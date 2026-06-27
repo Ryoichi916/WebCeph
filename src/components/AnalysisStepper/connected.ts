@@ -1,14 +1,12 @@
 import {
   connect,
-  MapStateToProps,
-  MapDispatchToPropsFunction,
 } from 'react-redux';
 import noop from 'lodash/noop';
 import AnalysisStepper from './index';
 import {
   StateProps,
-  DispatchProps,
   OwnProps,
+  Props,
 } from './props';
 import {
   getStepState,
@@ -20,6 +18,9 @@ import {
 import {
   getHighlightedStep,
 } from 'store/reducers/workspace/canvas';
+import {
+  getActiveTracingImageId,
+} from 'store/reducers/workspace';
 
 import {
   removeManualLandmark,
@@ -27,29 +28,42 @@ import {
   unhighlightStep,
 } from 'actions/workspace';
 
-const mapStateToProps: MapStateToProps<StateProps, OwnProps, StoreState> = (state: StoreState) => {
+// The active tracing image id is threaded through to mergeProps so the
+// landmark actions carry the {imageId} their payloads require.
+type StateFromStore = StateProps & { imageId: string };
+
+const mapStateToProps = (state: StoreState): StateFromStore => {
+  const imageId = getActiveTracingImageId(state)!;
   return {
-    steps: getActiveAnalysisSteps(state),
-    getStepState: getStepState(state),
-    getStepValue: getCalculatedValue(state),
+    steps: getActiveAnalysisSteps(state)(imageId),
+    getStepState: getStepState(state)(imageId),
+    getStepValue: getCalculatedValue(state)(imageId),
     highlightedStep: getHighlightedStep(state),
     isStepRemovable,
     isStepSkippable,
+    imageId,
   };
 };
 
-const mapDispatchToProps: MapDispatchToPropsFunction<DispatchProps, OwnProps> = (dispatch) => (
-  {
-    onRemoveLandmarkClick: ({ symbol }) => dispatch(removeManualLandmark({ symbol })),
+const mapDispatchToProps = (dispatch: GenericDispatch) => ({ dispatch });
+
+const mergeProps = (
+  stateProps: StateFromStore,
+  { dispatch }: { dispatch: GenericDispatch },
+  ownProps: OwnProps,
+): Props => {
+  const { imageId, ...rest } = stateProps;
+  return {
+    ...rest,
+    ...ownProps,
+    onRemoveLandmarkClick: ({ symbol }: CephLandmark) =>
+      dispatch(removeManualLandmark({ imageId, symbol })),
     onEditLandmarkClick: noop, // @TODO
-    onStepMouseEnter: ({ symbol }) => dispatch(highlightStep({ symbol })),
-    onStepMouseLeave: (_) => dispatch(unhighlightStep(void 0)),
-  }
-);
+    onStepMouseEnter: ({ symbol }: CephLandmark) => dispatch(highlightStep({ symbol })),
+    onStepMouseLeave: (_: CephLandmark) => dispatch(unhighlightStep(void 0)),
+  };
+};
 
-const connected = connect<StateProps, DispatchProps, OwnProps>(
-  mapStateToProps, mapDispatchToProps,
-)(AnalysisStepper);
-
+const connected = connect(mapStateToProps, mapDispatchToProps, mergeProps)(AnalysisStepper);
 
 export default connected;

@@ -5,7 +5,6 @@ export interface OwnProps {
 export type StateProps = {
   shouldCheckCompatibility: boolean;
   shouldShowWorkspaceSwitcher: boolean;
-  keyMap: KeyboardMap;
   isReady: boolean;
   activeWorkspaceId: string;
   locale: string;
@@ -17,6 +16,7 @@ export type StateProps = {
 export interface DispatchProps {
   dispatch: GenericDispatch;
   handlers: KeyboardHandlers;
+  keyMap: KeyboardMap;
 }
 
 export interface MergeProps {

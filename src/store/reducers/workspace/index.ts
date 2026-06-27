@@ -93,7 +93,7 @@ export const getSortedLandmarksToDisplay = createSelector(
     return sortBy(
       map(
         imageId !== null ? landmarksToDisplay(imageId) : {},
-        (value: GeoObject, symbol: string) => ({ symbol, value }),
+        (value: GeoObject, symbol: string) => ({ label: symbol, symbol, value }),
       ),
       ({ symbol }) => (
         isManual(symbol) || isHighlighted(symbol)

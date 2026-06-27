@@ -19,30 +19,34 @@ import {
 } from 'store/reducers/workspace';
 
 import {
+  getActiveWorkspaceId,
+} from 'store/reducers/workspace/activeId';
+
+import {
   getAllGeoObjects,
 } from 'store/reducers/workspace/analyses';
 
 const createExport: Exporter = async (state, options, _) => {
-  let {
-    imagesToSave = getWorkspaceImageIds(state),
+  const activeWorkspaceId = getActiveWorkspaceId(state)!;
+  const {
+    imagesToSave = getWorkspaceImageIds(state)(activeWorkspaceId),
     includeRasterImage = true,
-    objectsToExport,
+    objectsToExport: selection,
   } = options;
 
   const getObjectsByImageId = getAllGeoObjects(state);
-  objectsToExport = zipObject(
+  // For each image, the geo objects to export (filtered by the selection).
+  const objectsByImage = zipObject(
     imagesToSave,
-    imgId => pickBy(
+    imagesToSave.map((imgId: string) => pickBy(
       getObjectsByImageId(imgId),
-      (_, symbol) => {
-        return (
-          typeof objectsToExport === 'undefined' || (
-            typeof objectsToExport[imageId] !== 'undefined' &&
-            objectsToExport[imageId][symbol] === true
-          )
-        );
-      }
-    ),
+      (_, symbol) => (
+        typeof selection === 'undefined' || (
+          typeof selection[imgId] !== 'undefined' &&
+          selection[imgId][symbol] === true
+        )
+      ),
+    )),
   );
 
   if (includeRasterImage && imagesToSave.length > 1) {
@@ -50,7 +54,10 @@ const createExport: Exporter = async (state, options, _) => {
     throw new RangeError('Cannot export more than one image');
   }
   const getProps = getImageProps(state);
-  const [imageId] = getActiveTracingImageId(state) || getWorkspaceImageIds(state);
+  const activeImageId = getActiveTracingImageId(state);
+  const imageId = activeImageId !== null
+    ? activeImageId
+    : getWorkspaceImageIds(state)(activeWorkspaceId)[0];
   const imageToExport = getProps(imageId);
 
   const fragment = new DocumentFragment();
@@ -58,19 +65,23 @@ const createExport: Exporter = async (state, options, _) => {
     (
       <svg>
         {includeRasterImage ? <image xlinkHref={imageToExport.data} /> : null}
-        {map(objectsToExport, (objects, imgId) => {
+        {map(objectsByImage, (objects, imgId) => (
           <GeoViewer
             key={imgId}
-            objects={objects}
+            objects={map(objects, (value: GeoObject | undefined, symbol: string) =>
+              ({ label: symbol, symbol, value: value as GeoObject }))}
             top={0}
             left={0}
             width={500}
             height={500}
+            getPropsForPoint={() => ({})}
+            getPropsForVector={() => ({})}
+            getPropsForAngle={() => ({})}
           />
-        })}
+        ))}
       </svg>
     ),
-    fragment as Element,
+    fragment as unknown as Element,
   );
   const { serializeToString } = new XMLSerializer();
   const str = serializeToString(fragment);

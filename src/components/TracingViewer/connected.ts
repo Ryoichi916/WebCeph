@@ -29,6 +29,7 @@ import {
   getHighlightedLandmarks,
   getSortedLandmarksToDisplay,
   getLandmarksToDisplay,
+  getActiveTracingImageId,
   isHighlightMode,
 } from 'store/reducers/workspace';
 
@@ -43,9 +44,7 @@ import {
   isGeoVector,
 } from 'utils/math';
 
-import { PointProps, AngleProps, VectorProps } from 'components/GeoViewer';
-
-const EMPTY_ARRAY = [];
+const EMPTY_ARRAY: string[] = [];
 
 const getHighlightClassNames = createSelector(
   isHighlightMode,
@@ -67,16 +66,17 @@ import memoize from 'lodash/memoize';
 const getPropsForLandmark = createSelector(
   getHighlightClassNames,
   getLandmarksToDisplay,
-  (getHighlightClassNames, toDisplay) => memoize((symbol: string) => {
-    type Props = AngleProps | VectorProps | PointProps;
-
-    const props: Props = {
+  getActiveTracingImageId,
+  (getHighlightClassNames, toDisplay, imageId) => memoize((symbol: string) => {
+    // The rendered landmark props are a loose bag (see StateProps), since a
+    // point/vector/angle each contribute a different subset.
+    const props: { [prop: string]: any } = {
       className: undefined,
     };
 
     const classNames: string[] = [];
 
-    const l = toDisplay[symbol];
+    const l = imageId !== null ? toDisplay(imageId)[symbol] : undefined;
     if (isGeoPoint(l)) {
       classNames.push(classes.point);
       props.r = '0.5rem';

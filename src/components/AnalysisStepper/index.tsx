@@ -35,7 +35,7 @@ export class AnalysisStepper extends React.PureComponent<Props, { }> {
 
   public componentDidUpdate() {
     if (this.itemToScrollTo !== null) {
-      const node = findDOMNode(this.itemToScrollTo);
+      const node = findDOMNode(this.itemToScrollTo) as Element | null;
       if (node) {
         scrollIntoViewIfNeeded(node, false);
         this.hasScrolled = true;
@@ -51,15 +51,15 @@ export class AnalysisStepper extends React.PureComponent<Props, { }> {
       getStepValue,
       onStepMouseEnter, onStepMouseLeave,
     } = this.props;
-    const firstPendingIndex = findIndex(steps, (step) => getStepState(step.symbol) === 'current');
-    const lastDoneIndex = findLastIndex(steps, (step) => getStepState(step.symbol) === 'done');
+    const firstPendingIndex = findIndex(steps, (step) => getStepState(step) === 'current');
+    const lastDoneIndex = findLastIndex(steps, (step) => getStepState(step) === 'done');
     return (
       <div className={cx(classes.root, className)}>
         <List className={classes.list}>
         {
           map(steps, (step, i) => {
-            const value = getStepValue(step.symbol);
-            const state = getStepState(step.symbol);
+            const value = getStepValue(step);
+            const state = getStepState(step);
             const isDone = state === 'done';
             const shouldScrollTo = (
               i === firstPendingIndex || (

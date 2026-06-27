@@ -14,12 +14,19 @@ import {
 } from 'store/reducers/workspace/analyses';
 
 import {
+  getActiveImageId,
+} from 'store/reducers/workspace/image';
+
+import {
   toggleAnalysisResults,
 } from 'actions/workspace';
 
 const mapStateToProps: MapStateToProps<StateProps, OwnProps, StoreState> = (state: StoreState) => {
+  const activeImageId = getActiveImageId(state);
   return {
-    results: getCategorizedAnalysisResults(state),
+    results: activeImageId !== null
+      ? getCategorizedAnalysisResults(state)(activeImageId)
+      : [],
   };
 };
 
