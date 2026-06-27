@@ -25,10 +25,7 @@ import Props from './props';
 const CephaloEditorToolbar = (props: Props) => {
   const {
     canEdit, canRedo, canUndo,
-    contrast, brightness, isImageInverted,
     activeToolId,
-    onBrightnessChange,
-    onContrastChange,
     onFlipXClick,
     onUndoClick,
     onRedoClick,
@@ -45,44 +42,44 @@ const CephaloEditorToolbar = (props: Props) => {
   const cannotEdit = !canEdit;
   return (
     <div className={cx(classes.root, props.className)}>
-      <FlatButton onTouchTap={onUndoClick} disabled={cannotEdit || !canUndo} label="Undo" icon={<IconUndo/>} />
-      <FlatButton onTouchTap={onRedoClick} disabled={cannotEdit || !canRedo} label="Redo" icon={<IconRedo/>} />
-      <FlatButton onTouchTap={onFlipXClick} disabled={cannotEdit} label="Flip" icon={<IconFlip/>} />
+      <FlatButton onClick={onUndoClick} disabled={cannotEdit || !canUndo} label="Undo" icon={<IconUndo/>} />
+      <FlatButton onClick={onRedoClick} disabled={cannotEdit || !canRedo} label="Redo" icon={<IconRedo/>} />
+      <FlatButton onClick={onFlipXClick} disabled={cannotEdit} label="Flip" icon={<IconFlip/>} />
       <FlatButton
         disabled={cannotEdit || activeToolId === 'SELECT'}
         label=""
         icon={<IconSelect />}
-        onTouchTap={onToolButtonClick.bind(null, 'SELECT')}
+        onClick={onToolButtonClick.bind(null, 'SELECT')}
       />
       <FlatButton
         disabled={cannotEdit || activeToolId === 'ADD_POINT'}
         label=""
         icon={<IconAddPoint />}
-        onTouchTap={onToolButtonClick.bind(null, 'ADD_POINT')}
+        onClick={onToolButtonClick.bind(null, 'ADD_POINT')}
       />
       <FlatButton
         disabled={cannotEdit || activeToolId === 'ERASER'}
         label=""
         icon={<IconEraser />}
-        onTouchTap={onToolButtonClick.bind(null, 'ERASER')}
+        onClick={onToolButtonClick.bind(null, 'ERASER')}
       />
       <FlatButton
         disabled={cannotEdit || activeToolId === 'ZOOM_WITH_CLICK'}
         label=""
         icon={<IconZoom />}
-        onTouchTap={onToolButtonClick.bind(null, 'ZOOM_WITH_CLICK')}
+        onClick={onToolButtonClick.bind(null, 'ZOOM_WITH_CLICK')}
       />
       <FlatButton
         disabled={!canShowSummary}
         label="Summary"
         icon={<IconList />}
-        onTouchTap={onShowSummaryClick}
+        onClick={onShowSummaryClick}
       />
       <FlatButton
         disabled={!canExport}
         label="Export"
         icon={!isExporting ? <IconExport /> : <CircularProgress size={24} thickness={2} />}
-        onTouchTap={onExportClick}
+        onClick={onExportClick}
       />
     </div>
   );

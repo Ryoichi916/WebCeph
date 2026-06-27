@@ -1,6 +1,8 @@
-import { createStore, applyMiddleware, combineReducers, compose, Middleware, Reducer } from 'redux';
+import {
+  createStore, applyMiddleware, combineReducers, compose,
+  Middleware, Reducer, ReducersMapObject, StoreEnhancer,
+} from 'redux';
 import reducers from './reducers';
-import analyticsMiddleware from './middleware/analytics';
 import fetchAnalysisMiddleware from './middleware/fetchAnalysis';
 import exportMiddleware from './middleware/export';
 import importMiddleware from './middleware/import';
@@ -16,7 +18,7 @@ import workspaceManagerMiddleware from './middleware/workspaceManager';
 
 declare const window: Window & { devToolsExtension?: () => any };
 
-const reducer = combineReducers<StoreState>(reducers);
+const reducer = combineReducers<StoreState>(reducers as ReducersMapObject);
 
 const middlewares: Middleware[] = [
   loadStateMiddleware,
@@ -70,7 +72,7 @@ const createConfiguredStore = () => {
     compose(
       applyMiddleware(...middlewares),
       addDevTools(),
-    ),
+    ) as StoreEnhancer<StoreState>,
   );
 
   if (module.hot) {

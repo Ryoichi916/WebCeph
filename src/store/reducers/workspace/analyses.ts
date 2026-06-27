@@ -105,7 +105,10 @@ export const getActiveAnalysis = createSelector(
   (getAnalysisId) => (imageId: string) => {
     const analysisId = getAnalysisId(imageId);
     if (analysisId !== null) {
-      return require(`analyses/${analysisId}`) as Analysis<ImageType>;
+      return require(
+        /* webpackExclude: /\.test\.tsx?$/ */
+        `analyses/${analysisId}`
+      ) as Analysis<ImageType>;
     }
     return null;
   },
@@ -255,9 +258,11 @@ export const isStepEligibleForComputation = createSelector(
 
 export const getCalculatedValue = createSelector(
   isStepEligibleForComputation,
-  (isEligible) => (imageId: string): ((step: CephLandmark) => number | undefined) => (step: CephLandmark) => {
+  getManualLandmarks,
+  (isEligible, getManual) =>
+    (imageId: string): ((step: CephLandmark) => number | undefined) => (step: CephLandmark) => {
     if (isEligible(imageId)(step)) {
-      return tryCalculate(step);
+      return tryCalculate(step, getManual(imageId), {});
     }
     return undefined;
   },

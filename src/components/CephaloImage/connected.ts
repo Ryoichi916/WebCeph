@@ -15,7 +15,7 @@ import {
   getImageSrc,
 } from 'store/reducers/workspace/image';
 
-const mapStateToProps: MapStateToProps<StateProps, OwnProps> =
+const mapStateToProps: MapStateToProps<StateProps, OwnProps, StoreState> =
   (state: StoreState, { imageId }: OwnProps) => {
     return {
       src: getImageSrc(state)(imageId),

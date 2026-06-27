@@ -1,7 +1,7 @@
 import * as React from 'react';
 import Props from './props';
 
-const CommandPalette = (props: Props) => (
+const CommandPalette = (_props: Props) => (
   <div>
   </div>
 );

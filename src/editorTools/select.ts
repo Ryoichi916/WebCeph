@@ -10,7 +10,7 @@ export const createSelect: EditorToolCreator = (
     return Cursor.SELECT;
   },
   onLandmarkMouseEnter(dispatch, symbol) {
-    dispatch(highlightStep(symbol));
+    dispatch(highlightStep({ symbol }));
     // @TODO: show tooltip?
   },
   onLandmarkMouseLeave(dispatch) {

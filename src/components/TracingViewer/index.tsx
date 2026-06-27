@@ -14,14 +14,8 @@ import GeoViewer from 'components/GeoViewer';
 
 const classes = require('./style.scss');
 
-const noop = () => undefined;
-
 function isMouseEvent<T>(e: any): e is React.MouseEvent<T> {
   return e.touches === undefined;
-};
-
-function isTouchEvent<T>(e: any): e is React.TouchEvent<T> {
-  return e.touches !== undefined;
 };
 
 /**
@@ -47,7 +41,6 @@ export class TracingViewer extends React.PureComponent<Props, { mouseX: number, 
       canvasSize: { width: canvasWidth, height: canvasHeight },
       imageHeight, imageWidth,
       contrast = 50, brightness = 50,
-      scale,
       isHighlightMode,
       getPropsForLandmark,
       landmarks,
@@ -212,30 +205,6 @@ export class TracingViewer extends React.PureComponent<Props, { mouseX: number, 
   private handleContextMenu = (e: React.MouseEvent<SVGElement>) => {
     e.preventDefault();
   }
-
-  private handleLandmarkMouseEnter = (symbol: string) => (_: React.MouseEvent<SVGElement>) => {
-    const { onLandmarkMouseEnter } = this.props.activeTool;
-    if (typeof onLandmarkMouseEnter === 'function') {
-      const { dispatch } = this.props;
-      onLandmarkMouseEnter(dispatch, symbol);
-    }
-  }
-
-  private handleLandmarkMouseLeave = (symbol: string) => (_: React.MouseEvent<SVGElement>) => {
-    const { onLandmarkMouseLeave } = this.props.activeTool;
-    const { dispatch } = this.props;
-    if (typeof onLandmarkMouseLeave === 'function') {
-      onLandmarkMouseLeave(dispatch, symbol);
-    }
-  }
-
-  private handleLandmarkClick = (symbol: string) => (e: React.MouseEvent<SVGElement>) => {
-    const { onLandmarkClick } = this.props.activeTool;
-    const { dispatch } = this.props;
-    if (typeof onLandmarkClick === 'function') {
-      onLandmarkClick(dispatch, symbol, e.nativeEvent as MouseEvent);
-    }
-  };
 }
 
 export default TracingViewer;

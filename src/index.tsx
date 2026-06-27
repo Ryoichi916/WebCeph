@@ -32,8 +32,7 @@ let reg: ServiceWorkerRegistration;
 const installOrUpdateApp = async () => {
   const state = store.getState();
   if (!reg) {
-    const runtime = require('serviceworker-webpack-plugin/lib/runtime');
-    reg = await runtime.register();
+    reg = await navigator.serviceWorker.register('/service-worker.js');
     reg.addEventListener('updatefound', () => {
       const newWorker = reg.installing;
       const setStatus = isAppInstalled(state) ? setAppUpdateStatus : setAppInstallStatus;

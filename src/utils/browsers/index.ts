@@ -57,7 +57,7 @@ export const browsersById = keyBy(recommendedBrowsers, b => b.id);
 export const currentBrowser: Browser = {
   id: _current.name as BrowserId,
   downloadUrl: browsersById[_current.name] ? browsersById[_current.name].downloadUrl : '',
-  version: _current.version,
+  version: String(_current.version),
 };
 
 export const getApplicapleBrowsers = memoize(

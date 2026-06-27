@@ -28,7 +28,7 @@ const requireLang = require.context(`react-intl/locale-data`, false, /\.js$/);
 
 const addReactIntlData = (locale: string) => {
   const primaryLang = getPrimaryLang(locale);
-  return new Promise((resolve, reject) => {
+  return new Promise<void>((resolve, reject) => {
     require.ensure([], () => {
       try {
         const data = requireLang(`./${primaryLang}.js`) as ReactIntl.Locale;
@@ -42,20 +42,20 @@ const addReactIntlData = (locale: string) => {
   });
 };
 
-const middleware: Middleware = ({ getState }: Store<StoreState>) =>
+const middleware = ({ getState }: Store<StoreState>) =>
   (next: Dispatch<GenericAction>) => async (action: GenericAction) => {
     next(action);
     if (some(observedActions, (type) => isActionOfType(action, type))) {
       const state = getState();
       const locale = getLocaleToFetch(state);
       if (locale !== undefined) {
-        const url = require(`url-loader!locale/${locale}.json`) as string;
         next(fetchLocaleStarted(locale));
         try {
-          const [ messages ] = await Promise.all([
-            (await fetch(url)).json() as Promise<Locale>,
+          const [ localeModule ] = await Promise.all([
+            import(/* webpackChunkName: "locale" */ `locale/${locale}.json`),
             addReactIntlData(locale),
           ]);
+          const messages = (localeModule as { default: Locale }).default;
           next(fetchLocaleSucceeded({ locale, messages }));
         } catch (error) {
           next(fetchLocaleFailed({ locale, error }));
@@ -64,4 +64,4 @@ const middleware: Middleware = ({ getState }: Store<StoreState>) =>
     }
   };
 
-export default middleware;
+export default middleware as Middleware;

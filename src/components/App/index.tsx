@@ -11,10 +11,6 @@ import Progress from './Progress';
 import getMuiTheme from 'material-ui/styles/getMuiTheme';
 import MuiThemeProvider from 'material-ui/styles/MuiThemeProvider';
 
-import injectTapEventPlugin from 'react-tap-event-plugin';
-
-import attempt from 'lodash/attempt';
-
 import { compose, lifecycle, pure } from 'recompose';
 
 import { IntlProvider } from 'react-intl';
@@ -24,8 +20,6 @@ import { getDirForLocale } from 'utils/locale';
 import { defaultLocale } from 'utils/config';
 
 import Props from './props';
-
-attempt(injectTapEventPlugin);
 
 type State = { };
 
@@ -43,7 +37,9 @@ const addLifeCycleHooks = lifecycle({
 const enhance = compose<Props, State>(pure, addLifeCycleHooks);
 
 import { HotKeys } from 'react-hotkeys';
-import Helmet from 'react-helmet';
+import * as ReactHelmet from 'react-helmet';
+
+const Helmet = ReactHelmet as unknown as React.ComponentClass<ReactHelmet.HelmetProps>;
 
 const App = enhance(({
   isReady, keyMap, handlers,

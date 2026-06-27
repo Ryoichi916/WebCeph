@@ -20,7 +20,7 @@ import {
   getUserPreferredLocale,
 } from 'store/reducers/locale';
 
-const mapStateToProps: MapStateToProps<StateProps, OwnProps> =
+const mapStateToProps: MapStateToProps<StateProps, OwnProps, StoreState> =
   (state: StoreState) => {
     return {
       currentUserPreferredLocale: getUserPreferredLocale(state),

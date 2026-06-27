@@ -69,10 +69,10 @@ const GeoViewer = pure((props: Props) => {
             return (
               <Angle
                 key={symbol}
-                symbol={symbol}
                 {...value}
-                boundingRect={createBoundingRect(top, left, width, height)}
                 {...rest}
+                symbol={symbol}
+                boundingRect={createBoundingRect(top, left, width, height)}
               />
             );
           }

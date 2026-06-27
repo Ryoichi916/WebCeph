@@ -240,5 +240,5 @@ export const createHorizontalLine = (
 ): GeoVector => ({ x1: x, y1: y, x2, y2: y });
 
 export const composeGeoObject = (
-  ...objects: SingleGeoObject[],
+  ...objects: SingleGeoObject[]
 ): CompositeGeoObject => objects;

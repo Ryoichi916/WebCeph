@@ -15,14 +15,14 @@ import locale, {
   isNegotiatedLocaleFetched,
 } from './locale';
 
-const reducers: ReducerMap = {
+const reducers = {
   ...workspace,
   ...persistence,
   ...app,
   ...env,
   ...app,
   ...locale,
-};
+} as ReducerMap;
 
 export const isAppReady = createSelector(
   isPersistedStateReady,

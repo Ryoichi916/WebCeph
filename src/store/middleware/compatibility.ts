@@ -14,13 +14,14 @@ import featureDetails from 'utils/features';
 
 import { isActionOfType } from 'utils/store';
 
-const middleware: Middleware = (_: Store<StoreState>) =>
+const middleware = (_: Store<StoreState>) =>
   (next: GenericDispatch) => async (action: GenericAction) => {
     next(action);
     if (isActionOfType(action, 'BROWSER_COMPATIBLITY_CHECK_REQUESTED')) {
       try {
         const userAgent = action.payload.userAgent;
-        const Modernizr = require('exports-loader?Modernizr!utils/modernizr.js');
+        require('utils/modernizr.js');
+        const Modernizr = (window as any).Modernizr;
         const features = keys(featureDetails);
         const total = features.length;
         let j = 1;
@@ -57,4 +58,4 @@ const middleware: Middleware = (_: Store<StoreState>) =>
     }
   };
 
-export default middleware;
+export default middleware as Middleware;

@@ -50,7 +50,7 @@ import {
   getActiveLocaleData,
 } from 'store/reducers/locale';
 
-const mapStateToProps: MapStateToProps<StateProps, OwnProps> =
+const mapStateToProps: MapStateToProps<StateProps, OwnProps, StoreState> =
   (state: StoreState) => {
     return {
       isReady: isAppReady(state),
@@ -59,12 +59,12 @@ const mapStateToProps: MapStateToProps<StateProps, OwnProps> =
         isCompatibilityIgnoredForThisBrowser(state) ||
         isCheckingCompatiblityForThisBrowser(state)
       ),
-      activeWorkspaceId: getActiveWorkspaceId(state),
+      activeWorkspaceId: getActiveWorkspaceId(state)!,
       title: getActiveWorkspaceTitle(state),
       shouldShowWorkspaceSwitcher: hasMultipleWorkspaces(state) || isLastWorkspaceUsed(state),
       locale: getActiveLocale(state),
       messages: getActiveLocaleData(state),
-      userAgent: getUserAgent(state),
+      userAgent: getUserAgent(state)!,
     };
   };
 
@@ -79,7 +79,7 @@ const mapDispatchToProps: MapDispatchToPropsFunction<DispatchProps, OwnProps> =
     }
   );
 
-const mergeProps: MergeProps<StateProps, DispatchProps, OwnProps> =
+const mergeProps: MergeProps<StateProps, DispatchProps, OwnProps, ConnectableProps> =
   (stateProps, dispatchProps, ownProps): ConnectableProps => {
     const { dispatch } = dispatchProps;
     const { isReady, shouldCheckCompatibility, userAgent } = stateProps;

@@ -2,7 +2,7 @@ export function readFileAsBuffer(file: File): Promise<ArrayBuffer> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(reader.result as ArrayBuffer);
-    reader.onerror = e => reject(e.error);
+    reader.onerror = () => reject(reader.error);
     reader.readAsArrayBuffer(file);
   });
 }
@@ -10,8 +10,8 @@ export function readFileAsBuffer(file: File): Promise<ArrayBuffer> {
 export function readFileAsDataURL(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = e => reject(e.error);
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(reader.error);
     reader.readAsDataURL(file);
   });
 }

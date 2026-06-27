@@ -6,7 +6,7 @@ import { isActionOfType } from 'utils/store';
 
 import { setActiveWorkspace } from 'actions/workspace';
 
-const middleware: Middleware = ({ getState }: Store<StoreState>) =>
+const middleware = ({ getState }: Store<StoreState>) =>
   (next: Dispatch<GenericAction>) => (action: GenericAction) => {
     if (isActionOfType(action, 'ADD_NEW_WORKSPACE')) {
       const state = getState();
@@ -27,4 +27,4 @@ const middleware: Middleware = ({ getState }: Store<StoreState>) =>
     }
   };
 
-export default middleware;
+export default middleware as Middleware;

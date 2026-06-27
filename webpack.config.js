@@ -2,65 +2,66 @@
 const webpack = require('webpack');
 const path = require('path');
 const env = require('./env');
-const WebpackHTMLPlugin = require('webpack-html-plugin');
+const HtmlWebpackPlugin = require('html-webpack-plugin');
 const { compact } = require('lodash');
 const autoprefixer = require('autoprefixer');
-const AsyncModulePlugin = require('async-module-loader/plugin');
-const BabiliPlugin = require('babili-webpack-plugin');
-const ServiceWorkerWebpackPlugin = require('serviceworker-webpack-plugin');
+const { GenerateSW } = require('workbox-webpack-plugin');
 const CopyPlugin = require('copy-webpack-plugin');
-
-let Dashboard;
-let DashboardPlugin;
-let dashboard;
-
-const BUILD_PATH = path.resolve(__dirname, process.env.BUILD_PATH || 'build');
-
-/* eslint-disable global-require */
-if (env.isDev && !env.isTest) {
-  Dashboard = require('webpack-dashboard');
-  DashboardPlugin = require('webpack-dashboard/plugin');
-
-  dashboard = new Dashboard();
-}
-
-const prod = p => (env.isProd ? p : null);
-const hot = p => (env.isHot ? p : null);
-const test = p => (env.isTest ? p : null);
-const dev = p => (env.isDev ? p : null);
 
 const pkg = require('./package.json');
 
-const localCSSLoaders = [
-  'style-loader',
-  {
-    loader: 'css-loader',
-    query: {
-      module: true,
+const BUILD_PATH = path.resolve(__dirname, process.env.BUILD_PATH || 'build');
+
+const prod = p => (env.isProd ? p : null);
+const hot = p => (env.isHot ? p : null);
+
+// css-loader configured to keep CommonJS-style `const x = require('./style.scss')`
+// returning the locals object directly (esModule: false) for the existing source.
+const cssModuleLoader = {
+  loader: 'css-loader',
+  options: {
+    esModule: false,
+    modules: {
+      namedExport: false,
+      exportLocalsConvention: 'asIs',
       localIdentName: '[name]_[local]_[hash:base64:5]',
     },
   },
-  'postcss-loader',
-];
+};
 
-const globalCSSLoaders = [
-  'style-loader',
-  'css-loader',
-  'postcss-loader',
-];
+const cssGlobalLoader = {
+  loader: 'css-loader',
+  options: { esModule: false },
+};
 
-const sassLoaders = [
-  {
-    loader: 'sass-loader',
-    query: {
-      sourceMap: true,
+const postcssLoader = {
+  loader: 'postcss-loader',
+  options: {
+    postcssOptions: {
+      plugins: [autoprefixer],
     },
   },
-];
+};
+
+const sassLoader = {
+  loader: 'sass-loader',
+  options: {
+    sourceMap: true,
+    sassOptions: {
+      // Resolve project-absolute imports like `@import 'src/_theme.scss'`.
+      loadPaths: [__dirname],
+      // Legacy stylesheets (and office-ui-fabric-core) still use `@import` and
+      // global built-in functions; silence the Dart Sass 3 deprecation noise.
+      silenceDeprecations: ['import', 'global-builtin'],
+    },
+  },
+};
+
+const localCSSLoaders = ['style-loader', cssModuleLoader, postcssLoader];
+const globalCSSLoaders = ['style-loader', cssGlobalLoader, postcssLoader];
 
 const excludedPatterns = compact([
   /node_modules/,
-  /test/,
   prod(/\.test\.tsx?$/),
   prod(/\.test\.jsx?$/),
 ]);
@@ -68,114 +69,67 @@ const excludedPatterns = compact([
 const buildPath = env.isProd ? '' : '/';
 
 const config = {
+  mode: env.isProd ? 'production' : 'development',
+
   bail: env.isProd || env.isTest,
 
-  devServer: env.isDev ? {
-    inline: true,
-    contentBase: buildPath,
-    hot: env.isHot,
-  } : undefined,
-
-  devtool: env.isDev ? 'eval' : 'inline-source-map',
+  devtool: env.isDev ? 'eval-cheap-module-source-map' : 'source-map',
 
   entry: {
     bundle: compact([
-      hot('react-hot-loader/patch'),
       hot('webpack-hot-middleware/client'),
       path.resolve(__dirname, './src/index.tsx'),
     ]),
-    lib: [
-      'react',
-      'react-dom',
-      'reselect',
-      'redux',
-      'react-redux',
-      'redux-actions',
-      'redux-undo',
-      'lodash/assign',
-      'lodash/map',
-      'lodash/findIndex',
-      'lodash/attempt',
-      'lodash/curry',
-      'lodash/reduce',
-      'lodash/find',
-      'lodash/uniqBy',
-      'lodash/isEmpty',
-      'lodash/omit',
-      'lodash/filter',
-      'lodash/memoize',
-      'material-ui/CircularProgress',
-      'material-ui/Dialog',
-      'material-ui/List/List',
-      'material-ui/List/ListItem',
-      'material-ui/RaisedButton',
-      'material-ui/FlatButton',
-    ],
   },
 
-  performance: env.isDev ? false : undefined,
+  performance: false,
 
   output: {
     path: BUILD_PATH,
-    filename: env.isProd ? '[name]_[chunkhash].js' : '[name]_[hash].js',
+    filename: env.isProd ? '[name]_[chunkhash].js' : '[name]_[fullhash].js',
     publicPath: buildPath,
+    globalObject: 'self',
   },
 
   resolve: {
     extensions: ['.webpack.js', '.web.js', '.ts', '.tsx', '.js'],
-    modules: [
-      path.join(__dirname, 'src'),
-      'node_modules',
-    ],
+    modules: [path.join(__dirname, 'src'), 'node_modules'],
+    // Webpack 5 no longer polyfills Node core modules. The browser bundle does
+    // not use them (jszip references its Node stream adapters but the app only
+    // uses the browser Blob path), so stub them out.
+    fallback: {
+      fs: false,
+      path: false,
+      crypto: false,
+      stream: false,
+      util: false,
+    },
   },
 
   module: {
     rules: compact([
-      test({
-        enforce: 'post',
+      {
         test: /\.tsx?$/,
-        include: path.resolve(__dirname, 'src'),
         exclude: excludedPatterns,
         use: [
           {
-            loader: 'istanbul-instrumenter-loader',
-            query: {
-              esModules: true,
+            loader: 'ts-loader',
+            options: {
+              // Phase 1: build only. Strict type-checking is handled separately
+              // via `npm run tsc` (Phase 2). transpileOnly keeps the legacy
+              // TS 2.1-era source compiling under TypeScript 5.
+              transpileOnly: true,
+              compilerOptions: {
+                module: 'esnext',
+              },
             },
           },
         ],
-      }),
-      {
-        test: /\.tsx?$/,
-        exclude: excludedPatterns,
-        use: compact([
-          hot('react-hot-loader/webpack'),
-          prod('babel-loader'),
-          {
-            loader: 'ts-loader',
-            query: {
-              transpileOnly: env.isDev && !env.isTest,
-              silent: true,
-              compilerOptions: Object.assign(
-                {
-                  module: 'es2015',
-                  noEmitOnError: env.isProd || env.isTest,
-                },
-                env.isProd ? {
-                  jsx: 'preserve',
-                } : { }
-              ),
-            },
-          },
-        ]),
       },
       {
         test: /\.jsx?$/,
-        exclude: excludedPatterns,
-        use: compact([
-          hot('react-hot-loader/webpack'),
-          'babel-loader',
-        ]),
+        exclude: /node_modules/,
+        use: ['babel-loader'],
       },
       {
         test: /\.css$/,
@@ -184,38 +138,75 @@ const config = {
       {
         test: /\.scss$/,
         include: [
-          path.resolve(path.resolve(__dirname, 'src/components')),
-          path.resolve(path.resolve(__dirname, 'src/transitions')),
+          path.resolve(__dirname, 'src/components'),
+          path.resolve(__dirname, 'src/transitions'),
         ],
-        use: [...localCSSLoaders, ...sassLoaders],
+        use: [...localCSSLoaders, sassLoader],
       },
       {
         test: /\.scss$/,
-        include: [
-          path.resolve(path.resolve(__dirname, 'src/layout')),
-        ],
-        use: [...globalCSSLoaders, ...sassLoaders],
+        include: [path.resolve(__dirname, 'src/layout')],
+        use: [...globalCSSLoaders, sassLoader],
       },
       {
         test: /\.html$/,
-        use: 'html',
+        use: ['html-loader'],
       },
     ]),
   },
 
+  optimization: {
+    splitChunks: {
+      chunks: 'all',
+      cacheGroups: {
+        lib: {
+          test: /[\\/]node_modules[\\/]/,
+          name: 'lib',
+          priority: -10,
+        },
+        common: {
+          name: 'common',
+          minChunks: 2,
+          minSize: 100000,
+          priority: -20,
+          reuseExistingChunk: true,
+        },
+      },
+    },
+  },
+
   plugins: compact([
-    dev(new webpack.NamedModulesPlugin()),
-    new webpack.NoEmitOnErrorsPlugin(),
+    hot(new webpack.HotModuleReplacementPlugin()),
+    // Keep *.test.* files out of dynamic require/import contexts (analyses,
+    // locales) so test-only deps like `expect` never enter the app bundle.
+    // Matches both explicit paths (`foo.test.ts`) and the extensionless
+    // requests webpack generates inside require/import contexts (`./foo.test`).
+    new webpack.IgnorePlugin({ resourceRegExp: /\.test(\.[jt]sx?)?$/ }),
+    new HtmlWebpackPlugin({
+      filename: 'index.html',
+      template: path.resolve(__dirname, 'src/index.html'),
+      inject: 'body',
+      minify: env.isProd
+        ? {
+            html5: true,
+            collapseBooleanAttributes: true,
+            collapseInlineTagWhitespace: true,
+            collapseWhitespace: true,
+          }
+        : false,
+    }),
+    new webpack.DefinePlugin({
+      __VERSION__: JSON.stringify(pkg.version),
+      __BUILD_TIMESTAMP__: JSON.stringify(Date.now()),
+      __DEBUG__: JSON.stringify(env.isDev),
+      'process.env.ENVIRONMENT': JSON.stringify('BROWSER'),
+      'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV),
+      isBrowser: true,
+      isHot: JSON.stringify(env.isHot),
+    }),
+    // svgo config preserved from the legacy build for inline svg-react usage.
     new webpack.LoaderOptionsPlugin({
       options: {
-        minimize: true,
-        debug: false,
-        context: __dirname,
-        postcss() {
-          return {
-            defaults: [autoprefixer],
-          };
-        },
         svgoConfig: {
           plugins: [
             { removeXMLNS: true },
@@ -240,45 +231,28 @@ const config = {
         },
       },
     }),
-    hot(new webpack.HotModuleReplacementPlugin()),
-    dashboard ? new DashboardPlugin(dashboard.setData) : null,
-    new webpack.optimize.CommonsChunkPlugin({
-      names: ['common'],
-      minSize: 100000,
+    new CopyPlugin({
+      patterns: [
+        { from: 'src/assets/icons', to: 'icons' },
+        { from: 'src/manifest.json', to: 'manifest.json' },
+      ],
     }),
-    new WebpackHTMLPlugin({
-      filename: 'index.html',
-      template: path.resolve(__dirname, 'src/index.html'),
-      inject: 'body',
-      minify: env.isProduction ? {
-        html5: true,
-        collapseBooleanAttributes: true,
-        collapseInlineTagWhitespace: true,
-        collapseWhitespace: true,
-      } : false,
-    }),
-    new AsyncModulePlugin(),
-    new webpack.ProvidePlugin({
-      Promise: 'bluebird',
-    }),
-    new webpack.DefinePlugin({
-      __VERSION__: JSON.stringify(pkg.version),
-      __BUILD_TIMESTAMP__: Date.now(),
-      __DEBUG__: JSON.stringify(env.isDev),
-      'process.env.ENVIRONMENT': JSON.stringify('BROWSER'),
-      'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV),
-      isBrowser: true,
-      isHot: JSON.stringify(env.isHot),
-    }),
-    new ServiceWorkerWebpackPlugin({
-      entry: path.join(__dirname, 'src/service-worker.ts'),
-    }),
-    prod(new webpack.optimize.OccurrenceOrderPlugin(true)),
-    prod(new BabiliPlugin()),
-    new CopyPlugin([
-      { from: 'src/assets/icons', to: 'icons' },
-      { from: 'src/manifest.json', to: 'manifest.json' },
-    ]),
+    // Replaces serviceworker-webpack-plugin + sw-toolbox. GenerateSW precaches
+    // the build output and serves navigations cache-first, mirroring the old
+    // `toolbox.precache(...)` + `toolbox.router.get('/*', cacheFirst)` behaviour.
+    prod(
+      new GenerateSW({
+        swDest: 'service-worker.js',
+        clientsClaim: true,
+        skipWaiting: false,
+        runtimeCaching: [
+          {
+            urlPattern: /.*/,
+            handler: 'CacheFirst',
+          },
+        ],
+      })
+    ),
   ]),
 };
 

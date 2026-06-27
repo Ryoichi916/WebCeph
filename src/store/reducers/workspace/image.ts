@@ -4,9 +4,28 @@ import omit from 'lodash/omit';
 
 import { createSelector } from 'reselect';
 
+import { getTracingImageId } from './settings';
+import { getActiveWorkspaceId } from './activeId';
+
 const KEY_IMAGES: StoreKey = 'images.props';
 const KEY_IMAGES_LOAD_STATUS: StoreKey = 'images.status';
 const KEY_TRACING: StoreKey = 'images.tracing';
+
+// Default props applied to a freshly loaded image, then overridden by any
+// existing state and the action payload.
+const defaultImageProps = {
+  name: null as string | null,
+  type: 'ceph_lateral' as ImageType,
+  scaleFactor: null as number | null,
+  flipX: false,
+  flipY: false,
+  brightness: 0.5,
+  contrast: 0.5,
+  invertColors: false,
+  analysis: {
+    activeId: null as AnalysisId<ImageType> | null,
+  },
+};
 
 const imagesReducer = handleActions<typeof KEY_IMAGES>(
   {
@@ -23,17 +42,7 @@ const imagesReducer = handleActions<typeof KEY_IMAGES>(
       return {
         ...state,
         [payload.id]: {
-          name: null,
-          type: 'ceph_lateral',
-          scaleFactor: null,
-          flipX: false,
-          flipY: false,
-          brightness: 0.5,
-          contrast: 0.5,
-          invertColors: false,
-          analysis: {
-            activeId: null,
-          },
+          ...defaultImageProps,
           ...state[payload.id],
           ...payload,
         },
@@ -92,8 +101,8 @@ const loadStatusReducer = handleActions<typeof KEY_IMAGES_LOAD_STATUS>({
       },
     };
   },
-  CLOSE_IMAGE_REQUESTED: (state, { payload: id }) => {
-    return omit(state, id) as typeof state;
+  CLOSE_IMAGE_REQUESTED: (state, { payload: { imageId } }) => {
+    return omit(state, imageId) as typeof state;
   },
 }, {});
 
@@ -268,3 +277,8 @@ export const getScaleFactor = createSelector(
   getImageProps,
   (getProps) => (id: string) => getProps(id).scaleFactor,
 );
+
+// The id of the image being traced in the active workspace. Used by the editor
+// tools and lens, which always operate on the active tracing image.
+export const getActiveImageId = (state: StoreState) =>
+  getTracingImageId(state)(getActiveWorkspaceId(state)!);

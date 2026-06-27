@@ -18,7 +18,7 @@ export const AsyncCephaloImage = pure((props: OwnProps & AsyncProps) => {
   const {
     isLoading,
     hasFailed,
-    ...rest,
+    ...rest
   } = props;
   const component = () => <Image {...rest} />;
   return (
@@ -30,7 +30,7 @@ export const AsyncCephaloImage = pure((props: OwnProps & AsyncProps) => {
   );
 });
 
-export default connect<Partial<AsyncProps>, { }, OwnProps>(
+export default connect<Partial<AsyncProps>, { }, OwnProps, StoreState>(
   (state, { imageId }: OwnProps) => ({
     hasFailed: hasImageLoadFailed(state)(imageId),
     isLoading: isImageLoading(state)(imageId),

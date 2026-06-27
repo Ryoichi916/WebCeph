@@ -10,7 +10,7 @@ const CephImage = pure((props: Props) => {
     width, height,
     isFlippedX = false,
     isFlippedY = false,
-    ...rest,
+    ...rest
   } = props;
 
   let transform = '';

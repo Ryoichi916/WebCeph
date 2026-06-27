@@ -29,7 +29,6 @@ export class Workspace extends React.PureComponent<Props, { }> {
       >
         {mode === 'tracing' ? (
           <TracingEditor
-            className={classes.content}
             {...props}
           />
         ) : (

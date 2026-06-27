@@ -1,11 +1,9 @@
-import * as React from 'react';
 import {
   connect,
   MapStateToProps,
   MapDispatchToPropsFunction,
 } from 'react-redux';
 
-import TracingViewer from 'components/TracingViewer';
 
 import WorkspaceSwitcher from './index';
 import {
@@ -28,7 +26,7 @@ import {
   shouldShowLoadingFileIndicator,
 } from 'store/reducers/workspace';
 
-const mapStateToProps: MapStateToProps<StateProps, OwnProps> =
+const mapStateToProps: MapStateToProps<StateProps, OwnProps, StoreState> =
   (state: StoreState, { workspaceId }: OwnProps) => {
     return {
       images: getWorkspaceImageIds(state)(workspaceId),

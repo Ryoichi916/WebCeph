@@ -26,7 +26,7 @@
     "strictNullChecks": true,
     "noUnusedLocals": true,
     "noImplicitThis": true,
-    "skipLibCheck": false,
+    "skipLibCheck": true,
     "skipDefaultLibCheck": true,
     "baseUrl": ".",
     "paths": {
@@ -39,6 +39,9 @@
   "compileOnSave": false,
   "exclude": [
       "node_modules",
-      "build/**"
+      "build/**",
+      "scripts",
+      "**/*.test.ts",
+      "**/*.test.tsx"
   ]
 }

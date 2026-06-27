@@ -5,7 +5,7 @@ import ListItem from 'material-ui/List/ListItem';
 import List from 'material-ui/List/List';
 import CircularProgress from 'material-ui/CircularProgress';
 import identity from 'lodash/identity';
-import { branch, pure, renderComponent } from 'recompose';
+import { branch, pure, renderComponent, InferableComponentEnhancer } from 'recompose';
 import { getDisplayNameForBrowser, getFeatureName, getWhyFeatureIsRequired } from './strings';
 import Props from './props';
 
@@ -94,6 +94,6 @@ const ProgressDialog = pure((props: Props) => (
 
 export default branch(
   (props: Props) => props.isChecking,
-  renderComponent(ProgressDialog),
+  renderComponent(ProgressDialog) as InferableComponentEnhancer,
   identity,
 )(CompatibilityChecker);

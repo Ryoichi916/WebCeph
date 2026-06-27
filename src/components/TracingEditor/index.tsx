@@ -48,7 +48,6 @@ export default class TracingEditor extends React.PureComponent<Props, { }> {
       imageId,
       className,
       onFilesDrop,
-      isDemoImageLoading,
       onDemoButtonClick,
     } = this.props;
     return (
@@ -62,7 +61,6 @@ export default class TracingEditor extends React.PureComponent<Props, { }> {
           <CephDropzone
             onFilesDrop={onFilesDrop}
             onDemoButtonClick={onDemoButtonClick}
-            isDemoImageLoading={isDemoImageLoading}
             className={classes.main}
           />
         )}

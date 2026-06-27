@@ -2,16 +2,19 @@ import { isActionOfType } from 'utils/store';
 import { fetchAnalysisSucceeded, fetchAnalysisFailed } from 'actions/workspace';
 import { Store, Middleware } from 'redux';
 
-declare const require: __WebpackModuleApi.RequireFunction;
-
-const middleware: Middleware = (_: Store<StoreState>) => (next: GenericDispatch) =>
+const middleware = (_: Store<StoreState>) => (next: GenericDispatch) =>
   async (action: GenericAction) => {
     if (!isActionOfType(action, 'SET_ANALYSIS_REQUESTED')) {
       return next(action);
     } else {
       const { imageType, analysisId } = action.payload;
       try {
-        await require(`async-module-loader?promise!analyses/${analysisId}`);
+        // Webpack 5 code-splitting: lazily load the analysis module on demand.
+        await import(
+          /* webpackChunkName: "analysis" */
+          /* webpackExclude: /\.test\.tsx?$/ */
+          `analyses/${analysisId}`
+        );
         next(fetchAnalysisSucceeded({ imageType, analysisId}));
       } catch (e) {
         next(fetchAnalysisFailed({
@@ -23,4 +26,4 @@ const middleware: Middleware = (_: Store<StoreState>) => (next: GenericDispatch)
     }
   };
 
-export default middleware;
+export default middleware as Middleware;

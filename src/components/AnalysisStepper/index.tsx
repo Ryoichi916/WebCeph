@@ -49,9 +49,6 @@ export class AnalysisStepper extends React.PureComponent<Props, { }> {
       steps,
       getStepState,
       getStepValue,
-      highlightedStep,
-      isStepRemovable,
-      onRemoveLandmarkClick, onEditLandmarkClick,
       onStepMouseEnter, onStepMouseLeave,
     } = this.props;
     const firstPendingIndex = findIndex(steps, (step) => getStepState(step.symbol) === 'current');
@@ -64,7 +61,6 @@ export class AnalysisStepper extends React.PureComponent<Props, { }> {
             const value = getStepValue(step.symbol);
             const state = getStepState(step.symbol);
             const isDone = state === 'done';
-            const isRemovable = isDone && isStepRemovable(step.symbol);
             const shouldScrollTo = (
               i === firstPendingIndex || (
                 firstPendingIndex === -1 && i === lastDoneIndex && !this.hasScrolled

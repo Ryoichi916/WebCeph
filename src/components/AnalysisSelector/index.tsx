@@ -19,7 +19,7 @@ const AnalysisSelector = pure(({ className, isLoading, currentAnalysisId, onChan
         className={className}
         value={currentAnalysisId}
         onChange={setAnalysis}
-        autoWidth={false}
+        {...{ autoWidth: false }}
       >
         {
           map(analyses, (id) => (

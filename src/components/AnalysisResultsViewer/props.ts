@@ -1,5 +1,5 @@
 export interface StateProps {
-  results: Array<CategorizedAnalysisResult<Category>>;
+  results: (imageId: string) => Array<CategorizedAnalysisResult<Category>>;
 };
 
 export interface DispatchProps {

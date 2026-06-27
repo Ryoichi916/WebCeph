@@ -7,8 +7,8 @@ declare class Jimp {
   static MIME_BMP: 'image/bmp';
   static MIME_JPG: 'image/jpeg';
   static MIME_PNG: 'image/png';
-  distance(img1: Jimp, img2: Jimp): number;
-  diff(img1: Jimp, img2: Jimp): { percent: number, image: Jimp };
+  static distance(img1: Jimp, img2: Jimp): number;
+  static diff(img1: Jimp, img2: Jimp): { percent: number, image: Jimp };
   scaleToFit(height: number, width: number): Jimp;
   getBase64(mime: string, cb: (err: Error, base64: string) => void): void;
   getBuffer(mime: string, cb: (err: Error, buffer: ArrayBuffer) => void): void;

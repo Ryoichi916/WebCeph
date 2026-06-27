@@ -37,11 +37,17 @@ export interface MessageProps {
 }
 
 class Message extends React.PureComponent<MessageProps, { }> {
-  componentDidMount = this.setTimer;
-  componentDidUpdate = this.setTimer;
-  componentWillUnmount = this.clearTimer;
+  componentDidMount() {
+    this.setTimer();
+  }
+  componentDidUpdate() {
+    this.setTimer();
+  }
+  componentWillUnmount() {
+    this.clearTimer();
+  }
 
-  private timeout?: number;
+  private timeout?: ReturnType<typeof setTimeout>;
 
   render() {
     const { className, onDismiss, leftIcon, text, buttons = defaultButtons } = this.props;
@@ -58,7 +64,7 @@ class Message extends React.PureComponent<MessageProps, { }> {
         <span className={classes.text}>{text}</span>
         <span className={classes.button_container}>
         {map(allButtons, ({ onClick, label='', icon }, i) => (
-          <FlatButton key={label || i} label={label} icon={icon} onTouchTap={onClick} />
+          <FlatButton key={label || i} label={label} icon={icon} onClick={onClick} />
         ))}
         </span>
       </div>
