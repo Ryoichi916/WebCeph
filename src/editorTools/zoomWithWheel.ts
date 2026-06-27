@@ -27,7 +27,7 @@ const createZoomWithWheel: EditorToolCreator = (
       const scale = getScale(state);
       const newScale = clamp(scale * zoom, 0.2, 2);
       dispatch(setScale({
-      imageId: getActiveImageId(state),
+      imageId: getActiveImageId(state)!,
         scale: newScale,
       }));
     },

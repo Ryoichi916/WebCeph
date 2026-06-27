@@ -10,7 +10,7 @@ import {
 
 import { isActionOfType } from 'utils/store';
 
-const middleware: Middleware = ({ getState, dispatch }: Store<StoreState>) =>
+const middleware = ({ getState, dispatch }: Store<StoreState>) =>
   (next: GenericDispatch) => async (action: GenericAction) => {
     if (!isActionOfType(action, 'LOAD_IMAGE_SUCCEEDED')) {
       return next(action);
@@ -36,4 +36,4 @@ const middleware: Middleware = ({ getState, dispatch }: Store<StoreState>) =>
     }
   };
 
-export default middleware;
+export default middleware as Middleware;

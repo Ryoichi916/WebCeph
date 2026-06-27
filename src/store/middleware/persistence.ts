@@ -45,7 +45,7 @@ const isStoreEntryPersistable = (key: string): boolean => {
   return indexOf(PERSISTABLE_KEYS, key) > -1;
 };
 
-const saveStateMiddleware: Middleware = ({ getState }: Store<StoreState>) => (next: GenericDispatch) =>
+const saveStateMiddleware = (({ getState }: Store<StoreState>) => (next: GenericDispatch) =>
   async (action: GenericAction) => {
     if (isPersistenceNeededForAction(action)) {
       next(action);
@@ -79,11 +79,11 @@ const saveStateMiddleware: Middleware = ({ getState }: Store<StoreState>) => (ne
        */
       return next(action);
     }
-  };
+  }) as Middleware;
 
 type RestoredState = { [id: string]: any };
 
-const loadStateMiddleware: Middleware = (_: Store<StoreState>) => (next: GenericDispatch) =>
+const loadStateMiddleware = ((_: Store<StoreState>) => (next: GenericDispatch) =>
   async (action: GenericAction) => {
     if (isActionOfType(action, 'LOAD_PERSISTED_STATE_REQUESTED')) {
       console.info('Requested loading persisted state');
@@ -122,9 +122,9 @@ const loadStateMiddleware: Middleware = (_: Store<StoreState>) => (next: Generic
     } else {
       return next(action);
     }
-  };
+  }) as Middleware;
 
-const clearStateMiddleware: Middleware = (_: Store<StoreState>) => (next: GenericDispatch) =>
+const clearStateMiddleware = ((_: Store<StoreState>) => (next: GenericDispatch) =>
   async (action: GenericAction) => {
     if (isActionOfType(action, 'CLEAR_PRESISTED_STATE_SUCCEEDED')) {
       try {
@@ -140,6 +140,6 @@ const clearStateMiddleware: Middleware = (_: Store<StoreState>) => (next: Generi
     } else {
       return next(action);
     }
-  };
+  }) as Middleware;
 
 export { saveStateMiddleware, clearStateMiddleware, loadStateMiddleware };

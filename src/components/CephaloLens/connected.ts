@@ -24,7 +24,7 @@ import {
 
 const mapStateToProps: MapStateToProps<StateProps, OwnProps, StoreState> =
   (state: StoreState, { margin }: OwnProps) => {
-    const { top, width: canvasWidth } = getCanvasDimensions(state);
+    const { width: canvasWidth } = getCanvasDimensions(state);
     const { x, y } = getMousePosition(state)!;
     const props = getImageProps(state)(getActiveImageId(state)!);
     const { width: imageWidth, height: imageHeight } = props;
@@ -36,7 +36,7 @@ const mapStateToProps: MapStateToProps<StateProps, OwnProps, StoreState> =
       y: y !== null ? y :  imageHeight / 2,
       width, // @TODO: get from state
       height, // @TODO: get from state
-      top: top + margin,
+      top: null,
       left: canvasWidth - width - margin,
       imageHeight, imageWidth,
       isFlippedX: props.flipX,

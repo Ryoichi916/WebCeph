@@ -14,7 +14,7 @@ const isLoggable = (type: string) => {
   ));
 };
 
-const middleware: Middleware = (store: Store<StoreState>) =>
+const middleware = (store: Store<StoreState>) =>
   (next: Dispatch<GenericAction>) => (action: GenericAction) => {
     const { type, payload } = action;
     if (isLoggable(type)) {
@@ -24,4 +24,4 @@ const middleware: Middleware = (store: Store<StoreState>) =>
     return next(action);
   };
 
-export default middleware;
+export default middleware as Middleware;

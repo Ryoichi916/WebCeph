@@ -258,9 +258,11 @@ export const isStepEligibleForComputation = createSelector(
 
 export const getCalculatedValue = createSelector(
   isStepEligibleForComputation,
-  (isEligible) => (imageId: string): ((step: CephLandmark) => number | undefined) => (step: CephLandmark) => {
+  getManualLandmarks,
+  (isEligible, getManual) =>
+    (imageId: string): ((step: CephLandmark) => number | undefined) => (step: CephLandmark) => {
     if (isEligible(imageId)(step)) {
-      return tryCalculate(step);
+      return tryCalculate(step, getManual(imageId), {});
     }
     return undefined;
   },

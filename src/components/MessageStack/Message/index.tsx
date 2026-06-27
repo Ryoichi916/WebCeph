@@ -37,9 +37,15 @@ export interface MessageProps {
 }
 
 class Message extends React.PureComponent<MessageProps, { }> {
-  componentDidMount = this.setTimer;
-  componentDidUpdate = this.setTimer;
-  componentWillUnmount = this.clearTimer;
+  componentDidMount() {
+    this.setTimer();
+  }
+  componentDidUpdate() {
+    this.setTimer();
+  }
+  componentWillUnmount() {
+    this.clearTimer();
+  }
 
   private timeout?: ReturnType<typeof setTimeout>;
 

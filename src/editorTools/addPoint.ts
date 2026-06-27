@@ -27,8 +27,8 @@ export const createAddPoint: EditorToolCreator = (
     // @TODO
   },
   onCanvasLeftClick(dispatch, x, y) {
-    const landmark = getExpectedNextManualLandmark(state);
-    const imageId = getActiveImageId(state);
+    const imageId = getActiveImageId(state)!;
+    const landmark = getExpectedNextManualLandmark(state)(imageId);
     const value = { x, y };
     if (landmark !== null) {
       dispatch(addManualLandmark({

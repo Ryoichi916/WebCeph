@@ -37,7 +37,7 @@ const fail = (error: Error, workspaceId: string) => {
   return importFileFailed({ workspaceId, error });
 };
 
-const middleware: Middleware = ({ dispatch }: Store<StoreState>) =>
+const middleware = ({ dispatch }: Store<StoreState>) =>
   (next: GenericDispatch) => async (action: GenericAction) => {
     if (isActionOfType(action, 'LOAD_IMAGE_FROM_URL_REQUESTED')) {
       next(action);
@@ -75,4 +75,4 @@ const middleware: Middleware = ({ dispatch }: Store<StoreState>) =>
     }
   };
 
-export default middleware;
+export default middleware as Middleware;

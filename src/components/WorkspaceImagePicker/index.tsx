@@ -42,10 +42,10 @@ export default class WorkspaceImagePicker extends React.PureComponent<Props, { }
         {map(this.props.images, (imageId) => (
           <button className={classes.image_container}>
             <CephaloImage
-              className={classes.image}
               key={imageId}
               imageId={imageId}
               onClick={this.handleImageClick(imageId)}
+              {...{ className: classes.image }}
             />
           </button>
         ))}
@@ -61,7 +61,7 @@ export default class WorkspaceImagePicker extends React.PureComponent<Props, { }
             activeClassName={classes.image_dropzone__active}
             rejectClassName={classes.image_dropzone__reject}
             onDropAccepted={this.handleDrop}
-            tabIndex={0}
+            {...{ tabIndex: 0 }}
           >
             <span className={classes.image_dropzone_icon}>
               +

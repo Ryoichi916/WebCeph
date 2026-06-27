@@ -12,13 +12,13 @@ export const createZoomWithClick: EditorToolCreator = (
   ...createZoomWithWheel(state),
   onCanvasLeftClick(dispatch, _x, _y) {
     dispatch(setScale({
-      imageId: getActiveImageId(state),
+      imageId: getActiveImageId(state)!,
       scale: getScale(state) * 1.2,
     }));
   },
   onCanvasRightClick(dispatch, _x, _y) {
     dispatch(setScale({
-      imageId: getActiveImageId(state),
+      imageId: getActiveImageId(state)!,
       scale: getScale(state) * 0.8,
     }));
   },

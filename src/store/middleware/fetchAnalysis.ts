@@ -2,7 +2,7 @@ import { isActionOfType } from 'utils/store';
 import { fetchAnalysisSucceeded, fetchAnalysisFailed } from 'actions/workspace';
 import { Store, Middleware } from 'redux';
 
-const middleware: Middleware = (_: Store<StoreState>) => (next: GenericDispatch) =>
+const middleware = (_: Store<StoreState>) => (next: GenericDispatch) =>
   async (action: GenericAction) => {
     if (!isActionOfType(action, 'SET_ANALYSIS_REQUESTED')) {
       return next(action);
@@ -26,4 +26,4 @@ const middleware: Middleware = (_: Store<StoreState>) => (next: GenericDispatch)
     }
   };
 
-export default middleware;
+export default middleware as Middleware;

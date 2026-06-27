@@ -37,8 +37,8 @@ const Arc = ({ vector1, vector2, ...rest }: ArcProps) => {
     const { x, y } = i;
     const [point1, point2] = getVectorPoints(vector1);
     const [point3, point4] = getVectorPoints(vector2);
-    const p1 = last(reject([point1, point2], p => isEqual(p, i)));
-    const p2 = last(reject([point3, point4], p => isEqual(p, i)));
+    const p1 = last(reject([point1, point2], p => isEqual(p, i)))!;
+    const p2 = last(reject([point3, point4], p => isEqual(p, i)))!;
     const uid = uniqueId(`clip-path-`);
     const triangle = {
       points: [p1, i, p2].map(({ x, y }) => `${x},${y}`).join(' '),

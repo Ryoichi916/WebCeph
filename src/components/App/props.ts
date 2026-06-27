@@ -9,7 +9,7 @@ export type StateProps = {
   isReady: boolean;
   activeWorkspaceId: string;
   locale: string;
-  messages: ReactIntl.Messages;
+  messages: Locale | undefined;
   title: string | null;
   userAgent: string;
 };

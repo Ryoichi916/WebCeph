@@ -19,9 +19,10 @@ const Lens = pure((props: Props) => {
     style: ownStyle = { },
   } = props;
   const transform = `translate(-${ x - (width / 2) }px, -${ y - (height / 2) }px)`;
-  const style = {
+  const style: React.CSSProperties = {
     ...ownStyle,
-    top, left,
+    top: top === null ? undefined : top,
+    left: left === null ? undefined : left,
     width, height,
     position: 'absolute',
     overflow: 'hidden',

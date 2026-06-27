@@ -101,8 +101,8 @@ const loadStatusReducer = handleActions<typeof KEY_IMAGES_LOAD_STATUS>({
       },
     };
   },
-  CLOSE_IMAGE_REQUESTED: (state, { payload: id }) => {
-    return omit(state, id) as typeof state;
+  CLOSE_IMAGE_REQUESTED: (state, { payload: { imageId } }) => {
+    return omit(state, imageId) as typeof state;
   },
 }, {});
 

@@ -19,7 +19,7 @@ const reducers: Partial<ReducerMap> = {
         },
       };
     },
-    REMOVE_WORKSPACE: (state, id) => omit(state, id) as typeof state,
+    REMOVE_WORKSPACE: (state, { payload: { id } }) => omit(state, id) as typeof state,
     SET_SUPERIMPOSITION_MODE_REQUESTED: (state, { payload: { workspaceId, mode } }) => {
       return {
         ...state,

@@ -59,12 +59,12 @@ const mapStateToProps: MapStateToProps<StateProps, OwnProps, StoreState> =
         isCompatibilityIgnoredForThisBrowser(state) ||
         isCheckingCompatiblityForThisBrowser(state)
       ),
-      activeWorkspaceId: getActiveWorkspaceId(state),
+      activeWorkspaceId: getActiveWorkspaceId(state)!,
       title: getActiveWorkspaceTitle(state),
       shouldShowWorkspaceSwitcher: hasMultipleWorkspaces(state) || isLastWorkspaceUsed(state),
       locale: getActiveLocale(state),
       messages: getActiveLocaleData(state),
-      userAgent: getUserAgent(state),
+      userAgent: getUserAgent(state)!,
     };
   };
 

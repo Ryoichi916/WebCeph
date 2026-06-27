@@ -14,7 +14,7 @@ import featureDetails from 'utils/features';
 
 import { isActionOfType } from 'utils/store';
 
-const middleware: Middleware = (_: Store<StoreState>) =>
+const middleware = (_: Store<StoreState>) =>
   (next: GenericDispatch) => async (action: GenericAction) => {
     next(action);
     if (isActionOfType(action, 'BROWSER_COMPATIBLITY_CHECK_REQUESTED')) {
@@ -58,4 +58,4 @@ const middleware: Middleware = (_: Store<StoreState>) =>
     }
   };
 
-export default middleware;
+export default middleware as Middleware;

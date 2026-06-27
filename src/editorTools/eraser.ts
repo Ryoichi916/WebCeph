@@ -22,8 +22,8 @@ export const createEraser: EditorToolCreator = (
     ...createZoomWithWheel(state),
     ...createTrackCursor(state),
     onLandmarkClick(dispatch, symbol) {
-      if (isRemovable(symbol)) {
-        dispatch(removeManualLandmark(symbol));
+      if (imageId !== null && isRemovable(symbol)) {
+        dispatch(removeManualLandmark({ imageId, symbol }));
       }
     },
 

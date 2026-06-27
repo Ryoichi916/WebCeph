@@ -36,6 +36,7 @@ const analysis: Analysis<'ceph_lateral'> = {
       }
     }
 
+    return [];
   },
 };
 

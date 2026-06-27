@@ -6,7 +6,6 @@ import uniqBy from 'lodash/uniqBy';
 import sum from 'lodash/sum';
 import join from 'lodash/join';
 import isPlainObject from 'lodash/isPlainObject';
-import countBy from 'lodash/countBy';
 import maxBy from 'lodash/maxBy';
 import groupBy from 'lodash/groupBy';
 import keyBy from 'lodash/keyBy';
@@ -38,9 +37,12 @@ function getSymbolForAngle(line1: CephLine, line2: CephLine): string {
 const defaultMapAngle: MapLandmark<GeoVector, GeoAngle> =
   (line1: GeoVector, line2: GeoVector) => createAngleFromVectors(line1, line2);
 
-const defaultCalculateAngle: CalculateLandmark<undefined, GeoVector, GeoAngle> =
+// The angle calculator only ever runs on angle landmarks, so it is safe to
+// expose it under the general landmark-calculator type expected by CephLandmark.
+const defaultCalculateAngle = (
   () => () => (angle: GeoAngle) =>
-    radiansToDegrees(calculateAngle(angle));
+    radiansToDegrees(calculateAngle(angle))
+) as CalculateLandmark<number, GeoObject, GeoObject>;
 
 const defaultMapLine: MapLandmark<GeoPoint, GeoVector> =
   (A: GeoPoint, B: GeoPoint) => createVectorFromPoints(A, B);
@@ -48,8 +50,10 @@ const defaultMapLine: MapLandmark<GeoPoint, GeoVector> =
 const defaultMapDistance: MapLandmark<GeoObject, GeoVector> =
   (A: GeoPoint, line: GeoVector) => createPerpendicular(line, A);
 
-const defaultCalculateLine: CalculateLandmark<undefined, GeoPoint, GeoVector> =
-  () => () => (segment: GeoVector) => getSegmentLength(segment);
+// Only ever runs on line/distance landmarks; exposed under the general type.
+const defaultCalculateLine = (
+  () => () => (segment: GeoVector) => getSegmentLength(segment)
+) as CalculateLandmark<number, GeoObject, GeoObject>;
 
 const defaultCalculateSum: CalculateLandmark<number, GeoObject, GeoObject> =
   (...values) => () => () => sum(values);
@@ -464,7 +468,10 @@ export function composeInterpretation<C extends Category>(
 export function resolveIndication<C extends Category>(
   results: Array<LandmarkInterpretation<C>>,
 ): Indication<C> {
-  const counts = countBy(results, r => r.indication);
+  const counts: { [indication: string]: number } = {};
+  results.forEach((r) => {
+    counts[r.indication] = (counts[r.indication] || 0) + 1;
+  });
   const pairs = map(
     counts,
     (value, indication: Indication<C>) => ({
@@ -473,7 +480,7 @@ export function resolveIndication<C extends Category>(
     }),
   );
   const max = maxBy(pairs, ({ value }) => value);
-  return max.indication;
+  return max!.indication;
 };
 
 /**
@@ -485,10 +492,15 @@ export function resolveIndication<C extends Category>(
 export function resolveSeverity<C extends Category>(
   results: Array<LandmarkInterpretation<C>>,
 ): Severity {
-  const counts = countBy(results, r => r.severity);
+  const counts: { [severity: string]: number } = {};
+  results.forEach((r) => {
+    if (r.severity !== undefined) {
+      counts[r.severity] = (counts[r.severity] || 0) + 1;
+    }
+  });
   const pairs = map(counts, (value, severity: Severity) => ({ value, severity }));
   const max = maxBy(pairs, ({ value }) => value);
-  return max.severity;
+  return max!.severity;
 };
 
 export const indexAnalysisResults = <C extends Category>(

@@ -28,7 +28,7 @@ const requireLang = require.context(`react-intl/locale-data`, false, /\.js$/);
 
 const addReactIntlData = (locale: string) => {
   const primaryLang = getPrimaryLang(locale);
-  return new Promise((resolve, reject) => {
+  return new Promise<void>((resolve, reject) => {
     require.ensure([], () => {
       try {
         const data = requireLang(`./${primaryLang}.js`) as ReactIntl.Locale;
@@ -42,7 +42,7 @@ const addReactIntlData = (locale: string) => {
   });
 };
 
-const middleware: Middleware = ({ getState }: Store<StoreState>) =>
+const middleware = ({ getState }: Store<StoreState>) =>
   (next: Dispatch<GenericAction>) => async (action: GenericAction) => {
     next(action);
     if (some(observedActions, (type) => isActionOfType(action, type))) {
@@ -64,4 +64,4 @@ const middleware: Middleware = ({ getState }: Store<StoreState>) =>
     }
   };
 
-export default middleware;
+export default middleware as Middleware;

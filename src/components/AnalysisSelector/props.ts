@@ -1,6 +1,6 @@
 export interface StateProps {
   currentAnalysisId: AnalysisId<ImageType> | null;
-  analyses: Array<AnalysisId<ImageType>>;
+  analyses: string[];
   isLoading: boolean;
 };
 

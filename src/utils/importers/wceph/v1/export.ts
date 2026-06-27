@@ -38,6 +38,8 @@ import {
   getWorkspaceImageIds,
 } from 'store/reducers/workspace/settings';
 
+import { getActiveWorkspaceId } from 'store/reducers/workspace/activeId';
+
 import { validateIndexJSON } from './validate';
 
 const createExport: Exporter = async (state, options, onUpdate) => {
@@ -68,6 +70,7 @@ const createExport: Exporter = async (state, options, onUpdate) => {
     }),
   );
 
+  const activeWorkspaceId = getActiveWorkspaceId(state)!;
   const activeImageId = getActiveTracingImageId(state);
   const hasActiveImage = activeImageId !== null && findIndex(
     imagesToSave, id => id === activeImageId) !== -1;
@@ -101,8 +104,8 @@ const createExport: Exporter = async (state, options, onUpdate) => {
       ),
     ),
     superimposition: {
-      mode: getSuperimpsotionMode(state),
-      imageIds: getWorkspaceImageIds(state),
+      mode: getSuperimpsotionMode(state)(activeWorkspaceId),
+      imageIds: getWorkspaceImageIds(state)(activeWorkspaceId),
     },
     treatmentStages: {
       order: getTreatmentStagesOrder(state),
@@ -148,12 +151,13 @@ const createExport: Exporter = async (state, options, onUpdate) => {
   }
 
   zip.file(JSON_FILE_NAME, JSON.stringify(json, undefined, 2));
+  const generatorOptions: JSZipGeneratorOptions & { mimeType?: string } = {
+    type : 'blob',
+    compression: 'DEFLATE',
+    mimeType: 'application/wceph',
+  };
   const blob: Blob = await zip.generateAsync(
-    {
-      type : 'blob',
-      compression: 'DEFLATE',
-      mimeType: 'application/wceph',
-    },
+    generatorOptions,
     onUpdate !== undefined ? ({ percent }: { percent: number }) => {
       onUpdate(percent);
     } : undefined,

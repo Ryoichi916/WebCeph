@@ -40,20 +40,26 @@ export default {
 
 export const canEdit = hasImage;
 
+export const getActiveTracingImageId = createSelector(
+  getTracingImageId,
+  getActiveWorkspaceId,
+  (getImageId, workspaceId) => getImageId(workspaceId!),
+);
+
 export const getHighlightedLandmarks = createSelector(
   getHighlightedStep,
   findStepBySymbol,
   getAllGeoObjects,
   getMappedValue,
-  (symbol, findStep, all, getMapped) => {
-    if (symbol === null) {
+  getActiveTracingImageId,
+  (symbol, findStep, all, getMapped, imageId): { [symbol: string]: boolean } => {
+    if (symbol === null || imageId === null) {
       return { };
     }
-    const unhighlighted = mapValues(all, () => false);
-    const step = findStep(symbol);
-    if (step !== null) {
-      const highlighted = mapValues(getMapped(step), () => true);
-      return { ...unhighlighted, ...highlighted };
+    const unhighlighted = mapValues(all(imageId), () => false);
+    const step = findStep(imageId)(symbol, true);
+    if (step !== null && typeof getMapped(imageId)(step) !== 'undefined') {
+      return { ...unhighlighted, [step.symbol]: true };
     }
     return unhighlighted;
   },
@@ -68,7 +74,9 @@ export const isHighlightMode = createSelector(
 
 export const isManualObject = createSelector(
   getManualLandmarks,
-  (manual) => (symbol: string) => manual[symbol] !== undefined,
+  getActiveTracingImageId,
+  (getManual, imageId) => (symbol: string) =>
+    imageId !== null && getManual(imageId)[symbol] !== undefined,
 );
 
 export const isHighlightedObject = createSelector(
@@ -80,10 +88,11 @@ export const getSortedLandmarksToDisplay = createSelector(
   isManualObject,
   isHighlightedObject,
   getLandmarksToDisplay,
-  (isManual, isHighlighted, landmarksToDisplay) => {
+  getActiveTracingImageId,
+  (isManual, isHighlighted, landmarksToDisplay, imageId) => {
     return sortBy(
       map(
-        landmarksToDisplay,
+        imageId !== null ? landmarksToDisplay(imageId) : {},
         (value: GeoObject, symbol: string) => ({ symbol, value }),
       ),
       ({ symbol }) => (
@@ -102,12 +111,6 @@ export const getSortedLandmarksToDisplay = createSelector(
 //   getExportError,
 //   (error) => error !== null ? error.message : null,
 // );
-
-export const getActiveTracingImageId = createSelector(
-  getTracingImageId,
-  getActiveWorkspaceId,
-  (getImageId, workspaceId) => getImageId(workspaceId!),
-);
 
 // Undo/redo history is not currently wired through redux-undo, so there is
 // nothing to undo or redo. These return false until the undoable reducer is
