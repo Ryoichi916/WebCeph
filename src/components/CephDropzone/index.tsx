@@ -5,7 +5,7 @@ import { Button, ButtonType } from 'office-ui-fabric-react/lib/Button';
 // import join from 'lodash/join';
 import Props from './props';
 
-import ReactCSSTransitionGroup from 'react-addons-css-transition-group';
+import { CSSTransitionGroup as ReactCSSTransitionGroup } from 'react-transition-group';
 
 import { FormattedMessage, injectIntl, InjectedIntl, defineMessages } from 'react-intl';
 

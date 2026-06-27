@@ -9,7 +9,7 @@ export default class TracingToolbar extends React.PureComponent<Props, { }> {
     const { imageId, className } = this.props;
     const items: ICommandBarProps['items'] = [
       {
-        icon: 'Add',
+        iconProps: { iconName: 'Add' },
         key: 'newItem',
         name: 'Add',
         disabled: imageId === null,

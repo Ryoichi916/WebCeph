@@ -11,10 +11,6 @@ import Progress from './Progress';
 import getMuiTheme from 'material-ui/styles/getMuiTheme';
 import MuiThemeProvider from 'material-ui/styles/MuiThemeProvider';
 
-import injectTapEventPlugin from 'react-tap-event-plugin';
-
-import attempt from 'lodash/attempt';
-
 import { compose, lifecycle, pure } from 'recompose';
 
 import { IntlProvider } from 'react-intl';
@@ -24,8 +20,6 @@ import { getDirForLocale } from 'utils/locale';
 import { defaultLocale } from 'utils/config';
 
 import Props from './props';
-
-attempt(injectTapEventPlugin);
 
 type State = { };
 

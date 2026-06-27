@@ -1,6 +1,6 @@
 import * as React from 'react';
 import CircularProgress from 'material-ui/CircularProgress';
-import ReactCSSTransitionGroup from 'react-addons-css-transition-group';
+import { CSSTransitionGroup as ReactCSSTransitionGroup } from 'react-transition-group';
 
 const scaleInAndRotate = require('transitions/scale-in-and-rotate.scss');
 
