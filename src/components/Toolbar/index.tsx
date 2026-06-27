@@ -15,6 +15,7 @@ import IconRedo from 'material-ui/svg-icons/content/redo';
 import IconUndo from 'material-ui/svg-icons/content/undo';
 import IconZoom from 'material-ui/svg-icons/action/zoom-in';
 import IconExport from 'material-ui/svg-icons/file/file-download';
+import IconAutoPlot from 'material-ui/svg-icons/image/flash-auto';
 
 import * as cx from 'classnames';
 
@@ -34,9 +35,12 @@ const CephaloEditorToolbar = (props: Props) => {
     onExportClick,
     onToolButtonClick,
     onShowSummaryClick,
+    onAutoPlotClick,
     canShowSummary,
     canExport,
     isExporting,
+    canAutoPlot,
+    isAutoPlotting,
   } = props;
 
   const cannotEdit = !canEdit;
@@ -68,6 +72,12 @@ const CephaloEditorToolbar = (props: Props) => {
         label=""
         icon={<IconZoom />}
         onClick={onToolButtonClick.bind(null, 'ZOOM_WITH_CLICK')}
+      />
+      <FlatButton
+        disabled={!canAutoPlot || isAutoPlotting}
+        label="Auto-plot"
+        icon={!isAutoPlotting ? <IconAutoPlot /> : <CircularProgress size={24} thickness={2} />}
+        onClick={onAutoPlotClick}
       />
       <FlatButton
         disabled={!canShowSummary}

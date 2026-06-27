@@ -105,10 +105,12 @@ export const getActiveAnalysis = createSelector(
   (getAnalysisId) => (imageId: string) => {
     const analysisId = getAnalysisId(imageId);
     if (analysisId !== null) {
-      return require(
+      const mod = require(
         /* webpackExclude: /\.test\.tsx?$/ */
         `analyses/${analysisId}`
-      ) as Analysis<ImageType>;
+      );
+      // Analyses are ES modules (`export default`); unwrap the default export.
+      return (mod.default || mod) as Analysis<ImageType>;
     }
     return null;
   },

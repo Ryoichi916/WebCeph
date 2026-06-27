@@ -591,6 +591,24 @@ interface Events {
     imageId: string;
     symbol: string;
   };
+  /** Add several manual landmarks in a single transition (one undo step). */
+  ADD_MANUAL_LANDMARKS_BATCH_REQUESTED: {
+    imageId: string;
+    landmarks: { [symbol: string]: GeoObject };
+  };
+  /** Run automatic landmark detection on the active image. */
+  AUTO_PLOT_LANDMARKS_REQUESTED: {
+    imageId: string;
+    /** Overwrite landmarks that were already placed. Defaults to false. */
+    overwrite?: boolean;
+  };
+  AUTO_PLOT_LANDMARKS_SUCCEEDED: {
+    imageId: string;
+  };
+  AUTO_PLOT_LANDMARKS_FAILED: {
+    imageId: string;
+    error: GenericError;
+  };
   FLIP_IMAGE_X_REQUESTED: {
     imageId: string;
   };

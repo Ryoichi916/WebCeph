@@ -37,9 +37,7 @@ const addLifeCycleHooks = lifecycle({
 const enhance = compose<Props, State>(pure, addLifeCycleHooks);
 
 import { HotKeys } from 'react-hotkeys';
-import * as ReactHelmet from 'react-helmet';
-
-const Helmet = ReactHelmet as unknown as React.ComponentClass<ReactHelmet.HelmetProps>;
+import { Helmet } from 'react-helmet';
 
 const App = enhance(({
   isReady, keyMap, handlers,

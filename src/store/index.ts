@@ -7,6 +7,7 @@ import fetchAnalysisMiddleware from './middleware/fetchAnalysis';
 import exportMiddleware from './middleware/export';
 import importMiddleware from './middleware/import';
 import autoScaleMiddleware from './middleware/autoScale';
+import autoPlotMiddleware from './middleware/autoPlot';
 import compatibilityMiddleware from './middleware/compatibility';
 import fetchLocaleMiddleware from './middleware/fetchLocale';
 import {
@@ -30,6 +31,7 @@ const middlewares: Middleware[] = [
   importMiddleware,
   exportMiddleware,
   autoScaleMiddleware,
+  autoPlotMiddleware,
   saveStateMiddleware,
 ];
 
