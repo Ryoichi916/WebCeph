@@ -16,6 +16,7 @@ import {
 } from 'store/reducers/workspace/image';
 import { getManualSteps } from 'store/reducers/workspace/analyses';
 import { runPrediction, predictionsToLandmarks } from 'predictors';
+import { runPredictionInWorker } from 'predictors/workerClient';
 import { dataUrlToImageData } from 'utils/imageData';
 
 /**
@@ -68,12 +69,20 @@ const middleware = ({ getState, dispatch }: Store<StoreState>) =>
 
     try {
       const imageData = await dataUrlToImageData(props.data);
-      const predictions = await runPrediction({
+      const input = {
         imageData,
         width: props.width,
         height: props.height,
         symbols,
-      });
+      };
+      // Prefer off-main-thread inference; fall back to the main thread if a
+      // worker cannot be spawned (e.g. a restrictive environment).
+      let predictions;
+      try {
+        predictions = await runPredictionInWorker(input);
+      } catch (workerError) {
+        predictions = await runPrediction(input);
+      }
       const landmarks = predictionsToLandmarks(
         predictions, props.width, props.height, placed, overwrite,
       );
