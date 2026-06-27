@@ -245,6 +245,9 @@ const config = {
         swDest: 'service-worker.js',
         clientsClaim: true,
         skipWaiting: false,
+        // Large on-demand assets (e.g. the onnxruntime WASM) are not precached;
+        // they are runtime-cached by the CacheFirst route when first fetched.
+        exclude: [/\.wasm$/, /\.map$/],
         runtimeCaching: [
           {
             urlPattern: /.*/,

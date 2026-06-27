@@ -1,14 +1,18 @@
 import { LandmarkPredictor, PredictedLandmark, PredictionInput } from './types';
 import demoPredictor from './demo';
+import onnxPredictor from './onnx';
 
 export type { LandmarkPredictor, PredictedLandmark, PredictionInput } from './types';
 
 /**
- * The active landmark predictor. Today this is the deterministic demo
- * predictor; swapping in a trained onnxruntime-web backend is a one-line change
- * here once a model is available (see predictors/onnx.ts).
+ * Switch to the onnxruntime-web backend once a trained model is available at the
+ * configured MODEL_URL (see predictors/onnx.ts). Until then the demo predictor
+ * is used so the feature works end-to-end.
  */
-export const getActivePredictor = (): LandmarkPredictor => demoPredictor;
+const USE_ONNX = false;
+
+export const getActivePredictor = (): LandmarkPredictor =>
+  USE_ONNX ? onnxPredictor : demoPredictor;
 
 export function runPrediction(input: PredictionInput): Promise<PredictedLandmark[]> {
   return getActivePredictor().predict(input);
