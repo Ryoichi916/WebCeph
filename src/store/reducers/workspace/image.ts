@@ -283,7 +283,10 @@ export const getSkippedSteps = createSelector(
 
 export const getAnalysisId = createSelector(
   getImageProps,
-  (getProps) => (id: string) => getProps(id).analysis,
+  (getProps) => (id: string) => {
+    const props = getProps(id);
+    return props && props.analysis ? props.analysis.activeId : null;
+  },
 );
 
 export const getScaleFactor = createSelector(
