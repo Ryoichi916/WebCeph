@@ -33,8 +33,8 @@ const scaleInAndRotate = require('transitions/scale-in-and-rotate.scss');
 const fadeIn = require('transitions/fade-in.scss');
 
 const DropzonePlaceholder = require(
-  'svg-react-loader?name=DropzonePlaceholder!svgo-loader?useConfig=svgoConfig!./assets/placeholder.svg',
-) as React.DOMFactory<React.DOMAttributes<SVGElement>, SVGElement>;
+  '@svgr/webpack?svgo=false!./assets/placeholder.svg',
+).default as React.ComponentType<React.SVGAttributes<SVGElement>>;
 
 class CephDropzone extends React.PureComponent<Props & InjectedIntlProps, { }> {
   dropzone: null | React.ReactInstance & { open: Function };

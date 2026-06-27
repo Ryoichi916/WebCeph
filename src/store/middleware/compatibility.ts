@@ -20,7 +20,8 @@ const middleware: Middleware = (_: Store<StoreState>) =>
     if (isActionOfType(action, 'BROWSER_COMPATIBLITY_CHECK_REQUESTED')) {
       try {
         const userAgent = action.payload.userAgent;
-        const Modernizr = require('exports-loader?Modernizr!utils/modernizr.js');
+        require('utils/modernizr.js');
+        const Modernizr = (window as any).Modernizr;
         const features = keys(featureDetails);
         const total = features.length;
         let j = 1;

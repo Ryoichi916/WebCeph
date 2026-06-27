@@ -1,6 +1,5 @@
 import * as React from 'react';
 import { Provider } from 'react-redux';
-import { AppContainer } from 'react-hot-loader';
 
 import RootScreen from 'screens/root';
 import createConfiguredStore from 'store';
@@ -13,10 +12,4 @@ export const ReduxApp = () => (
   </Provider>
 );
 
-export const hotReloadable = () => (
-  <AppContainer>
-    <ReduxApp />
-  </AppContainer>
-);
-
-export default hotReloadable;
+export default ReduxApp;

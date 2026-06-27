@@ -105,7 +105,10 @@ export const getActiveAnalysis = createSelector(
   (getAnalysisId) => (imageId: string) => {
     const analysisId = getAnalysisId(imageId);
     if (analysisId !== null) {
-      return require(`analyses/${analysisId}`) as Analysis<ImageType>;
+      return require(
+        /* webpackExclude: /\.test\.tsx?$/ */
+        `analyses/${analysisId}`
+      ) as Analysis<ImageType>;
     }
     return null;
   },

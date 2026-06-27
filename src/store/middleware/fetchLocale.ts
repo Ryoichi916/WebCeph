@@ -49,13 +49,13 @@ const middleware: Middleware = ({ getState }: Store<StoreState>) =>
       const state = getState();
       const locale = getLocaleToFetch(state);
       if (locale !== undefined) {
-        const url = require(`url-loader!locale/${locale}.json`) as string;
         next(fetchLocaleStarted(locale));
         try {
-          const [ messages ] = await Promise.all([
-            (await fetch(url)).json() as Promise<Locale>,
+          const [ localeModule ] = await Promise.all([
+            import(/* webpackChunkName: "locale" */ `locale/${locale}.json`),
             addReactIntlData(locale),
           ]);
+          const messages = (localeModule as { default: Locale }).default;
           next(fetchLocaleSucceeded({ locale, messages }));
         } catch (error) {
           next(fetchLocaleFailed({ locale, error }));

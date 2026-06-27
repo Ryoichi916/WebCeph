@@ -25,7 +25,7 @@ export const defaultLocale = bundledLocales[0];
 export const bundleLocaleData = zipObject(
   bundledLocales,
   map(bundledLocales, (locale) => {
-    return require(`json-loader!locale/${locale}.json`) as Locale;
+    return require(`locale/${locale}.json`) as Locale;
   }),
 );
 
