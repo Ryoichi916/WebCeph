@@ -29,9 +29,6 @@ export class TracingViewer extends React.PureComponent<Props, { mouseX: number, 
       mouseX: 0,
       mouseY: 0,
     };
-    this.refs = {
-      canvas: null,
-    };
   }
 
   render() {
@@ -50,7 +47,6 @@ export class TracingViewer extends React.PureComponent<Props, { mouseX: number, 
     return (
       <div className={className} style={{ height: minHeight, width: minWidth }}>
         <svg
-          ref={this.setRef}
           className={cx(classes.canvas, className)}
           viewBox={`0 0 ${minWidth} ${minHeight}`}
           onContextMenu={this.handleContextMenu}
@@ -101,8 +97,6 @@ export class TracingViewer extends React.PureComponent<Props, { mouseX: number, 
       </div>
     );
   }
-
-  private setRef = (node: React.ReactInstance) => this.refs.canvas = node;
 
   private convertMousePositionRelativeToOriginalImage = (
     e: React.MouseEvent<SVGElement> | React.TouchEvent<SVGElement>,

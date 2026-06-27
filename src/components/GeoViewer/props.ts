@@ -12,9 +12,9 @@ export interface StateProps extends React.SVGAttributes<SVGElement> {
   height: number;
   getPropsForPoint: (symbol: string) => Partial<PointProps>;
   getPropsForVector: (symbol: string) => Partial<VectorProps>;
-  getPropsForAngle: (symbol: string) => (
-    Pick<AngleProps, 'boundingRect' | 'vectors' | 'symbol'> & Partial<AngleProps>
-  );
+  // GeoViewer supplies symbol/vectors/boundingRect itself, so the callback
+  // only contributes styling overrides.
+  getPropsForAngle: (symbol: string) => Partial<AngleProps>;
 }
 
 export interface DispatchProps {
