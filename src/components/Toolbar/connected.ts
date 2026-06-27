@@ -1,9 +1,7 @@
 import {
   connect,
-  MapStateToProps,
-  MapDispatchToPropsFunction,
 } from 'react-redux';
-import { StateProps, DispatchProps, OwnProps } from './props';
+import { StateProps, OwnProps, Props } from './props';
 import CephaloToolbar from './index';
 import {
   setBrightness,
@@ -23,10 +21,9 @@ import {
   canRedo,
   canUndo,
   hasUnsavedWork,
-} from 'store/reducers/workspace';
-import {
   isExporting,
-} from 'store/reducers/workspace/export';
+  getActiveTracingImageId,
+} from 'store/reducers/workspace';
 import {
   hasImage,
 } from 'store/reducers/workspace/image';
@@ -38,9 +35,14 @@ import {
   canShowSummary,
 } from 'store/reducers/workspace/analyses';
 
-const mapStateToProps: MapStateToProps<StateProps, OwnProps, StoreState> =
-  (state: StoreState): StateProps => {
+// The active image id is needed to bind the image-targeting actions; it is
+// passed through to mergeProps and stripped from the final props.
+type StateFromStore = StateProps & { activeImageId: string | null };
+
+const mapStateToProps =
+  (state: StoreState): StateFromStore => {
     const _isExporting = isExporting(state);
+    const activeImageId = getActiveTracingImageId(state);
     return {
       activeToolId: getActiveToolId(state),
       brightness: 0.5,
@@ -49,30 +51,43 @@ const mapStateToProps: MapStateToProps<StateProps, OwnProps, StoreState> =
       canEdit: canEdit(state),
       canRedo: canRedo(state),
       canUndo: canUndo(state),
-      canShowSummary: !isSummaryShown(state) && canShowSummary(state),
+      canShowSummary:
+        activeImageId !== null &&
+        !isSummaryShown(state) &&
+        canShowSummary(state)(activeImageId),
       canExport: !_isExporting && hasImage(state) && hasUnsavedWork(state),
       isExporting: _isExporting,
+      activeImageId,
     };
   };
 
-const mapDispatchToProps: MapDispatchToPropsFunction<DispatchProps, OwnProps> =
-  (dispatch: GenericDispatch): DispatchProps => {
-    return {
-      onBrightnessChange: (value) => dispatch(setBrightness(value)),
-      onContrastChange: (value) => dispatch(setContrast(value)),
-      onFlipXClick: () => dispatch(flipX()),
-      onFlipYClick: () => dispatch(flipY()),
-      onInvertToggle: () => dispatch(invertColors()),
-      onRedoClick: () => dispatch(redo(void 0)),
-      onUndoClick: () => dispatch(undo(void 0)),
-      onToolButtonClick: (id) => dispatch(setActiveTool(id)),
-      onShowSummaryClick: () => dispatch(toggleAnalysisResults(void 0)),
-      onExportClick: () => dispatch(
-        exportFile({
-          format: 'wceph_v1',
-        }),
-      ),
-    };
-  };
+const mapDispatchToProps = (dispatch: GenericDispatch) => ({ dispatch });
 
-export default connect(mapStateToProps, mapDispatchToProps)(CephaloToolbar);
+const mergeProps = (
+  stateProps: StateFromStore,
+  { dispatch }: { dispatch: GenericDispatch },
+  ownProps: OwnProps,
+): Props => {
+  const { activeImageId, ...rest } = stateProps;
+  const imageId = activeImageId !== null ? activeImageId : '';
+  return {
+    ...rest,
+    ...ownProps,
+    onBrightnessChange: (value: number) => dispatch(setBrightness({ imageId, value })),
+    onContrastChange: (value: number) => dispatch(setContrast({ imageId, value })),
+    onFlipXClick: () => dispatch(flipX({ imageId })),
+    onFlipYClick: () => dispatch(flipY({ imageId })),
+    onInvertToggle: () => dispatch(invertColors({ imageId })),
+    onRedoClick: () => dispatch(redo(void 0)),
+    onUndoClick: () => dispatch(undo(void 0)),
+    onToolButtonClick: (id: ToolId) => dispatch(setActiveTool(id)),
+    onShowSummaryClick: () => dispatch(toggleAnalysisResults(void 0)),
+    onExportClick: () => dispatch(
+      exportFile({
+        format: 'wceph_v1',
+      }),
+    ),
+  };
+};
+
+export default connect(mapStateToProps, mapDispatchToProps, mergeProps)(CephaloToolbar);

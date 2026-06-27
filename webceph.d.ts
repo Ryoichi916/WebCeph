@@ -2,16 +2,6 @@ declare const __DEBUG__: boolean;
 declare const __VERSION__: string;
 declare const __BUILD_TIMESTAMP__: number;
 
-// `scroll-into-view-if-needed@1.x` ships no type definitions. This shim
-// replaces the declaration the legacy `typings/` tool used to provide.
-declare module 'scroll-into-view-if-needed' {
-  function scrollIntoViewIfNeeded(
-    node: Element | null,
-    centerIfNeeded?: boolean,
-  ): void;
-  export default scrollIntoViewIfNeeded;
-}
-
 type AngularUnit = 'degree' | 'radian';
 type LinearUnit = 'mm' | 'cm' | 'in';
 

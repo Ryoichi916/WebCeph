@@ -13,7 +13,7 @@ import image, {
 } from './image';
 import settings, {
   getWorkspaceImageIds, getWorkspaceMode, getTracingImageId,
-  isImporting,
+  isImporting, getWorkspaceSettingsById,
 } from './settings';
 import workers from './workers';
 import order from './order';
@@ -121,6 +121,14 @@ export const hasUnsavedWork = createSelector(
   getManualLandmarks,
   getActiveTracingImageId,
   (getManual, imageId) => imageId !== null && !isEmpty(getManual(imageId)),
+);
+
+// Whether an export is in progress for the active workspace.
+export const isExporting = createSelector(
+  getWorkspaceSettingsById,
+  getActiveWorkspaceId,
+  (getSettings, workspaceId) =>
+    workspaceId !== null ? getSettings(workspaceId).isExporting : false,
 );
 
 export { getWorkspaceImageIds };
