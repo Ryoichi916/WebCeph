@@ -1,0 +1,90 @@
+import { Store, Middleware } from 'redux';
+import uniqueId from 'lodash/uniqueId';
+
+import { isActionOfType } from 'utils/store';
+import {
+  addWorker,
+  updateWorker,
+  removeWorker,
+  addManualLandmarks,
+  autoPlotSucceeded,
+  autoPlotFailed,
+} from 'actions/workspace';
+import {
+  getImageProps,
+  getManualLandmarks,
+} from 'store/reducers/workspace/image';
+import { getManualSteps } from 'store/reducers/workspace/analyses';
+import { runPrediction, predictionsToLandmarks } from 'predictors';
+import { dataUrlToImageData } from 'utils/imageData';
+
+/**
+ * Orchestrates automatic landmark plotting: gathers the image and the analysis'
+ * manual-step symbols, runs the active predictor, and injects the results as a
+ * single batched (undoable) manual-landmark update. Predictor failures are
+ * surfaced via the worker/error channel without leaving a stuck busy worker.
+ */
+const middleware = ({ getState, dispatch }: Store<StoreState>) =>
+  (next: GenericDispatch) => async (action: GenericAction) => {
+    if (!isActionOfType(action, 'AUTO_PLOT_LANDMARKS_REQUESTED')) {
+      return next(action);
+    }
+    next(action);
+
+    const state = getState();
+    const { imageId, overwrite = false } = action.payload;
+
+    const steps = getManualSteps(state)(imageId);
+    const placed = getManualLandmarks(state)(imageId);
+    const props = getImageProps(state)(imageId);
+
+    if (steps.length === 0) {
+      dispatch(autoPlotFailed({
+        imageId,
+        error: { message: 'Select an analysis before auto-plotting landmarks.' },
+      }));
+      return;
+    }
+    if (!props || !props.data) {
+      dispatch(autoPlotFailed({
+        imageId,
+        error: { message: 'Load an image before auto-plotting landmarks.' },
+      }));
+      return;
+    }
+
+    const symbols = steps
+      .map((step) => step.symbol)
+      .filter((symbol) => overwrite || placed[symbol] === undefined);
+
+    if (symbols.length === 0) {
+      // Nothing to do; do not pollute the undo history.
+      dispatch(autoPlotSucceeded({ imageId }));
+      return;
+    }
+
+    const workerId = uniqueId('predictor_');
+    dispatch(addWorker({ id: workerId, type: 'tracing_worker', isBusy: true, error: null }));
+
+    try {
+      const imageData = await dataUrlToImageData(props.data);
+      const predictions = await runPrediction({
+        imageData,
+        width: props.width,
+        height: props.height,
+        symbols,
+      });
+      const landmarks = predictionsToLandmarks(
+        predictions, props.width, props.height, placed, overwrite,
+      );
+      dispatch(addManualLandmarks({ imageId, landmarks }));
+      dispatch(removeWorker(workerId));
+      dispatch(autoPlotSucceeded({ imageId }));
+    } catch (e) {
+      dispatch(updateWorker({ id: workerId, isBusy: false, error: { message: e.message } }));
+      dispatch(removeWorker(workerId));
+      dispatch(autoPlotFailed({ imageId, error: { message: e.message } }));
+    }
+  };
+
+export default middleware as Middleware;

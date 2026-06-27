@@ -12,10 +12,15 @@ import {
   redo, undo,
   toggleAnalysisResults,
   exportFile,
+  autoPlotLandmarks,
 } from 'actions/workspace';
 import {
   isSummaryShown,
+  getManualSteps,
 } from 'store/reducers/workspace/analyses';
+import {
+  isPerformingBackgroundWork,
+} from 'store/reducers/workspace/workers';
 import {
   canEdit,
   canRedo,
@@ -57,6 +62,11 @@ const mapStateToProps =
         canShowSummary(state)(activeImageId),
       canExport: !_isExporting && hasImage(state) && hasUnsavedWork(state),
       isExporting: _isExporting,
+      canAutoPlot:
+        activeImageId !== null &&
+        hasImage(state) &&
+        getManualSteps(state)(activeImageId).length > 0,
+      isAutoPlotting: isPerformingBackgroundWork(state),
       activeImageId,
     };
   };
@@ -81,6 +91,7 @@ const mergeProps = (
     onRedoClick: () => dispatch(redo(void 0)),
     onUndoClick: () => dispatch(undo(void 0)),
     onToolButtonClick: (id: ToolId) => dispatch(setActiveTool(id)),
+    onAutoPlotClick: () => dispatch(autoPlotLandmarks({ imageId })),
     onShowSummaryClick: () => dispatch(toggleAnalysisResults(void 0)),
     onExportClick: () => dispatch(
       exportFile({

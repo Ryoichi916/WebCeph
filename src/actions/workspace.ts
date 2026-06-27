@@ -7,6 +7,11 @@ export const ignoreWorkspaceError = createActionCreator('IGNORE_WORKSPACE_ERROR_
 export const addManualLandmark = createActionCreator('ADD_MANUAL_LANDMARK_REQUESTED');
 export const addUnnamedManualLandmark = createActionCreator('ADD_UNKOWN_MANUAL_LANDMARK_REQUESTED');
 export const removeManualLandmark = createActionCreator('REMOVE_MANUAL_LANDMARK_REQUESTED');
+export const addManualLandmarks = createActionCreator('ADD_MANUAL_LANDMARKS_BATCH_REQUESTED');
+
+export const autoPlotLandmarks = createActionCreator('AUTO_PLOT_LANDMARKS_REQUESTED');
+export const autoPlotSucceeded = createActionCreator('AUTO_PLOT_LANDMARKS_SUCCEEDED');
+export const autoPlotFailed = createActionCreator('AUTO_PLOT_LANDMARKS_FAILED');
 
 export const setScale = createActionCreator('SET_SCALE_REQUESTED');
 

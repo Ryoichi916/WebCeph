@@ -141,6 +141,19 @@ const tracingReducer = handleActions<typeof KEY_TRACING>({
       },
     };
   },
+  ADD_MANUAL_LANDMARKS_BATCH_REQUESTED: (state, { payload }) => {
+    const { imageId, landmarks } = payload;
+    return {
+      ...state,
+      [imageId]: {
+        ...state[imageId],
+        manualLandmarks: {
+          ...state[imageId].manualLandmarks,
+          ...landmarks,
+        },
+      },
+    };
+  },
   REMOVE_MANUAL_LANDMARK_REQUESTED: (state, { payload }) => {
     const { imageId, symbol } = payload;
     return {

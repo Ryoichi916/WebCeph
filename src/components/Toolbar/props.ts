@@ -9,9 +9,12 @@ export interface StateProps {
   canShowSummary: boolean;
   canExport: boolean;
   isExporting: boolean;
+  canAutoPlot: boolean;
+  isAutoPlotting: boolean;
 };
 
 export interface DispatchProps {
+  onAutoPlotClick(): any;
   onFlipXClick(): any;
   onFlipYClick(): any;
   onInvertToggle(): any;
