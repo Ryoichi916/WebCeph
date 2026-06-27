@@ -57,8 +57,12 @@ const sassLoader = {
   },
 };
 
-const localCSSLoaders = ['style-loader', cssModuleLoader, postcssLoader];
-const globalCSSLoaders = ['style-loader', cssGlobalLoader, postcssLoader];
+// esModule:false on style-loader too so `const x = require('./style.scss')`
+// yields the CSS-module locals object (not css-loader's runtime export).
+const styleLoader = { loader: 'style-loader', options: { esModule: false } };
+
+const localCSSLoaders = [styleLoader, cssModuleLoader, postcssLoader];
+const globalCSSLoaders = [styleLoader, cssGlobalLoader, postcssLoader];
 
 const excludedPatterns = compact([
   /node_modules/,
