@@ -17,7 +17,7 @@ import {
   toggleAnalysisResults,
 } from 'actions/workspace';
 
-const mapStateToProps: MapStateToProps<StateProps, OwnProps> = (state: StoreState) => {
+const mapStateToProps: MapStateToProps<StateProps, OwnProps, StoreState> = (state: StoreState) => {
   return {
     results: getCategorizedAnalysisResults(state),
   };

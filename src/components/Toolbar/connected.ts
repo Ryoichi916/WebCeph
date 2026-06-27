@@ -38,7 +38,7 @@ import {
   canShowSummary,
 } from 'store/reducers/workspace/analyses';
 
-const mapStateToProps: MapStateToProps<StateProps, OwnProps> =
+const mapStateToProps: MapStateToProps<StateProps, OwnProps, StoreState> =
   (state: StoreState): StateProps => {
     const _isExporting = isExporting(state);
     return {

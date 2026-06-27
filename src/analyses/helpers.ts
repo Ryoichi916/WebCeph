@@ -449,7 +449,7 @@ export function defaultInterpetLandmark<T extends Category>(
  * each function call. 
  */
 export function composeInterpretation<C extends Category>(
-  ...args: Array<InterpretLandmark<C>>,
+  ...args: Array<InterpretLandmark<C>>
 ): InterpretLandmark<C> {
   return (value, max, min, mean) => {
     return flatten(map(args, fn => fn(value, max, min, mean)));

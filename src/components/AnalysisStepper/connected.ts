@@ -27,7 +27,7 @@ import {
   unhighlightStep,
 } from 'actions/workspace';
 
-const mapStateToProps: MapStateToProps<StateProps, OwnProps> = (state: StoreState) => {
+const mapStateToProps: MapStateToProps<StateProps, OwnProps, StoreState> = (state: StoreState) => {
   return {
     steps: getActiveAnalysisSteps(state),
     getStepState: getStepState(state),

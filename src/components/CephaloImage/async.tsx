@@ -18,7 +18,7 @@ export const AsyncCephaloImage = pure((props: OwnProps & AsyncProps) => {
   const {
     isLoading,
     hasFailed,
-    ...rest,
+    ...rest
   } = props;
   const component = () => <Image {...rest} />;
   return (

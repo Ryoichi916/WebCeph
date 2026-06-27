@@ -94,7 +94,7 @@ class Zoomable extends React.PureComponent<Props, {}> {
       style, className,
       children, scaleFactor,
       onZoom, originX, originY,
-      ...rest,
+      ...rest
     } = this.props;
     return (
       <div

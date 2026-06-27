@@ -11,7 +11,7 @@ import {
 
 import { isAppOffline } from 'store/reducers/env/connection';
 
-const mapStateToProps: MapStateToProps<StateProps, OwnProps> = (state) => ({
+const mapStateToProps: MapStateToProps<StateProps, OwnProps, StoreState> = (state) => ({
   isOffline: isAppOffline(state),
 });
 

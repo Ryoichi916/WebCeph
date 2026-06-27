@@ -30,7 +30,7 @@ import {
   getWorkspacesIdsInOrder,
 } from 'store/reducers/workspace/order';
 
-const mapStateToProps: MapStateToProps<StateProps, OwnProps> =
+const mapStateToProps: MapStateToProps<StateProps, OwnProps, StoreState> =
   (state: StoreState) => {
     return {
       activeTabId: getActiveWorkspaceId(state),

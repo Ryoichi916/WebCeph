@@ -22,7 +22,7 @@ import {
   getCanvasDimensions,
 } from 'store/reducers/workspace/canvas';
 
-const mapStateToProps: MapStateToProps<StateProps, OwnProps> =
+const mapStateToProps: MapStateToProps<StateProps, OwnProps, StoreState> =
   (state: StoreState, { margin }: OwnProps) => {
     const { top, width: canvasWidth } = getCanvasDimensions(state);
     const { x, y } = getMousePosition(state)!;

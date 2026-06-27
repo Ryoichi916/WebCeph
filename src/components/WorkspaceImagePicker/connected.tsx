@@ -28,7 +28,7 @@ import {
   shouldShowLoadingFileIndicator,
 } from 'store/reducers/workspace';
 
-const mapStateToProps: MapStateToProps<StateProps, OwnProps> =
+const mapStateToProps: MapStateToProps<StateProps, OwnProps, StoreState> =
   (state: StoreState, { workspaceId }: OwnProps) => {
     return {
       images: getWorkspaceImageIds(state)(workspaceId),

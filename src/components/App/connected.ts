@@ -50,7 +50,7 @@ import {
   getActiveLocaleData,
 } from 'store/reducers/locale';
 
-const mapStateToProps: MapStateToProps<StateProps, OwnProps> =
+const mapStateToProps: MapStateToProps<StateProps, OwnProps, StoreState> =
   (state: StoreState) => {
     return {
       isReady: isAppReady(state),
@@ -79,7 +79,7 @@ const mapDispatchToProps: MapDispatchToPropsFunction<DispatchProps, OwnProps> =
     }
   );
 
-const mergeProps: MergeProps<StateProps, DispatchProps, OwnProps> =
+const mergeProps: MergeProps<StateProps, DispatchProps, OwnProps, ConnectableProps> =
   (stateProps, dispatchProps, ownProps): ConnectableProps => {
     const { dispatch } = dispatchProps;
     const { isReady, shouldCheckCompatibility, userAgent } = stateProps;

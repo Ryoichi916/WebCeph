@@ -16,7 +16,7 @@ import {
   OwnProps,
 } from './props';
 
-const mapStateToProps: MapStateToProps<StateProps, OwnProps> =
+const mapStateToProps: MapStateToProps<StateProps, OwnProps, StoreState> =
   (state: StoreState, { workspaceId }: OwnProps): StateProps => {
     return {
       imageId: getTracingImageId(state)(workspaceId),

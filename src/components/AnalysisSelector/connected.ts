@@ -25,7 +25,7 @@ const analyses = [
   'softTissues',
 ];
 
-const mapStateToProps: MapStateToProps<StateProps, OwnProps> =
+const mapStateToProps: MapStateToProps<StateProps, OwnProps, StoreState> =
   (state: StoreState): StateProps => {
     return {
       analyses,

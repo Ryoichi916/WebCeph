@@ -20,7 +20,7 @@ import {
   canvasResized,
 } from 'actions/workspace';
 
-const mapStateToProps: MapStateToProps<StateProps, OwnProps> =
+const mapStateToProps: MapStateToProps<StateProps, OwnProps, StoreState> =
   (state: StoreState, { workspaceId }: OwnProps) => {
     return {
       mode: getWorkspaceMode(state)(workspaceId),

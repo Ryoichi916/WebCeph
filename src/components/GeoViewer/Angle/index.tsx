@@ -67,7 +67,7 @@ const Angle = pure((props: AngleProps): JSX.Element => {
     parallelProps = defaultLineProps,
     extendedProps = defaultLineProps,
     angleIndicatorProps = defaultAngleIndicatorProps,
-    ...rest,
+    ...rest
   } = props;
   const [vector1, vector2] = vectors;
   const intersection = getIntersectionPoint(vector1, vector2);
