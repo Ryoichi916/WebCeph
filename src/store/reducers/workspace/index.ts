@@ -93,17 +93,6 @@ export const getSortedLandmarksToDisplay = createSelector(
   },
 );
 
-// export const hasUnsavedWork = createSelector(
-//   getActiveManualLandmarks,
-//   ({ present, past }) => !isEmpty(present) || !isEmpty(past),
-// );
-
-// export const canUndo = hasUnsavedWork;
-// export const canRedo = createSelector(
-//   getActiveManualLandmarks,
-//   ({ future }) => !isEmpty(future),
-// );
-
 // export const workspaceHasError = createSelector(
 //   hasExportError,
 //   (exportError) => exportError,
@@ -118,6 +107,20 @@ export const getActiveTracingImageId = createSelector(
   getTracingImageId,
   getActiveWorkspaceId,
   (getImageId, workspaceId) => getImageId(workspaceId!),
+);
+
+// Undo/redo history is not currently wired through redux-undo, so there is
+// nothing to undo or redo. These return false until the undoable reducer is
+// reintroduced (see the auto-plot batching work).
+export const canUndo = (_: StoreState) => false;
+export const canRedo = (_: StoreState) => false;
+
+// The user has work worth exporting once the active tracing has any manually
+// placed landmark.
+export const hasUnsavedWork = createSelector(
+  getManualLandmarks,
+  getActiveTracingImageId,
+  (getManual, imageId) => imageId !== null && !isEmpty(getManual(imageId)),
 );
 
 export { getWorkspaceImageIds };

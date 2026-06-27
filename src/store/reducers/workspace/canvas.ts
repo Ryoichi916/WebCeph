@@ -69,3 +69,11 @@ export const getActiveTool = createSelector(
 
 export const getScale = (state: StoreState) => state[KEY_SCALE];
 export const getScaleOrigin = (state: StoreState) => state[KEY_SCALE_ORIGIN];
+
+// The canvas fills the browser viewport. Canvas dimensions are not tracked in
+// the store, so they are derived from the window. Used to auto-fit a freshly
+// loaded image (see the autoScale middleware) and to size the tracing canvas.
+export const getCanvasDimensions = (_: StoreState): { width: number; height: number } => ({
+  width: typeof window !== 'undefined' ? window.innerWidth : 0,
+  height: typeof window !== 'undefined' ? window.innerHeight : 0,
+});

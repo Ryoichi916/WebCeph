@@ -26,8 +26,6 @@ const analysis: Analysis<'ceph_lateral'> = {
   components,
   interpret(values) {
     const valueFMPA = values[FMPA.symbol];
-    const valueFMIA = values[FMIA.symbol];
-    const valueIMPA = values[IMPA.symbol];
     if (typeof valueFMPA === 'number') {
       if (valueFMPA < 20) {
         // IMPA should not exceed 92 degrees.

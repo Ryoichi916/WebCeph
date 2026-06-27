@@ -11,11 +11,6 @@ import {
   setAnalysis,
 } from 'actions/workspace';
 
-import {
-  getActiveAnalysisId,
-  isAnalysisLoading,
-} from 'store/reducers/workspace/analyses';
-
 const analyses = [
   'downs',
   'basic',
@@ -26,7 +21,7 @@ const analyses = [
 ];
 
 const mapStateToProps: MapStateToProps<StateProps, OwnProps, StoreState> =
-  (state: StoreState): StateProps => {
+  (_state: StoreState): StateProps => {
     return {
       analyses,
       currentAnalysisId: 'basic',

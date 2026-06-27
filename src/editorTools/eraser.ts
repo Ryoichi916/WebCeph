@@ -7,13 +7,17 @@ import {
 } from 'actions/workspace';
 
 import {
-  isStepRemovable,
-} from 'store/reducers/workspace/analyses';
+  getManualLandmarks,
+  getActiveImageId,
+} from 'store/reducers/workspace/image';
 
 export const createEraser: EditorToolCreator = (
   state: StoreState,
 ) => {
-  const isRemovable = isStepRemovable(state);
+  // A landmark can be erased when it was placed manually.
+  const imageId = getActiveImageId(state);
+  const manualLandmarks = imageId !== null ? getManualLandmarks(state)(imageId) : {};
+  const isRemovable = (symbol: string) => manualLandmarks[symbol] !== undefined;
   return {
     ...createZoomWithWheel(state),
     ...createTrackCursor(state),

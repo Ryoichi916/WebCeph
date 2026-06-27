@@ -1,11 +1,9 @@
-import * as React from 'react';
 import {
   connect,
   MapStateToProps,
   MapDispatchToPropsFunction,
 } from 'react-redux';
 
-import TracingViewer from 'components/TracingViewer';
 
 import WorkspaceSwitcher from './index';
 import {

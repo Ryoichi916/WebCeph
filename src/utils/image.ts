@@ -12,7 +12,6 @@ async function readReferenceImage(): Promise<Jimp> {
 
 const getAspectRatio = (img: Jimp) => img.bitmap.width / img.bitmap.height;
 const getDistance = (img: Jimp, ref: Jimp) => Jimp.distance(img, ref);
-const getPixelDiff = (img: Jimp, ref: Jimp) => Jimp.diff(img, ref).percent;
 
 const err = new Error('This image does not look like a cephalometric radiograph');
 
@@ -28,17 +27,10 @@ async function isDistanceSatisifed(img: Jimp): Promise<void> {
   return distance < 0.25 ? Promise.resolve() : Promise.reject(err);
 }
 
-async function isDiffSatisfied(img: Jimp): Promise<void> {
-  const diff = getPixelDiff(img, await readReferenceImage());
-  console.info('Pixel difference %f', diff);
-  return diff < 0.15 ? Promise.resolve() : Promise.reject(err);
-}
-
 export async function doesLookLikeCephalometricRadiograph(img: Jimp, tryFlipX: boolean = true): Promise<{ isCephalo: boolean, shouldFlipX: boolean }> {
   return Promise.all([
     isAspectRatioSatisfied(img),
     isDistanceSatisifed(img),
-    // isDiffSatisfied(img),
   ])
   .then(() => ({ isCephalo: true, shouldFlipX: false }))
   .catch(async () => {

@@ -10,13 +10,13 @@ import {
   OwnProps,
 } from './props';
 
-const mapStateToProps: MapStateToProps<StateProps, OwnProps, StoreState> = (state: StoreState) => {
+const mapStateToProps: MapStateToProps<StateProps, OwnProps, StoreState> = (_state: StoreState) => {
   return {
 
   };
 };
 
-const mapDispatchToProps: MapDispatchToPropsFunction<DispatchProps, OwnProps> = (dispatch) => (
+const mapDispatchToProps: MapDispatchToPropsFunction<DispatchProps, OwnProps> = (_dispatch) => (
   {
 
   }

@@ -59,7 +59,7 @@ enum ValidationErrorType {
   INVALID_IMAGE_NAME,
 }
 
-const getMessageForError = (type: ValidationErrorType, data?: any) => {
+const getMessageForError = (type: ValidationErrorType, _data?: any) => {
   switch (type) {
     case ValidationErrorType.UNSPECIFIED_FILE_VERSION:
       return (
