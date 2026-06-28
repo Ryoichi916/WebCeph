@@ -1,7 +1,25 @@
 .main {
   flex-grow: 1;
+  min-width: 0;
+  overflow: auto;
 }
 
 .toolbar {
 
+}
+
+.tracing {
+  display: flex;
+  flex-direction: row;
+  flex-grow: 1;
+  min-height: 0;
+  height: 100%;
+}
+
+.stepper {
+  width: 280px;
+  flex-shrink: 0;
+  overflow-y: auto;
+  background: #f4f4f4;
+  color: #222;
 }

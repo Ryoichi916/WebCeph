@@ -14,6 +14,8 @@ import {
 
 import {
   getImageSrc,
+  getImageWidth,
+  getImageHeight,
 } from 'store/reducers/workspace/image';
 
 import {
@@ -110,10 +112,8 @@ const mapStateToProps: MapStateToProps<StateProps, OwnProps, StoreState> =
     return {
       canvasSize: getCanvasDimensions(state),
       src: getImageSrc(state)(imageId),
-      imageWidth: 200,
-      imageHeight: 200,
-      // imageWidth: getImageWidth(state) as number,
-      // imageHeight: getImageHeight(state) as number,
+      imageWidth: getImageWidth(state)(imageId) as number,
+      imageHeight: getImageHeight(state)(imageId) as number,
       scale: getScale(state),
       // brightness: getImageBrightness(state),
       // contrast: getImageContrast(state),
