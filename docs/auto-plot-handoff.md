@@ -66,3 +66,59 @@ Default `MODEL_URL` is `/models/cephalometric.onnx`, served from the build root.
 - Model card / weights: https://huggingface.co/cwlachap/hrnet-cephalometric-landmark-detection (`best_model.pth`)
 - Architecture / preprocessing source: https://github.com/cwlachap/hrnet-cephalometric-landmark-detection (`src/model_hrnet.py`, `src/dataset.py`, `src/heatmaps.py`, `configs/hrnet_w32_768x768.yaml`)
 - Contract summary + enable steps: `docs/auto-plot-model.md`
+
+## Definition of done
+
+The pick-up is complete when all of these hold:
+
+- [ ] `src/assets/models/cephalometric.onnx` exists (converter ran clean:
+      29.3M params, forward shape `(1, 19, 192, 192)`, ONNX checker passed).
+- [ ] `USE_ONNX = true` in `src/predictors/index.ts`.
+- [ ] `npx tsc --noEmit` is green (strict tsc is the project's bar — see commit
+      `64f9219`).
+- [ ] `npm start` boots and `/models/cephalometric.onnx` returns `200` (check
+      the Network tab; a `404` here is the most common failure — see below).
+- [ ] Auto-plot on a real lateral ceph lands points on anatomy (Sella inside the
+      sella turcica, Nasion at the frontonasal suture, …), not the demo grid.
+- [ ] Model hosting decided and applied (Git LFS, CI-regenerate, or external
+      URL — see "Hosting the model" above). Don't leave the `.onnx` only on a
+      local disk.
+
+## Troubleshooting
+
+**Converter side (`tools/convert_hrnet_to_onnx.py`)**
+
+- *Download fails / hangs* — `huggingface.co` is blocked. This whole handoff
+  exists for that reason; you must run the converter where egress is open.
+- *`state_dict` key mismatch on load* — the vendored architecture has drifted
+  from the model repo's `src/model_hrnet.py`. Re-vendor it; the `.pth` is loaded
+  strictly so any layer-name diff throws.
+- *Forward-shape assertion fails* — `INPUT_SIZE`/`NUM_JOINTS` or the stage config
+  in the script no longer match the weights. These must also stay in lockstep
+  with `SIZE`/`HEATMAP`/`LANDMARK_ORDER` in `onnx.ts`.
+
+**App side (`src/predictors/onnx.ts`)**
+
+- *`404` for the model* — it isn't at `MODEL_URL`. Confirm `webpack.config.js`
+  CopyPlugin copied `src/assets/models/` → `/models/`, or point `MODEL_URL` at
+  the real (CORS-allowed) URL.
+- *`InferenceSession.create` throws* — corrupt/partial `.onnx`, or onnxruntime-web
+  can't fetch its WASM. The runtime and session are loaded lazily on first
+  Auto-plot, so failures surface then, not at page load.
+- *Points cluster on one side / mirrored / scaled wrong* — the letterbox inverse
+  drifted from training. The forward letterbox (`letterboxOf` + `preprocess`)
+  and its inverse (the `(xInput - padLeft) / scale` math in `predict`) must
+  mirror `src/dataset.py`; the soft-argmax (`softArgmax`) must mirror
+  `src/heatmaps.py`. The optional numeric check above isolates this without a
+  browser.
+- *Some expected landmarks never appear* — by design. Only 11 of the model's 19
+  channels map to WebCeph symbols (`S, N, Or, Po, A, B, Pog, Gn, Ls, Li, Sn`);
+  the other 8 are `''` in `LANDMARK_ORDER` and skipped, and the middleware
+  further filters to the symbols the active analysis needs.
+
+## Reverting / shipping demo-only
+
+Auto-plot ships working without a model: leave `USE_ONNX = false` and the demo
+predictor runs end-to-end (placeholder points, not real detection). Nothing
+about enabling ONNX is destructive — flipping the flag back off fully restores
+the demo path, and no large asset ships while the flag is off.
