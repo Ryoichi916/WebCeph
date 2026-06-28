@@ -30,6 +30,9 @@ heatmap decode, and the ISBI-2015 landmark order all mirror the model's own
 pipeline (`src/dataset.py` / `src/heatmaps.py` in its repo). You only need to
 produce the `.onnx` and flip the switch.
 
+> Picking this up in a fresh environment? See **`docs/auto-plot-handoff.md`** for
+> the exact pick-up list and model-hosting options.
+
 Steps:
 
 1. **Convert to ONNX** (outside WebCeph, needs Python + PyTorch — no GPU
@@ -38,7 +41,7 @@ Steps:
 
    ```sh
    pip install torch onnx huggingface_hub
-   python tools/convert_hrnet_to_onnx.py --out build/models/cephalometric.onnx
+   python tools/convert_hrnet_to_onnx.py --out src/assets/models/cephalometric.onnx
    ```
 
    The script is **self-contained**: it vendors the exact HRNet-W32 architecture

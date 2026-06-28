@@ -17,7 +17,7 @@ itself only needs the resulting .onnx file.
 USAGE
 -----
     pip install torch onnx huggingface_hub
-    python tools/convert_hrnet_to_onnx.py --out build/models/cephalometric.onnx
+    python tools/convert_hrnet_to_onnx.py --out src/assets/models/cephalometric.onnx
 
 Then place the .onnx at WebCeph's MODEL_URL (default `/models/cephalometric.onnx`,
 served from the build output / public root) and set USE_ONNX = true in
@@ -340,7 +340,7 @@ def build_model():
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--out", default="build/models/cephalometric.onnx")
+    parser.add_argument("--out", default="src/assets/models/cephalometric.onnx")
     parser.add_argument("--opset", type=int, default=17)
     args = parser.parse_args()
 
