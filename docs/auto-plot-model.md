@@ -24,35 +24,54 @@ model** [`cwlachap/hrnet-cephalometric-landmark-detection`](https://huggingface.
 (19 lateral landmarks, heatmap regression). MIT is compatible with WebCeph's
 GPL-3 license.
 
+The model contract is already wired into `src/predictors/onnx.ts` — input/output
+sizes, ImageNet normalisation, the **letterbox** preprocessing, **soft-argmax**
+heatmap decode, and the ISBI-2015 landmark order all mirror the model's own
+pipeline (`src/dataset.py` / `src/heatmaps.py` in its repo). You only need to
+produce the `.onnx` and flip the switch.
+
+> Picking this up in a fresh environment? See **`docs/auto-plot-handoff.md`** for
+> the exact pick-up list and model-hosting options.
+
 Steps:
 
 1. **Convert to ONNX** (outside WebCeph, needs Python + PyTorch — no GPU
-   required for export):
+   required for export). `huggingface.co` must be reachable; WebCeph's hosted/CI
+   sandboxes may block it, so run this on a machine with open egress:
 
    ```sh
    pip install torch onnx huggingface_hub
-   python tools/convert_hrnet_to_onnx.py --out build/models/cephalometric.onnx
+   python tools/convert_hrnet_to_onnx.py --out src/assets/models/cephalometric.onnx
    ```
 
-   The script downloads the weights; you plug in the HRNet architecture from the
-   model's source repo (the `.pth` is weights-only). See the script's docstring.
+   The script is **self-contained**: it vendors the exact HRNet-W32 architecture
+   from the model's source repo, downloads `best_model.pth` from Hugging Face,
+   loads the weights, sanity-checks the forward shape (`[1, 19, 192, 192]`), and
+   exports the ONNX file.
 
 2. **Place the model** at `MODEL_URL` (default `/models/cephalometric.onnx`,
    served from the build/public root).
 
-3. **Match the config** in `src/predictors/onnx.ts` to the model:
-   - `SIZE`, `INPUT_CHANNELS`, `MEAN`/`STD` = the model's training preprocessing.
-   - `OUTPUT_IS_HEATMAP` = true for HRNet (peak of each heatmap), false for a
-     model that outputs coordinates directly.
-   - `LANDMARK_ORDER` = the model's output channel order mapped to WebCeph
-     symbols (`''` for landmarks WebCeph has no point for — they're skipped). The
-     defaults follow the standard ISBI-2015 19-landmark order.
+3. **Switch the backend**: set `USE_ONNX = true` in `src/predictors/index.ts`.
 
-4. **Switch the backend**: set `USE_ONNX = true` in `src/predictors/index.ts`.
+That's it — no config edits are needed for this model. (If you swap in a
+*different* model, revisit `SIZE`, `HEATMAP`, `MEAN`/`STD`, and `LANDMARK_ORDER`
+in `onnx.ts`, and the preprocessing/decode if it isn't a letterbox + heatmap
+model.)
 
 Only landmarks the active analysis actually needs are placed (the middleware
 filters by the analysis' manual steps), so partial coverage of the 19 model
 landmarks is fine.
+
+### Model contract (for reference)
+
+| Property | Value |
+|---|---|
+| Input | `[1, 3, 768, 768]` float32, RGB |
+| Preprocessing | letterbox (aspect-preserving resize + centred black pad) → `/255` → ImageNet `MEAN`/`STD` |
+| Output | `[1, 19, 192, 192]` float32 heatmaps |
+| Decode | per-channel **soft-argmax** (softmax-weighted centroid) → ×4 to input space → invert letterbox to image space |
+| Landmarks | standard ISBI-2015 19-point order |
 
 ## Notes
 

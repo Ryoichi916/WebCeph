@@ -239,6 +239,10 @@ const config = {
       patterns: [
         { from: 'src/assets/icons', to: 'icons' },
         { from: 'src/manifest.json', to: 'manifest.json' },
+        // Auto-plot ONNX model, if present, is served at /models/ (the URL the
+        // onnx predictor fetches). noErrorOnMissing so builds work before a
+        // model is added. See docs/auto-plot-model.md.
+        { from: 'src/assets/models', to: 'models', noErrorOnMissing: true },
       ],
     }),
     // Replaces serviceworker-webpack-plugin + sw-toolbox. GenerateSW precaches

@@ -4,38 +4,40 @@ import { LandmarkPredictor, PredictionInput, PredictedLandmark } from './types';
 /**
  * onnxruntime-web backend for cephalometric landmark detection.
  *
- * Designed around a heatmap-regression model such as the MIT-licensed HRNet
- * cephalometric model (cwlachap/hrnet-cephalometric-landmark-detection, 19
- * lateral landmarks). No model ships with WebCeph; this backend is opt-in (see
+ * This is wired to the MIT-licensed HRNet-W32 cephalometric model
+ * `cwlachap/hrnet-cephalometric-landmark-detection` (19 lateral landmarks,
+ * heatmap regression). No model ships with WebCeph; this backend is opt-in (see
  * USE_ONNX in predictors/index.ts). To enable it:
  *
  *   1. Convert the model to ONNX (see tools/convert_hrnet_to_onnx.py) and place
  *      it at MODEL_URL.
- *   2. Make the CONFIG below match the model's training preprocessing and the
- *      LANDMARK_ORDER match the model's output channel order.
- *   3. Set USE_ONNX = true in predictors/index.ts.
+ *   2. Set USE_ONNX = true in predictors/index.ts.
  *
- * The model contract assumed here (HRNet defaults):
- *   - input:  1 x C x SIZE x SIZE float32 (C = INPUT_CHANNELS), normalised
- *   - output: 1 x N x Hh x Wh float32 heatmaps (one channel per landmark); the
- *             peak of each channel is the landmark location.
- * For a model that outputs coordinates directly instead of heatmaps, set
- * OUTPUT_IS_HEATMAP = false (output is then read as normalised [x, y] pairs).
+ * The preprocessing and decoding below mirror the model's own pipeline exactly
+ * (src/dataset.py / src/heatmaps.py in the model repo), so changing them will
+ * degrade accuracy unless the model is retrained:
+ *
+ *   - input:  1 x 3 x SIZE x SIZE float32, RGB, **letterbox** resized
+ *             (aspect-ratio preserving + centred black padding), then scaled to
+ *             [0,1] and ImageNet-normalised.
+ *   - output: 1 x 19 x HEATMAP x HEATMAP float32 heatmaps; each landmark is the
+ *             **soft-argmax** (softmax-weighted centroid) of its channel.
+ *   - decode: heatmap coords -> input (SIZE) space (x4) -> original image space
+ *             by inverting the letterbox transform.
  */
 
-// ---- Model configuration (match these to your converted model) -------------
+// ---- Model configuration (match these to the converted model) --------------
 const MODEL_URL = '/models/cephalometric.onnx';
-const SIZE = 256;
-const INPUT_CHANNELS: number = 3;
-const OUTPUT_IS_HEATMAP: boolean = true;
-// Per-channel normalisation (ImageNet defaults, common for HRNet-W32 backbones).
+const SIZE = 768;          // model input size (INPUT.IMAGE_SIZE)
+const HEATMAP = 192;       // model heatmap size (INPUT.HEATMAP_SIZE = SIZE / 4)
+// Per-channel normalisation (ImageNet, as trained).
 const MEAN = [0.485, 0.456, 0.406];
 const STD = [0.229, 0.224, 0.225];
 
 /**
- * Maps each model output channel (index) to a WebCeph landmark symbol. Order
- * follows the standard ISBI-2015 19-landmark set; '' marks a landmark WebCeph
- * has no point for (it is skipped). Adjust to match your model.
+ * Maps each model output channel (index) to a WebCeph landmark symbol. Order is
+ * the standard ISBI-2015 19-landmark set the model was trained on; '' marks a
+ * landmark WebCeph has no point for (it is skipped).
  */
 const LANDMARK_ORDER: string[] = [
   'S',   //  1 Sella
@@ -84,7 +86,7 @@ const getSession = (): Promise<ORT.InferenceSession> => {
   return sessionPromise;
 };
 
-/** Bilinear sample of a single channel from the source ImageData (0..255). */
+/** Bilinear sample of one channel (c=0..2) from the source ImageData (0..255). */
 const sample = (data: Uint8ClampedArray, w: number, h: number, fx: number, fy: number, c: number): number => {
   const x = fx * (w - 1);
   const y = fy * (h - 1);
@@ -100,26 +102,50 @@ const sample = (data: Uint8ClampedArray, w: number, h: number, fx: number, fy: n
   return top * (1 - dy) + bot * dy;
 };
 
-/** ImageData -> normalised CHW float32 tensor of shape [C, SIZE, SIZE]. */
-const preprocess = (imageData: ImageData): Float32Array => {
+/** The letterbox transform from original-image space to SIZE x SIZE input space. */
+interface Letterbox {
+  scale: number;
+  padLeft: number;
+  padTop: number;
+  newW: number;
+  newH: number;
+}
+
+const letterboxOf = (width: number, height: number): Letterbox => {
+  const scale = Math.min(SIZE / width, SIZE / height);
+  const newW = Math.floor(width * scale);
+  const newH = Math.floor(height * scale);
+  const padLeft = Math.floor((SIZE - newW) / 2);
+  const padTop = Math.floor((SIZE - newH) / 2);
+  return { scale, padLeft, padTop, newW, newH };
+};
+
+/**
+ * ImageData -> normalised CHW float32 tensor [3, SIZE, SIZE] using the model's
+ * letterbox (aspect-preserving resize + centred black padding). Padding pixels
+ * are 0 before normalisation, matching the training pipeline.
+ */
+const preprocess = (imageData: ImageData, lb: Letterbox): Float32Array => {
   const { data, width, height } = imageData;
-  const out = new Float32Array(INPUT_CHANNELS * SIZE * SIZE);
+  const out = new Float32Array(3 * SIZE * SIZE);
   const plane = SIZE * SIZE;
-  for (let y = 0; y < SIZE; y++) {
-    const fy = y / (SIZE - 1);
-    for (let x = 0; x < SIZE; x++) {
-      const fx = x / (SIZE - 1);
-      const idx = y * SIZE + x;
-      if (INPUT_CHANNELS === 1) {
-        const r = sample(data, width, height, fx, fy, 0);
-        const g = sample(data, width, height, fx, fy, 1);
-        const b = sample(data, width, height, fx, fy, 2);
-        const gray = (r * 0.299 + g * 0.587 + b * 0.114) / 255;
-        out[idx] = (gray - MEAN[0]) / STD[0];
-      } else {
+  const { padLeft, padTop, newW, newH } = lb;
+  for (let py = 0; py < SIZE; py++) {
+    const insideY = py >= padTop && py < padTop + newH;
+    const fy = insideY ? (py - padTop) / (newH - 1) : 0;
+    for (let px = 0; px < SIZE; px++) {
+      const idx = py * SIZE + px;
+      const insideX = px >= padLeft && px < padLeft + newW;
+      if (insideY && insideX) {
+        const fx = (px - padLeft) / (newW - 1);
         for (let c = 0; c < 3; c++) {
           const v = sample(data, width, height, fx, fy, c) / 255;
           out[c * plane + idx] = (v - MEAN[c]) / STD[c];
+        }
+      } else {
+        // Black padding (raw 0) carried through normalisation.
+        for (let c = 0; c < 3; c++) {
+          out[c * plane + idx] = -MEAN[c] / STD[c];
         }
       }
     }
@@ -127,25 +153,34 @@ const preprocess = (imageData: ImageData): Float32Array => {
   return out;
 };
 
-/** Decode heatmaps [N, Hh, Wh] into normalised [0,1] landmark coordinates. */
-const decodeHeatmaps = (data: Float32Array, dims: readonly number[]): Array<{ x: number; y: number }> => {
-  // dims = [1, N, Hh, Wh]
-  const n = dims[dims.length - 3];
-  const hh = dims[dims.length - 2];
-  const ww = dims[dims.length - 1];
+/**
+ * Soft-argmax decode of heatmaps [N, HEATMAP, HEATMAP] -> per-channel coordinate
+ * in heatmap-grid space [0, HEATMAP). Mirrors soft_argmax_2d (temperature 1,
+ * un-normalised) from the model repo: softmax over each map, then its centroid.
+ */
+const softArgmax = (data: Float32Array, n: number, hh: number, ww: number): Array<{ x: number; y: number }> => {
   const out: Array<{ x: number; y: number }> = [];
+  const len = hh * ww;
   for (let k = 0; k < n; k++) {
-    let best = -Infinity;
-    let bx = 0;
-    let by = 0;
-    const base = k * hh * ww;
+    const base = k * len;
+    let max = -Infinity;
+    for (let i = 0; i < len; i++) {
+      const v = data[base + i];
+      if (v > max) { max = v; }
+    }
+    let sum = 0;
+    let ex = 0;
+    let ey = 0;
+    let i = 0;
     for (let y = 0; y < hh; y++) {
-      for (let x = 0; x < ww; x++) {
-        const v = data[base + y * ww + x];
-        if (v > best) { best = v; bx = x; by = y; }
+      for (let x = 0; x < ww; x++, i++) {
+        const e = Math.exp(data[base + i] - max);
+        sum += e;
+        ex += e * x;
+        ey += e * y;
       }
     }
-    out.push({ x: bx / (ww - 1), y: by / (hh - 1) });
+    out.push({ x: ex / sum, y: ey / sum });
   }
   return out;
 };
@@ -157,25 +192,37 @@ const onnxPredictor: LandmarkPredictor = {
     const ort = await getOrt();
     const session = await getSession();
 
-    const tensor = new ort.Tensor('float32', preprocess(imageData), [1, INPUT_CHANNELS, SIZE, SIZE]);
+    const lb = letterboxOf(width, height);
+    const tensor = new ort.Tensor('float32', preprocess(imageData, lb), [1, 3, SIZE, SIZE]);
     const feeds: Record<string, ORT.Tensor> = { [session.inputNames[0]]: tensor };
     const output = await session.run(feeds);
     const result = output[session.outputNames[0]];
     const data = result.data as Float32Array;
 
-    // Per-landmark normalised [0,1] coordinates of the original image.
-    const coords = OUTPUT_IS_HEATMAP
-      ? decodeHeatmaps(data, result.dims)
-      : Array.from({ length: Math.floor(data.length / 2) }, (_, i) => ({ x: data[i * 2], y: data[i * 2 + 1] }));
+    // dims = [1, N, Hh, Ww]
+    const dims = result.dims;
+    const n = dims[dims.length - 3];
+    const hh = dims[dims.length - 2];
+    const ww = dims[dims.length - 1];
+    const grid = softArgmax(data, n, hh, ww);
 
+    const inputToHeatmap = SIZE / HEATMAP; // heatmap-grid -> input(SIZE) space
     const requested = new Set(symbols);
     const results: PredictedLandmark[] = [];
-    for (let i = 0; i < LANDMARK_ORDER.length && i < coords.length; i++) {
+    for (let i = 0; i < LANDMARK_ORDER.length && i < grid.length; i++) {
       const symbol = LANDMARK_ORDER[i];
       if (symbol === '' || !requested.has(symbol)) {
         continue;
       }
-      results.push({ symbol, x: coords[i].x * width, y: coords[i].y * height });
+      // heatmap grid -> input(SIZE) space, then invert the letterbox to the
+      // original image (subtract padding, divide by scale).
+      const xInput = grid[i].x * inputToHeatmap;
+      const yInput = grid[i].y * inputToHeatmap;
+      results.push({
+        symbol,
+        x: (xInput - lb.padLeft) / lb.scale,
+        y: (yInput - lb.padTop) / lb.scale,
+      });
     }
     return results;
   },

@@ -1,0 +1,7 @@
+Place the converted auto-plot model here as `cephalometric.onnx`.
+It is then copied to /models/cephalometric.onnx at build time (webpack.config.js
+CopyPlugin) and fetched by src/predictors/onnx.ts (MODEL_URL).
+
+Generate it with: python tools/convert_hrnet_to_onnx.py --out src/assets/models/cephalometric.onnx
+(needs huggingface.co reachable). The .onnx itself is gitignored — see
+.gitignore and docs/auto-plot-handoff.md for hosting options.
