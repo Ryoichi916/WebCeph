@@ -6,13 +6,20 @@ import { CommandBar, ICommandBarProps } from 'office-ui-fabric-react/lib/Command
 
 export default class TracingToolbar extends React.PureComponent<Props, { }> {
   render() {
-    const { imageId, className } = this.props;
+    const { imageId, className, canAutoPlot, isAutoPlotting, onAutoPlotClick } = this.props;
     const items: ICommandBarProps['items'] = [
       {
         iconProps: { iconName: 'Add' },
         key: 'newItem',
         name: 'Add',
         disabled: imageId === null,
+      },
+      {
+        iconProps: { iconName: 'LightningBolt' },
+        key: 'autoPlot',
+        name: isAutoPlotting ? 'Auto-plotting…' : 'Auto-plot',
+        disabled: !canAutoPlot || isAutoPlotting,
+        onClick: onAutoPlotClick,
       },
     ];
     return (
