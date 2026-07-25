@@ -14,7 +14,12 @@ import {
 
 import {
   getImageSrc,
+  getImageWidth,
+  getImageHeight,
+  getManualLandmarks,
 } from 'store/reducers/workspace/image';
+
+import { addManualLandmark } from 'actions/workspace';
 
 import {
   getCanvasDimensions
@@ -23,7 +28,13 @@ import {
 import {
   getScale,
   getActiveTool,
+  isProfilogramShown,
 } from 'store/reducers/workspace/canvas';
+
+import { buildProfilogram } from 'analyses/profilogram';
+
+// Stable empty array so an off profilogram doesn't re-render on every state change.
+const EMPTY_PROFILOGRAM: never[] = [];
 
 import {
   getHighlightedLandmarks,
@@ -79,7 +90,7 @@ const getPropsForLandmark = createSelector(
     const l = imageId !== null ? toDisplay(imageId)[symbol] : undefined;
     if (isGeoPoint(l)) {
       classNames.push(classes.point);
-      props.r = '0.5rem';
+      props.r = 4;
     } else if (isGeoVector(l)) {
       classNames.push(classes.vector);
     } else if (isGeoAngle(l)) {
@@ -105,16 +116,32 @@ const getPropsForLandmark = createSelector(
   }),
 );
 
+// Scale that letterboxes the image into the canvas. Computed at render time so
+// it always reflects the current layout, instead of a one-shot value captured
+// at load time (which races with layout).
+const getFitScale = (
+  canvas: { width: number; height: number },
+  imageWidth: number,
+  imageHeight: number,
+): number => {
+  if (canvas.width > 0 && canvas.height > 0 && imageWidth > 0 && imageHeight > 0) {
+    return Math.min(canvas.width / imageWidth, canvas.height / imageHeight);
+  }
+  return 1;
+};
+
 const mapStateToProps: MapStateToProps<StateProps, OwnProps, StoreState> =
   (state: StoreState, { imageId }: OwnProps) => {
+    const canvasSize = getCanvasDimensions(state);
+    const imageWidth = getImageWidth(state)(imageId) as number;
+    const imageHeight = getImageHeight(state)(imageId) as number;
     return {
-      canvasSize: getCanvasDimensions(state),
+      canvasSize,
       src: getImageSrc(state)(imageId),
-      imageWidth: 200,
-      imageHeight: 200,
-      // imageWidth: getImageWidth(state) as number,
-      // imageHeight: getImageHeight(state) as number,
-      scale: getScale(state),
+      imageWidth,
+      imageHeight,
+      // The stored scale is the user's zoom factor (1 = fit, wheel-adjusted).
+      scale: getFitScale(canvasSize, imageWidth, imageHeight) * getScale(state),
       // brightness: getImageBrightness(state),
       // contrast: getImageContrast(state),
       // isFlippedX: isImageFlippedX(state),
@@ -125,11 +152,20 @@ const mapStateToProps: MapStateToProps<StateProps, OwnProps, StoreState> =
       highlightedLandmarks: getHighlightedLandmarks(state),
       activeTool: getActiveTool(state),
       getPropsForLandmark: getPropsForLandmark(state),
+      isDraggableLandmark: (symbol: string) =>
+        getManualLandmarks(state)(imageId)[symbol] !== undefined,
+      profilogram: isProfilogramShown(state)
+        ? buildProfilogram(getManualLandmarks(state)(imageId))
+        : EMPTY_PROFILOGRAM,
     };
   };
 
 const mapDispatchToProps: MapDispatchToPropsFunction<DispatchProps, OwnProps> =
-  (dispatch) => ({ dispatch });
+  (dispatch, { imageId }) => ({
+    dispatch,
+    onLandmarkMoved: (symbol: string, x: number, y: number) =>
+      dispatch(addManualLandmark({ imageId, symbol, value: { x, y } })),
+  });
 
 const connected = connect<StateProps, DispatchProps, OwnProps>(
   mapStateToProps, mapDispatchToProps,

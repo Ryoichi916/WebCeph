@@ -8,6 +8,9 @@ import exportMiddleware from './middleware/export';
 import importMiddleware from './middleware/import';
 import autoScaleMiddleware from './middleware/autoScale';
 import autoPlotMiddleware from './middleware/autoPlot';
+import referencePlotMiddleware from './middleware/referencePlot';
+import exportImageMiddleware from './middleware/exportImage';
+import projectMiddleware from './middleware/project';
 import compatibilityMiddleware from './middleware/compatibility';
 import fetchLocaleMiddleware from './middleware/fetchLocale';
 import {
@@ -32,6 +35,9 @@ const middlewares: Middleware[] = [
   exportMiddleware,
   autoScaleMiddleware,
   autoPlotMiddleware,
+  referencePlotMiddleware,
+  exportImageMiddleware,
+  projectMiddleware,
   saveStateMiddleware,
 ];
 
@@ -44,6 +50,19 @@ if (__DEBUG__) {
     timestamp: true,
   }));
 }
+
+const enableLoadingProject = (r: Reducer<StoreState>): Reducer<StoreState> => {
+  return (state: StoreState, action: GenericAction) => {
+    if (action.type === 'LOAD_PROJECT_SUCCEEDED') {
+      // Replace the project slices (and active patient) wholesale.
+      return {
+        ...r(state, action),
+        ...action.payload,
+      };
+    }
+    return r(state, action);
+  };
+};
 
 const enableLoadingPersistedState = (r: Reducer<StoreState>): Reducer<StoreState> => {
   return (state: StoreState, action: GenericAction) => {
@@ -64,7 +83,7 @@ function addDevTools() {
   return (f: any) => f;
 }
 
-const enhancedReducer = enableLoadingPersistedState(reducer);
+const enhancedReducer = enableLoadingProject(enableLoadingPersistedState(reducer));
 
 declare var module: __WebpackModuleApi.Module;
 

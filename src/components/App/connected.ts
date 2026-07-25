@@ -32,6 +32,10 @@ import {
 } from 'store/reducers/workspace/activeId';
 
 import {
+  getActivePatientId,
+} from 'store/reducers/patients';
+
+import {
   isLastWorkspaceUsed,
   hasMultipleWorkspaces,
   getActiveWorkspaceTitle,
@@ -60,6 +64,7 @@ const mapStateToProps: MapStateToProps<StateProps, OwnProps, StoreState> =
         isCheckingCompatiblityForThisBrowser(state)
       ),
       activeWorkspaceId: getActiveWorkspaceId(state)!,
+      hasActivePatient: getActivePatientId(state) !== null,
       title: getActiveWorkspaceTitle(state),
       shouldShowWorkspaceSwitcher: hasMultipleWorkspaces(state) || isLastWorkspaceUsed(state),
       locale: getActiveLocale(state),

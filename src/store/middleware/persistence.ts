@@ -25,6 +25,10 @@ const PERSISTABLE_EVENTS: ActionType[] = [
   'FETCH_ANALYSIS_SUCCEEDED',
   'SET_USER_PREFERRED_LOCALE',
   'UNSET_USER_PREFERRED_LOCALE',
+  'ADD_PATIENT_REQUESTED',
+  'UPDATE_PATIENT_REQUESTED',
+  'REMOVE_PATIENT_REQUESTED',
+  'SET_ACTIVE_PATIENT_REQUESTED',
 ];
 
 const isPersistenceNeededForAction = ({ type }: GenericAction): boolean => {
@@ -37,6 +41,9 @@ const PERSISTABLE_KEYS: StoreKey[] = [
   'env.compat.check.results',
   'analyses.lastUsedId',
   'user.preferences.preferredLocale',
+  // Patient records persist; the active patient does not, so every launch
+  // starts at the patient picker.
+  'patients.byId',
 ];
 
 import requestIdleCallback from 'utils/requestIdleCallback';

@@ -5,6 +5,7 @@ export interface OwnProps {
 export type StateProps = {
   shouldCheckCompatibility: boolean;
   shouldShowWorkspaceSwitcher: boolean;
+  hasActivePatient: boolean;
   isReady: boolean;
   activeWorkspaceId: string;
   locale: string;

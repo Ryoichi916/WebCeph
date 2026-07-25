@@ -4,6 +4,8 @@ import scrollIntoViewIfNeeded from 'scroll-into-view-if-needed';
 
 import * as cx from 'classnames';
 import { List, ListItem } from 'material-ui/List';
+import IconButton from 'material-ui/IconButton';
+import IconDelete from 'material-ui/svg-icons/action/delete';
 import IconDone from 'material-ui/svg-icons/action/done';
 import IconHourglass from 'material-ui/svg-icons/action/hourglass-empty';
 import IconPlayArrow from 'material-ui/svg-icons/av/play-arrow';
@@ -49,6 +51,8 @@ export class AnalysisStepper extends React.PureComponent<Props, { }> {
       steps,
       getStepState,
       getStepValue,
+      isStepRemovable,
+      onRemoveLandmarkClick,
       onStepMouseEnter, onStepMouseLeave,
     } = this.props;
     const firstPendingIndex = findIndex(steps, (step) => getStepState(step) === 'current');
@@ -77,8 +81,18 @@ export class AnalysisStepper extends React.PureComponent<Props, { }> {
                     (typeof value === 'number' ?
                       <span>{value.toLocaleString('en-US')}</span> : undefined)
                   }
-                  onMouseEnter={isDone ? onStepMouseEnter.bind(null, step.symbol) : undefined}
-                  onMouseLeave={isDone ? onStepMouseLeave.bind(null, step.symbol) : undefined}
+                  rightIconButton={
+                    (isDone && isStepRemovable(step) ? (
+                      <IconButton
+                        title="Remove this landmark"
+                        onClick={onRemoveLandmarkClick.bind(null, step)}
+                      >
+                        <IconDelete />
+                      </IconButton>
+                    ) : undefined)
+                  }
+                  onMouseEnter={isDone ? onStepMouseEnter.bind(null, step) : undefined}
+                  onMouseLeave={isDone ? onStepMouseLeave.bind(null, step) : undefined}
                 />
               </div>
             );

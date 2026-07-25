@@ -2,11 +2,15 @@ import { handleActions } from 'utils/store';
 import { createSelector } from 'reselect';
 import Tools from 'editorTools';
 
+import { getActiveWorkspaceId } from './activeId';
+import { getWorkspaceSettingsById } from './settings';
+
 const KEY_CANVAS_MOUSE_POSITION: StoreKey = 'workspace.canvas.mouse.position';
 const KEY_CANVAS_TOOL_ID: StoreKey = 'workspace.canvas.tools.activeToolId';
 const KEY_HIGHLIGHTED_STEP: StoreKey = 'workspace.canvas.highlightedStep';
 const KEY_SCALE: StoreKey = 'workspace.canvas.scale.value';
 const KEY_SCALE_ORIGIN: StoreKey = 'workspace.canvas.scale.offset';
+const KEY_PROFILOGRAM_SHOWN: StoreKey = 'workspace.canvas.profilogram.isShown';
 
 const reducers: Partial<ReducerMap> = {
   [KEY_CANVAS_MOUSE_POSITION]: handleActions<typeof KEY_CANVAS_MOUSE_POSITION>(
@@ -49,11 +53,19 @@ const reducers: Partial<ReducerMap> = {
     },
     null,
   ),
+  [KEY_PROFILOGRAM_SHOWN]: handleActions<typeof KEY_PROFILOGRAM_SHOWN>(
+    {
+      TOGGLE_PROFILOGRAM_REQUESTED: (shown) => !shown,
+      RESET_WORKSPACE_REQUESTED: () => false,
+    },
+    false,
+  ),
 };
 
 export default reducers;
 
 export const getHighlightedStep = (state: StoreState) => state[KEY_HIGHLIGHTED_STEP];
+export const isProfilogramShown = (state: StoreState) => state[KEY_PROFILOGRAM_SHOWN];
 
 export const getMousePosition = (state: StoreState) => state[KEY_CANVAS_MOUSE_POSITION];
 
@@ -70,10 +82,36 @@ export const getActiveTool = createSelector(
 export const getScale = (state: StoreState) => state[KEY_SCALE];
 export const getScaleOrigin = (state: StoreState) => state[KEY_SCALE_ORIGIN];
 
-// The canvas fills the browser viewport. Canvas dimensions are not tracked in
-// the store, so they are derived from the window. Used to auto-fit a freshly
-// loaded image (see the autoScale middleware) and to size the tracing canvas.
-export const getCanvasDimensions = (_: StoreState): { width: number; height: number } => ({
-  width: typeof window !== 'undefined' ? window.innerWidth : 0,
-  height: typeof window !== 'undefined' ? window.innerHeight : 0,
-});
+// The stepper panel and the toolbar share the workspace content area with the
+// canvas (see TracingEditor); their sizes must be carved out of the measured
+// contentRect or the canvas overflows and scrolls out of view.
+const STEPPER_WIDTH = 280; // .stepper in TracingEditor/style.scss
+const TOOLBAR_HEIGHT = 44; // office-ui-fabric CommandBar
+
+// The space available to the tracing canvas. Preferably the measured size of
+// the active workspace's content area (kept up to date by ResizeObservable via
+// CANVAS_RESIZED) minus the stepper/toolbar; the window size is only a
+// first-render fallback. Used to auto-fit a freshly loaded image (see the
+// autoScale middleware) and to size the tracing canvas.
+export const getCanvasDimensions = (state: StoreState): { width: number; height: number } => {
+  const workspaceId = getActiveWorkspaceId(state);
+  const settings = workspaceId !== null
+    ? getWorkspaceSettingsById(state)(workspaceId)
+    : null;
+  const rect = settings && settings.contentRect;
+  if (rect && rect.width > 0 && rect.height > 0) {
+    // The observed element can be stretched by its own (overflowing) canvas
+    // content, so its measurement must never exceed the viewport — otherwise
+    // canvas size and measurement feed back into each other and grow.
+    const winW = typeof window !== 'undefined' ? window.innerWidth : rect.width;
+    const winH = typeof window !== 'undefined' ? window.innerHeight : rect.height;
+    return {
+      width: Math.max(Math.min(rect.width, winW) - STEPPER_WIDTH, 0),
+      height: Math.max(Math.min(rect.height, winH) - TOOLBAR_HEIGHT, 0),
+    };
+  }
+  return {
+    width: typeof window !== 'undefined' ? window.innerWidth : 0,
+    height: typeof window !== 'undefined' ? window.innerHeight : 0,
+  };
+};

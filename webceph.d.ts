@@ -291,7 +291,7 @@ type WorkspaceSettings = {
   importError: GenericError | null;
   exportError: GenericError | null;
   mode: WorkspaceMode;
-  contectRect: ContentRect | null;
+  contentRect: ContentRect | null;
   images: string[];
   tracing: {
     imageId: string | null;
@@ -332,7 +332,16 @@ type FetchStatus = {
 
 type Locale = Record<string, string>;
 
+/** A patient record. Kept intentionally minimal — a chart system links later. */
+interface Patient {
+  id: string;
+  name: string;
+  chartId: string;
+}
+
 interface StoreState {
+  'patients.byId': { [id: string]: Patient };
+  'patients.activeId': string | null;
   'app.init.isInitialized': boolean;
   'app.status.isUpdating': boolean;
   'app.status.isInstalling': boolean;
@@ -386,6 +395,8 @@ interface StoreState {
     left: number;
   };
   'workspace.canvas.highlightedStep': string | null;
+  /** Whether the profilogram overlay (profile lines through landmarks) is shown. */
+  'workspace.canvas.profilogram.isShown': boolean;
   /** Data indexed by image ID */
   'images.props': {
     [imageId: string]: ImageBlobData & CephImageData<ImageType>;
@@ -609,6 +620,13 @@ interface Events {
     imageId: string;
     error: GenericError;
   };
+  /**
+   * Scaffold the remaining landmarks from the placed Sella and Nasion at their
+   * standard SN-relative positions.
+   */
+  PLOT_FROM_REFERENCE_POINTS_REQUESTED: {
+    imageId: string;
+  };
   FLIP_IMAGE_X_REQUESTED: {
     imageId: string;
   };
@@ -702,6 +720,44 @@ interface Events {
     update: Partial<TreatmentStage>;
   };
   TOGGLE_ANALYSIS_RESULTS_REQUESTED: void;
+  TOGGLE_PROFILOGRAM_REQUESTED: void;
+  /** Set the active analysis for a specific image. */
+  SET_ACTIVE_ANALYSIS_REQUESTED: {
+    imageId: string;
+    analysisId: AnalysisId<ImageType>;
+  };
+  /** Export the current tracing as a raster image (PNG/JPEG). */
+  EXPORT_IMAGE_REQUESTED: {
+    imageId: string;
+    format: 'png' | 'jpeg';
+  };
+  /** Patient records (name + chart id; linked to a chart system later). */
+  ADD_PATIENT_REQUESTED: {
+    id: string;
+    name: string;
+    chartId: string;
+  };
+  UPDATE_PATIENT_REQUESTED: {
+    id: string;
+    name: string;
+    chartId: string;
+  };
+  REMOVE_PATIENT_REQUESTED: {
+    id: string;
+  };
+  SET_ACTIVE_PATIENT_REQUESTED: {
+    id: string | null;
+  };
+  /** Open a patient's project: make them active and load their saved tracing. */
+  OPEN_PATIENT_REQUESTED: {
+    patientId: string;
+  };
+  /** Persist the current project (images + tracings) under a patient. */
+  SAVE_PROJECT_REQUESTED: {
+    patientId: string;
+  };
+  /** Replace the project state slices with a loaded project. */
+  LOAD_PROJECT_SUCCEEDED: Partial<StoreState>;
   BROWSER_COMPATIBLITY_CHECK_REQUESTED: {
     userAgent: string;
   };

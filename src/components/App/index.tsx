@@ -3,6 +3,7 @@ import * as React from 'react';
 import VerticalTabBar from 'components/VerticalTabBar/connected';
 import Workspace from 'components/Workspace/connected';
 import Settings from 'components/Settings/connected';
+import PatientPicker from 'components/PatientPicker/connected';
 
 import { Route, Link } from 'react-router-dom';
 
@@ -42,6 +43,7 @@ import { Helmet } from 'react-helmet';
 const App = enhance(({
   isReady, keyMap, handlers,
   shouldShowWorkspaceSwitcher,
+  hasActivePatient,
   activeWorkspaceId,
   title,
   locale, messages,
@@ -64,17 +66,21 @@ const App = enhance(({
                 defaultTitle="WebCeph"
               />
               <HotKeys keyMap={keyMap} handlers={handlers}>
-                <div className={classes.container}>
-                  <div className={classes.row}>
-                    {shouldShowWorkspaceSwitcher ? (
-                      <VerticalTabBar
-                        className={classes.tab_bar}
-                      />
-                    ) : null}
-                    <Workspace className={classes.workspace} workspaceId={activeWorkspaceId} />
+                {hasActivePatient ? (
+                  <div className={classes.container}>
+                    <div className={classes.row}>
+                      {shouldShowWorkspaceSwitcher ? (
+                        <VerticalTabBar
+                          className={classes.tab_bar}
+                        />
+                      ) : null}
+                      <Workspace className={classes.workspace} workspaceId={activeWorkspaceId} />
+                    </div>
+                    <Link to="/settings">Settings</Link>
                   </div>
-                  <Link to="/settings">Settings</Link>
-                </div>
+                ) : (
+                  <PatientPicker />
+                )}
               </HotKeys>
               <Route path="/settings" component={Settings} />
             </div>

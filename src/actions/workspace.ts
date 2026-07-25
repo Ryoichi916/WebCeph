@@ -13,6 +13,30 @@ export const autoPlotLandmarks = createActionCreator('AUTO_PLOT_LANDMARKS_REQUES
 export const autoPlotSucceeded = createActionCreator('AUTO_PLOT_LANDMARKS_SUCCEEDED');
 export const autoPlotFailed = createActionCreator('AUTO_PLOT_LANDMARKS_FAILED');
 
+// Scaffold the remaining landmarks from the placed Sella and Nasion at their
+// SN-relative population-mean positions (see analyses/referenceTemplate).
+export const plotFromReferencePoints = createActionCreator('PLOT_FROM_REFERENCE_POINTS_REQUESTED');
+
+// Toggle the profilogram overlay (profile lines through the placed landmarks).
+export const toggleProfilogram = createActionCreator('TOGGLE_PROFILOGRAM_REQUESTED');
+
+// Set the active analysis for a specific image (drives the stepper + values).
+export const setActiveAnalysis = createActionCreator('SET_ACTIVE_ANALYSIS_REQUESTED');
+
+// Export the current tracing (image + profilogram + points) as a raster image.
+export const exportImage = createActionCreator('EXPORT_IMAGE_REQUESTED');
+
+// Patient records (name + chart id).
+export const addPatient = createActionCreator('ADD_PATIENT_REQUESTED');
+export const updatePatient = createActionCreator('UPDATE_PATIENT_REQUESTED');
+export const removePatient = createActionCreator('REMOVE_PATIENT_REQUESTED');
+export const setActivePatient = createActionCreator('SET_ACTIVE_PATIENT_REQUESTED');
+
+// Project lifecycle (a project is a patient's images + tracings + analyses).
+export const openPatient = createActionCreator('OPEN_PATIENT_REQUESTED');
+export const saveProject = createActionCreator('SAVE_PROJECT_REQUESTED');
+export const loadProjectSucceeded = createActionCreator('LOAD_PROJECT_SUCCEEDED');
+
 export const setScale = createActionCreator('SET_SCALE_REQUESTED');
 
 export const importFileRequested = createActionCreator('IMPORT_FILE_REQUESTED');

@@ -16,6 +16,11 @@ const KEY_TRACING: StoreKey = 'images.tracing';
 const defaultImageProps = {
   name: null as string | null,
   type: 'ceph_lateral' as ImageType,
+  // Natural pixel dimensions of the loaded image; filled from the
+  // LOAD_IMAGE_SUCCEEDED payload. Used to render the tracing canvas at the right
+  // aspect ratio and to auto-fit the zoom.
+  width: null as number | null,
+  height: null as number | null,
   scaleFactor: null as number | null,
   flipX: false,
   flipY: false,
@@ -23,7 +28,11 @@ const defaultImageProps = {
   contrast: 0.5,
   invertColors: false,
   analysis: {
-    activeId: null as AnalysisId<ImageType> | null,
+    // Default to a standard lateral-ceph analysis so manual plotting is usable
+    // immediately on import: the stepper has steps and canvas clicks name the
+    // expected landmarks. Without an active analysis, clicks fall back to the
+    // (unimplemented) unnamed-landmark path and place nothing.
+    activeId: 'downs' as AnalysisId<ImageType> | null,
   },
 };
 
@@ -50,6 +59,18 @@ const imagesReducer = handleActions<typeof KEY_IMAGES>(
     },
     CLOSE_IMAGE_REQUESTED: (state, { payload: { imageId } }) => {
       return omit(state, imageId) as typeof state;
+    },
+    SET_ACTIVE_ANALYSIS_REQUESTED: (state, { payload: { imageId, analysisId } }) => {
+      return {
+        ...state,
+        [imageId]: {
+          ...state[imageId],
+          analysis: {
+            ...(state[imageId] && state[imageId].analysis),
+            activeId: analysisId,
+          },
+        },
+      };
     },
     SET_SCALE_FACTOR_REQUESTED: (state, { payload: { imageId, value } }) => {
       return {
@@ -130,12 +151,13 @@ const tracingReducer = handleActions<typeof KEY_TRACING>({
   },
   ADD_MANUAL_LANDMARK_REQUESTED: (state, { payload }) => {
     const { imageId, symbol, value } = payload;
+    const entry = state[imageId];
     return {
       ...state,
       [imageId]: {
-        ...state[imageId],
+        ...entry,
         manualLandmarks: {
-          ...state[imageId].manualLandmarks,
+          ...(entry && entry.manualLandmarks),
           [symbol]: value,
         },
       },
@@ -143,12 +165,13 @@ const tracingReducer = handleActions<typeof KEY_TRACING>({
   },
   ADD_MANUAL_LANDMARKS_BATCH_REQUESTED: (state, { payload }) => {
     const { imageId, landmarks } = payload;
+    const entry = state[imageId];
     return {
       ...state,
       [imageId]: {
-        ...state[imageId],
+        ...entry,
         manualLandmarks: {
-          ...state[imageId].manualLandmarks,
+          ...(entry && entry.manualLandmarks),
           ...landmarks,
         },
       },
@@ -156,35 +179,38 @@ const tracingReducer = handleActions<typeof KEY_TRACING>({
   },
   REMOVE_MANUAL_LANDMARK_REQUESTED: (state, { payload }) => {
     const { imageId, symbol } = payload;
+    const entry = state[imageId];
     return {
       ...state,
       [imageId]: {
-        ...state[imageId],
+        ...entry,
         manualLandmarks: {
-          ...omit(state[imageId].manualLandmarks, symbol),
+          ...omit(entry && entry.manualLandmarks, symbol),
         },
       },
     };
   },
   SKIP_MANUAL_STEP_REQUESTED: (state, { payload: { imageId, step } }) => {
+    const entry = state[imageId];
     return {
       ...state,
       [imageId]: {
-        ...state[imageId],
+        ...entry,
         skippedSteps: {
-          ...state[imageId].skippedSteps,
+          ...(entry && entry.skippedSteps),
           [step]: true,
         },
       },
     };
   },
   UNSKIP_MANUAL_STEP_REQUESTED: (state, { payload: { imageId, step } }) => {
+    const entry = state[imageId];
     return {
       ...state,
       [imageId]: {
-        ...state[imageId],
+        ...entry,
         skippedSteps: {
-          ...omit(state[imageId].skippedSteps, step),
+          ...omit(entry && entry.skippedSteps, step),
         },
       },
     };
@@ -210,6 +236,16 @@ export const getImageProps = createSelector(
 export const getImageSrc = createSelector(
   getImageProps,
   (getProps) => (id: string) => getProps(id).data,
+);
+
+export const getImageWidth = createSelector(
+  getImageProps,
+  (getProps) => (id: string) => getProps(id).width,
+);
+
+export const getImageHeight = createSelector(
+  getImageProps,
+  (getProps) => (id: string) => getProps(id).height,
 );
 
 export const isImageFlippedX = createSelector(
@@ -271,14 +307,26 @@ export const getTracingDataByImageId = createSelector(
   (all) => (id: string) => all[id],
 );
 
+// Stable empty defaults so selectors stay referentially stable (reselect/memoize
+// equality) for images that have no tracing entry yet — a tracing entry is only
+// created lazily on the first manual landmark / skip.
+const EMPTY_MANUAL_LANDMARKS = {};
+const EMPTY_SKIPPED_STEPS = {};
+
 export const getManualLandmarks = createSelector(
   getTracingDataByImageId,
-  (getTracing) => (id: string) => getTracing(id).manualLandmarks,
+  (getTracing) => (id: string) => {
+    const tracing = getTracing(id);
+    return (tracing && tracing.manualLandmarks) || EMPTY_MANUAL_LANDMARKS;
+  },
 );
 
 export const getSkippedSteps = createSelector(
   getTracingDataByImageId,
-  (getTracing) => (id: string) => getTracing(id).skippedSteps,
+  (getTracing) => (id: string) => {
+    const tracing = getTracing(id);
+    return (tracing && tracing.skippedSteps) || EMPTY_SKIPPED_STEPS;
+  },
 );
 
 export const getAnalysisId = createSelector(
