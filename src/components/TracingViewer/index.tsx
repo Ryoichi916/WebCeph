@@ -11,6 +11,7 @@ import * as cx from 'classnames';
 import Props from './props';
 
 import GeoViewer from 'components/GeoViewer';
+import { isGeoPoint } from 'utils/math';
 
 const classes = require('./style.scss');
 
@@ -279,10 +280,15 @@ export class TracingViewer extends React.PureComponent<Props, State> {
   private getRenderedLandmarks = () => {
     const { landmarks } = this.props;
     const { draggedSymbol, dragX, dragY } = this.state;
+    // Render only the landmark points. The analysis' own lines/angles are not
+    // drawn on the canvas — the profile geometry is shown by the (toggleable)
+    // profilogram overlay instead — while the analysis still computes its values
+    // for the stepper.
+    const points = landmarks.filter((landmark) => isGeoPoint(landmark.value));
     if (draggedSymbol === null) {
-      return landmarks;
+      return points;
     }
-    return landmarks.map((landmark) =>
+    return points.map((landmark) =>
       landmark.symbol === draggedSymbol
         ? { ...landmark, value: { x: dragX, y: dragY } }
         : landmark,
