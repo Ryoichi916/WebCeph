@@ -8,6 +8,7 @@ import {
   plotFromReferencePoints,
   toggleProfilogram,
   setActiveAnalysis,
+  exportImage,
 } from 'actions/workspace';
 import { getManualSteps } from 'store/reducers/workspace/analyses';
 import { isPerformingBackgroundWork } from 'store/reducers/workspace/workers';
@@ -57,6 +58,11 @@ const mapDispatchToProps =
           imageId,
           analysisId: analysisId as AnalysisId<ImageType>,
         }));
+      }
+    },
+    onExportImage: (format: 'png' | 'jpeg') => {
+      if (imageId !== null) {
+        dispatch(exportImage({ imageId, format }));
       }
     },
   });

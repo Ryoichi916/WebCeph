@@ -21,6 +21,7 @@ export default class TracingToolbar extends React.PureComponent<Props, { }> {
       canPlotFromReferences, onPlotFromReferencesClick,
       isProfilogramShown, onToggleProfilogramClick,
       activeAnalysisId, onSelectAnalysis,
+      onExportImage,
     } = this.props;
     const activeAnalysis = ANALYSES.find((a) => a.id === activeAnalysisId);
     const items: ICommandBarProps['items'] = [
@@ -68,6 +69,29 @@ export default class TracingToolbar extends React.PureComponent<Props, { }> {
         checked: isProfilogramShown,
         disabled: imageId === null,
         onClick: onToggleProfilogramClick,
+      },
+      {
+        iconProps: { iconName: 'Download' },
+        key: 'export',
+        name: 'Export',
+        title: 'Save the tracing as an image',
+        disabled: imageId === null,
+        subMenuProps: {
+          items: [
+            {
+              key: 'png',
+              name: 'PNG image',
+              iconProps: { iconName: 'FileImage' },
+              onClick: () => onExportImage('png'),
+            },
+            {
+              key: 'jpg',
+              name: 'JPG image',
+              iconProps: { iconName: 'FileImage' },
+              onClick: () => onExportImage('jpeg'),
+            },
+          ],
+        },
       },
     ];
     return (

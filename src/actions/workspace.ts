@@ -23,6 +23,9 @@ export const toggleProfilogram = createActionCreator('TOGGLE_PROFILOGRAM_REQUEST
 // Set the active analysis for a specific image (drives the stepper + values).
 export const setActiveAnalysis = createActionCreator('SET_ACTIVE_ANALYSIS_REQUESTED');
 
+// Export the current tracing (image + profilogram + points) as a raster image.
+export const exportImage = createActionCreator('EXPORT_IMAGE_REQUESTED');
+
 export const setScale = createActionCreator('SET_SCALE_REQUESTED');
 
 export const importFileRequested = createActionCreator('IMPORT_FILE_REQUESTED');

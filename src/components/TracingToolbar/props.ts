@@ -14,6 +14,7 @@ export interface DispatchProps {
   onPlotFromReferencesClick(): any;
   onToggleProfilogramClick(): any;
   onSelectAnalysis(analysisId: string): any;
+  onExportImage(format: 'png' | 'jpeg'): any;
 };
 
 export type ConnectableProps = StateProps & DispatchProps;

@@ -717,6 +717,11 @@ interface Events {
     imageId: string;
     analysisId: AnalysisId<ImageType>;
   };
+  /** Export the current tracing as a raster image (PNG/JPEG). */
+  EXPORT_IMAGE_REQUESTED: {
+    imageId: string;
+    format: 'png' | 'jpeg';
+  };
   BROWSER_COMPATIBLITY_CHECK_REQUESTED: {
     userAgent: string;
   };
