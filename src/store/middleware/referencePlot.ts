@@ -6,19 +6,18 @@ import {
   getImageProps,
   getManualLandmarks,
 } from 'store/reducers/workspace/image';
-import { getManualSteps } from 'store/reducers/workspace/analyses';
 import { isGeoPoint } from 'utils/math';
-import { positionFromReferences } from 'analyses/referenceTemplate';
+import { SN_RELATIVE_TEMPLATE, positionFromReferences } from 'analyses/referenceTemplate';
 
 const clamp = (n: number, min: number, max: number) => Math.max(min, Math.min(max, n));
 
 /**
  * Scaffolds a tracing from the two reference points: on
  * PLOT_FROM_REFERENCE_POINTS_REQUESTED, reads the placed Sella (S) and Nasion
- * (N) and fills every other manual landmark of the active analysis at its
- * SN-relative population-mean position, as a single undoable batch. Landmarks
- * the reader has already placed are left untouched so re-running never clobbers
- * hand-tuned points.
+ * (N) and fills every templated landmark (the full profilogram set, not just
+ * the active analysis' steps) at its SN-relative population-mean position, as a
+ * single undoable batch. Landmarks the reader has already placed are left
+ * untouched so re-running never clobbers hand-tuned points.
  */
 const middleware = ({ getState, dispatch }: Store<StoreState>) =>
   (next: GenericDispatch) => (action: GenericAction) => {
@@ -42,8 +41,7 @@ const middleware = ({ getState, dispatch }: Store<StoreState>) =>
     const height = (props && props.height) || Infinity;
 
     const landmarks: { [symbol: string]: { x: number; y: number } } = {};
-    getManualSteps(state)(imageId).forEach((step) => {
-      const symbol = step.symbol;
+    Object.keys(SN_RELATIVE_TEMPLATE).forEach((symbol) => {
       if (symbol === 'S' || symbol === 'N' || placed[symbol] !== undefined) {
         return;
       }

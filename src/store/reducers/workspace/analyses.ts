@@ -334,8 +334,20 @@ export const getStepState = createSelector(
 export const getAllGeoObjects = createSelector(
   getAllPossibleActiveAnalysisSteps,
   getMappedValue,
-  (getSteps, getMapped) => (imageId: string) => {
-    return mapValues(keyBy(getSteps(imageId), s => s.symbol), getMapped(imageId));
+  getManualLandmarks,
+  (getSteps, getMapped, getManual) => (imageId: string) => {
+    const fromAnalysis = mapValues(keyBy(getSteps(imageId), s => s.symbol), getMapped(imageId));
+    // Also surface manually placed landmarks that the active analysis does not
+    // define (e.g. the soft-tissue profile points used by the profilogram), so
+    // they render as draggable points instead of being invisible.
+    const manual = getManual(imageId);
+    const result: { [symbol: string]: GeoObject | undefined } = { ...fromAnalysis };
+    Object.keys(manual).forEach((symbol) => {
+      if (result[symbol] === undefined) {
+        result[symbol] = manual[symbol];
+      }
+    });
+    return result;
   },
 );
 

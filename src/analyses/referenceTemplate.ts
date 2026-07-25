@@ -28,21 +28,28 @@ export interface Point { x: number; y: number; }
  * implicit (they are the references) and intentionally omitted.
  */
 export const SN_RELATIVE_TEMPLATE: { [symbol: string]: [number, number] } = {
+  // --- Skeletal ---
+  Ba: [-0.30, 0.50],   // Basion — postero-inferior to S (foramen magnum)
   Po: [-0.10, 0.28],   // Porion — posterior, below SN (external auditory meatus)
+  Ar: [-0.18, 0.55],   // Articulare
   Or: [0.72, 0.22],    // Orbitale — anterior, just below SN
-  ANS: [1.02, 0.55],   // Anterior nasal spine
   PNS: [0.30, 0.55],   // Posterior nasal spine
+  ANS: [1.02, 0.55],   // Anterior nasal spine
   A: [0.95, 0.64],     // Subspinale (A-point)
   B: [0.88, 1.02],     // Supramentale (B-point)
   Pog: [0.95, 1.18],   // Pogonion (bony chin)
   Gn: [0.86, 1.30],    // Gnathion
   Me: [0.78, 1.34],    // Menton (lowest point of the symphysis)
   Go: [-0.05, 1.06],   // Gonion (mandibular angle)
-  Ar: [-0.18, 0.55],   // Articulare
-  // Soft-tissue profile (used by soft-tissue analyses)
-  Sn: [1.12, 0.60],    // Subnasale
-  Ls: [1.16, 0.76],    // Labrale superius (upper lip)
-  Li: [1.13, 0.92],    // Labrale inferius (lower lip)
+  // --- Soft-tissue profile (superior -> inferior) ---
+  'G': [1.02, -0.15],   // Glabella
+  'N\'': [1.10, 0.05],  // Soft-tissue nasion
+  Pn: [1.34, 0.32],     // Pronasale (nose tip)
+  Sn: [1.16, 0.60],     // Subnasale
+  Ls: [1.20, 0.77],     // Labrale superius (upper lip)
+  Li: [1.17, 0.95],     // Labrale inferius (lower lip)
+  'Pog\'': [1.08, 1.22], // Soft-tissue pogonion
+  'Me\'': [0.88, 1.42],  // Soft-tissue menton
 };
 
 /**

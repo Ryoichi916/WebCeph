@@ -8,19 +8,37 @@ import { isGeoPoint } from 'utils/math';
  * simply skipped, so the profilogram fills in as more points are added.
  */
 export const PROFILOGRAM_SEGMENTS: Array<[string, string]> = [
-  ['S', 'N'],     // anterior cranial base
+  // --- Cranial base ---
+  ['Ba', 'N'],    // basion -> nasion (cranial base)
+  ['S', 'N'],     // anterior cranial base (SN)
+  ['Ba', 'S'],
+  // --- Maxilla / palatal ---
   ['N', 'A'],     // maxillary (nasion -> subspinale)
   ['A', 'ANS'],   // anterior maxilla
   ['ANS', 'PNS'], // palatal plane
+  // --- Facial plane ---
   ['N', 'Pog'],   // facial plane
+  // --- Anterior mandible / symphysis ---
   ['A', 'B'],     // alveolar profile
   ['B', 'Pog'],   // anterior symphysis
   ['Pog', 'Gn'],  // chin
   ['Gn', 'Me'],   // chin -> menton
-  ['Me', 'Go'],   // mandibular plane
+  // --- Mandibular outline ---
+  ['Me', 'Go'],   // mandibular plane (corpus)
   ['Go', 'Ar'],   // ramus
   ['Ar', 'S'],    // condyle -> sella
-  ['S', 'Gn'],    // Y-axis
+  // --- Frankfort horizontal ---
+  ['Po', 'Or'],   // FH plane
+  // --- Soft-tissue profile (superior -> inferior) ---
+  ['G', 'N\''],
+  ['N\'', 'Pn'],
+  ['Pn', 'Sn'],
+  ['Sn', 'Ls'],
+  ['Ls', 'Li'],
+  ['Li', 'Pog\''],
+  ['Pog\'', 'Me\''],
+  // --- Ricketts E-line (nose tip -> soft chin) ---
+  ['Pn', 'Pog\''],
 ];
 
 export interface Segment { x1: number; y1: number; x2: number; y2: number; }
