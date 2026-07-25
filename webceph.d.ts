@@ -609,6 +609,13 @@ interface Events {
     imageId: string;
     error: GenericError;
   };
+  /**
+   * Scaffold the remaining landmarks from the placed Sella and Nasion at their
+   * standard SN-relative positions.
+   */
+  PLOT_FROM_REFERENCE_POINTS_REQUESTED: {
+    imageId: string;
+  };
   FLIP_IMAGE_X_REQUESTED: {
     imageId: string;
   };

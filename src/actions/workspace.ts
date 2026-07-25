@@ -13,6 +13,10 @@ export const autoPlotLandmarks = createActionCreator('AUTO_PLOT_LANDMARKS_REQUES
 export const autoPlotSucceeded = createActionCreator('AUTO_PLOT_LANDMARKS_SUCCEEDED');
 export const autoPlotFailed = createActionCreator('AUTO_PLOT_LANDMARKS_FAILED');
 
+// Scaffold the remaining landmarks from the placed Sella and Nasion at their
+// SN-relative population-mean positions (see analyses/referenceTemplate).
+export const plotFromReferencePoints = createActionCreator('PLOT_FROM_REFERENCE_POINTS_REQUESTED');
+
 export const setScale = createActionCreator('SET_SCALE_REQUESTED');
 
 export const importFileRequested = createActionCreator('IMPORT_FILE_REQUESTED');

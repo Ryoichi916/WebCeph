@@ -6,7 +6,11 @@ import { CommandBar, ICommandBarProps } from 'office-ui-fabric-react/lib/Command
 
 export default class TracingToolbar extends React.PureComponent<Props, { }> {
   render() {
-    const { imageId, className, canAutoPlot, isAutoPlotting, onAutoPlotClick } = this.props;
+    const {
+      imageId, className,
+      canAutoPlot, isAutoPlotting, onAutoPlotClick,
+      canPlotFromReferences, onPlotFromReferencesClick,
+    } = this.props;
     const items: ICommandBarProps['items'] = [
       {
         iconProps: { iconName: 'Add' },
@@ -20,6 +24,14 @@ export default class TracingToolbar extends React.PureComponent<Props, { }> {
         name: isAutoPlotting ? 'Auto-plotting…' : 'Auto-plot',
         disabled: !canAutoPlot || isAutoPlotting,
         onClick: onAutoPlotClick,
+      },
+      {
+        iconProps: { iconName: 'DoubleColumn' },
+        key: 'plotFromReferences',
+        name: 'Plot from S & N',
+        title: 'Place the remaining landmarks at standard positions from Sella and Nasion',
+        disabled: !canPlotFromReferences,
+        onClick: onPlotFromReferencesClick,
       },
     ];
     return (
