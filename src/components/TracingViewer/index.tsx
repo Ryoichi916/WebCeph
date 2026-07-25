@@ -267,7 +267,7 @@ export class TracingViewer extends React.PureComponent<Props, State> {
             x2={seg.x2}
             y2={seg.y2}
             stroke="#00e5ff"
-            strokeWidth={3}
+            strokeWidth={1.25}
             strokeLinecap="round"
             vectorEffect="non-scaling-stroke"
             pointerEvents="none"

@@ -13,7 +13,9 @@
 }
 
 .landmark {
-  stroke-width: 1.3mm;
+  // Keep the stroke a constant on-screen weight regardless of zoom.
+  stroke-width: 1px;
+  vector-effect: non-scaling-stroke;
   pointer-events: none;
   will-change: transform, opacity;
   transition-property: transform, opacity, fill, stroke;
@@ -23,8 +25,8 @@
 
 .point {
   @extend .landmark;
-  stroke: black;
-  fill: white;
+  stroke: #05323a;
+  fill: #00e5ff;
 }
 
 .vector {

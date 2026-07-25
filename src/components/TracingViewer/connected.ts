@@ -90,7 +90,7 @@ const getPropsForLandmark = createSelector(
     const l = imageId !== null ? toDisplay(imageId)[symbol] : undefined;
     if (isGeoPoint(l)) {
       classNames.push(classes.point);
-      props.r = '0.5rem';
+      props.r = 4;
     } else if (isGeoVector(l)) {
       classNames.push(classes.vector);
     } else if (isGeoAngle(l)) {
