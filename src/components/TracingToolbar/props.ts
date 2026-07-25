@@ -5,12 +5,15 @@ export interface StateProps {
   canPlotFromReferences: boolean;
   /** Whether the profilogram overlay is currently shown. */
   isProfilogramShown: boolean;
+  /** The id of the analysis active for the current image. */
+  activeAnalysisId: string | null;
 };
 
 export interface DispatchProps {
   onAutoPlotClick(): any;
   onPlotFromReferencesClick(): any;
   onToggleProfilogramClick(): any;
+  onSelectAnalysis(analysisId: string): any;
 };
 
 export type ConnectableProps = StateProps & DispatchProps;

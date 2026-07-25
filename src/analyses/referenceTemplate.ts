@@ -41,6 +41,11 @@ export const SN_RELATIVE_TEMPLATE: { [symbol: string]: [number, number] } = {
   Gn: [0.86, 1.30],    // Gnathion
   Me: [0.78, 1.34],    // Menton (lowest point of the symphysis)
   Go: [-0.05, 1.06],   // Gonion (mandibular angle)
+  // --- Incisors (axes used by Tweed / Steiner / interincisal) ---
+  'U1 Apex': [0.93, 0.70],          // Upper incisor root apex
+  'U1 Incisal Edge': [1.02, 0.98],  // Upper incisor incisal edge
+  'L1 Apex': [0.84, 1.12],          // Lower incisor root apex
+  'L1 Incisal Edge': [0.98, 0.97],  // Lower incisor incisal edge
   // --- Soft-tissue profile (superior -> inferior) ---
   'G': [1.02, -0.15],   // Glabella
   'N\'': [1.10, 0.05],  // Soft-tissue nasion

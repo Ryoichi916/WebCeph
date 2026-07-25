@@ -7,11 +7,12 @@ import {
   autoPlotLandmarks,
   plotFromReferencePoints,
   toggleProfilogram,
+  setActiveAnalysis,
 } from 'actions/workspace';
 import { getManualSteps } from 'store/reducers/workspace/analyses';
 import { isPerformingBackgroundWork } from 'store/reducers/workspace/workers';
 import { isProfilogramShown } from 'store/reducers/workspace/canvas';
-import { hasImage, getManualLandmarks } from 'store/reducers/workspace/image';
+import { hasImage, getManualLandmarks, getAnalysisId } from 'store/reducers/workspace/image';
 
 const mapStateToProps =
   (state: StoreState, { imageId }: OwnProps): StateProps => {
@@ -33,6 +34,7 @@ const mapStateToProps =
         manual['S'] !== undefined &&
         manual['N'] !== undefined,
       isProfilogramShown: isProfilogramShown(state),
+      activeAnalysisId: imageId !== null ? getAnalysisId(state)(imageId) : null,
     };
   };
 
@@ -49,6 +51,14 @@ const mapDispatchToProps =
       }
     },
     onToggleProfilogramClick: () => dispatch(toggleProfilogram()),
+    onSelectAnalysis: (analysisId: string) => {
+      if (imageId !== null) {
+        dispatch(setActiveAnalysis({
+          imageId,
+          analysisId: analysisId as AnalysisId<ImageType>,
+        }));
+      }
+    },
   });
 
 export default connect(mapStateToProps, mapDispatchToProps)(TracingToolbar);

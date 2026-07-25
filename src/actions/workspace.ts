@@ -20,6 +20,9 @@ export const plotFromReferencePoints = createActionCreator('PLOT_FROM_REFERENCE_
 // Toggle the profilogram overlay (profile lines through the placed landmarks).
 export const toggleProfilogram = createActionCreator('TOGGLE_PROFILOGRAM_REQUESTED');
 
+// Set the active analysis for a specific image (drives the stepper + values).
+export const setActiveAnalysis = createActionCreator('SET_ACTIVE_ANALYSIS_REQUESTED');
+
 export const setScale = createActionCreator('SET_SCALE_REQUESTED');
 
 export const importFileRequested = createActionCreator('IMPORT_FILE_REQUESTED');

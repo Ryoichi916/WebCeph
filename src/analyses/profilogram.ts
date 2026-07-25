@@ -29,6 +29,9 @@ export const PROFILOGRAM_SEGMENTS: Array<[string, string]> = [
   ['Ar', 'S'],    // condyle -> sella
   // --- Frankfort horizontal ---
   ['Po', 'Or'],   // FH plane
+  // --- Incisor axes (Tweed / Steiner) ---
+  ['U1 Apex', 'U1 Incisal Edge'],
+  ['L1 Apex', 'L1 Incisal Edge'],
   // --- Soft-tissue profile (superior -> inferior) ---
   ['G', 'N\''],
   ['N\'', 'Pn'],

@@ -712,6 +712,11 @@ interface Events {
   };
   TOGGLE_ANALYSIS_RESULTS_REQUESTED: void;
   TOGGLE_PROFILOGRAM_REQUESTED: void;
+  /** Set the active analysis for a specific image. */
+  SET_ACTIVE_ANALYSIS_REQUESTED: {
+    imageId: string;
+    analysisId: AnalysisId<ImageType>;
+  };
   BROWSER_COMPATIBLITY_CHECK_REQUESTED: {
     userAgent: string;
   };

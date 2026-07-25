@@ -3,6 +3,15 @@ import Props from './props';
 
 import { CommandBar, ICommandBarProps } from 'office-ui-fabric-react/lib/CommandBar';
 
+// Lateral-cephalometric analyses the user can switch between. The id is the
+// analysis module name (see src/analyses/<id>.ts).
+const ANALYSES: Array<{ id: string; name: string }> = [
+  { id: 'downs', name: 'Downs' },
+  { id: 'steiner', name: 'Steiner' },
+  { id: 'tweed', name: 'Tweed' },
+  { id: 'ricketts', name: 'Ricketts' },
+  { id: 'bjork', name: 'Björk' },
+];
 
 export default class TracingToolbar extends React.PureComponent<Props, { }> {
   render() {
@@ -11,13 +20,30 @@ export default class TracingToolbar extends React.PureComponent<Props, { }> {
       canAutoPlot, isAutoPlotting, onAutoPlotClick,
       canPlotFromReferences, onPlotFromReferencesClick,
       isProfilogramShown, onToggleProfilogramClick,
+      activeAnalysisId, onSelectAnalysis,
     } = this.props;
+    const activeAnalysis = ANALYSES.find((a) => a.id === activeAnalysisId);
     const items: ICommandBarProps['items'] = [
       {
         iconProps: { iconName: 'Add' },
         key: 'newItem',
         name: 'Add',
         disabled: imageId === null,
+      },
+      {
+        iconProps: { iconName: 'ClipboardList' },
+        key: 'analysis',
+        name: activeAnalysis ? `Analysis: ${activeAnalysis.name}` : 'Analysis',
+        disabled: imageId === null,
+        subMenuProps: {
+          items: ANALYSES.map((a) => ({
+            key: a.id,
+            name: a.name,
+            canCheck: true,
+            checked: a.id === activeAnalysisId,
+            onClick: () => onSelectAnalysis(a.id),
+          })),
+        },
       },
       {
         iconProps: { iconName: 'LightningBolt' },

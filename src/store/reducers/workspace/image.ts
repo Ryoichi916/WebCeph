@@ -60,6 +60,18 @@ const imagesReducer = handleActions<typeof KEY_IMAGES>(
     CLOSE_IMAGE_REQUESTED: (state, { payload: { imageId } }) => {
       return omit(state, imageId) as typeof state;
     },
+    SET_ACTIVE_ANALYSIS_REQUESTED: (state, { payload: { imageId, analysisId } }) => {
+      return {
+        ...state,
+        [imageId]: {
+          ...state[imageId],
+          analysis: {
+            ...(state[imageId] && state[imageId].analysis),
+            activeId: analysisId,
+          },
+        },
+      };
+    },
     SET_SCALE_FACTOR_REQUESTED: (state, { payload: { imageId, value } }) => {
       return {
         ...state,
