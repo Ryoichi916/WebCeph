@@ -28,7 +28,13 @@ import {
 import {
   getScale,
   getActiveTool,
+  isProfilogramShown,
 } from 'store/reducers/workspace/canvas';
+
+import { buildProfilogram } from 'analyses/profilogram';
+
+// Stable empty array so an off profilogram doesn't re-render on every state change.
+const EMPTY_PROFILOGRAM: never[] = [];
 
 import {
   getHighlightedLandmarks,
@@ -148,6 +154,9 @@ const mapStateToProps: MapStateToProps<StateProps, OwnProps, StoreState> =
       getPropsForLandmark: getPropsForLandmark(state),
       isDraggableLandmark: (symbol: string) =>
         getManualLandmarks(state)(imageId)[symbol] !== undefined,
+      profilogram: isProfilogramShown(state)
+        ? buildProfilogram(getManualLandmarks(state)(imageId))
+        : EMPTY_PROFILOGRAM,
     };
   };
 

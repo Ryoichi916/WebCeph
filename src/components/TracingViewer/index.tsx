@@ -102,6 +102,7 @@ export class TracingViewer extends React.PureComponent<Props, State> {
                 getPropsForVector={getPropsForLandmark}
                 getPropsForAngle={getPropsForLandmark}
               />
+              {this.renderProfilogram()}
             </g>
           </g>
         </svg>
@@ -248,6 +249,31 @@ export class TracingViewer extends React.PureComponent<Props, State> {
     }
     this.props.onLandmarkMoved(draggedSymbol, Math.round(dragX), Math.round(dragY));
     this.setState({ draggedSymbol: null });
+  };
+
+  private renderProfilogram = () => {
+    const { profilogram } = this.props;
+    if (profilogram.length === 0) {
+      return null;
+    }
+    return (
+      <g>
+        {profilogram.map((seg, i) => (
+          <line
+            key={i}
+            x1={seg.x1}
+            y1={seg.y1}
+            x2={seg.x2}
+            y2={seg.y2}
+            stroke="#00e5ff"
+            strokeWidth={3}
+            strokeLinecap="round"
+            vectorEffect="non-scaling-stroke"
+            pointerEvents="none"
+          />
+        ))}
+      </g>
+    );
   };
 
   private getRenderedLandmarks = () => {

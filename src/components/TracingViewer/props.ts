@@ -20,6 +20,8 @@ export interface StateProps {
   getPropsForLandmark: (symbol: string) => { [prop: string]: any };
   /** Whether the landmark was placed manually and can be dragged to adjust. */
   isDraggableLandmark: (symbol: string) => boolean;
+  /** Profilogram line segments (image coords); empty when the overlay is off. */
+  profilogram: ReadonlyArray<{ x1: number; y1: number; x2: number; y2: number }>;
   isHighlightMode: boolean;
   highlightedLandmarks: {
     [symbol: string]: boolean;

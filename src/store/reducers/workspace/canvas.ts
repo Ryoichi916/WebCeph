@@ -10,6 +10,7 @@ const KEY_CANVAS_TOOL_ID: StoreKey = 'workspace.canvas.tools.activeToolId';
 const KEY_HIGHLIGHTED_STEP: StoreKey = 'workspace.canvas.highlightedStep';
 const KEY_SCALE: StoreKey = 'workspace.canvas.scale.value';
 const KEY_SCALE_ORIGIN: StoreKey = 'workspace.canvas.scale.offset';
+const KEY_PROFILOGRAM_SHOWN: StoreKey = 'workspace.canvas.profilogram.isShown';
 
 const reducers: Partial<ReducerMap> = {
   [KEY_CANVAS_MOUSE_POSITION]: handleActions<typeof KEY_CANVAS_MOUSE_POSITION>(
@@ -52,11 +53,19 @@ const reducers: Partial<ReducerMap> = {
     },
     null,
   ),
+  [KEY_PROFILOGRAM_SHOWN]: handleActions<typeof KEY_PROFILOGRAM_SHOWN>(
+    {
+      TOGGLE_PROFILOGRAM_REQUESTED: (shown) => !shown,
+      RESET_WORKSPACE_REQUESTED: () => false,
+    },
+    false,
+  ),
 };
 
 export default reducers;
 
 export const getHighlightedStep = (state: StoreState) => state[KEY_HIGHLIGHTED_STEP];
+export const isProfilogramShown = (state: StoreState) => state[KEY_PROFILOGRAM_SHOWN];
 
 export const getMousePosition = (state: StoreState) => state[KEY_CANVAS_MOUSE_POSITION];
 

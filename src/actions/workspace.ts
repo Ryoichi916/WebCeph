@@ -17,6 +17,9 @@ export const autoPlotFailed = createActionCreator('AUTO_PLOT_LANDMARKS_FAILED');
 // SN-relative population-mean positions (see analyses/referenceTemplate).
 export const plotFromReferencePoints = createActionCreator('PLOT_FROM_REFERENCE_POINTS_REQUESTED');
 
+// Toggle the profilogram overlay (profile lines through the placed landmarks).
+export const toggleProfilogram = createActionCreator('TOGGLE_PROFILOGRAM_REQUESTED');
+
 export const setScale = createActionCreator('SET_SCALE_REQUESTED');
 
 export const importFileRequested = createActionCreator('IMPORT_FILE_REQUESTED');

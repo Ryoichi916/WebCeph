@@ -10,6 +10,7 @@ export default class TracingToolbar extends React.PureComponent<Props, { }> {
       imageId, className,
       canAutoPlot, isAutoPlotting, onAutoPlotClick,
       canPlotFromReferences, onPlotFromReferencesClick,
+      isProfilogramShown, onToggleProfilogramClick,
     } = this.props;
     const items: ICommandBarProps['items'] = [
       {
@@ -32,6 +33,15 @@ export default class TracingToolbar extends React.PureComponent<Props, { }> {
         title: 'Place the remaining landmarks at standard positions from Sella and Nasion',
         disabled: !canPlotFromReferences,
         onClick: onPlotFromReferencesClick,
+      },
+      {
+        iconProps: { iconName: 'ClusterView' },
+        key: 'profilogram',
+        name: 'Profilogram',
+        title: 'Toggle the profilogram (profile lines through the placed landmarks)',
+        checked: isProfilogramShown,
+        disabled: imageId === null,
+        onClick: onToggleProfilogramClick,
       },
     ];
     return (

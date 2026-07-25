@@ -386,6 +386,8 @@ interface StoreState {
     left: number;
   };
   'workspace.canvas.highlightedStep': string | null;
+  /** Whether the profilogram overlay (profile lines through landmarks) is shown. */
+  'workspace.canvas.profilogram.isShown': boolean;
   /** Data indexed by image ID */
   'images.props': {
     [imageId: string]: ImageBlobData & CephImageData<ImageType>;
@@ -709,6 +711,7 @@ interface Events {
     update: Partial<TreatmentStage>;
   };
   TOGGLE_ANALYSIS_RESULTS_REQUESTED: void;
+  TOGGLE_PROFILOGRAM_REQUESTED: void;
   BROWSER_COMPATIBLITY_CHECK_REQUESTED: {
     userAgent: string;
   };

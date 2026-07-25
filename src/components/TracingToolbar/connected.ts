@@ -6,9 +6,11 @@ import { StateProps, DispatchProps, OwnProps } from './props';
 import {
   autoPlotLandmarks,
   plotFromReferencePoints,
+  toggleProfilogram,
 } from 'actions/workspace';
 import { getManualSteps } from 'store/reducers/workspace/analyses';
 import { isPerformingBackgroundWork } from 'store/reducers/workspace/workers';
+import { isProfilogramShown } from 'store/reducers/workspace/canvas';
 import { hasImage, getManualLandmarks } from 'store/reducers/workspace/image';
 
 const mapStateToProps =
@@ -30,6 +32,7 @@ const mapStateToProps =
         imageId !== null &&
         manual['S'] !== undefined &&
         manual['N'] !== undefined,
+      isProfilogramShown: isProfilogramShown(state),
     };
   };
 
@@ -45,6 +48,7 @@ const mapDispatchToProps =
         dispatch(plotFromReferencePoints({ imageId }));
       }
     },
+    onToggleProfilogramClick: () => dispatch(toggleProfilogram()),
   });
 
 export default connect(mapStateToProps, mapDispatchToProps)(TracingToolbar);
