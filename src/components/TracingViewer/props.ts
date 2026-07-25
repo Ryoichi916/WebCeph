@@ -18,6 +18,8 @@ export interface StateProps {
     value: GeoObject;
   }>;
   getPropsForLandmark: (symbol: string) => { [prop: string]: any };
+  /** Whether the landmark was placed manually and can be dragged to adjust. */
+  isDraggableLandmark: (symbol: string) => boolean;
   isHighlightMode: boolean;
   highlightedLandmarks: {
     [symbol: string]: boolean;
@@ -27,6 +29,8 @@ export interface StateProps {
 
 export interface DispatchProps {
   dispatch: GenericDispatch;
+  /** Commits a dragged manual landmark to its new position (image coords). */
+  onLandmarkMoved: (symbol: string, x: number, y: number) => any;
 };
 
 export type ConnectableProps = StateProps & DispatchProps;

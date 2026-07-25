@@ -23,13 +23,22 @@ function isMouseEvent<T>(e: any): e is React.MouseEvent<T> {
  * Provides a declarative API for viewing landmarks on a cephalomertic image
  * and performing common edits like brightness and contrast.
  */
-export class TracingViewer extends React.PureComponent<Props, { mouseX: number, mouseY: number }> {
-  constuctor() {
-    this.state = {
-      mouseX: 0,
-      mouseY: 0,
-    };
-  }
+interface State {
+  /** Symbol of the manual landmark currently being dragged, if any. */
+  draggedSymbol: string | null;
+  /** Live drag position in original-image coordinates. */
+  dragX: number;
+  dragY: number;
+}
+
+export class TracingViewer extends React.PureComponent<Props, State> {
+  state: State = {
+    draggedSymbol: null,
+    dragX: 0,
+    dragY: 0,
+  };
+
+  private imageElement: SVGImageElement | null = null;
 
   render() {
     const {
@@ -40,7 +49,6 @@ export class TracingViewer extends React.PureComponent<Props, { mouseX: number, 
       contrast = 50, brightness = 50,
       isHighlightMode,
       getPropsForLandmark,
-      landmarks,
     } = this.props;
     const minHeight = Math.max(canvasHeight, imageHeight);
     const minWidth = Math.max(canvasWidth, imageWidth);
@@ -52,6 +60,8 @@ export class TracingViewer extends React.PureComponent<Props, { mouseX: number, 
           onContextMenu={this.handleContextMenu}
           onMouseEnter={this.handleCanvasMouseEnter}
           onMouseLeave={this.handleCanvasMouseLeave}
+          onMouseMove={this.handleSvgMouseMove}
+          onMouseUp={this.commitDrag}
         >
           <defs>
             <BrightnessFilter id="brightness" value={brightness} />
@@ -64,6 +74,7 @@ export class TracingViewer extends React.PureComponent<Props, { mouseX: number, 
             <g filter="">
               <g filter="">
                 <image
+                  ref={this.setImageRef}
                   className={classes.image}
                   xlinkHref={src}
                   x={0}
@@ -86,8 +97,8 @@ export class TracingViewer extends React.PureComponent<Props, { mouseX: number, 
                 left={0}
                 width={imageWidth}
                 height={imageHeight}
-                objects={landmarks}
-                getPropsForPoint={getPropsForLandmark}
+                objects={this.getRenderedLandmarks()}
+                getPropsForPoint={this.getPropsForPoint}
                 getPropsForVector={getPropsForLandmark}
                 getPropsForAngle={getPropsForLandmark}
               />
@@ -156,12 +167,100 @@ export class TracingViewer extends React.PureComponent<Props, { mouseX: number, 
   };
 
   private handleCanvasMouseLeave = (e: React.MouseEvent<SVGElement>) => {
+    // Leaving the canvas mid-drag commits the landmark at its last position so
+    // it is never left visually detached from its stored value.
+    this.commitDrag();
     const { onCanvasMouseLeave } = this.props.activeTool;
     if (typeof onCanvasMouseLeave === 'function') {
       e.preventDefault();
       const { dispatch } = this.props;
       onCanvasMouseLeave(dispatch);
     }
+  };
+
+  // ---- Manual-landmark dragging (fine-tuning) ------------------------------
+  // Placed points get pointer events and a mousedown handler; the drag position
+  // is tracked locally so the store (and undo history) only receives a single
+  // update on release.
+
+  private setImageRef = (element: SVGImageElement | null) => {
+    this.imageElement = element;
+  };
+
+  private convertPagePositionToOriginalImage = (pageX: number, pageY: number) => {
+    const rect = this.imageElement!.getBoundingClientRect();
+    const { imageWidth, imageHeight } = this.props;
+    const scaleX = rect.width / imageWidth;
+    const scaleY = rect.height / imageHeight;
+    const scrollTop = document.documentElement.scrollTop;
+    const scrollLeft = document.documentElement.scrollLeft;
+    let x = (pageX - (rect.left + scrollLeft)) / scaleX;
+    let y = (pageY - (rect.top + scrollTop)) / scaleY;
+    if (this.props.isFlippedX) {
+      x = imageWidth - x;
+    }
+    if (this.props.isFlippedY) {
+      y = imageHeight - y;
+    }
+    return {
+      x: Math.min(Math.max(x, 0), imageWidth),
+      y: Math.min(Math.max(y, 0), imageHeight),
+    };
+  };
+
+  private getPropsForPoint = (symbol: string) => {
+    const base = this.props.getPropsForLandmark(symbol);
+    if (!this.props.isDraggableLandmark(symbol)) {
+      return base;
+    }
+    return {
+      ...base,
+      // .landmark disables pointer events (decorative geometry); re-enable them
+      // inline for manually placed points so they can be grabbed.
+      style: { ...base.style, pointerEvents: 'auto', cursor: 'move' },
+      onMouseDown: (e: React.MouseEvent<SVGCircleElement>) =>
+        this.handleLandmarkMouseDown(symbol, e),
+    };
+  };
+
+  private handleLandmarkMouseDown = (symbol: string, e: React.MouseEvent<SVGCircleElement>) => {
+    if (e.button !== 0 || this.imageElement === null) {
+      return;
+    }
+    e.preventDefault();
+    e.stopPropagation();
+    const { x, y } = this.convertPagePositionToOriginalImage(e.pageX, e.pageY);
+    this.setState({ draggedSymbol: symbol, dragX: x, dragY: y });
+  };
+
+  private handleSvgMouseMove = (e: React.MouseEvent<SVGElement>) => {
+    if (this.state.draggedSymbol === null || this.imageElement === null) {
+      return;
+    }
+    const { x, y } = this.convertPagePositionToOriginalImage(e.pageX, e.pageY);
+    this.setState({ dragX: x, dragY: y });
+  };
+
+  private commitDrag = () => {
+    const { draggedSymbol, dragX, dragY } = this.state;
+    if (draggedSymbol === null) {
+      return;
+    }
+    this.props.onLandmarkMoved(draggedSymbol, Math.round(dragX), Math.round(dragY));
+    this.setState({ draggedSymbol: null });
+  };
+
+  private getRenderedLandmarks = () => {
+    const { landmarks } = this.props;
+    const { draggedSymbol, dragX, dragY } = this.state;
+    if (draggedSymbol === null) {
+      return landmarks;
+    }
+    return landmarks.map((landmark) =>
+      landmark.symbol === draggedSymbol
+        ? { ...landmark, value: { x: dragX, y: dragY } }
+        : landmark,
+    );
   };
 
   private handleMouseWheel = (e: React.WheelEvent<SVGElement>) => {

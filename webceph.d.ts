@@ -291,7 +291,7 @@ type WorkspaceSettings = {
   importError: GenericError | null;
   exportError: GenericError | null;
   mode: WorkspaceMode;
-  contectRect: ContentRect | null;
+  contentRect: ContentRect | null;
   images: string[];
   tracing: {
     imageId: string | null;

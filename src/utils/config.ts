@@ -36,7 +36,7 @@ export const defaultWorkspaceSettings: WorkspaceSettings = {
   isExporting: false,
   exportError: null,
   images: [],
-  contectRect: null,
+  contentRect: null,
   mode: 'tracing',
   tracing: {
     imageId: null,

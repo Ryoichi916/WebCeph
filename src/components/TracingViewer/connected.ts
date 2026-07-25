@@ -16,7 +16,10 @@ import {
   getImageSrc,
   getImageWidth,
   getImageHeight,
+  getManualLandmarks,
 } from 'store/reducers/workspace/image';
+
+import { addManualLandmark } from 'actions/workspace';
 
 import {
   getCanvasDimensions
@@ -107,14 +110,32 @@ const getPropsForLandmark = createSelector(
   }),
 );
 
+// Scale that letterboxes the image into the canvas. Computed at render time so
+// it always reflects the current layout, instead of a one-shot value captured
+// at load time (which races with layout).
+const getFitScale = (
+  canvas: { width: number; height: number },
+  imageWidth: number,
+  imageHeight: number,
+): number => {
+  if (canvas.width > 0 && canvas.height > 0 && imageWidth > 0 && imageHeight > 0) {
+    return Math.min(canvas.width / imageWidth, canvas.height / imageHeight);
+  }
+  return 1;
+};
+
 const mapStateToProps: MapStateToProps<StateProps, OwnProps, StoreState> =
   (state: StoreState, { imageId }: OwnProps) => {
+    const canvasSize = getCanvasDimensions(state);
+    const imageWidth = getImageWidth(state)(imageId) as number;
+    const imageHeight = getImageHeight(state)(imageId) as number;
     return {
-      canvasSize: getCanvasDimensions(state),
+      canvasSize,
       src: getImageSrc(state)(imageId),
-      imageWidth: getImageWidth(state)(imageId) as number,
-      imageHeight: getImageHeight(state)(imageId) as number,
-      scale: getScale(state),
+      imageWidth,
+      imageHeight,
+      // The stored scale is the user's zoom factor (1 = fit, wheel-adjusted).
+      scale: getFitScale(canvasSize, imageWidth, imageHeight) * getScale(state),
       // brightness: getImageBrightness(state),
       // contrast: getImageContrast(state),
       // isFlippedX: isImageFlippedX(state),
@@ -125,11 +146,17 @@ const mapStateToProps: MapStateToProps<StateProps, OwnProps, StoreState> =
       highlightedLandmarks: getHighlightedLandmarks(state),
       activeTool: getActiveTool(state),
       getPropsForLandmark: getPropsForLandmark(state),
+      isDraggableLandmark: (symbol: string) =>
+        getManualLandmarks(state)(imageId)[symbol] !== undefined,
     };
   };
 
 const mapDispatchToProps: MapDispatchToPropsFunction<DispatchProps, OwnProps> =
-  (dispatch) => ({ dispatch });
+  (dispatch, { imageId }) => ({
+    dispatch,
+    onLandmarkMoved: (symbol: string, x: number, y: number) =>
+      dispatch(addManualLandmark({ imageId, symbol, value: { x, y } })),
+  });
 
 const connected = connect<StateProps, DispatchProps, OwnProps>(
   mapStateToProps, mapDispatchToProps,
