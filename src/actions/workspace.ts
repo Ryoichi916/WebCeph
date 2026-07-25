@@ -32,6 +32,11 @@ export const updatePatient = createActionCreator('UPDATE_PATIENT_REQUESTED');
 export const removePatient = createActionCreator('REMOVE_PATIENT_REQUESTED');
 export const setActivePatient = createActionCreator('SET_ACTIVE_PATIENT_REQUESTED');
 
+// Project lifecycle (a project is a patient's images + tracings + analyses).
+export const openPatient = createActionCreator('OPEN_PATIENT_REQUESTED');
+export const saveProject = createActionCreator('SAVE_PROJECT_REQUESTED');
+export const loadProjectSucceeded = createActionCreator('LOAD_PROJECT_SUCCEEDED');
+
 export const setScale = createActionCreator('SET_SCALE_REQUESTED');
 
 export const importFileRequested = createActionCreator('IMPORT_FILE_REQUESTED');

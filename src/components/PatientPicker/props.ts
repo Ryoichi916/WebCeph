@@ -1,10 +1,11 @@
 export interface StateProps {
-  activePatient: Patient | null;
+  patients: Patient[];
 }
 
 export interface DispatchProps {
-  onSave(): any;
-  onChangePatient(): any;
+  onRegister(name: string, chartId: string): any;
+  onOpen(id: string): any;
+  onRemove(id: string): any;
 }
 
 export interface OwnProps {

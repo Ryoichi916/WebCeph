@@ -41,8 +41,9 @@ const PERSISTABLE_KEYS: StoreKey[] = [
   'env.compat.check.results',
   'analyses.lastUsedId',
   'user.preferences.preferredLocale',
+  // Patient records persist; the active patient does not, so every launch
+  // starts at the patient picker.
   'patients.byId',
-  'patients.activeId',
 ];
 
 import requestIdleCallback from 'utils/requestIdleCallback';

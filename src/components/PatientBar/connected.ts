@@ -1,29 +1,42 @@
 import { connect } from 'react-redux';
-import uniqueId from 'lodash/uniqueId';
 
 import PatientBar from './index';
 import { StateProps, DispatchProps } from './props';
 
 import {
-  addPatient,
-  removePatient,
+  saveProject,
   setActivePatient,
 } from 'actions/workspace';
 import {
-  getPatientsList,
   getActivePatient,
+  getActivePatientId,
 } from 'store/reducers/patients';
 
-const mapStateToProps = (state: StoreState): StateProps => ({
-  patients: getPatientsList(state),
+const mapStateToProps = (state: StoreState): StateProps & { activeId: string | null } => ({
   activePatient: getActivePatient(state),
+  activeId: getActivePatientId(state),
 });
 
-const mapDispatchToProps = (dispatch: GenericDispatch): DispatchProps => ({
-  onAdd: (name: string, chartId: string) =>
-    dispatch(addPatient({ id: uniqueId(`patient_${new Date().getTime()}_`), name, chartId })),
-  onSelect: (id: string | null) => dispatch(setActivePatient({ id })),
-  onRemove: (id: string) => dispatch(removePatient({ id })),
-});
+const mapDispatchToProps = (dispatch: GenericDispatch) => ({ dispatch });
 
-export default connect(mapStateToProps, mapDispatchToProps)(PatientBar);
+const mergeProps = (
+  stateProps: StateProps & { activeId: string | null },
+  { dispatch }: { dispatch: GenericDispatch },
+  ownProps: { className?: string },
+): DispatchProps & StateProps & { className?: string } => {
+  const { activeId, ...rest } = stateProps;
+  return {
+    ...rest,
+    ...ownProps,
+    onSave: () => {
+      if (activeId !== null) {
+        dispatch(saveProject({ patientId: activeId }));
+      }
+    },
+    // Returning to the picker clears the active patient; the project stays in
+    // memory until another patient is opened (which loads over it).
+    onChangePatient: () => dispatch(setActivePatient({ id: null })),
+  };
+};
+
+export default connect(mapStateToProps, mapDispatchToProps, mergeProps)(PatientBar);

@@ -23,8 +23,8 @@ const reducers: Partial<ReducerMap> = {
   ),
   [KEY_ACTIVE]: handleActions<typeof KEY_ACTIVE>(
     {
-      // A newly added patient becomes the active one.
-      ADD_PATIENT_REQUESTED: (_, { payload: { id } }) => id,
+      // Opening a patient (which also loads their project) makes them active;
+      // see LOAD_PROJECT_SUCCEEDED, which carries patients.activeId.
       SET_ACTIVE_PATIENT_REQUESTED: (_, { payload: { id } }) => id,
       REMOVE_PATIENT_REQUESTED: (state, { payload: { id } }) =>
         state === id ? null : state,

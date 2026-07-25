@@ -748,6 +748,16 @@ interface Events {
   SET_ACTIVE_PATIENT_REQUESTED: {
     id: string | null;
   };
+  /** Open a patient's project: make them active and load their saved tracing. */
+  OPEN_PATIENT_REQUESTED: {
+    patientId: string;
+  };
+  /** Persist the current project (images + tracings) under a patient. */
+  SAVE_PROJECT_REQUESTED: {
+    patientId: string;
+  };
+  /** Replace the project state slices with a loaded project. */
+  LOAD_PROJECT_SUCCEEDED: Partial<StoreState>;
   BROWSER_COMPATIBLITY_CHECK_REQUESTED: {
     userAgent: string;
   };
