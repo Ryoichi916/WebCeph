@@ -5,6 +5,7 @@ import values from 'lodash/values';
 
 import env from './env';
 import workspace from './workspace';
+import patients from './patients';
 import app from './app';
 import persistence, {
   isPersistedStateReady,
@@ -17,6 +18,7 @@ import locale, {
 
 const reducers = {
   ...workspace,
+  ...patients,
   ...persistence,
   ...app,
   ...env,

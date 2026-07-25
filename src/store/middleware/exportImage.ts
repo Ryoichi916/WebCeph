@@ -10,6 +10,7 @@ import {
   getManualLandmarks,
 } from 'store/reducers/workspace/image';
 import { isProfilogramShown } from 'store/reducers/workspace/canvas';
+import { getActivePatient } from 'store/reducers/patients';
 import { buildProfilogram } from 'analyses/profilogram';
 import { isGeoPoint } from 'utils/math';
 
@@ -52,7 +53,14 @@ const middleware = ({ getState }: Store<StoreState>) =>
     const manual = getManualLandmarks(state)(imageId);
     const showProfilogram = isProfilogramShown(state);
     const segments = showProfilogram ? buildProfilogram(manual) : [];
-    const filename = `${baseName(getImageName(state)(imageId))}.${format === 'jpeg' ? 'jpg' : 'png'}`;
+    // Prefer the active patient (chart id / name) for the filename so exports are
+    // filed against the patient; fall back to the image name.
+    const patient = getActivePatient(state);
+    const ext = format === 'jpeg' ? 'jpg' : 'png';
+    const stem = patient
+      ? [patient.chartId, patient.name].filter(Boolean).join('_').replace(/[^\w.\-]+/g, '_')
+      : baseName(getImageName(state)(imageId));
+    const filename = `${stem || 'tracing'}-tracing.${ext}`;
 
     const img = new Image();
     img.onload = () => {

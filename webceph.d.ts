@@ -332,7 +332,16 @@ type FetchStatus = {
 
 type Locale = Record<string, string>;
 
+/** A patient record. Kept intentionally minimal — a chart system links later. */
+interface Patient {
+  id: string;
+  name: string;
+  chartId: string;
+}
+
 interface StoreState {
+  'patients.byId': { [id: string]: Patient };
+  'patients.activeId': string | null;
   'app.init.isInitialized': boolean;
   'app.status.isUpdating': boolean;
   'app.status.isInstalling': boolean;
@@ -721,6 +730,23 @@ interface Events {
   EXPORT_IMAGE_REQUESTED: {
     imageId: string;
     format: 'png' | 'jpeg';
+  };
+  /** Patient records (name + chart id; linked to a chart system later). */
+  ADD_PATIENT_REQUESTED: {
+    id: string;
+    name: string;
+    chartId: string;
+  };
+  UPDATE_PATIENT_REQUESTED: {
+    id: string;
+    name: string;
+    chartId: string;
+  };
+  REMOVE_PATIENT_REQUESTED: {
+    id: string;
+  };
+  SET_ACTIVE_PATIENT_REQUESTED: {
+    id: string | null;
   };
   BROWSER_COMPATIBLITY_CHECK_REQUESTED: {
     userAgent: string;

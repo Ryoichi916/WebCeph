@@ -26,6 +26,12 @@ export const setActiveAnalysis = createActionCreator('SET_ACTIVE_ANALYSIS_REQUES
 // Export the current tracing (image + profilogram + points) as a raster image.
 export const exportImage = createActionCreator('EXPORT_IMAGE_REQUESTED');
 
+// Patient records (name + chart id).
+export const addPatient = createActionCreator('ADD_PATIENT_REQUESTED');
+export const updatePatient = createActionCreator('UPDATE_PATIENT_REQUESTED');
+export const removePatient = createActionCreator('REMOVE_PATIENT_REQUESTED');
+export const setActivePatient = createActionCreator('SET_ACTIVE_PATIENT_REQUESTED');
+
 export const setScale = createActionCreator('SET_SCALE_REQUESTED');
 
 export const importFileRequested = createActionCreator('IMPORT_FILE_REQUESTED');
