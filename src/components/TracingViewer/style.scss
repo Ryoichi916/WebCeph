@@ -20,6 +20,9 @@
 %landmark {
   vector-effect: non-scaling-stroke;
   pointer-events: none;
+  // Round caps so segments meeting at a shared landmark (A-N / N-B / Pog-N
+  // all converge on N) blend into one joint instead of stacking square ends.
+  stroke-linecap: round;
   transition-property: opacity, fill, stroke, stroke-width;
   transition-duration: 0.15s;
   transition-timing-function: ease;
@@ -44,13 +47,26 @@
   fill: #FF6E40;
 }
 
-// Line segments (S-N, N-A, …): cyan, slightly translucent so the anatomy
-// underneath stays legible.
+// Completed analysis lines (S-N, Go-Me, …): cyan strokes with a whisper of a
+// dark casing (drop-shadow) so they stay legible where they cross the bright
+// film regions of the radiograph. Constant 1.5px on-screen weight
+// (vector-effect above).
 .vector {
   @extend %landmark;
   stroke: #40C4FF;
   stroke-width: 1.5px;
   opacity: 0.85;
+  filter: drop-shadow(0 0 0.75px rgba(20, 24, 29, 0.9));
+}
+
+// Line segments belonging to an angle landmark: hidden by default (the
+// standalone "Draw line" landmarks already draw the same geometry), shown
+// only while their step is highlighted.
+.vector_segment {
+  @extend %landmark;
+  stroke: #40C4FF;
+  stroke-width: 1.5px;
+  opacity: 0;
 }
 
 .vector_extended {
@@ -88,6 +104,7 @@
   }
 
   &.vector,
+  &.vector_segment,
   &.vector_extended,
   &.vector_parallel {
     stroke: #FFC400;

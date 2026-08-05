@@ -5,7 +5,6 @@ import * as cx from 'classnames';
 import IconDelete from 'material-ui/svg-icons/action/delete';
 import IconDone from 'material-ui/svg-icons/action/done';
 import IconHourglass from 'material-ui/svg-icons/action/hourglass-empty';
-import IconPlayArrow from 'material-ui/svg-icons/av/play-arrow';
 
 import findIndex from 'lodash/findIndex';
 import findLastIndex from 'lodash/findLastIndex';
@@ -22,7 +21,10 @@ const PRIMARY = '#1565C0';
 const stateIconStyle: React.CSSProperties = { width: 18, height: 18 };
 
 const ICON_DONE = <IconDone color={SUCCESS} style={stateIconStyle} />;
-const ICON_CURRENT = <IconPlayArrow color={PRIMARY} style={stateIconStyle} />;
+// Concentric ring + dot ("you are here") — reads clinical, and pairs with the
+// hollow pending circle and the green done check better than a media-player
+// play arrow would.
+const ICON_CURRENT = <span className={classes.icon_current_ring} />;
 const ICON_PENDING = <span className={classes.icon_pending_circle} />;
 const ICON_EVALUATING = (
   <IconHourglass
@@ -51,16 +53,25 @@ const formatStepValue = (step: CephLandmark, value: number): string => {
   return rounded;
 };
 
-export class AnalysisStepper extends React.PureComponent<Props, { }> {
+interface State {
+  canScrollUp: boolean;
+  canScrollDown: boolean;
+}
+
+export class AnalysisStepper extends React.PureComponent<Props, State> {
+  public state: State = { canScrollUp: false, canScrollDown: false };
+
   private itemToScrollTo: HTMLElement | null = null;
   private lastScrolledSymbol: string | null = null;
 
   public componentDidMount() {
     this.scrollToActiveStep();
+    this.updateScrollState();
   }
 
   public componentDidUpdate() {
     this.scrollToActiveStep();
+    this.updateScrollState();
   }
 
   public render() {
@@ -79,6 +90,7 @@ export class AnalysisStepper extends React.PureComponent<Props, { }> {
     const doneCount = steps.filter((step) => getStepState(step) === 'done').length;
     const total = steps.length;
     const progress = total > 0 ? (doneCount / total) * 100 : 0;
+    const isComplete = total > 0 && doneCount === total;
     return (
       <div className={cx(classes.root, className)}>
         <header className={classes.header}>
@@ -89,9 +101,16 @@ export class AnalysisStepper extends React.PureComponent<Props, { }> {
             </span>
           </div>
           <span
-            className={classes.header_progress}
-            title={`${doneCount} of ${total} steps completed`}
+            className={cx(classes.header_progress, {
+              [classes.header_progress__complete]: isComplete,
+            })}
+            title={isComplete
+              ? `Analysis complete — all ${total} steps done`
+              : `${doneCount} of ${total} steps completed`}
           >
+            {isComplete
+              ? <IconDone color="currentColor" style={{ width: 13, height: 13 }} />
+              : null}
             {doneCount}/{total}
           </span>
         </header>
@@ -101,14 +120,32 @@ export class AnalysisStepper extends React.PureComponent<Props, { }> {
             style={{ width: `${progress}%` }}
           />
         </div>
-        <ol className={classes.list}>
+        <div
+          className={cx(classes.list_wrap, {
+            [classes.list_wrap__can_scroll_up]: this.state.canScrollUp,
+            [classes.list_wrap__can_scroll_down]: this.state.canScrollDown,
+          })}
+        >
+        <ol
+          ref={this.setListRef}
+          className={classes.list}
+          onScroll={this.updateScrollState}
+        >
         {
           map(steps, (step, i) => {
             const value = getStepValue(step);
             const state = getStepState(step);
             const isDone = state === 'done';
             const command = getCommandForStep(step);
-            const description = getDescriptionForLandmark(step);
+            const rawDescription = getDescriptionForLandmark(step);
+            // A secondary line that merely repeats the command carries no
+            // information ("Draw line Frankfort Horizontal Plane" over
+            // "Frankfort Horizontal Plane") — suppress it.
+            const description =
+              rawDescription !== null &&
+              command.toLowerCase().indexOf(rawDescription.toLowerCase()) === -1
+                ? rawDescription
+                : null;
             const shouldScrollTo = (
               i === firstPendingIndex ||
               (firstPendingIndex === -1 && i === lastDoneIndex)
@@ -156,11 +193,39 @@ export class AnalysisStepper extends React.PureComponent<Props, { }> {
           })
         }
         </ol>
+        </div>
       </div>
     );
   }
 
+  /**
+   * The fade scrims under the sticky header and above the bottom edge only
+   * show when there actually is overflowed content in that direction, so
+   * half-clipped rows dissolve instead of being guillotined against the
+   * panel chrome.
+   */
+  private updateScrollState = () => {
+    const list = this.listElement;
+    if (list === null) {
+      return;
+    }
+    const canScrollUp = list.scrollTop > 1;
+    const canScrollDown =
+      list.scrollTop + list.clientHeight < list.scrollHeight - 1;
+    if (
+      canScrollUp !== this.state.canScrollUp ||
+      canScrollDown !== this.state.canScrollDown
+    ) {
+      this.setState({ canScrollUp, canScrollDown });
+    }
+  };
+
   private scrollTargetSymbol: string | null = null;
+  private listElement: HTMLOListElement | null = null;
+
+  private setListRef = (node: HTMLOListElement | null) => {
+    this.listElement = node;
+  };
 
   private setScrollTo = (symbol: string) => (node: HTMLElement | null) => {
     this.itemToScrollTo = node;
@@ -173,7 +238,37 @@ export class AnalysisStepper extends React.PureComponent<Props, { }> {
       this.scrollTargetSymbol !== this.lastScrolledSymbol
     ) {
       scrollIntoViewIfNeeded(this.itemToScrollTo, false);
+      this.snapListToRowBoundary();
       this.lastScrolledSymbol = this.scrollTargetSymbol;
+    }
+  }
+
+  /**
+   * After a programmatic scroll, nudge the list so no row is left half-clipped
+   * under the panel header: if a row straddles the top edge of the scrollport,
+   * advance scrollTop to that row's bottom edge. When the list is already at
+   * (or near) max scroll and cannot advance, retreat to the row's top edge
+   * instead — the generous bottom slack padding on the list guarantees the
+   * row scrolled into view stays fully visible either way, so no row ever
+   * sits half-greyed under the top fade scrim.
+   */
+  private snapListToRowBoundary() {
+    const list = this.listElement;
+    if (list === null) {
+      return;
+    }
+    const rows = list.children;
+    for (let i = 0; i < rows.length; i += 1) {
+      const row = rows[i] as HTMLElement;
+      const rowTop = row.offsetTop;
+      const rowBottom = rowTop + row.offsetHeight;
+      if (rowTop < list.scrollTop && rowBottom > list.scrollTop) {
+        const maxScrollTop = list.scrollHeight - list.clientHeight;
+        list.scrollTop = rowBottom <= maxScrollTop
+          ? rowBottom
+          : Math.max(rowTop, 0);
+        break;
+      }
     }
   }
 };

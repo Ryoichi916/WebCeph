@@ -96,7 +96,7 @@ const getPropsForLandmark = createSelector(
     } else if (isGeoAngle(l)) {
       classNames.push(classes.angle);
       props.segmentProps = {
-        className: cx(classes.vector, ...getHighlightClassNames(symbol)),
+        className: cx(classes.vector_segment, ...getHighlightClassNames(symbol)),
       };
       props.parallelProps = {
         className: cx(classes.vector_parallel, ...getHighlightClassNames(symbol)),

@@ -1,5 +1,7 @@
 @import 'src/_variables.scss';
 
+// ---- Dialog header ---------------------------------------------------------
+
 .title {
   display: flex;
   align-items: center;
@@ -15,12 +17,36 @@
   min-width: 0;
 }
 
+.title_row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
 .title_heading {
   margin: 0;
   font-size: 20px;
   font-weight: 600;
   color: $text-primary;
   line-height: 1.3;
+  white-space: nowrap;
+}
+
+// Active analysis badge, e.g. "Downs" — same pill language as the chart-ID
+// chip in the top bar.
+.title_badge {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: $primary-050;
+  border: 1px solid $primary-100;
+  font-size: 12px;
+  font-weight: 600;
+  color: $primary-700;
+  white-space: nowrap;
 }
 
 .title_caption {
@@ -60,6 +86,8 @@
   }
 }
 
+// ---- Results table ---------------------------------------------------------
+
 .table_wrap {
   overflow-x: auto;
 }
@@ -72,6 +100,12 @@
   color: $text-primary;
 
   th {
+    // Sticky within the dialog's scrolling body so column meaning survives
+    // long analyses (Ricketts).
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: $bg-surface;
     padding: 8px 12px;
     font-size: 11px;
     font-weight: 600;
@@ -79,22 +113,27 @@
     letter-spacing: 0.06em;
     color: $text-tertiary;
     text-align: left;
-    border-bottom: 1px solid $border-strong;
+    box-shadow: inset 0 -1px 0 $border-strong;
     white-space: nowrap;
   }
 
   td {
     padding: 10px 12px;
     vertical-align: middle;
-    border-bottom: 1px solid $border;
   }
+}
 
-  tbody tr:nth-child(even) {
+// One <tbody> per clinical finding. Zebra alternates per finding (not per
+// component row) so multi-measurement findings read as one unit. The
+// separator rule is drawn as a border-TOP on the following group — with
+// row-spanning finding cells a border-bottom would skip the spanned column.
+.group {
+  &:nth-of-type(even) td {
     background: #FAFBFC;
   }
 
-  tbody tr:last-child td {
-    border-bottom: none;
+  + .group tr:first-child td {
+    border-top: 1px solid $border;
   }
 }
 
@@ -102,14 +141,87 @@
   text-align: right !important;
 }
 
-.cell_category {
-  font-weight: 500;
+.col_finding {
+  width: 176px;
+}
+
+// The finding cell spans all of its measurement rows; the default
+// `vertical-align: middle` centers the category + chip across the group.
+.cell_finding {
+  min-width: 0;
+}
+
+.finding_category {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: $text-primary;
+}
+
+// Interpretation chip — severity-tinted (design brief: semantic chips).
+.chip {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  margin-top: 5px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
   white-space: nowrap;
 }
 
-.cell_indication {
+.chip__success {
+  background: $success-bg;
+  color: $success;
+}
+
+.chip__neutral {
+  background: $bg-sunken;
   color: $text-secondary;
+}
+
+.chip__warn {
+  background: $warn-bg;
+  color: $warn;
+}
+
+.chip__error {
+  background: $error-bg;
+  color: $error;
+}
+
+.cell_measurement {
+  min-width: 0;
+}
+
+.measurement_symbol {
+  display: block;
+  font-size: 13.5px;
+  font-weight: 500;
+  line-height: 1.3;
+  color: $text-primary;
   white-space: nowrap;
+}
+
+// A measurement that is shared with an earlier finding: quieter symbol so the
+// eye lands on the full row above.
+.measurement_symbol__muted {
+  color: $text-secondary;
+  font-weight: 400;
+}
+
+.measurement_name {
+  display: block;
+  max-width: 200px;
+  font-size: 12px;
+  line-height: 1.3;
+  color: $text-tertiary;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .cell_numeric {
@@ -118,24 +230,121 @@
   white-space: nowrap;
 }
 
-.component_line {
-  line-height: 1.6;
+.cell_value {
+  font-weight: 600;
 }
 
-.component_symbol {
+.cell_value__warn {
+  color: $warn;
+}
+
+.cell_value__error {
+  color: $error;
+}
+
+.cell_norm {
+  color: $text-secondary;
+  cursor: help;
+}
+
+.norm_sd {
+  color: $text-tertiary;
+}
+
+.cell_deviation {
+  color: $text-tertiary;
+}
+
+.cell_deviation__warn {
+  color: $warn;
+  font-weight: 600;
+}
+
+.cell_deviation__error {
+  color: $error;
+  font-weight: 600;
+}
+
+// The severity markers (*, **, ***) sit in a fixed-width slot so deviation
+// values stay right-aligned with each other regardless of star count.
+.deviation_stars {
+  display: inline-block;
+  width: 22px;
+  margin-left: 2px;
+  text-align: left;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+}
+
+// Cross-reference cell for a measurement already listed in full under an
+// earlier finding — value kept for context, but muted and unstarred so the
+// table never repeats an identical row.
+.cell_crossref {
+  text-align: right;
+  font-size: 12.5px;
+  color: $text-tertiary;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+// ---- Dialog actions --------------------------------------------------------
+
+// The mui actions container is a plain right-aligned strip; this row splits it
+// into secondary report actions (left) and the primary Close (right).
+.actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  font-family: $font-stack;
+}
+
+.actions_left {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+// ---- Legend / empty state --------------------------------------------------
+
+.legend {
+  margin-top: 4px;
+  padding: 10px 12px 2px;
+  border-top: 1px solid $border;
+  font-family: $font-stack;
+  font-size: 12px;
+  color: $text-tertiary;
+}
+
+.legend_stars {
+  font-weight: 700;
+  color: $text-secondary;
+  letter-spacing: 0.08em;
+}
+
+.legend_dot {
+  margin: 0 8px;
+  color: $text-disabled;
+}
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 48px 24px;
+  font-family: $font-stack;
+  text-align: center;
+}
+
+.empty_headline {
+  font-size: 16px;
+  font-weight: 400;
   color: $text-secondary;
 }
 
-.component_value {
-  font-weight: 600;
-}
-
-.norm_mean {
-  font-weight: 600;
-}
-
-.norm_range {
-  color: $text-tertiary;
+.empty_hint {
   font-size: 12.5px;
-  margin-left: 6px;
+  color: $text-tertiary;
 }

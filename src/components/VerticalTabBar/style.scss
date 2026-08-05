@@ -1,5 +1,6 @@
 @import 'src/_variables.scss';
 
+// 56px rail with 44px tabs, per the design brief's left-rail spec.
 .root {
   width: 56px;
   min-width: 56px;
@@ -11,67 +12,150 @@
   flex-wrap: nowrap;
   align-items: center;
   justify-content: flex-start;
-  gap: 8px;
+  gap: 10px;
   overflow-y: auto;
   overflow-x: hidden;
   font-family: $font-stack;
 }
 
+// A page tab: a generous thumbnail tile with its index caption *below* the
+// image (never cramped into a corner of the miniature).
 .tab_item {
   width: 44px;
-  height: 44px;
-  min-height: 44px;
   padding: 0;
   margin: 0;
   border: none;
   border-radius: 6px;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
+  gap: 3px;
   font-family: inherit;
-  font-size: 15px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  color: $text-secondary;
   background: transparent;
   cursor: pointer;
-  transition: background-color 120ms ease, color 120ms ease, box-shadow 120ms ease;
+
+  &:focus {
+    outline: none;
+
+    .tab_preview {
+      box-shadow: $focus-ring;
+    }
+  }
 
   &:hover {
+    .tab_preview {
+      border-color: $primary-500;
+    }
+
+    .tab_index {
+      color: $primary-600;
+    }
+  }
+
+  &__active {
+    cursor: default;
+
+    .tab_preview {
+      border-color: $primary-600;
+      box-shadow: 0 0 0 2px rgba(21, 101, 192, 0.35), $shadow-1;
+    }
+
+    .tab_index {
+      color: $primary-600;
+      font-weight: 600;
+    }
+  }
+}
+
+// The miniature of the loaded radiograph (or the page number while no image
+// has been uploaded yet).
+.tab_preview {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: $canvas-bg;
+  border: 1px solid $border-strong;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.tab_thumbnail {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+}
+
+// Placeholder page number shown inside the tile before an image exists.
+.tab_number {
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  color: $canvas-text;
+}
+
+// Index caption under the tile — outside the image area.
+.tab_index {
+  font-size: 11px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  color: $text-secondary;
+  transition: color 120ms ease;
+}
+
+// "Add image" ghost tile: dashed border + explicit label, obviously clickable.
+.tab_item_placeholder {
+  width: 44px;
+  min-height: 44px;
+  padding: 6px 2px;
+  margin: 0;
+  border: 1px dashed $border-strong;
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  font-family: inherit;
+  background: transparent;
+  color: $text-secondary;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+
+  &:hover {
+    border-color: $primary-500;
     background: $primary-050;
     color: $primary-600;
+  }
+
+  &:active {
+    background: $primary-100;
   }
 
   &:focus {
     outline: none;
     box-shadow: $focus-ring;
   }
+}
 
-  &__active {
-    background: $primary-600;
-    color: #FFFFFF;
-    box-shadow: $shadow-1;
-    cursor: default;
+.tab_add_glyph {
+  font-size: 18px;
+  font-weight: 400;
+  line-height: 1;
+}
 
-    &:hover {
-      background: $primary-600;
-      color: #FFFFFF;
-    }
-  }
-
-  &_placeholder {
-    @extend .tab_item;
-    border: 1px dashed $border-strong;
-    background: transparent;
-    color: $text-tertiary;
-    font-size: 20px;
-    font-weight: 400;
-    line-height: 1;
-
-    &:hover {
-      border-color: $primary-500;
-      background: $primary-050;
-      color: $primary-600;
-    }
-  }
+.tab_add_label {
+  font-size: 9.5px;
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: 0.02em;
+  text-align: center;
 }

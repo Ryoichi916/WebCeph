@@ -291,7 +291,7 @@ export function tryCalculate(
 };
 
 const categoryMap: Record<Category, string> = {
-  growthPattern: 'Growth Pattern',
+  growthPattern: 'Growth pattern',
   lowerIncisorInclination: 'Lower incisor inclination',
   upperIncisorInclination: 'Upper incisor inclination',
   mandible: 'Mandible',

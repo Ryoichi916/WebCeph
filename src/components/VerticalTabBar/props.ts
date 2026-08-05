@@ -6,6 +6,8 @@ export interface StateProps {
   tabs: string[];
   activeTabId: string | null;
   canAddWorkspace: boolean;
+  /** Data URL of each workspace's radiograph, keyed by workspace id. */
+  thumbnails: { [workspaceId: string]: string | undefined };
 }
 
 

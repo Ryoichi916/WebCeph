@@ -119,33 +119,38 @@ class CephDropzone extends React.PureComponent<Props & InjectedIntlProps, { }> {
         disableClick
         disablePreview
       >
-        <div className={classes.dropzone_placeholder}>
-          <CephIllustration />
-          <span className={classes.dropzone_placeholder_text}>
-            <FormattedMessage
-              id="callout_start_tracing"
-              defaultMessage="To start tracing, drop a cephalogram or photograph here"
-            />
-          </span>
-          <RaisedButton
-            primary
-            label={formatMessage(messageDescriptors.action_pick_image)}
-            labelStyle={{ textTransform: 'none', fontWeight: 600 }}
-            onClick={this.openFilePicker}
-          />
-          {isOffline ? null : (
-            <div className={classes.dropzone_load_demo}>
-              <span className={classes.dropzone_hint}>
-                {formatMessage(messageDescriptors.callout_load_sample_image)}
-              </span>
-              <FlatButton
-                primary
-                label={formatMessage(messageDescriptors.action_load_sample_image)}
-                labelStyle={{ textTransform: 'none', fontWeight: 500 }}
-                onClick={onDemoButtonClick}
+        <div className={classes.dropzone_card}>
+          <div className={classes.dropzone_placeholder}>
+            <CephIllustration />
+            <span className={classes.dropzone_placeholder_text}>
+              <FormattedMessage
+                id="callout_start_tracing"
+                defaultMessage="To start tracing, drop a cephalogram or photograph here"
               />
-            </div>
-          )}
+            </span>
+            <span className={classes.dropzone_drop_hint}>
+              Drag &amp; drop anywhere inside this frame
+            </span>
+            <RaisedButton
+              primary
+              label={formatMessage(messageDescriptors.action_pick_image)}
+              labelStyle={{ textTransform: 'none', fontWeight: 600 }}
+              onClick={this.openFilePicker}
+            />
+            {isOffline ? null : (
+              <div className={classes.dropzone_load_demo}>
+                <span className={classes.dropzone_hint}>
+                  {formatMessage(messageDescriptors.callout_load_sample_image)}
+                </span>
+                <FlatButton
+                  primary
+                  label={formatMessage(messageDescriptors.action_load_sample_image)}
+                  labelStyle={{ textTransform: 'none', fontWeight: 500 }}
+                  onClick={onDemoButtonClick}
+                />
+              </div>
+            )}
+          </div>
         </div>
       </Dropzone>
     );

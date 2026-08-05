@@ -14,8 +14,12 @@ import { getActivePatient } from 'store/reducers/patients';
 import { buildProfilogram } from 'analyses/profilogram';
 import { isGeoPoint } from 'utils/math';
 
-const PROFILOGRAM_COLOR = '#00e5ff';
-const POINT_STROKE = '#05323a';
+// Match the on-screen tracing exactly (see TracingViewer/style.scss): amber
+// landmark dots with a dark halo stroke, cyan profilogram lines — the export
+// must look like what the clinician saw, and both read on gray radiographs.
+const PROFILOGRAM_COLOR = '#40C4FF';
+const POINT_FILL = '#FFC400';
+const POINT_STROKE = '#14181D';
 
 const baseName = (name: string | null): string => {
   if (!name) {
@@ -88,7 +92,7 @@ const middleware = ({ getState }: Store<StoreState>) =>
         ctx.stroke();
       });
 
-      ctx.fillStyle = PROFILOGRAM_COLOR;
+      ctx.fillStyle = POINT_FILL;
       ctx.strokeStyle = POINT_STROKE;
       ctx.lineWidth = Math.max(1, pointRadius * 0.25);
       Object.keys(manual).forEach((symbol) => {

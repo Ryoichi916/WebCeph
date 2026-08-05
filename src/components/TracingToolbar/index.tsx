@@ -14,24 +14,25 @@ import IconPlotFromRefs from 'material-ui/svg-icons/action/timeline';
 import IconProfilogram from 'material-ui/svg-icons/image/blur-on';
 import IconSummary from 'material-ui/svg-icons/action/list';
 import IconExport from 'material-ui/svg-icons/file/file-download';
-import IconImage from 'material-ui/svg-icons/image/image';
 import IconArrowUp from 'material-ui/svg-icons/navigation/arrow-drop-up';
 import IconZoomIn from 'material-ui/svg-icons/action/zoom-in';
 import IconZoomOut from 'material-ui/svg-icons/action/zoom-out';
 import IconZoomFit from 'material-ui/svg-icons/maps/zoom-out-map';
+import IconRuler from 'material-ui/svg-icons/image/straighten';
 import IconUndo from 'material-ui/svg-icons/content/undo';
 import IconRedo from 'material-ui/svg-icons/content/redo';
 
 const classes = require('./style.scss');
 
 // Lateral-cephalometric analyses the user can switch between. The id is the
-// analysis module name (see src/analyses/<id>.ts).
-const ANALYSES: Array<{ id: string; name: string }> = [
-  { id: 'downs', name: 'Downs' },
-  { id: 'steiner', name: 'Steiner' },
-  { id: 'tweed', name: 'Tweed' },
-  { id: 'ricketts', name: 'Ricketts' },
-  { id: 'bjork', name: 'Björk' },
+// analysis module name (see src/analyses/<id>.ts); `focus` is the one-line
+// clinical scope shown as the menu item's secondary text.
+const ANALYSES: Array<{ id: string; name: string; focus: string }> = [
+  { id: 'downs', name: 'Downs', focus: 'Facial pattern & skeletal profile' },
+  { id: 'steiner', name: 'Steiner', focus: 'SNA · SNB · ANB skeletal relations' },
+  { id: 'tweed', name: 'Tweed', focus: 'FMA · FMIA · IMPA diagnostic triangle' },
+  { id: 'ricketts', name: 'Ricketts', focus: 'Comprehensive skeletal & dental' },
+  { id: 'bjork', name: 'Björk', focus: 'Growth direction & jaw rotation' },
 ];
 
 interface State {
@@ -42,6 +43,33 @@ interface State {
 const ICON_COLOR = 'currentColor';
 const iconStyle: React.CSSProperties = { width: 18, height: 18 };
 const caretStyle: React.CSSProperties = { width: 18, height: 18, margin: '0 -6px 0 -2px' };
+
+// Analysis menu rows carry a title + clinical-focus line, so the mui
+// MenuItem's fixed 48px line-height/font must be reset; the selected row is
+// marked with the panel's own language — primary-050 fill + 3px inset rail —
+// rather than a lone checkmark.
+const analysisItemStyle: React.CSSProperties = {
+  fontSize: 13.5,
+  lineHeight: 'normal',
+  minHeight: 0,
+  whiteSpace: 'normal',
+};
+const selectedAnalysisItemStyle: React.CSSProperties = {
+  ...analysisItemStyle,
+  backgroundColor: '#EBF3FB',
+  boxShadow: 'inset 3px 0 0 #1565C0',
+};
+const analysisItemInnerStyle: React.CSSProperties = {
+  padding: '8px 16px',
+};
+
+// Menus/popovers follow the card spec: 8px radius on all corners (mui's Paper
+// defaults to 2px) and the level-2 shadow reserved for overlays.
+const popoverStyle: React.CSSProperties = {
+  borderRadius: 8,
+  overflow: 'hidden',
+  boxShadow: '0 4px 12px rgba(16, 30, 50, .14)',
+};
 
 // Same zoom bounds as the mouse-wheel zoom tool (see editorTools/zoomWithWheel).
 const ZOOM_MIN = 0.2;
@@ -54,11 +82,11 @@ export default class TracingToolbar extends React.PureComponent<Props, State> {
   render() {
     const {
       imageId, className,
-      canAutoPlot, isAutoPlotting, onAutoPlotClick,
+      canAutoPlot, isAutoPlotting,
       canPlotFromReferences, onPlotFromReferencesClick,
       isProfilogramShown, onToggleProfilogramClick,
       activeAnalysisId,
-      canShowSummary, onShowSummaryClick,
+      canShowSummary,
       canUndo, onUndoClick,
       canRedo, onRedoClick,
     } = this.props;
@@ -121,7 +149,7 @@ export default class TracingToolbar extends React.PureComponent<Props, State> {
           className={classes.button}
           disabled={!canAutoPlot || isAutoPlotting}
           title="Detect and place all landmarks automatically"
-          onClick={onAutoPlotClick}
+          onClick={this.handleAutoPlotClick}
         >
           {isAutoPlotting
             ? <CircularProgress size={16} thickness={2} />
@@ -158,6 +186,20 @@ export default class TracingToolbar extends React.PureComponent<Props, State> {
 
         <span className={classes.spacer} />
 
+        <span
+          className={classes.calibration_chip}
+          title={
+            'No mm calibration is set for this image. ' +
+            'Angular measurements are scale-independent and unaffected; ' +
+            'linear (mm) measurements require calibration.'
+          }
+        >
+          <IconRuler color="currentColor" style={{ width: 14, height: 14 }} />
+          Not calibrated
+        </span>
+
+        <span className={classes.separator} />
+
         <div className={classes.zoom_group} role="group" aria-label="Zoom">
           <button
             type="button"
@@ -169,9 +211,15 @@ export default class TracingToolbar extends React.PureComponent<Props, State> {
           >
             <IconZoomOut color={ICON_COLOR} style={iconStyle} />
           </button>
-          <span className={classes.zoom_value} title="Zoom level (100% = fit)">
+          <button
+            type="button"
+            className={cx(classes.button, classes.zoom_value)}
+            title="Reset zoom to 100% (fit)"
+            aria-label="Reset zoom to 100%"
+            onClick={this.zoomToFit}
+          >
             {Math.round(this.props.zoom * 100)}%
-          </span>
+          </button>
           <button
             type="button"
             className={cx(classes.button, classes.button__icon)}
@@ -182,6 +230,7 @@ export default class TracingToolbar extends React.PureComponent<Props, State> {
           >
             <IconZoomIn color={ICON_COLOR} style={iconStyle} />
           </button>
+          <span className={classes.zoom_divider} />
           <button
             type="button"
             className={cx(classes.button, classes.button__icon)}
@@ -201,7 +250,7 @@ export default class TracingToolbar extends React.PureComponent<Props, State> {
           className={classes.button}
           disabled={!canShowSummary}
           title="Show the analysis results summary"
-          onClick={onShowSummaryClick}
+          onClick={this.handleSummaryClick}
         >
           <IconSummary color={ICON_COLOR} style={iconStyle} />
           <span className={classes.button_label}>Summary</span>
@@ -224,47 +273,84 @@ export default class TracingToolbar extends React.PureComponent<Props, State> {
 
         <Popover
           open={openMenu === 'analysis'}
+          style={popoverStyle}
           anchorEl={anchorEl as any}
           anchorOrigin={{ horizontal: 'left', vertical: 'top' }}
           targetOrigin={{ horizontal: 'left', vertical: 'bottom' }}
           onRequestClose={this.closeMenu}
         >
-          <Menu desktop onEscKeyDown={this.closeMenu}>
-            {ANALYSES.map((a) => (
-              <MenuItem
-                key={a.id}
-                primaryText={a.name}
-                checked={a.id === activeAnalysisId}
-                insetChildren={a.id !== activeAnalysisId}
-                onClick={this.selectAnalysis.bind(this, a.id)}
-              />
-            ))}
+          <Menu desktop width={264} onEscKeyDown={this.closeMenu}>
+            <div className={classes.menu_heading}>Analysis</div>
+            {ANALYSES.map((a) => {
+              const isSelected = a.id === activeAnalysisId;
+              return (
+                <MenuItem
+                  key={a.id}
+                  style={isSelected ? selectedAnalysisItemStyle : analysisItemStyle}
+                  innerDivStyle={analysisItemInnerStyle}
+                  onClick={this.selectAnalysis.bind(this, a.id)}
+                >
+                  <span
+                    className={cx(classes.menu_item, {
+                      [classes.menu_item__selected]: isSelected,
+                    })}
+                  >
+                    <span className={classes.menu_item_title}>{a.name}</span>
+                    <span className={classes.menu_item_focus}>{a.focus}</span>
+                  </span>
+                </MenuItem>
+              );
+            })}
           </Menu>
         </Popover>
 
         <Popover
           open={openMenu === 'export'}
+          style={popoverStyle}
           anchorEl={anchorEl as any}
           anchorOrigin={{ horizontal: 'left', vertical: 'top' }}
           targetOrigin={{ horizontal: 'left', vertical: 'bottom' }}
           onRequestClose={this.closeMenu}
         >
-          <Menu desktop onEscKeyDown={this.closeMenu}>
+          <Menu desktop width={248} onEscKeyDown={this.closeMenu}>
+            <div className={classes.menu_heading}>Export tracing</div>
             <MenuItem
-              primaryText="PNG image"
-              leftIcon={<IconImage />}
+              style={analysisItemStyle}
+              innerDivStyle={analysisItemInnerStyle}
               onClick={this.exportAs.bind(this, 'png' as 'png')}
-            />
+            >
+              <span className={classes.menu_item}>
+                <span className={classes.menu_item_title}>PNG image</span>
+                <span className={classes.menu_item_focus}>Lossless — best for records</span>
+              </span>
+            </MenuItem>
             <MenuItem
-              primaryText="JPG image"
-              leftIcon={<IconImage />}
+              style={analysisItemStyle}
+              innerDivStyle={analysisItemInnerStyle}
               onClick={this.exportAs.bind(this, 'jpeg' as 'jpeg')}
-            />
+            >
+              <span className={classes.menu_item}>
+                <span className={classes.menu_item_title}>JPG image</span>
+                <span className={classes.menu_item_focus}>Smaller file — best for sharing</span>
+              </span>
+            </MenuItem>
           </Menu>
         </Popover>
       </div>
     );
   }
+
+  // Blur before delegating so the button doesn't keep a focus/pressed pill
+  // after the action's dialog closes or the plotting run finishes.
+  private handleAutoPlotClick = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.currentTarget.blur();
+    this.props.onAutoPlotClick();
+  };
+
+  private handleSummaryClick = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.currentTarget.blur();
+    this.props.onShowSummaryClick();
+  };
 
   private openAnalysisMenu = (e: React.MouseEvent<HTMLButtonElement>) => {
     this.setState({ openMenu: 'analysis', anchorEl: e.currentTarget });

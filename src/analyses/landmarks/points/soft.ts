@@ -43,7 +43,7 @@ export const Sls = point('Sls', 'Superior labial sulcus');
 export const Li = point('Li', 'Labrale inferius');
 
 /**
- * Point located perpendicular on madibular symphysis midway between pogonion and menton
+ * Point located perpendicular on mandibular symphysis midway between pogonion and menton
  */
 export const Gn = point('Gn', 'Gnathion');
 

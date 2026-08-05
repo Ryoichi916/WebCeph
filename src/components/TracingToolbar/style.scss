@@ -39,11 +39,19 @@
 
   svg {
     flex-shrink: 0;
+    // mui SvgIcon writes an inline `color` from the theme, which would pin
+    // `fill: currentColor` to dark text forever. Force the icon to follow the
+    // button's own text color so hover / active / disabled states recolor the
+    // glyph together with the label (never a dark icon on a dimmed button).
+    color: inherit !important;
+    fill: currentColor !important;
   }
 
+  // Hover uses the same primary tint as the active pill (one hue family for
+  // every interactive state — no gray-on-gray pills in the toolbar).
   &:hover:not(:disabled) {
-    background: $bg-sunken;
-    color: $text-primary;
+    background: $primary-050;
+    color: $primary-600;
   }
 
   &:focus {
@@ -107,12 +115,106 @@
   gap: 2px;
 }
 
+// The zoom percentage is a real control (click resets to 100% = fit) and is
+// styled as an interactive chip so the affordance is visible, not implied.
 .zoom_value {
-  min-width: 44px;
-  text-align: center;
-  font-size: 12.5px;
-  font-weight: 500;
+  min-width: 52px;
+  height: 24px;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
-  color: $text-secondary;
   user-select: none;
+  color: $text-secondary;
+  background: $bg-sunken;
+  border: 1px solid $border;
+  border-radius: 999px;
+  padding: 0 10px;
+  margin: 0 2px;
+
+  &:hover:not(:disabled) {
+    background: $primary-050;
+    border-color: $primary-500;
+    color: $primary-600;
+  }
+
+  &:active:not(:disabled) {
+    background: $primary-100;
+  }
+}
+
+// Calibration status: real ceph software always says whether linear (mm)
+// measurements can be trusted. Until a calibration ruler is set, angular
+// values are the reliable ones — surface that instead of hiding it.
+.calibration_chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  color: $warn;
+  background: $warn-bg;
+  border: 1px solid rgba(178, 106, 0, 0.25);
+  cursor: help;
+
+  svg {
+    flex-shrink: 0;
+  }
+}
+
+// ---- Analysis switcher menu ----------------------------------------------
+// The popover shares the side panel's design language: micro uppercase
+// section label, 13.5/12 two-line rows, and a primary-tinted selected row
+// with an inset rail (set inline on the MenuItem, see index.tsx).
+
+.menu_heading {
+  padding: 10px 16px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: $text-tertiary;
+}
+
+.menu_item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.menu_item_title {
+  font-size: 13.5px;
+  font-weight: 500;
+  line-height: 1.3;
+  color: $text-primary;
+}
+
+.menu_item_focus {
+  font-size: 12px;
+  line-height: 1.3;
+  color: $text-tertiary;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.menu_item__selected {
+  .menu_item_title {
+    color: $primary-600;
+    font-weight: 600;
+  }
+}
+
+.zoom_divider {
+  width: 1px;
+  height: 16px;
+  margin: 0 4px;
+  background: $border;
+  flex-shrink: 0;
 }
