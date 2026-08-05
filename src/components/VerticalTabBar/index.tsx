@@ -27,6 +27,9 @@ class VerticalTabBar extends React.PureComponent<Props, { }> {
               key={id}
               className={cx(classes.tab_item, { [classes.tab_item__active]: isActiveTab })}
               onClick={!isActiveTab ? this.handleTabClick(id) : undefined}
+              title={`Workspace ${i + 1}`}
+              aria-label={`Workspace ${i + 1}`}
+              aria-pressed={isActiveTab}
             >
               {i + 1}
             </button>
@@ -36,6 +39,8 @@ class VerticalTabBar extends React.PureComponent<Props, { }> {
           <button
             className={classes.tab_item_placeholder}
             onClick={this.handleNewTab}
+            title="New workspace"
+            aria-label="New workspace"
           >
             +
           </button>

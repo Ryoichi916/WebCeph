@@ -91,7 +91,7 @@ const Angle = pure((props: AngleProps): JSX.Element => {
       console.info('Vectors are head to tail');
       const extended2 = createParallel(vector2, head1, head1.x + (head1.x - tail1.x));
       additionalElements = [
-        <line key="extended2" {...extendedProps} {...rest} {...extended2} />,
+        <line key="extended2" {...rest} {...extendedProps} {...extended2} />,
       ];
       finalVectors = [vector1, extended2];
     } else if (inSegment1) {
@@ -99,7 +99,7 @@ const Angle = pure((props: AngleProps): JSX.Element => {
       const extended1 = createParallel(vector1, intersection, tail1.x);
       const extended2 = createParallel(vector2, intersection, tail2.x);
       additionalElements = [
-        <line key="extended2" {...extendedProps} {...rest} {...extended2} />,
+        <line key="extended2" {...rest} {...extendedProps} {...extended2} />,
       ];
       finalVectors = [extended1, extended2];
     } else {
@@ -110,8 +110,8 @@ const Angle = pure((props: AngleProps): JSX.Element => {
     const extended1 = createParallel(vector1, intersection, tail1.x);
     const extended2 = createParallel(vector2, intersection, tail2.x);
     additionalElements = [
-      <line key="extended1" {...extendedProps} {...rest} {...extended1} />,
-      <line key="extended2" {...extendedProps} {...rest} {...extended2} />,
+      <line key="extended1" {...rest} {...extendedProps} {...extended1} />,
+      <line key="extended2" {...rest} {...extendedProps} {...extended2} />,
     ];
     finalVectors = [extended1, extended2];
   } else {
@@ -119,14 +119,14 @@ const Angle = pure((props: AngleProps): JSX.Element => {
     console.log('Intersection point is outside the canvas boundaries, creating parallel...');
     const parallel = createParallel(vector1, head2, tail1.x);
     additionalElements = [
-      <line key="parallel1" {...parallelProps} {...rest} {...parallel} />,
+      <line key="parallel1" {...rest} {...parallelProps} {...parallel} />,
     ];
     finalVectors = [parallel, vector2];
   }
   return (
     <g>
-      <line {...segmentProps} {...rest} {...vector1} />
-      <line {...segmentProps} {...rest} {...vector2} />
+      <line {...rest} {...segmentProps} {...vector1} />
+      <line {...rest} {...segmentProps} {...vector2} />
       {additionalElements}
       <Arc vector1={finalVectors[0]} vector2={finalVectors[1]} {...angleIndicatorProps} />
     </g>

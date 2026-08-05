@@ -2,6 +2,8 @@ export interface StateProps {
   imageId: string | null;
   imageSrc?: string;
   isDemoImageLoading?: boolean;
+  /** Whether the analysis results summary dialog is open. */
+  isSummaryShown: boolean;
 };
 
 export interface DispatchProps {

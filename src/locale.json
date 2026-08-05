@@ -9,11 +9,11 @@
   },
   {
     "id": "callout_load_sample_image",
-    "defaultMessage": "Don't have one around? Try a sample image from Wikipedia!"
+    "defaultMessage": "No image at hand? Try the bundled sample cephalogram."
   },
   {
     "id": "callout_start_tracing",
-    "defaultMessage": "To start tracing, drop a cephalogram or a photograph here"
+    "defaultMessage": "To start tracing, drop a cephalogram or photograph here"
   },
   {
     "id": "label_language",

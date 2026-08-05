@@ -85,8 +85,8 @@ export const getScaleOrigin = (state: StoreState) => state[KEY_SCALE_ORIGIN];
 // The stepper panel and the toolbar share the workspace content area with the
 // canvas (see TracingEditor); their sizes must be carved out of the measured
 // contentRect or the canvas overflows and scrolls out of view.
-const STEPPER_WIDTH = 280; // .stepper in TracingEditor/style.scss
-const TOOLBAR_HEIGHT = 44; // office-ui-fabric CommandBar
+const STEPPER_WIDTH = 320; // .stepper in TracingEditor/style.scss
+const TOOLBAR_HEIGHT = 44; // .root in TracingToolbar/style.scss
 
 // The space available to the tracing canvas. Preferably the measured size of
 // the active workspace's content area (kept up to date by ResizeObservable via

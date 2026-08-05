@@ -1,45 +1,77 @@
-@import 'src/_theme.scss';
+@import 'src/_variables.scss';
 
 .root {
-  background-color: $ms-color-themeLighterAlt;
+  width: 56px;
+  min-width: 56px;
+  padding: 8px 0;
+  background-color: $bg-sunken;
+  border-right: 1px solid $border;
   display: flex;
   flex-direction: column;
   flex-wrap: nowrap;
   align-items: center;
   justify-content: flex-start;
-  overflow-y: scroll;
+  gap: 8px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  font-family: $font-stack;
 }
 
 .tab_item {
-  min-height: 64px;
-  min-width: 64px;
-  margin: 3px;
-  border: 1px solid $ms-color-neutralTertiary;
+  width: 44px;
+  height: 44px;
+  min-height: 44px;
+  padding: 0;
+  margin: 0;
+  border: none;
+  border-radius: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: x-large;
-  background: white;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: $text-secondary;
+  background: transparent;
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease, box-shadow 120ms ease;
 
-  &:hover, &:focus {
-    background: $ms-color-themeLight;
+  &:hover {
+    background: $primary-050;
+    color: $primary-600;
   }
 
-  & + & {
-    margin-top: 0;
+  &:focus {
+    outline: none;
+    box-shadow: $focus-ring;
   }
 
   &__active {
-    border: 1px solid $ms-color-themeDarker;
-    background-color: $ms-color-themeDarkAlt;
-    color: $ms-color-themeLighter;
+    background: $primary-600;
+    color: #FFFFFF;
+    box-shadow: $shadow-1;
+    cursor: default;
+
+    &:hover {
+      background: $primary-600;
+      color: #FFFFFF;
+    }
   }
 
   &_placeholder {
     @extend .tab_item;
-    content: '+';
-    border-style: dashed;
-    opacity: 0.5;
+    border: 1px dashed $border-strong;
+    background: transparent;
+    color: $text-tertiary;
+    font-size: 20px;
+    font-weight: 400;
+    line-height: 1;
+
+    &:hover {
+      border-color: $primary-500;
+      background: $primary-050;
+      color: $primary-600;
+    }
   }
 }
-

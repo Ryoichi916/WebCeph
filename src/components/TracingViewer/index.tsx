@@ -12,8 +12,23 @@ import Props from './props';
 
 import GeoViewer from 'components/GeoViewer';
 import { isGeoPoint } from 'utils/math';
+import { mapCursor } from 'utils/constants';
 
 const classes = require('./style.scss');
+
+// On-screen (device-pixel) sizes of the landmark UI; divided by the current
+// scale when rendered so they stay constant regardless of zoom.
+const POINT_RADIUS = 4.5;
+const POINT_HIT_RADIUS = 13;
+const LABEL_OFFSET_X = 9;
+const LABEL_OFFSET_Y = 7;
+const LABEL_FONT_SIZE = 11;
+
+const LABEL_FONT_FAMILY = [
+  '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto',
+  '"Hiragino Sans"', '"Hiragino Kaku Gothic ProN"', '"Noto Sans JP"',
+  'Meiryo', 'sans-serif',
+].join(', ');
 
 function isMouseEvent<T>(e: any): e is React.MouseEvent<T> {
   return e.touches === undefined;
@@ -30,6 +45,8 @@ interface State {
   /** Live drag position in original-image coordinates. */
   dragX: number;
   dragY: number;
+  /** Symbol of the draggable landmark currently under the cursor, if any. */
+  hoveredSymbol: string | null;
 }
 
 export class TracingViewer extends React.PureComponent<Props, State> {
@@ -37,6 +54,7 @@ export class TracingViewer extends React.PureComponent<Props, State> {
     draggedSymbol: null,
     dragX: 0,
     dragY: 0,
+    hoveredSymbol: null,
   };
 
   private imageElement: SVGImageElement | null = null;
@@ -58,6 +76,7 @@ export class TracingViewer extends React.PureComponent<Props, State> {
         <svg
           className={cx(classes.canvas, className)}
           viewBox={`0 0 ${minWidth} ${minHeight}`}
+          style={this.state.draggedSymbol !== null ? { cursor: 'grabbing' } : undefined}
           onContextMenu={this.handleContextMenu}
           onMouseEnter={this.handleCanvasMouseEnter}
           onMouseLeave={this.handleCanvasMouseLeave}
@@ -89,6 +108,7 @@ export class TracingViewer extends React.PureComponent<Props, State> {
                   transform={this.getTransformAttribute()}
                   filter={this.getFilterAttribute()}
                   opacity={isHighlightMode ? 0.5 : 1 }
+                  style={{ cursor: this.getCanvasCursor() }}
                 />
               </g>
             </g>
@@ -104,6 +124,7 @@ export class TracingViewer extends React.PureComponent<Props, State> {
                 getPropsForAngle={getPropsForLandmark}
               />
               {this.renderProfilogram()}
+              {this.renderLandmarkDecorations()}
             </g>
           </g>
         </svg>
@@ -144,11 +165,20 @@ export class TracingViewer extends React.PureComponent<Props, State> {
   }
 
   private getTransformAttribute = () => {
-    const { scale } = this.props;
+    const {
+      scale,
+      canvasSize: { width: canvasWidth, height: canvasHeight },
+      imageWidth, imageHeight,
+    } = this.props;
     let transform = '';
-    const translateX = 0; // (imageWidth * scale) - scaleOriginX;
-    const translateY = 0; // (scaleOriginY * scale) - scaleOriginY;
-    transform += ` translate(${-1 * translateX}, ${-1 * translateY}) `;
+    // Center the (scaled) image inside the drawing surface so the radiograph
+    // is the visual hero instead of hugging the top-left corner. Mouse math is
+    // unaffected: all conversions use the image element's bounding rect.
+    const surfaceWidth = Math.max(canvasWidth, imageWidth);
+    const surfaceHeight = Math.max(canvasHeight, imageHeight);
+    const translateX = Math.max(0, (surfaceWidth - imageWidth * scale) / 2);
+    const translateY = Math.max(0, (surfaceHeight - imageHeight * scale) / 2);
+    transform += ` translate(${translateX}, ${translateY}) `;
     transform += ` scale(${scale}, ${scale})`;
     if (this.props.isFlippedX) {
       transform += ` scale(-1, 1) translate(-${this.props.imageWidth}, 0)`;
@@ -212,17 +242,104 @@ export class TracingViewer extends React.PureComponent<Props, State> {
 
   private getPropsForPoint = (symbol: string) => {
     const base = this.props.getPropsForLandmark(symbol);
+    const { draggedSymbol, hoveredSymbol } = this.state;
+    const withStates = {
+      ...base,
+      // Constant on-screen dot size regardless of zoom (the parent group is
+      // scaled, so the image-space radius is divided by the current scale).
+      r: POINT_RADIUS / this.props.scale,
+      className: cx(
+        base.className,
+        symbol === draggedSymbol && classes.point_dragged,
+        draggedSymbol === null && symbol === hoveredSymbol && classes.point_hovered,
+      ),
+    };
     if (!this.props.isDraggableLandmark(symbol)) {
-      return base;
+      return withStates;
     }
     return {
-      ...base,
-      // .landmark disables pointer events (decorative geometry); re-enable them
-      // inline for manually placed points so they can be grabbed.
-      style: { ...base.style, pointerEvents: 'auto', cursor: 'move' },
+      ...withStates,
+      // .point disables pointer events (decorative geometry); re-enable them
+      // inline for manually placed points so they can be grabbed. A larger
+      // invisible hit target is rendered on top (see renderLandmarkDecorations).
+      style: { ...base.style, pointerEvents: 'auto', cursor: 'grab' },
       onMouseDown: (e: React.MouseEvent<SVGCircleElement>) =>
         this.handleLandmarkMouseDown(symbol, e),
     };
+  };
+
+  /** The tool-appropriate cursor for the imaging surface. */
+  private getCanvasCursor = () => {
+    if (this.state.draggedSymbol !== null) {
+      return 'grabbing';
+    }
+    const { getCursorForCanvas } = this.props.activeTool;
+    if (typeof getCursorForCanvas === 'function') {
+      return mapCursor(getCursorForCanvas());
+    }
+    return 'auto';
+  };
+
+  /**
+   * Symbol labels (with a dark halo so they read on any radiograph region)
+   * plus enlarged invisible hit targets for the draggable points.
+   */
+  private renderLandmarkDecorations = () => {
+    const { scale, isHighlightMode, highlightedLandmarks, isDraggableLandmark } = this.props;
+    const { draggedSymbol } = this.state;
+    const fontSize = LABEL_FONT_SIZE / scale;
+    return (
+      <g>
+        {this.getRenderedLandmarks().map(({ symbol, value }) => {
+          if (!isGeoPoint(value)) {
+            return null;
+          }
+          const dimmed = isHighlightMode && highlightedLandmarks[symbol] !== true;
+          return (
+            <g key={symbol} opacity={dimmed ? 0.3 : 1}>
+              <text
+                x={value.x + LABEL_OFFSET_X / scale}
+                y={value.y - LABEL_OFFSET_Y / scale}
+                fontSize={fontSize}
+                fontWeight={600}
+                fontFamily={LABEL_FONT_FAMILY}
+                fill="#FFFFFF"
+                stroke="rgba(20, 24, 29, 0.75)"
+                strokeWidth={3 / scale}
+                paintOrder="stroke"
+                strokeLinejoin="round"
+                pointerEvents="none"
+              >
+                {symbol}
+              </text>
+              {isDraggableLandmark(symbol) && !dimmed ? (
+                <circle
+                  cx={value.x}
+                  cy={value.y}
+                  r={POINT_HIT_RADIUS / scale}
+                  fill="transparent"
+                  stroke="none"
+                  pointerEvents="all"
+                  style={{ cursor: draggedSymbol === null ? 'grab' : 'grabbing' }}
+                  onMouseEnter={this.handleLandmarkMouseEnter.bind(this, symbol)}
+                  onMouseLeave={this.handleLandmarkMouseLeave}
+                  onMouseDown={(e: React.MouseEvent<SVGCircleElement>) =>
+                    this.handleLandmarkMouseDown(symbol, e)}
+                />
+              ) : null}
+            </g>
+          );
+        })}
+      </g>
+    );
+  };
+
+  private handleLandmarkMouseEnter = (symbol: string) => {
+    this.setState({ hoveredSymbol: symbol });
+  };
+
+  private handleLandmarkMouseLeave = () => {
+    this.setState({ hoveredSymbol: null });
   };
 
   private handleLandmarkMouseDown = (symbol: string, e: React.MouseEvent<SVGCircleElement>) => {
@@ -266,8 +383,9 @@ export class TracingViewer extends React.PureComponent<Props, State> {
             y1={seg.y1}
             x2={seg.x2}
             y2={seg.y2}
-            stroke="#00e5ff"
-            strokeWidth={1.25}
+            stroke="#40C4FF"
+            strokeWidth={1.5}
+            opacity={0.85}
             strokeLinecap="round"
             vectorEffect="non-scaling-stroke"
             pointerEvents="none"
@@ -278,13 +396,17 @@ export class TracingViewer extends React.PureComponent<Props, State> {
   };
 
   private getRenderedLandmarks = () => {
-    const { landmarks } = this.props;
+    const { landmarks, isHighlightMode, highlightedLandmarks } = this.props;
     const { draggedSymbol, dragX, dragY } = this.state;
-    // Render only the landmark points. The analysis' own lines/angles are not
-    // drawn on the canvas — the profile geometry is shown by the (toggleable)
-    // profilogram overlay instead — while the analysis still computes its values
-    // for the stepper.
-    const points = landmarks.filter((landmark) => isGeoPoint(landmark.value));
+    // Render the landmark points. The analysis' own lines/angles are not drawn
+    // permanently — the profile geometry is shown by the (toggleable)
+    // profilogram overlay instead — but the line/angle belonging to the
+    // stepper row currently hovered IS rendered (highlighted) so the user can
+    // see exactly which measurement the row refers to.
+    const points = landmarks.filter((landmark) =>
+      isGeoPoint(landmark.value) ||
+      (isHighlightMode && highlightedLandmarks[landmark.symbol] === true),
+    );
     if (draggedSymbol === null) {
       return points;
     }

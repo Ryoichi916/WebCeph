@@ -1,0 +1,118 @@
+@import 'src/_variables.scss';
+
+// Bottom action strip for the tracing editor. Sits between the dark imaging
+// canvas and the viewport edge, so it needs a real top hairline + elevation to
+// read as chrome rather than page background.
+.root {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 44px;
+  min-height: 44px;
+  flex-shrink: 0;
+  padding: 0 12px;
+  background: $bg-surface;
+  border-top: 1px solid $border;
+  box-shadow: 0 -1px 2px rgba(16, 30, 50, .06);
+  font-family: $font-stack;
+  position: relative;
+  z-index: 5;
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 10px;
+  margin: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  color: $text-secondary;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease, box-shadow 120ms ease;
+
+  svg {
+    flex-shrink: 0;
+  }
+
+  &:hover:not(:disabled) {
+    background: $bg-sunken;
+    color: $text-primary;
+  }
+
+  &:focus {
+    outline: none;
+  }
+
+  &:focus-visible {
+    box-shadow: $focus-ring;
+  }
+
+  &:disabled {
+    color: $text-disabled;
+    cursor: default;
+  }
+
+  // Toggled-on state (e.g. the profilogram switch) and the active analysis.
+  &__active {
+    color: $primary-600;
+    background: $primary-050;
+
+    &:hover:not(:disabled) {
+      color: $primary-600;
+      background: $primary-100;
+    }
+  }
+
+  // While the button's popover menu is open.
+  &__open {
+    color: $primary-600;
+    background: $primary-050;
+  }
+
+  // Icon-only square buttons (zoom controls).
+  &__icon {
+    width: 32px;
+    padding: 0;
+    justify-content: center;
+  }
+}
+
+.button_label {
+  line-height: 1;
+}
+
+.separator {
+  width: 1px;
+  height: 20px;
+  margin: 0 6px;
+  background: $border;
+  flex-shrink: 0;
+}
+
+.spacer {
+  flex-grow: 1;
+}
+
+// Zoom controls: [out] 100% [in] [fit]
+.zoom_group {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.zoom_value {
+  min-width: 44px;
+  text-align: center;
+  font-size: 12.5px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: $text-secondary;
+  user-select: none;
+}

@@ -21,6 +21,10 @@ import {
 import {
   getActiveTracingImageId,
 } from 'store/reducers/workspace';
+import {
+  getAnalysisId,
+} from 'store/reducers/workspace/image';
+import { getNameForAnalysis } from 'components/AnalysisSelector/strings';
 
 import {
   removeManualLandmark,
@@ -34,7 +38,9 @@ type StateFromStore = StateProps & { imageId: string };
 
 const mapStateToProps = (state: StoreState): StateFromStore => {
   const imageId = getActiveTracingImageId(state)!;
+  const analysisId = imageId !== null ? getAnalysisId(state)(imageId) : null;
   return {
+    analysisName: analysisId !== null ? getNameForAnalysis(analysisId) : null,
     steps: getActiveAnalysisSteps(state)(imageId),
     getStepState: getStepState(state)(imageId),
     getStepValue: getCalculatedValue(state)(imageId),

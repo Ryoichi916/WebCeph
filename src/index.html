@@ -2,12 +2,20 @@
 <html lang="en-US" dir="auto">
   <head>
     <title>WebCeph</title>
+    <!-- Inline favicon: keeps the browser from requesting /favicon.ico (404) and avoids any network asset.
+         base64 (not %-encoded) because the template goes through lodash templating where "<%" is special. -->
+    <link rel="icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMiAzMiI+PHJlY3Qgd2lkdGg9IjMyIiBoZWlnaHQ9IjMyIiByeD0iNyIgZmlsbD0iIzE1NjVDMCIvPjxwYXRoIGQ9Ik02IDlsNCAxNCA2LTEwIDYgMTAgNC0xNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjZmZmIiBzdHJva2Utd2lkdGg9IjIuNSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+PC9zdmc+">
     <link rel="manifest" href="./manifest.json">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
     <meta charset="utf-8">
     <style>
       html, body {
         margin: 0;
+        background-color: #F4F6F9;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", Meiryo,
+          sans-serif;
+        color: #1F2933;
       }
 
       * {

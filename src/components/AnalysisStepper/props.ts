@@ -5,6 +5,8 @@ export interface OwnProps {
 export interface StateProps {
   steps: CephLandmark[];
   highlightedStep: string | null;
+  /** Display name of the active analysis, for the panel header. */
+  analysisName: string | null;
   getStepState(step: CephLandmark): StepState;
   getStepValue(step: CephLandmark): number | undefined;
   isStepRemovable(step: CephLandmark): boolean;

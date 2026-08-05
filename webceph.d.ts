@@ -404,6 +404,13 @@ interface StoreState {
   'images.tracing': {
     [imageId: string]: CephImageTracingData;
   };
+  /**
+   * Undo/redo history of the tracing slice. Managed by the enableUndoRedo
+   * reducer enhancer (see store/index.ts); the registered reducers for these
+   * keys are passthroughs so combineReducers leaves them intact.
+   */
+  'history.past': Array<{ [imageId: string]: CephImageTracingData }>;
+  'history.future': Array<{ [imageId: string]: CephImageTracingData }>;
   'images.status': {
     [imageId: string]: {
       isLoading: true;

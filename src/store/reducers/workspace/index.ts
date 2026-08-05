@@ -112,11 +112,12 @@ export const getSortedLandmarksToDisplay = createSelector(
 //   (error) => error !== null ? error.message : null,
 // );
 
-// Undo/redo history is not currently wired through redux-undo, so there is
-// nothing to undo or redo. These return false until the undoable reducer is
-// reintroduced (see the auto-plot batching work).
-export const canUndo = (_: StoreState) => false;
-export const canRedo = (_: StoreState) => false;
+// Undo/redo history of the tracing slice; maintained by the enableUndoRedo
+// reducer enhancer (see store/index.ts).
+export const canUndo = (state: StoreState) =>
+  (state['history.past'] || []).length > 0;
+export const canRedo = (state: StoreState) =>
+  (state['history.future'] || []).length > 0;
 
 // The user has work worth exporting once the active tracing has any manually
 // placed landmark.
