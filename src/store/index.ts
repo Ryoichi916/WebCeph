@@ -64,6 +64,84 @@ const enableLoadingProject = (r: Reducer<StoreState>): Reducer<StoreState> => {
   };
 };
 
+// ---- Undo/redo ------------------------------------------------------------
+// A small, focused history of the tracing slice ('images.tracing'): every
+// landmark edit pushes the previous slice onto the past stack; UNDO/REDO swap
+// slices between the stacks. Kept at the reducer level (not middleware) so a
+// single action produces a single, consistent state transition.
+
+type TracingSlice = StoreState['images.tracing'];
+
+const UNDOABLE_ACTIONS: { [type: string]: boolean } = {
+  ADD_MANUAL_LANDMARK_REQUESTED: true,
+  ADD_MANUAL_LANDMARKS_BATCH_REQUESTED: true,
+  REMOVE_MANUAL_LANDMARK_REQUESTED: true,
+  SKIP_MANUAL_STEP_REQUESTED: true,
+  UNSKIP_MANUAL_STEP_REQUESTED: true,
+};
+
+// Wholesale state replacements invalidate the recorded snapshots.
+const HISTORY_CLEARING_ACTIONS: { [type: string]: boolean } = {
+  LOAD_PROJECT_SUCCEEDED: true,
+  LOAD_PERSISTED_STATE_SUCCEEDED: true,
+  CLOSE_IMAGE_REQUESTED: true,
+};
+
+const HISTORY_LIMIT = 100;
+
+const enableUndoRedo = (r: Reducer<StoreState>): Reducer<StoreState> => {
+  return (state: StoreState, action: GenericAction): StoreState => {
+    if (typeof state === 'undefined') {
+      return r(state, action);
+    }
+    const past: TracingSlice[] = state['history.past'] || [];
+    const future: TracingSlice[] = state['history.future'] || [];
+    if (action.type === 'UNDO_REQUESTED') {
+      if (past.length === 0) {
+        return state;
+      }
+      return {
+        ...state,
+        'images.tracing': past[past.length - 1],
+        'history.past': past.slice(0, past.length - 1),
+        'history.future': [state['images.tracing'], ...future],
+      };
+    }
+    if (action.type === 'REDO_REQUESTED') {
+      if (future.length === 0) {
+        return state;
+      }
+      return {
+        ...state,
+        'images.tracing': future[0],
+        'history.past': [...past, state['images.tracing']],
+        'history.future': future.slice(1),
+      };
+    }
+    const result = r(state, action);
+    if (HISTORY_CLEARING_ACTIONS[action.type] === true) {
+      if (past.length === 0 && future.length === 0) {
+        return result;
+      }
+      return { ...result, 'history.past': [], 'history.future': [] };
+    }
+    if (
+      UNDOABLE_ACTIONS[action.type] === true &&
+      result['images.tracing'] !== state['images.tracing']
+    ) {
+      return {
+        ...result,
+        'history.past': [
+          ...past.slice(-(HISTORY_LIMIT - 1)),
+          state['images.tracing'],
+        ],
+        'history.future': [],
+      };
+    }
+    return result;
+  };
+};
+
 const enableLoadingPersistedState = (r: Reducer<StoreState>): Reducer<StoreState> => {
   return (state: StoreState, action: GenericAction) => {
     if (action.type === 'LOAD_PERSISTED_STATE_SUCCEEDED') {
@@ -83,7 +161,8 @@ function addDevTools() {
   return (f: any) => f;
 }
 
-const enhancedReducer = enableLoadingProject(enableLoadingPersistedState(reducer));
+const enhancedReducer =
+  enableUndoRedo(enableLoadingProject(enableLoadingPersistedState(reducer)));
 
 declare var module: __WebpackModuleApi.Module;
 

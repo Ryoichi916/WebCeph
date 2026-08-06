@@ -21,14 +21,35 @@ class VerticalTabBar extends React.PureComponent<Props, { }> {
       <div className={cx(classes.root, this.props.className)}>
         {map(this.props.tabs, (id, i) => {
           const isActiveTab = this.props.activeTabId === id;
+          const thumbnail = this.props.thumbnails[id];
           return (
             <button
               tabIndex={0}
               key={id}
-              className={cx(classes.tab_item, { [classes.tab_item__active]: isActiveTab })}
+              className={cx(classes.tab_item, {
+                [classes.tab_item__active]: isActiveTab,
+                [classes.tab_item__thumbnail]: thumbnail !== undefined,
+              })}
               onClick={!isActiveTab ? this.handleTabClick(id) : undefined}
+              title={`Image ${i + 1}`}
+              aria-label={`Image ${i + 1}`}
+              aria-pressed={isActiveTab}
             >
-              {i + 1}
+              {thumbnail !== undefined ? (
+                <span className={classes.tab_preview}>
+                  <img
+                    className={classes.tab_thumbnail}
+                    src={thumbnail}
+                    alt=""
+                    draggable={false}
+                  />
+                </span>
+              ) : (
+                <span className={classes.tab_preview}>
+                  <span className={classes.tab_number}>{i + 1}</span>
+                </span>
+              )}
+              <span className={classes.tab_index}>{i + 1}</span>
             </button>
           );
         })}
@@ -36,8 +57,11 @@ class VerticalTabBar extends React.PureComponent<Props, { }> {
           <button
             className={classes.tab_item_placeholder}
             onClick={this.handleNewTab}
+            title="Add another image"
+            aria-label="Add another image"
           >
-            +
+            <span className={classes.tab_add_glyph} aria-hidden="true">+</span>
+            <span className={classes.tab_add_label}>Add image</span>
           </button>
         ) : null}
       </div>

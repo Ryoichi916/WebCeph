@@ -11,8 +11,11 @@ const undoableConfig = {
   limit: 100,
 };
 
-export const DEMO_IMAGE_URL =
-  'https://upload.wikimedia.org/wikipedia/commons/6/66/Cephalometric_radiograph.JPG';
+import { SAMPLE_CEPH_DATA_URL } from 'utils/sampleCeph';
+
+// The sample image is bundled with the app (as a data: URI) so it loads
+// instantly and works offline — no external requests.
+export const DEMO_IMAGE_URL = SAMPLE_CEPH_DATA_URL;
 
 export { undoableConfig };
 

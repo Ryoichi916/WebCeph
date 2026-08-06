@@ -42,7 +42,7 @@ export const B = point('B', 'Supramentale');
 export const Pog = point('Pog', 'Pogonion');
 
 /**
- * Point located perpendicular on madibular symphysis midway between pogonion and menton
+ * Point located perpendicular on mandibular symphysis midway between pogonion and menton
  */
 export const Gn = point('Gn', 'Gnathion');
 

@@ -2,8 +2,8 @@ import * as React from 'react';
 import Props from './props';
 
 import Dialog from 'material-ui/Dialog';
-
-import { Dropdown, IDropdownProps } from 'office-ui-fabric-react/lib/Dropdown';
+import DropDownMenu from 'material-ui/DropDownMenu';
+import MenuItem from 'material-ui/MenuItem';
 
 import map from 'lodash/map';
 
@@ -28,11 +28,11 @@ const messageDescriptors = defineMessages({
 });
 
 class Settings extends React.PureComponent<Props & InjectedIntlProps, { }> {
-  handleLocaleChange: IDropdownProps['onChanged'] = ({ key }) => {
-    if (key === 'auto') {
+  handleLocaleChange = (_: any, __: number, value: string) => {
+    if (value === 'auto') {
       this.props.onLocaleUnset();
     } else {
-      this.props.onLocaleChange(key as string);
+      this.props.onLocaleChange(value);
     }
   }
 
@@ -53,15 +53,31 @@ class Settings extends React.PureComponent<Props & InjectedIntlProps, { }> {
     ];
     const { intl: { formatMessage } } = this.props;
     return (
-      <Dialog open>
-        <h2>Settings</h2>
+      <Dialog
+        open
+        title="Settings"
+        contentStyle={{ maxWidth: 480 }}
+      >
         <div>
-          <Dropdown
-            label={formatMessage(messageDescriptors.label_language)}
-            selectedKey={this.props.currentUserPreferredLocale || 'auto'}
-            onChanged={this.handleLocaleChange}
-            options={options}
-          />
+          <label
+            style={{
+              display: 'block',
+              fontSize: 12.5,
+              fontWeight: 600,
+              color: '#52616F',
+            }}
+          >
+            {formatMessage(messageDescriptors.label_language)}
+          </label>
+          <DropDownMenu
+            value={this.props.currentUserPreferredLocale || 'auto'}
+            onChange={this.handleLocaleChange}
+            style={{ marginLeft: -24 }}
+          >
+            {map(options, ({ key, text }) => (
+              <MenuItem key={key} value={key} primaryText={text} />
+            ))}
+          </DropDownMenu>
         </div>
       </Dialog>
     );

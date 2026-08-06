@@ -1,0 +1,53 @@
+// WebCeph design tokens — see design brief.
+// Plain SCSS variables only; no office-ui-fabric dependency.
+
+// Primary — clinical blue
+$primary-900: #0C3B66;
+$primary-700: #10538F;
+$primary-600: #1565C0;
+$primary-500: #1E7AD4;
+$primary-100: #D6E7F7;
+$primary-050: #EBF3FB;
+
+// Accent — clinical teal
+$accent-600: #00897B;
+$accent-400: #26A69A;
+$accent-050: #E0F2F1;
+
+// Neutrals (light chrome)
+$bg-app:        #F4F6F9;
+$bg-surface:    #FFFFFF;
+$bg-sunken:     #EDF0F4;
+$border:        #DDE3EA;
+$border-strong: #C3CCD6;
+$text-primary:   #1F2933;
+$text-secondary: #52616F;
+$text-tertiary:  #7B8794;
+$text-disabled:  #A9B4BE;
+$text-on-dark:   #F2F5F8;
+
+// Semantic
+$success:    #2E7D32;
+$success-bg: #E6F4EA;
+$warn:       #B26A00;
+$warn-bg:    #FFF4E0;
+$error:      #C62828;
+$error-bg:   #FCE8E8;
+
+// Imaging canvas (dark zone)
+$canvas-bg:     #14181D;
+$canvas-panel:  #1E242B;
+$canvas-border: #2C343D;
+$canvas-text:   #C7D0D9;
+
+// Typography
+$font-stack: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Hiragino Sans',
+  'Hiragino Kaku Gothic ProN', 'Noto Sans JP', Meiryo, sans-serif;
+
+// Elevation
+$shadow-1: 0 1px 2px rgba(16, 30, 50, .08);
+$shadow-2: 0 4px 12px rgba(16, 30, 50, .14);
+$shadow-3: 0 12px 32px rgba(16, 30, 50, .22);
+
+// Focus ring
+$focus-ring: 0 0 0 3px rgba(21, 101, 192, .28);

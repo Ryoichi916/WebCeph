@@ -7,6 +7,7 @@ import env from './env';
 import workspace from './workspace';
 import patients from './patients';
 import app from './app';
+import history from './history';
 import persistence, {
   isPersistedStateReady,
   getPersistenceLoadError,
@@ -24,6 +25,7 @@ const reducers = {
   ...env,
   ...app,
   ...locale,
+  ...history,
 } as ReducerMap;
 
 export const isAppReady = createSelector(

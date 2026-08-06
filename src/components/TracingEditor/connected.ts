@@ -5,6 +5,7 @@ import {
 } from 'react-redux';
 
 import { getTracingImageId } from 'store/reducers/workspace/settings';
+import { isSummaryShown } from 'store/reducers/workspace/analyses';
 
 import { importFileRequested, loadImageFromURL } from 'actions/workspace';
 
@@ -20,6 +21,7 @@ const mapStateToProps: MapStateToProps<StateProps, OwnProps, StoreState> =
   (state: StoreState, { workspaceId }: OwnProps): StateProps => {
     return {
       imageId: getTracingImageId(state)(workspaceId),
+      isSummaryShown: isSummaryShown(state),
     };
   };
 

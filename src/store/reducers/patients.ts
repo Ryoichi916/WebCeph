@@ -8,13 +8,17 @@ const KEY_ACTIVE: StoreKey = 'patients.activeId';
 const reducers: Partial<ReducerMap> = {
   [KEY_BY_ID]: handleActions<typeof KEY_BY_ID>(
     {
-      ADD_PATIENT_REQUESTED: (state, { payload: { id, name, chartId } }) => ({
+      ADD_PATIENT_REQUESTED: (
+        state, { payload: { id, name, chartId, dateOfBirth, sex } },
+      ) => ({
         ...state,
-        [id]: { id, name, chartId },
+        [id]: { id, name, chartId, dateOfBirth, sex },
       }),
-      UPDATE_PATIENT_REQUESTED: (state, { payload: { id, name, chartId } }) => ({
+      UPDATE_PATIENT_REQUESTED: (
+        state, { payload: { id, name, chartId, dateOfBirth, sex } },
+      ) => ({
         ...state,
-        [id]: { id, name, chartId },
+        [id]: { id, name, chartId, dateOfBirth, sex },
       }),
       REMOVE_PATIENT_REQUESTED: (state, { payload: { id } }) =>
         omit(state, id) as typeof state,

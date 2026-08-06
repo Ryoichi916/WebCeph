@@ -1,12 +1,4 @@
-@import 'src/_theme.scss';
-
-.muted {
-  color: gray;
-}
-
-.text_center {
-  text-align: center;
-}
+@import 'src/_variables.scss';
 
 .dropzone {
   display: flex;
@@ -15,105 +7,152 @@
   flex-direction: column;
   flex-wrap: nowrap;
   width: 100%;
-  background-color: $ms-color-neutralLighterAlt;
+  background-color: $bg-app;
+}
 
-  .dropzone_load_demo {
-    margin: 15px 0;
-    flex-grow: 0;
+// The bounded drop target: a dashed frame that makes the droppable area
+// explicit and lights up while a file is dragged over the zone.
+.dropzone_card {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: min(720px, calc(100% - 64px));
+  margin: 32px;
+  padding: 8px;
+  border: 2px dashed $border-strong;
+  border-radius: 12px;
+  background: $bg-surface;
+  transition: border-color 160ms ease, background-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.dropzone_placeholder {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  user-select: none;
+  padding: 32px 24px;
+}
+
+.dropzone_drop_hint {
+  font-size: 12.5px;
+  color: $text-tertiary;
+  margin: -12px 0 20px;
+  transition: color 160ms ease;
+}
+
+.dropzone_placeholder_text {
+  font-size: 20px;
+  font-weight: 400;
+  color: $text-secondary;
+  // Wide enough for the headline to sit on a single line at desktop sizes;
+  // `balance` keeps any two-line wrap symmetric instead of leaving an orphan.
+  max-width: 560px;
+  margin: 24px 0;
+  text-wrap: balance;
+}
+
+.dropzone_load_demo {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  margin-top: 32px;
+}
+
+.dropzone_hint {
+  font-size: 12.5px;
+  color: $text-tertiary;
+}
+
+// ---- Illustration ---------------------------------------------------------
+
+.illustration {
+  display: block;
+}
+
+.illustration_disc {
+  fill: $bg-sunken;
+  transition: fill 200ms ease;
+}
+
+.illustration_card {
+  fill: $bg-surface;
+  stroke: $border-strong;
+  stroke-width: 1.5;
+  transition: stroke 200ms ease;
+}
+
+.illustration_profile {
+  stroke: $primary-600;
+}
+
+.illustration_construction {
+  stroke: $text-disabled;
+}
+
+.illustration_dots {
+  fill: $accent-400;
+}
+
+.illustration_badge {
+  circle {
+    fill: $primary-600;
+    transition: fill 200ms ease;
+  }
+}
+
+.illustration_badge_arrow {
+  stroke: #FFFFFF;
+}
+
+// ---- Drag states ----------------------------------------------------------
+
+.dropzone__active {
+  cursor: copy;
+
+  .dropzone_card {
+    border-color: $primary-500;
+    background: $primary-050;
+    box-shadow: 0 0 0 4px rgba(21, 101, 192, 0.12);
   }
 
-  .dropzone_svg {
-    max-width: 100% !important;
+  .dropzone_drop_hint {
+    color: $primary-600;
   }
 
-  .demo_button {
-    margin-top: 15px;
+  .illustration_disc {
+    fill: $primary-050;
   }
 
-  .dropzone_placeholder {
-    align-self: center;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    flex-direction: column;
-    user-select: none;
-    flex-grow: 1;
+  .illustration_card {
+    stroke: $primary-500;
   }
 
-  .dropzone_placeholder_text {
-    font-size: calc(0.8em + 1vw);
-    margin: 25px 0;
+  .illustration_badge circle {
+    fill: $accent-600;
+  }
+}
+
+.dropzone__reject {
+  cursor: not-allowed;
+
+  .dropzone_card {
+    border-color: $error;
+    background: $error-bg;
   }
 
-  .dropzone_placeholder_image {
-    margin-bottom: 40px;
-    [id="portrait-bg"] {
-      fill: $ms-color-themeTertiary !important;
-    }
-    [id="portrait-silhouette"] {
-      fill: $ms-color-themeLight !important;
-    }
-
-    [id="circle"] {
-      fill: none;
-      stroke: $ms-color-neutralTertiary;
-      stroke-opacity: 0.3;
-    }
-    [id="circle"], [id="images"], [id="incorrect"], [id="x"] {
-      transition-property: fill stroke transform opacity;
-      transition-duration: 0.3s;
-      transform-origin: center center;
-    }
-
-    [id="x"] * {
-      fill: $ms-color-error !important;
-    }
-
-    [id="incorrect"], [id="correct"] {
-      opacity: 0;
-    }
+  .illustration_disc {
+    fill: $error-bg;
   }
 
-  &.dropzone__active {
-    cursor: pointer;
-    .dropzone_placeholder_image {
-      [id="circle"] {
-        fill: $ms-color-successBackground !important;
-        stroke: $ms-color-success !important;
-        transform: scale(1.05);
-      }
-
-      [id="images"] {
-        transform: rotate(-10deg) scale(0.85);
-      }
-
-      [id="correct"] {
-        opacity: 1;
-      }
-    }
+  .illustration_card {
+    stroke: $error;
   }
 
-  &.dropzone__reject {
-    cursor: no-drop not-allowed !important;
-
-    .dropzone_placeholder_image {
-      [id="circle"] {
-        fill: $ms-color-errorBackground !important;
-        stroke: $ms-color-error !important;
-        transform: scale(0.7);
-      }
-
-      [id="images"] {
-        transform: scale(0.5);
-        opacity: 0 !important;
-      }
-
-      [id="incorrect"] {
-        opacity: 1 !important;
-        transition-delay: 0.1s;
-        transition-duration: 0.2s;
-        transform: scale(0.7);
-      }
-    }
+  .illustration_badge circle {
+    fill: $error;
   }
 }

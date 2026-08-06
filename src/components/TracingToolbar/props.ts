@@ -7,6 +7,19 @@ export interface StateProps {
   isProfilogramShown: boolean;
   /** The id of the analysis active for the current image. */
   activeAnalysisId: string | null;
+  /** Whether the analysis summary dialog can be shown for the current image. */
+  canShowSummary: boolean;
+  /** The user zoom factor (1 = fit to screen). */
+  zoom: number;
+  /** Whether there is a landmark edit that can be undone. */
+  canUndo: boolean;
+  /** Whether there is an undone landmark edit that can be reapplied. */
+  canRedo: boolean;
+  /**
+   * The mm-per-pixel calibration of the current image, or null when the image
+   * has not been calibrated yet.
+   */
+  scaleFactor: number | null;
 };
 
 export interface DispatchProps {
@@ -15,6 +28,14 @@ export interface DispatchProps {
   onToggleProfilogramClick(): any;
   onSelectAnalysis(analysisId: string): any;
   onExportImage(format: 'png' | 'jpeg'): any;
+  onShowSummaryClick(): any;
+  onZoomChange(zoom: number): any;
+  onUndoClick(): any;
+  onRedoClick(): any;
+  /** Store the mm-per-pixel calibration for the current image. */
+  onSetScaleFactor(value: number): any;
+  /** Clear the calibration for the current image. */
+  onUnsetScaleFactor(): any;
 };
 
 export type ConnectableProps = StateProps & DispatchProps;

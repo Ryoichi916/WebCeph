@@ -1,11 +1,15 @@
+@import 'src/_variables.scss';
+
 .main {
   flex-grow: 1;
   min-width: 0;
   overflow: auto;
+  order: 1;
 }
 
+// DOM-first (primary controls) but visually docked at the bottom.
 .toolbar {
-
+  order: 2;
 }
 
 .tracing {
@@ -14,12 +18,31 @@
   flex-grow: 1;
   min-height: 0;
   height: 100%;
+  order: 1;
+}
+
+// The dark imaging area. The viewer is centered inside it (margin: auto keeps
+// scrolling correct when the zoomed image overflows) so the radiograph reads
+// as the hero instead of leaving a dead column beside it.
+.canvas_area {
+  flex-grow: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  overflow: auto;
+  background: $canvas-bg;
+}
+
+.canvas_wrap {
+  margin: auto;
+  flex-shrink: 0;
 }
 
 .stepper {
-  width: 280px;
+  width: 320px;
   flex-shrink: 0;
-  overflow-y: auto;
-  background: #f4f4f4;
-  color: #222;
+  min-height: 0;
+  background: $bg-surface;
+  border-left: 1px solid $border;
+  color: $text-primary;
 }

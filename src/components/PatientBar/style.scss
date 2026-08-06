@@ -1,0 +1,137 @@
+@import 'src/_variables.scss';
+
+.root {
+  display: flex;
+  align-items: center;
+  height: 48px;
+  min-height: 48px;
+  flex-shrink: 0;
+  padding: 0 8px 0 16px;
+  background: $primary-700;
+  color: #FFFFFF;
+  font-family: $font-stack;
+  font-size: 14px;
+  box-shadow: $shadow-1;
+  position: relative;
+  z-index: 10;
+}
+
+.wordmark {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: #FFFFFF;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.divider {
+  width: 1px;
+  height: 20px;
+  margin: 0 16px;
+  background: rgba(255, 255, 255, 0.28);
+  flex-shrink: 0;
+}
+
+.patient {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.patient_avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  background: $primary-100;
+  color: $primary-700;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  line-height: 1;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.patient_icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+  flex-shrink: 0;
+}
+
+.patient_name {
+  font-size: 14px;
+  font-weight: 500;
+  color: #FFFFFF;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 320px;
+}
+
+.chart_id {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+// Age · sex next to the identity pill: quiet metadata, never competing
+// with the name.
+.demographics {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.68);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.spacer {
+  flex-grow: 1;
+  min-width: 16px;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.settings_link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  margin-left: 4px;
+  border-radius: 6px;
+  color: rgba(255, 255, 255, 0.85);
+  transition: background-color 120ms ease;
+
+  &:hover,
+  &:focus {
+    background: rgba(255, 255, 255, 0.12);
+    color: #FFFFFF;
+    outline: none;
+  }
+}

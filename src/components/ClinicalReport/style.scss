@@ -1,0 +1,689 @@
+@import 'src/_variables.scss';
+
+// ---- Full-screen preview shell ---------------------------------------------
+
+// Above the toolbar/popovers (mui popover ~2100 is only used while open;
+// the report is opened from a closed menu state).
+.root {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 2200;
+  background: #3E4650; // neutral print-preview backdrop; hides the app
+  font-family: $font-stack;
+}
+
+// While the report is open the app behind must not scroll.
+:global(body.clinical-report-open) {
+  overflow: hidden;
+}
+
+// ---- Top chrome (never printed) --------------------------------------------
+
+.chrome {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  background: rgba(20, 24, 29, .92);
+  border-bottom: 1px solid rgba(255, 255, 255, .08);
+  z-index: 1;
+}
+
+.chrome_title {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  color: $text-on-dark;
+}
+
+.chrome_hint {
+  font-size: 12px;
+  font-weight: 400;
+  color: rgba(242, 245, 248, .55);
+}
+
+.chrome_actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.chrome_button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 36px;
+  padding: 0 14px;
+  border: 1px solid rgba(255, 255, 255, .25);
+  border-radius: 6px;
+  background: transparent;
+  color: $text-on-dark;
+  font-family: $font-stack;
+  font-size: 13.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease;
+
+  &:hover {
+    background: rgba(255, 255, 255, .1);
+  }
+
+  &:focus {
+    outline: none;
+  }
+
+  &:focus-visible {
+    box-shadow: $focus-ring;
+  }
+}
+
+.chrome_button__primary {
+  padding: 0 16px;
+  border-color: $primary-600;
+  background: $primary-600;
+  font-weight: 600;
+
+  &:hover {
+    background: $primary-500;
+    border-color: $primary-500;
+  }
+}
+
+// ---- Scrolling paper area --------------------------------------------------
+
+.scroll {
+  position: absolute;
+  top: 52px;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  overflow-y: auto;
+  padding: 32px 24px 72px;
+}
+
+// A4 portrait at 96dpi: 210mm ≈ 794px, 297mm ≈ 1123px. Padding ≈ the 12mm
+// print margin so the preview matches the printed page.
+.paper {
+  box-sizing: border-box;
+  width: 794px;
+  min-height: 1123px;
+  margin: 0 auto;
+  padding: 48px 52px 40px;
+  display: flex;
+  flex-direction: column;
+  background: $bg-surface;
+  color: $text-primary;
+  box-shadow: $shadow-3;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+// ---- Masthead --------------------------------------------------------------
+
+.masthead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 16px;
+  border-bottom: 2px solid $primary-700;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.brand_text {
+  display: flex;
+  flex-direction: column;
+}
+
+.brand_word {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: .01em;
+  color: $primary-900;
+  line-height: 1.2;
+}
+
+.brand_sub {
+  margin-top: 1px;
+  font-size: 11.5px;
+  color: $text-tertiary;
+}
+
+.masthead_right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.doc_kicker {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .14em;
+  color: $primary-700;
+}
+
+.doc_date {
+  margin-top: 3px;
+  font-size: 12px;
+  color: $text-secondary;
+  font-variant-numeric: tabular-nums;
+}
+
+.doc_title {
+  margin: 20px 0 0;
+  font-size: 23px;
+  font-weight: 600;
+  letter-spacing: -.01em;
+  color: $text-primary;
+  line-height: 1.25;
+}
+
+// ---- Patient block ---------------------------------------------------------
+
+.patient_block {
+  display: flex;
+  flex-direction: column;
+  margin-top: 14px;
+  border: 1px solid $border;
+  border-radius: 8px;
+  background: #FAFBFC;
+  overflow: hidden;
+}
+
+// Two rows of three aligned columns: identity on top, demographics below.
+.patient_row {
+  display: flex;
+
+  + .patient_row {
+    border-top: 1px solid $border;
+  }
+}
+
+.patient_cell {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px 16px 11px;
+
+  + .patient_cell {
+    border-left: 1px solid $border;
+  }
+}
+
+.patient_label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .1em;
+  color: $text-tertiary;
+}
+
+.patient_value {
+  font-size: 14.5px;
+  font-weight: 600;
+  color: $text-primary;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+// ---- Section labels --------------------------------------------------------
+
+.section_label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 26px 0 10px;
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .13em;
+  color: $text-secondary;
+
+  // Hairline rule filling the rest of the row.
+  &::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: $border;
+  }
+}
+
+.section_badge {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  color: $primary-700;
+  background: $primary-050;
+  border: 1px solid $primary-100;
+  border-radius: 999px;
+  padding: 2px 9px;
+}
+
+// ---- Radiograph figure -----------------------------------------------------
+
+.figure {
+  margin: 0;
+}
+
+.figure_frame {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px;
+  background: $canvas-bg;
+  border: 1px solid $border-strong;
+  border-radius: 6px;
+}
+
+.figure_image {
+  display: block;
+  max-width: 100%;
+  max-height: 300px;
+  border-radius: 2px;
+}
+
+.figure_missing {
+  padding: 48px 0;
+  font-size: 13px;
+  color: $canvas-text;
+}
+
+.figure_caption {
+  margin-top: 7px;
+  font-size: 11.5px;
+  color: $text-tertiary;
+  text-align: center;
+}
+
+.caption_dot {
+  margin: 0 7px;
+  color: $text-disabled;
+}
+
+// ---- Results table (print variant of the Summary table) --------------------
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+  color: $text-primary;
+
+  th {
+    padding: 6px 10px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: $text-tertiary;
+    text-align: left;
+    border-bottom: 1.5px solid $border-strong;
+    white-space: nowrap;
+  }
+
+  td {
+    padding: 7px 10px;
+    vertical-align: middle;
+    border-bottom: 1px solid $border;
+  }
+
+  tr {
+    page-break-inside: avoid;
+  }
+}
+
+.group + .group tr:first-child td {
+  border-top: none;
+}
+
+.col_numeric {
+  text-align: right !important;
+}
+
+.col_finding {
+  width: 168px;
+}
+
+.cell_finding {
+  min-width: 0;
+}
+
+.finding_category {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: $text-primary;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  margin-top: 4px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.chip__interp {
+  margin-top: 0;
+}
+
+.chip__success {
+  background: $success-bg;
+  color: $success;
+}
+
+.chip__neutral {
+  background: $bg-sunken;
+  color: $text-secondary;
+}
+
+.chip__warn {
+  background: $warn-bg;
+  color: $warn;
+}
+
+.chip__error {
+  background: $error-bg;
+  color: $error;
+}
+
+.cell_measurement {
+  min-width: 0;
+}
+
+.measurement_symbol {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: $text-primary;
+  white-space: nowrap;
+}
+
+.measurement_symbol__muted {
+  color: $text-secondary;
+  font-weight: 400;
+}
+
+.measurement_name {
+  display: block;
+  max-width: 220px;
+  font-size: 10.5px;
+  line-height: 1.3;
+  color: $text-tertiary;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cell_numeric {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.cell_value {
+  font-weight: 600;
+}
+
+.cell_value__warn {
+  color: $warn;
+}
+
+.cell_value__error {
+  color: $error;
+}
+
+.cell_norm {
+  color: $text-secondary;
+}
+
+.norm_sd {
+  color: $text-tertiary;
+}
+
+.cell_deviation {
+  color: $text-tertiary;
+}
+
+.cell_deviation__warn {
+  color: $warn;
+  font-weight: 600;
+}
+
+.cell_deviation__error {
+  color: $error;
+  font-weight: 600;
+}
+
+.deviation_stars {
+  display: inline-block;
+  width: 20px;
+  margin-left: 2px;
+  text-align: left;
+  letter-spacing: .08em;
+  font-weight: 700;
+}
+
+.cell_crossref {
+  text-align: right;
+  font-size: 11.5px;
+  color: $text-tertiary;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.legend {
+  margin-top: 8px;
+  font-size: 10.5px;
+  color: $text-tertiary;
+}
+
+.legend_stars {
+  font-weight: 700;
+  color: $text-secondary;
+  letter-spacing: .08em;
+}
+
+.legend_dot {
+  margin: 0 7px;
+  color: $text-disabled;
+}
+
+.empty_note {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  color: $text-secondary;
+}
+
+// ---- Clinical interpretation -----------------------------------------------
+
+.interp_section {
+  page-break-inside: avoid;
+}
+
+.interp_grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+}
+
+.interp_item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px 6px 12px;
+  border: 1px solid $border;
+  border-radius: 6px;
+  background: #FAFBFC;
+}
+
+.interp_category {
+  font-size: 12px;
+  font-weight: 600;
+  color: $text-primary;
+  white-space: nowrap;
+}
+
+// ---- Footer ----------------------------------------------------------------
+
+.foot {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: auto;
+  padding-top: 12px;
+  border-top: 1px solid $border;
+  font-size: 10.5px;
+  color: $text-tertiary;
+}
+
+.foot > * {
+  white-space: nowrap;
+}
+
+.foot_brand {
+  font-weight: 600;
+  color: $text-secondary;
+}
+
+.foot_note {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+  white-space: normal;
+}
+
+.foot_page {
+  font-variant-numeric: tabular-nums;
+}
+
+// The footer must always sit above the paper's bottom padding; when content
+// overflows to a second printed page, keep it attached to the content.
+@media screen {
+  .foot {
+    margin-top: auto;
+  }
+}
+
+// ---- Print -----------------------------------------------------------------
+
+@page {
+  size: A4 portrait;
+  margin: 12mm;
+}
+
+@media print {
+  // Hide everything on the page (the app under #container, mui layers,
+  // other portals) except the report itself.
+  :global(body.clinical-report-open) > * {
+    display: none !important;
+  }
+
+  :global(body.clinical-report-open) {
+    overflow: visible;
+  }
+
+  :global(body.clinical-report-open) > .root {
+    display: block !important;
+    position: static;
+    background: none;
+  }
+
+  .chrome {
+    display: none !important;
+  }
+
+  .scroll {
+    position: static;
+    overflow: visible;
+    padding: 0;
+  }
+
+  .paper {
+    // Block layout paginates reliably (flex columns resist page breaks).
+    display: block;
+    width: auto;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    box-shadow: none;
+    // Keep exact colors for chips, rules and the radiograph frame.
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .figure_frame,
+  .figure {
+    page-break-inside: avoid;
+  }
+
+  // Compact the layout under print margins so a typical analysis
+  // (Downs/Steiner) fits on a single A4 page. The zoom acts as a gentle
+  // shrink-to-fit in Chromium's print pipeline; browsers that ignore it
+  // simply paginate onto a second page.
+  .paper {
+    zoom: 0.88;
+  }
+
+  .doc_title {
+    margin-top: 14px;
+    font-size: 21px;
+  }
+
+  .patient_block {
+    margin-top: 12px;
+  }
+
+  .section_label {
+    margin: 16px 0 8px;
+  }
+
+  .figure_frame {
+    padding: 8px;
+  }
+
+  .figure_image {
+    max-height: 230px;
+  }
+
+  .table td {
+    padding: 6px 10px;
+  }
+
+  .foot {
+    padding-top: 10px;
+  }
+
+  // In block flow `margin-top: auto` collapses to 0 — give the footer a
+  // fixed offset from the content instead.
+  .foot {
+    margin-top: 20px;
+    page-break-inside: avoid;
+  }
+}

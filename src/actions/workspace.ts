@@ -23,10 +23,15 @@ export const toggleProfilogram = createActionCreator('TOGGLE_PROFILOGRAM_REQUEST
 // Set the active analysis for a specific image (drives the stepper + values).
 export const setActiveAnalysis = createActionCreator('SET_ACTIVE_ANALYSIS_REQUESTED');
 
+// Image calibration: mm-per-pixel scale of the radiograph. Linear (mm)
+// measurements are converted with this factor; angular ones are unaffected.
+export const setScaleFactor = createActionCreator('SET_SCALE_FACTOR_REQUESTED');
+export const unsetScaleFactor = createActionCreator('UNSET_SCALE_FACTOR_REQUESTED');
+
 // Export the current tracing (image + profilogram + points) as a raster image.
 export const exportImage = createActionCreator('EXPORT_IMAGE_REQUESTED');
 
-// Patient records (name + chart id).
+// Patient records (name + chart id + demographics).
 export const addPatient = createActionCreator('ADD_PATIENT_REQUESTED');
 export const updatePatient = createActionCreator('UPDATE_PATIENT_REQUESTED');
 export const removePatient = createActionCreator('REMOVE_PATIENT_REQUESTED');

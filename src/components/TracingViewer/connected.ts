@@ -47,6 +47,7 @@ import {
 import * as cx from 'classnames';
 
 const classes = require('./style.scss');
+import isReferencePlaneSymbol from './planes';
 import { createSelector } from 'reselect';
 
 import {
@@ -92,11 +93,15 @@ const getPropsForLandmark = createSelector(
       classNames.push(classes.point);
       props.r = 4;
     } else if (isGeoVector(l)) {
-      classNames.push(classes.vector);
+      // Reference planes (S-N, Frankfort, Go-Me, facial plane…) get the
+      // heavier stroke; construction/measurement segments stay light.
+      classNames.push(
+        isReferencePlaneSymbol(symbol) ? classes.vector_plane : classes.vector,
+      );
     } else if (isGeoAngle(l)) {
       classNames.push(classes.angle);
       props.segmentProps = {
-        className: cx(classes.vector, ...getHighlightClassNames(symbol)),
+        className: cx(classes.vector_segment, ...getHighlightClassNames(symbol)),
       };
       props.parallelProps = {
         className: cx(classes.vector_parallel, ...getHighlightClassNames(symbol)),

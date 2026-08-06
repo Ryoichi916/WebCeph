@@ -3,7 +3,12 @@ export interface StateProps {
 }
 
 export interface DispatchProps {
-  onRegister(name: string, chartId: string): any;
+  onRegister(
+    name: string,
+    chartId: string,
+    dateOfBirth: string,
+    sex: PatientSex,
+  ): any;
   onOpen(id: string): any;
   onRemove(id: string): any;
 }

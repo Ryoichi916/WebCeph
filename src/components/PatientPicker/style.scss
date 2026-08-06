@@ -1,0 +1,710 @@
+@import 'src/_variables.scss';
+
+// Patient picker — the product entry point. Split card: brand panel on the
+// left, patient registration + list on the right.
+
+.screen {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  box-sizing: border-box;
+  background: $bg-app;
+  overflow: auto;
+}
+
+.card {
+  display: flex;
+  align-items: stretch;
+  width: 860px;
+  max-width: calc(100vw - 48px);
+  // Stable height: content states (empty list, long list, validation error,
+  // filtered search) change what is inside, never where the card sits.
+  height: 620px;
+  max-height: calc(100vh - 48px);
+  background: $bg-surface;
+  border-radius: 8px;
+  box-shadow: $shadow-2;
+  overflow: hidden;
+}
+
+// ---------------------------------------------------------------- brand panel
+
+.brand {
+  flex: 0 0 280px;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  padding: 32px 28px 28px;
+  background: linear-gradient(168deg, $primary-700 0%, $primary-900 100%);
+  color: #ffffff;
+  user-select: none;
+}
+
+// Faint landmark-constellation artwork filling the middle of the panel.
+.brand_art {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 16px -8px 12px;
+  overflow: hidden;
+}
+
+.brand_art_svg {
+  width: 100%;
+  height: 100%;
+  max-height: 320px;
+}
+
+.brand_name {
+  margin: 16px 0 4px;
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: .01em;
+  color: #ffffff;
+}
+
+.brand_tagline {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, .78);
+}
+
+.brand_points {
+  list-style: none;
+  margin: 0;
+  padding: 18px 0 0;
+  border-top: 1px solid rgba(255, 255, 255, .16);
+  display: grid;
+  gap: 10px;
+
+  li {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: 12.5px;
+    line-height: 1.45;
+    color: rgba(255, 255, 255, .85);
+
+    &::before {
+      content: '✓';
+      flex-shrink: 0;
+      font-weight: 600;
+      color: #7ee0d6;
+    }
+  }
+}
+
+// ----------------------------------------------------------------- main panel
+
+.main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  padding: 28px 32px 20px;
+}
+
+.header_title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: $text-primary;
+}
+
+.count_badge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: $primary-050;
+  color: $primary-700;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.3;
+  // Optically centered on the heading's cap height.
+  vertical-align: middle;
+  position: relative;
+  top: -1px;
+  font-variant-numeric: tabular-nums;
+}
+
+.header_sub {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  color: $text-tertiary;
+}
+
+// Register form — two rows: identity (name + chart ID) on top, demographics
+// (date of birth + sex) with the Register action below. The reserved error
+// line under the first row doubles as the inter-row gap.
+.form {
+  display: flex;
+  flex-direction: column;
+  margin-top: 20px;
+}
+
+.form_row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+
+  & + & {
+    margin-top: 2px;
+  }
+}
+
+.field {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+// Demographics row: fixed-width date field, natural-width segmented control,
+// Register anchored to the right by the flexible spacer.
+.field_dob {
+  flex: 0 0 170px;
+}
+
+.field_sex {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form_spacer {
+  flex: 1 1 0;
+}
+
+// Button column: an invisible label spacer keeps the button aligned with the
+// inputs.
+.form_action {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.field_label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: $text-tertiary;
+}
+
+// Quiet "optional" tag inside a field label; lowercase against the
+// uppercase label so it reads as an aside, not part of the field name.
+.field_optional {
+  margin-left: 5px;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: .03em;
+  text-transform: lowercase;
+  color: $text-disabled;
+}
+
+.field_input {
+  box-sizing: border-box;
+  width: 100%;
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid $border-strong;
+  border-radius: 6px;
+  background: $bg-surface;
+  font-family: $font-stack;
+  font-size: 14px;
+  color: $text-primary;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+
+  &::placeholder {
+    color: $text-disabled;
+    opacity: 1;
+  }
+
+  &:hover {
+    border-color: darken($border-strong, 8%);
+  }
+
+  &:focus {
+    outline: none;
+    border-color: $primary-600;
+    box-shadow: $focus-ring;
+  }
+}
+
+// Native date input: match the text inputs exactly and keep the picker
+// affordance quiet until hovered.
+.field_input_date {
+  &::-webkit-calendar-picker-indicator {
+    opacity: .55;
+    cursor: pointer;
+
+    &:hover {
+      opacity: .85;
+    }
+  }
+}
+
+// While empty, the browser's yyyy/mm/dd scaffold is shown in placeholder
+// gray so it cannot be mistaken for an entered date.
+.field_input_date_empty {
+  color: $text-disabled;
+}
+
+// Sex: two-option segmented control (click the active segment to clear).
+.segmented {
+  display: inline-flex;
+  align-items: stretch;
+  box-sizing: border-box;
+  height: 36px;
+  border: 1px solid $border-strong;
+  border-radius: 6px;
+  background: $bg-surface;
+  overflow: hidden;
+}
+
+.segment {
+  appearance: none;
+  border: none;
+  margin: 0;
+  padding: 0 16px;
+  background: none;
+  font-family: $font-stack;
+  font-size: 13px;
+  font-weight: 500;
+  color: $text-secondary;
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease;
+
+  & + & {
+    border-left: 1px solid $border-strong;
+  }
+
+  &:hover {
+    background: $bg-sunken;
+  }
+
+  &:focus {
+    outline: none;
+  }
+
+  &:focus-visible {
+    box-shadow: inset $focus-ring;
+  }
+}
+
+.segment_active {
+  background: $primary-050;
+  color: $primary-700;
+  font-weight: 600;
+
+  &:hover {
+    background: $primary-050;
+  }
+}
+
+// Error state on a specific input: red outline + faint tint.
+.field_input_error {
+  border: 1.5px solid $error;
+  padding: 0 11.5px;
+  background: #FEF6F6;
+
+  &:hover {
+    border-color: $error;
+  }
+
+  &:focus {
+    border-color: $error;
+    box-shadow: 0 0 0 3px rgba(198, 40, 40, .18);
+  }
+}
+
+// Reserved line under each field: the card never grows or shifts when a
+// validation message appears.
+.field_error {
+  display: block;
+  min-height: 16px;
+  font-size: 12px;
+  line-height: 16px;
+  color: $error;
+}
+
+.field_error_inner {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.field_error_icon {
+  flex-shrink: 0;
+}
+
+// Search (appears once the list grows)
+.search_row {
+  position: relative;
+  margin-top: 6px;
+}
+
+.search_icon {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  display: flex;
+}
+
+.search_input {
+  composes: field_input;
+  padding-left: 36px;
+}
+
+// Primary Register button: keep full saturation on hover/focus/active (the
+// default mui overlay washes the blue out so it reads as disabled) and signal
+// keyboard focus with an outer ring instead.
+.register_btn {
+  border-radius: 6px !important;
+  transition: box-shadow 120ms ease !important;
+
+  button {
+    background-color: $primary-600 !important;
+    border-radius: 6px !important;
+    transition: background-color 120ms ease !important;
+  }
+
+  &:hover button {
+    background-color: $primary-500 !important;
+  }
+
+  &:active button {
+    background-color: $primary-700 !important;
+  }
+
+  &:focus-within {
+    box-shadow: 0 1px 2px rgba(16, 30, 50, .2), $focus-ring !important;
+  }
+}
+
+// Destructive confirm in the remove dialog: filled red, darkens on hover.
+.danger_btn {
+  border-radius: 6px !important;
+  transition: box-shadow 120ms ease !important;
+
+  button {
+    background-color: $error !important;
+    border-radius: 6px !important;
+    transition: background-color 120ms ease !important;
+  }
+
+  &:hover button {
+    background-color: #A81F1F !important;
+  }
+
+  &:active button {
+    background-color: #8E1A1A !important;
+  }
+
+  &:focus-within {
+    box-shadow: 0 1px 2px rgba(16, 30, 50, .2), 0 0 0 3px rgba(198, 40, 40, .28) !important;
+  }
+}
+
+// Patient list
+.list_wrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  margin: 8px -12px 0;
+  padding: 0 12px;
+}
+
+// Fills the space a short list leaves between the last row and the footer.
+.list_tip {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px 24px;
+  text-align: center;
+  font-size: 12px;
+  line-height: 1.7;
+  color: $text-tertiary;
+  user-select: none;
+}
+
+.kbd {
+  display: inline-block;
+  margin: 0 2px;
+  padding: 0 6px;
+  border: 1px solid $border-strong;
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  background: $bg-sunken;
+  font-family: $font-stack;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 17px;
+  color: $text-secondary;
+}
+
+.list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+}
+
+.row_item {
+  position: relative;
+
+  & + & {
+    border-top: 1px solid $border;
+  }
+
+  // Delete fades in as a SECOND control left of the chevron; the open
+  // affordance itself never disappears from under the pointer.
+  &:hover .row_delete,
+  &:focus-within .row_delete {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 52px;
+  padding: 8px 84px 8px 8px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  cursor: pointer;
+  text-align: left;
+  font-family: $font-stack;
+  transition: background-color 120ms ease;
+
+  &:hover {
+    background: $primary-050;
+  }
+
+  &:focus {
+    outline: none;
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: $focus-ring;
+  }
+}
+
+.avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  background: $primary-100;
+  color: $primary-700;
+  font-size: 13px;
+  font-weight: 600;
+  user-select: none;
+}
+
+.row_text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.row_name {
+  font-size: 14px;
+  font-weight: 500;
+  color: $text-primary;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.row_meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 2px;
+  min-width: 0;
+}
+
+.chip {
+  flex-shrink: 0;
+  padding: 0 7px 1px;
+  border-radius: 999px;
+  background: $bg-sunken;
+  color: $text-secondary;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: .02em;
+  font-variant-numeric: tabular-nums;
+}
+
+// Demographics (DOB · sex · age): quiet secondary metadata, one step
+// stronger than the registration date because it is clinically relevant.
+.row_demographics {
+  font-size: 11.5px;
+  color: $text-tertiary;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+// Registration date: quiet metadata — every row carries the same value on a
+// fresh install, so it must never compete with the name/chart ID.
+.row_date {
+  font-size: 11.5px;
+  color: $text-disabled;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.row_chevron {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  pointer-events: none;
+  opacity: .9;
+}
+
+// Trash sits to the LEFT of the (always visible) chevron and telegraphs
+// destructiveness on its own hover: red glyph on a faint red disc.
+.row_delete {
+  position: absolute;
+  right: 44px;
+  top: 50%;
+  transform: translateY(-50%);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+
+  button:hover {
+    background-color: $error-bg !important;
+
+    svg {
+      fill: $error !important;
+    }
+  }
+}
+
+// Empty states
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  text-align: center;
+  padding: 32px 24px;
+  user-select: none;
+}
+
+.empty_icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 999px;
+  background: $bg-sunken;
+  margin-bottom: 12px;
+}
+
+.empty_title {
+  font-size: 15px;
+  font-weight: 500;
+  color: $text-secondary;
+}
+
+.empty_hint {
+  margin-top: 4px;
+  font-size: 12.5px;
+  color: $text-tertiary;
+}
+
+// Footer note
+.footnote {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid $border;
+  font-size: 12px;
+  color: $text-tertiary;
+  user-select: none;
+}
+
+// ----------------------------------------------------------------- responsive
+
+@media (max-width: 760px) {
+  .form_row {
+    flex-wrap: wrap;
+  }
+
+  .card {
+    flex-direction: column;
+    height: auto;
+    min-height: 0;
+  }
+
+  .brand_art {
+    display: none;
+  }
+
+  .brand {
+    flex: 0 0 auto;
+    flex-direction: row;
+    align-items: center;
+    gap: 14px;
+    padding: 16px 20px;
+  }
+
+  .brand_top {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .brand_name {
+    margin: 0;
+    font-size: 18px;
+  }
+
+  .brand_tagline {
+    display: none;
+  }
+
+  .brand_points {
+    display: none;
+  }
+}

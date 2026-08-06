@@ -9,11 +9,24 @@ import {
   toggleProfilogram,
   setActiveAnalysis,
   exportImage,
+  toggleAnalysisResults,
+  setScale,
+  setScaleFactor,
+  unsetScaleFactor,
+  undo,
+  redo,
 } from 'actions/workspace';
-import { getManualSteps } from 'store/reducers/workspace/analyses';
+import { canUndo, canRedo } from 'store/reducers/workspace';
+import {
+  getManualSteps,
+  isSummaryShown,
+  canShowSummary,
+} from 'store/reducers/workspace/analyses';
 import { isPerformingBackgroundWork } from 'store/reducers/workspace/workers';
-import { isProfilogramShown } from 'store/reducers/workspace/canvas';
-import { hasImage, getManualLandmarks, getAnalysisId } from 'store/reducers/workspace/image';
+import { isProfilogramShown, getScale } from 'store/reducers/workspace/canvas';
+import {
+  hasImage, getManualLandmarks, getAnalysisId, getScaleFactor,
+} from 'store/reducers/workspace/image';
 
 const mapStateToProps =
   (state: StoreState, { imageId }: OwnProps): StateProps => {
@@ -36,6 +49,14 @@ const mapStateToProps =
         manual['N'] !== undefined,
       isProfilogramShown: isProfilogramShown(state),
       activeAnalysisId: imageId !== null ? getAnalysisId(state)(imageId) : null,
+      canShowSummary:
+        imageId !== null &&
+        !isSummaryShown(state) &&
+        canShowSummary(state)(imageId),
+      zoom: getScale(state),
+      canUndo: canUndo(state),
+      canRedo: canRedo(state),
+      scaleFactor: imageId !== null ? getScaleFactor(state)(imageId) : null,
     };
   };
 
@@ -63,6 +84,24 @@ const mapDispatchToProps =
     onExportImage: (format: 'png' | 'jpeg') => {
       if (imageId !== null) {
         dispatch(exportImage({ imageId, format }));
+      }
+    },
+    onShowSummaryClick: () => dispatch(toggleAnalysisResults(void 0)),
+    onUndoClick: () => dispatch(undo(void 0)),
+    onRedoClick: () => dispatch(redo(void 0)),
+    onZoomChange: (scale: number) => {
+      if (imageId !== null) {
+        dispatch(setScale({ imageId, scale }));
+      }
+    },
+    onSetScaleFactor: (value: number) => {
+      if (imageId !== null) {
+        dispatch(setScaleFactor({ imageId, value }));
+      }
+    },
+    onUnsetScaleFactor: () => {
+      if (imageId !== null) {
+        dispatch(unsetScaleFactor({ imageId }));
       }
     },
   });

@@ -1,7 +1,11 @@
+@import 'src/_variables.scss';
+
 .root {
-  overflow: scroll;
+  overflow: auto;
   display: flex;
-  background-color: #272727;
+  min-width: 0;
+  min-height: 0;
+  background-color: $canvas-bg;
 }
 
 .content {

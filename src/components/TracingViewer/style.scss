@@ -1,68 +1,144 @@
-.root {
-  
-}
+@import 'src/_variables.scss';
 
 .canvas {
-  background: #272727;
+  // Transparent so the flat $canvas-bg of the surrounding imaging area shows
+  // through (no two-tone seam between the drawing surface and the workspace).
+  background: transparent;
 }
 
 .image {
+  // Lift the radiograph off the flat canvas background.
+  filter: drop-shadow(0 4px 14px rgba(0, 0, 0, 0.45));
   will-change: opacity, transform;
   transition-property: transform, opacity;
   transition-duration: 0.1s;
 }
 
-.landmark {
-  // Keep the stroke a constant on-screen weight regardless of zoom.
-  stroke-width: 1px;
+// Shared geometry treatment. Strokes keep a constant on-screen weight
+// regardless of zoom (vector-effect), and are decorative by default —
+// pointer events are re-enabled selectively for draggable points.
+%landmark {
   vector-effect: non-scaling-stroke;
   pointer-events: none;
-  will-change: transform, opacity;
-  transition-property: transform, opacity, fill, stroke;
-  transition-duration: 0.5s;
-  transform-origin: 50% 50%;
+  // Round caps so segments meeting at a shared landmark (A-N / N-B / Pog-N
+  // all converge on N) blend into one joint instead of stacking square ends.
+  stroke-linecap: round;
+  transition-property: opacity, fill, stroke, stroke-width;
+  transition-duration: 0.15s;
+  transition-timing-function: ease;
 }
 
+// Landmark dots: amber with a dark rim so they read on both the bright and
+// dark regions of a grayscale radiograph.
 .point {
-  @extend .landmark;
-  stroke: #05323a;
-  fill: #00e5ff;
+  @extend %landmark;
+  fill: #FFC400;
+  stroke: #14181D;
+  stroke-width: 1.5px;
 }
 
+// Cursor is over the point (grab affordance).
+.point_hovered {
+  fill: #40C4FF;
+}
+
+// Point is being dragged to a new position.
+.point_dragged {
+  fill: #FF6E40;
+}
+
+// Completed construction / measurement segments (A-N, B-A, S-Gn, …): a
+// deepened cyan-blue so they hold contrast on the bright film regions, with
+// a whisper of a dark casing (drop-shadow). Constant 1.5px on-screen weight
+// (vector-effect above).
 .vector {
-  @extend .landmark;
-  stroke: black;
+  @extend %landmark;
+  stroke: #0091EA;
+  stroke-width: 1.5px;
+  opacity: 0.85;
+  filter: drop-shadow(0 0 0.75px rgba(20, 24, 29, 0.9));
+}
 
-  &_extended {
-    @extend .vector;
-    stroke-dasharray: 15 10;
-    opacity: 0;
-    stroke: greenyellow;
+// Reference planes (S-N, Frankfort, Go-Me, facial plane, …): the anatomical
+// scaffolding of the tracing — heavier, brighter and near-opaque, so the
+// canvas reads with a hierarchy instead of a uniform web of strokes.
+// Classified per symbol in connected.ts / planes.ts.
+.vector_plane {
+  @extend %landmark;
+  stroke: #00B0FF;
+  stroke-width: 2.5px;
+  opacity: 0.95;
+  filter: drop-shadow(0 0 0.75px rgba(20, 24, 29, 0.9));
+}
+
+// Line segments belonging to an angle landmark: hidden by default (the
+// standalone "Draw line" landmarks already draw the same geometry), shown
+// only while their step is highlighted.
+.vector_segment {
+  @extend %landmark;
+  stroke: #0091EA;
+  stroke-width: 1.5px;
+  opacity: 0;
+}
+
+.vector_extended {
+  @extend %landmark;
+  stroke: #0091EA;
+  stroke-width: 1.5px;
+  stroke-dasharray: 6 6;
+  opacity: 0;
+}
+
+.vector_parallel {
+  @extend %landmark;
+  stroke: #0091EA;
+  stroke-width: 1.5px;
+  stroke-dasharray: 6 6;
+  opacity: 0;
+}
+
+// Angle arcs: violet, only visible while their step is highlighted.
+.angle_indicator {
+  @extend %landmark;
+  stroke: #B388FF;
+  stroke-width: 1.5px;
+  fill: none !important;
+  opacity: 0;
+}
+
+// Applied (together with one of the shape classes above) while the related
+// analysis step is hovered in the stepper.
+.highlighted {
+  opacity: 1;
+
+  &.point {
+    fill: #40C4FF;
   }
 
-  &_parallel {
-    @extend .vector_extended;
+  &.vector,
+  &.vector_plane,
+  &.vector_segment,
+  &.vector_extended,
+  &.vector_parallel {
+    // Above even the heavy reference planes, so the hovered measurement
+    // always reads on top.
+    stroke: #FFC400;
+    stroke-width: 2.75px;
+    opacity: 1;
+  }
+
+  &.angle_indicator {
+    stroke: #B388FF;
+    opacity: 1;
   }
 }
 
-.highlighted {
-  stroke: orange;
-  fill: orange;
-  opacity: 1;
+// Everything unrelated to the highlighted step recedes instead of vanishing,
+// so spatial context is preserved.
+.landmark_unhighlighted {
+  opacity: 0.3;
 }
 
 .unhighlighted {
   opacity: 0;
-}
-
-.angle_indicator {
-  @extend .vector_extended;
-  fill: none !important;
-  opacity: 0;
-  &.highlighted {
-    opacity: 1;
-  }
-  &.unhighlighted {
-    opacity: 0;
-  }
 }
