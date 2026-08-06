@@ -102,7 +102,7 @@ export default class TracingToolbar extends React.PureComponent<Props, State> {
       canPlotFromReferences, onPlotFromReferencesClick,
       isProfilogramShown, onToggleProfilogramClick,
       activeAnalysisId,
-      canShowSummary,
+      canShowSummary, missingLandmarkCount,
       canUndo, onUndoClick,
       canRedo, onRedoClick,
       scaleFactor,
@@ -278,7 +278,13 @@ export default class TracingToolbar extends React.PureComponent<Props, State> {
           type="button"
           className={classes.button}
           disabled={!canShowSummary}
-          title="Show the analysis results summary"
+          title={
+            !canShowSummary && missingLandmarkCount > 0
+              ? `${missingLandmarkCount} landmark` +
+                `${missingLandmarkCount === 1 ? '' : 's'} remaining — ` +
+                'run Auto-plot to complete the analysis'
+              : 'Show the analysis results summary'
+          }
           onClick={this.handleSummaryClick}
         >
           <IconSummary color={ICON_COLOR} style={iconStyle} />

@@ -152,6 +152,25 @@ const segmentIntersectsRect = (s: ScreenSegment, r: ScreenRect, pad: number): bo
   return true;
 };
 
+/**
+ * Compact canvas labels for verbose landmark symbols: the dentition cluster
+ * especially ('U1 Incisal Edge', 'L1 Apex', …) sits in the densest region of
+ * the tracing, where full names collide no matter how the layout dodges. The
+ * stepper and dialogs keep the full names; only the on-canvas tag shortens.
+ */
+const SHORT_LABELS: { [symbol: string]: string } = {
+  'U1 Incisal Edge': 'U1',
+  'U1 Apex': 'U1A',
+  'L1 Incisal Edge': 'L1',
+  'L1 Apex': 'L1A',
+  'R1-mandible': 'R1',
+  'R2-mandible': 'R2',
+  'R3-mandible': 'R3',
+  'R4-mandible': 'R4',
+};
+
+const getShortLabel = (symbol: string): string => SHORT_LABELS[symbol] || symbol;
+
 const LABEL_FONT_FAMILY = [
   '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto',
   '"Hiragino Sans"', '"Hiragino Kaku Gothic ProN"', '"Noto Sans JP"',
@@ -443,7 +462,8 @@ export class TracingViewer extends React.PureComponent<Props, State> {
       const sx = point.x * scale;
       const sy = point.y * scale;
       // ~0.62em average glyph advance for an 11px 600-weight system font.
-      const textWidth = point.symbol.length * LABEL_FONT_SIZE * 0.62 + 2;
+      // Measured on the compact display label, not the (possibly long) symbol.
+      const textWidth = getShortLabel(point.symbol).length * LABEL_FONT_SIZE * 0.62 + 2;
       const candidates = [
         ...(PREFERRED_CANDIDATES[point.symbol] || []),
         ...LABEL_CANDIDATES,
@@ -542,7 +562,7 @@ export class TracingViewer extends React.PureComponent<Props, State> {
                 strokeLinejoin="round"
                 pointerEvents="none"
               >
-                {symbol}
+                {getShortLabel(symbol)}
               </text>
               {isDraggableLandmark(symbol) && !dimmed ? (
                 <circle
@@ -655,27 +675,51 @@ export class TracingViewer extends React.PureComponent<Props, State> {
     );
   };
 
+  /**
+   * The profilogram overlay: a stylised skeletal/soft-tissue schematic drawn
+   * through the placed landmarks. Most of its segments coincide with lines the
+   * analysis already draws, so it must NOT reuse the tracing's cyan solid
+   * strokes (that made the toggle look dead). Instead it reads as its own
+   * layer: heavier dashed amber strokes over a dark casing — unmistakably
+   * different from both the cyan measurement lines and the fine outline
+   * tracings, so toggling it produces an obvious change.
+   */
   private renderProfilogram = () => {
-    const { profilogram } = this.props;
+    const { profilogram, isHighlightMode } = this.props;
     if (profilogram.length === 0) {
       return null;
     }
     return (
-      <g>
+      <g opacity={isHighlightMode ? 0.35 : 1} pointerEvents="none">
         {profilogram.map((seg, i) => (
-          <line
-            key={i}
-            x1={seg.x1}
-            y1={seg.y1}
-            x2={seg.x2}
-            y2={seg.y2}
-            stroke="#0091EA"
-            strokeWidth={1.5}
-            opacity={0.85}
-            strokeLinecap="round"
-            vectorEffect="non-scaling-stroke"
-            pointerEvents="none"
-          />
+          <g key={i}>
+            {/* Dark casing so the dashes read on bright bone regions. */}
+            <line
+              x1={seg.x1}
+              y1={seg.y1}
+              x2={seg.x2}
+              y2={seg.y2}
+              stroke="rgba(20, 24, 29, 0.75)"
+              strokeWidth={4}
+              strokeDasharray="7 5"
+              strokeLinecap="round"
+              vectorEffect="non-scaling-stroke"
+              pointerEvents="none"
+            />
+            <line
+              x1={seg.x1}
+              y1={seg.y1}
+              x2={seg.x2}
+              y2={seg.y2}
+              stroke="#FFC400"
+              strokeWidth={2.25}
+              strokeDasharray="7 5"
+              strokeLinecap="round"
+              opacity={0.95}
+              vectorEffect="non-scaling-stroke"
+              pointerEvents="none"
+            />
+          </g>
         ))}
       </g>
     );

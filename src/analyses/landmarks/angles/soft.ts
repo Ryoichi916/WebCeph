@@ -1,7 +1,12 @@
 import { Ls, Li, softPog } from 'analyses/landmarks/points/soft';
 import { FH } from 'analyses/landmarks/lines/skeletal';
-import { flipVector } from 'analyses/helpers';
-import { isBehind, createVectorFromPoints } from 'utils/math';
+import { flipVector, defaultInterpetLandmark } from 'analyses/helpers';
+import {
+  isBehind,
+  createVectorFromPoints,
+  calculateAngle,
+  radiansToDegrees,
+} from 'utils/math';
 
 /**
  * A profile line is established by drawing a line tangent
@@ -36,4 +41,22 @@ export const Z: CephLandmark = {
       };
     }
   },
+  /**
+   * The Z angle value itself: the angle between the (posteriorly directed)
+   * Frankfort horizontal and the profile line built in `map` above.
+   * Merrifield's norm is 80° ± 9°.
+   */
+  calculate: (() =>
+    () =>
+      (angle: GeoAngle) =>
+        radiansToDegrees(calculateAngle(angle))
+  ) as CalculateLandmark<number, GeoObject, GeoObject>,
+  /**
+   * A low Z angle (< 71°) marks a protrusive (convex) soft-tissue profile,
+   * a high one (> 89°) a flat-to-concave profile.
+   */
+  interpret: defaultInterpetLandmark(
+    'skeletalProfile',
+    ['convex', 'normal', 'concave'],
+  ),
 };

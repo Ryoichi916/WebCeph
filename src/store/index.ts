@@ -8,6 +8,7 @@ import exportMiddleware from './middleware/export';
 import importMiddleware from './middleware/import';
 import autoScaleMiddleware from './middleware/autoScale';
 import autoPlotMiddleware from './middleware/autoPlot';
+import analysisSwitchMiddleware from './middleware/analysisSwitch';
 import referencePlotMiddleware from './middleware/referencePlot';
 import exportImageMiddleware from './middleware/exportImage';
 import projectMiddleware from './middleware/project';
@@ -35,6 +36,7 @@ const middlewares: Middleware[] = [
   exportMiddleware,
   autoScaleMiddleware,
   autoPlotMiddleware,
+  analysisSwitchMiddleware,
   referencePlotMiddleware,
   exportImageMiddleware,
   projectMiddleware,

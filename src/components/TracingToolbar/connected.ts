@@ -31,7 +31,12 @@ import {
 const mapStateToProps =
   (state: StoreState, { imageId }: OwnProps): StateProps => {
     const manual = imageId !== null ? getManualLandmarks(state)(imageId) : {};
+    const missingLandmarkCount = imageId !== null
+      ? getManualSteps(state)(imageId)
+          .filter(({ symbol }) => manual[symbol] === undefined).length
+      : 0;
     return {
+      missingLandmarkCount,
       // Auto-plot needs an image and an analysis whose manual steps define which
       // landmarks to place. The active predictor (see predictors/index.ts) does
       // the plotting; results are injected as a single undoable batch that can

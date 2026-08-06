@@ -359,11 +359,26 @@ export function isStepAutomatic(step: CephLandmark): boolean {
   return typeof step.map === 'function';
 };
 
-/** Determines whether a step in a cephalometric analysis needs to be performed by the user  */
-export const isStepManual = (step: CephLandmark) => !isStepAutomatic(step);
+/**
+ * Determines whether a step in a cephalometric analysis needs to be performed
+ * by the user. Only *points* can be placed by hand (or by the auto-plot
+ * predictor); computed-only measurements without a `map` (angular sums,
+ * ratios, value-only distances such as Björk's sum or S-Go/N-Me) are derived
+ * from their components and must never be treated as clickable/plottable
+ * landmarks — doing so used to scatter bogus dots labeled with measurement
+ * names across the tracing.
+ */
+export const isStepManual = (step: CephLandmark) =>
+  step.type === 'point' && !isStepAutomatic(step);
 
-/** Determines whether a step in a cephalometric analysis can be represented a geometrical object  */
-export const isStepMappable = (_: CephLandmark) => true;
+/**
+ * Determines whether a step in a cephalometric analysis can be represented as
+ * a geometrical object on the image: points always can (they are placed), and
+ * anything with a `map` method can. Computed-only measurements (sums, ratios,
+ * mapless distances) have a numeric value but no geometry of their own.
+ */
+export const isStepMappable = (step: CephLandmark) =>
+  step.type === 'point' || typeof step.map === 'function';
 
 /** Determines whether a step in a cephalometric analysis can be computed as a numerical value */
 export function isStepComputable(step: CephLandmark) {

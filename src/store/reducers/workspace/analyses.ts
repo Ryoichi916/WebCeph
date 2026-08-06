@@ -28,6 +28,8 @@ import {
   tryMap,
 } from 'analyses/helpers';
 
+import { isGeoPoint } from 'utils/math';
+
 const KEY_ANALYSIS_LOAD_STATUS: StoreKey = 'analyses.status';
 const KEY_LAST_USED_ID: StoreKey = 'analyses.lastUsedId';
 const KEY_SUMMARY_SHOWN: StoreKey = 'analyses.summary.isShown';
@@ -348,13 +350,31 @@ export const getAllGeoObjects = createSelector(
   getMappedValue,
   getManualLandmarks,
   (getSteps, getMapped, getManual) => (imageId: string) => {
-    const fromAnalysis = mapValues(keyBy(getSteps(imageId), s => s.symbol), getMapped(imageId));
+    const steps = getSteps(imageId);
+    const fromAnalysis = mapValues(keyBy(steps, s => s.symbol), (s: CephLandmark) => {
+      const mapped = getMapped(imageId)(s);
+      // A stored *point* under a computed measurement's symbol ('Björk',
+      // 'S-Go/N-Me', …) can never be that measurement's honest geometry — it
+      // is a stray from an older session that treated computed-only steps as
+      // clickable landmarks. Drop it instead of rendering a bogus labeled dot.
+      if (s.type !== 'point' && isGeoPoint(mapped)) {
+        return undefined;
+      }
+      return mapped;
+    });
     // Also surface manually placed landmarks that the active analysis does not
     // define (e.g. the soft-tissue profile points used by the profilogram), so
     // they render as draggable points instead of being invisible.
     const manual = getManual(imageId);
+    const stepsBySymbol = keyBy(steps, s => s.symbol);
     const result: { [symbol: string]: GeoObject | undefined } = { ...fromAnalysis };
     Object.keys(manual).forEach((symbol) => {
+      const step = stepsBySymbol[symbol];
+      // Same stray-point guard as above: never resurrect a point stored under
+      // a computed measurement's symbol.
+      if (step !== undefined && step.type !== 'point') {
+        return;
+      }
       if (result[symbol] === undefined) {
         result[symbol] = manual[symbol];
       }

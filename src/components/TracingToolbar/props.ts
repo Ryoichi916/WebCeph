@@ -9,6 +9,11 @@ export interface StateProps {
   activeAnalysisId: string | null;
   /** Whether the analysis summary dialog can be shown for the current image. */
   canShowSummary: boolean;
+  /**
+   * How many of the active analysis' manual landmarks are still unplaced.
+   * Used to explain a disabled Summary button instead of graying out silently.
+   */
+  missingLandmarkCount: number;
   /** The user zoom factor (1 = fit to screen). */
   zoom: number;
   /** Whether there is a landmark edit that can be undone. */
