@@ -9,6 +9,12 @@ export interface StateProps {
   analysisName: string | null;
   getStepState(step: CephLandmark): StepState;
   getStepValue(step: CephLandmark): number | undefined;
+  /**
+   * Whether the active image has a mm/px scale. Linear (mm) measurements have
+   * no reportable value without it, so their rows explain that instead of
+   * rendering an empty value column.
+   */
+  isCalibrated: boolean;
   isStepRemovable(step: CephLandmark): boolean;
   isStepSkippable(step: CephLandmark): boolean;
 }

@@ -272,11 +272,19 @@ export const getCalculatedValue = createSelector(
       // Linear measurements come out of the geometry in image pixels; when a
       // mm/px calibration is set for the image, convert them to millimeters.
       // Angular values are scale-independent and pass through unchanged.
+      //
+      // Without a calibration there is no honest millimeter value to report:
+      // the raw pixel distance compared against a mm norm would read as a
+      // gross deviation (a lip 1 mm behind the E-line showed as "-10.1 mm
+      // ***"). Report it as uncalculated instead — `interpret` skips
+      // non-numeric values, so the measurement drops out of the summary,
+      // report and wigglegram until the image is calibrated.
       if (typeof value === 'number' && step.unit === 'mm') {
         const scaleFactor = getScale(imageId);
-        if (scaleFactor !== null && scaleFactor > 0) {
-          return value * scaleFactor;
+        if (scaleFactor === null || scaleFactor <= 0) {
+          return undefined;
         }
+        return value * scaleFactor;
       }
       return value;
     }

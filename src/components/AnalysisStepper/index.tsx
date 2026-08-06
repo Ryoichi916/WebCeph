@@ -81,6 +81,7 @@ export class AnalysisStepper extends React.PureComponent<Props, State> {
       analysisName,
       getStepState,
       getStepValue,
+      isCalibrated,
       isStepRemovable,
       onRemoveLandmarkClick,
       onStepMouseEnter, onStepMouseLeave,
@@ -183,6 +184,18 @@ export class AnalysisStepper extends React.PureComponent<Props, State> {
                 {typeof value === 'number' ? (
                   <span className={classes.step_value}>
                     {formatStepValue(step, value)}
+                  </span>
+                ) : step.unit === 'mm' && !isCalibrated ? (
+                  // A linear measurement has no honest value until the image
+                  // scale is known — say so instead of leaving the row blank.
+                  <span
+                    className={classes.step_value__pending}
+                    title={
+                      'Set the image scale (the calibration chip in the ' +
+                      'toolbar) to report this measurement in millimeters.'
+                    }
+                  >
+                    needs scale
                   </span>
                 ) : null}
                 {isDone && isStepRemovable(step) ? (
