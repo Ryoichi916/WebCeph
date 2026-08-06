@@ -32,6 +32,8 @@ import { renderTracingSnapshot } from 'utils/tracingSnapshot';
 import { isGeoPoint } from 'utils/math';
 import { formatAgeFull, formatSexFull } from 'utils/patient';
 
+import Wigglegram from './Wigglegram';
+
 const classes = require('./style.scss');
 
 /**
@@ -48,6 +50,96 @@ const IMAGE_TYPE_NAMES: { [type: string]: string | undefined } = {
   photo_lateral: 'Lateral photograph',
   photo_frontal: 'Frontal photograph',
 };
+
+/**
+ * localStorage keys for the clinic/clinician identity. This is presentation
+ * identity (letterhead), not patient data, so device-local storage is the
+ * honest scope: it prints on every report generated from this machine.
+ */
+const STORAGE_KEY_CLINIC = 'webceph-report-clinic-name';
+const STORAGE_KEY_CLINICIAN = 'webceph-report-clinician-name';
+const STORAGE_KEY_LICENSE = 'webceph-report-clinician-license';
+
+const readStored = (key: string): string => {
+  try {
+    return localStorage.getItem(key) || '';
+  } catch {
+    return '';
+  }
+};
+
+const writeStored = (key: string, value: string) => {
+  try {
+    if (value === '') {
+      localStorage.removeItem(key);
+    } else {
+      localStorage.setItem(key, value);
+    }
+  } catch {
+    // Storage unavailable (private mode) — the field still edits on screen.
+  }
+};
+
+interface StoredEditableProps {
+  storageKey: string;
+  className?: string;
+  /** Screen-only hint shown while the field is empty (never printed). */
+  placeholder: string;
+  ariaLabel: string;
+}
+
+/**
+ * A single-line, device-persistent editable field for the report letterhead
+ * (clinic name, clinician name, license number). Uncontrolled contentEditable:
+ * the initial text is read once from localStorage and every edit is written
+ * back, so the identity re-appears on the next report without any dialog.
+ * Empty fields render nothing in print — just the ruled signature line.
+ */
+class StoredEditable extends React.PureComponent<StoredEditableProps> {
+  /** Read once; the DOM owns the text afterwards (uncontrolled). */
+  private initialText = readStored(this.props.storageKey);
+
+  render() {
+    const { className, placeholder, ariaLabel } = this.props;
+    return (
+      <span
+        className={cx(classes.editable, className)}
+        contentEditable={true}
+        suppressContentEditableWarning={true}
+        spellCheck={false}
+        role="textbox"
+        aria-label={ariaLabel}
+        data-placeholder={placeholder}
+        onInput={this.handleInput}
+        onBlur={this.handleInput}
+        onKeyDown={this.handleKeyDown}
+        onPaste={this.handlePaste}
+      >
+        {this.initialText}
+      </span>
+    );
+  }
+
+  private handleInput = (e: React.FormEvent<HTMLSpanElement>) => {
+    const text = (e.currentTarget.textContent || '').trim();
+    writeStored(this.props.storageKey, text);
+  };
+
+  // Single-line field: Enter confirms (blurs) instead of inserting <div>s.
+  private handleKeyDown = (e: React.KeyboardEvent<HTMLSpanElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      e.currentTarget.blur();
+    }
+  };
+
+  // Paste as plain text so pasted rich content cannot break the letterhead.
+  private handlePaste = (e: React.ClipboardEvent<HTMLSpanElement>) => {
+    e.preventDefault();
+    const text = e.clipboardData.getData('text/plain').replace(/\s+/g, ' ');
+    document.execCommand('insertText', false, text);
+  };
+}
 
 /** The brand mark, redrawn in report ink (see PatientPicker's BrandMark). */
 const ReportMark = () => (
@@ -116,7 +208,7 @@ export default class ClinicalReport extends React.PureComponent<Props, State> {
   private renderReport() {
     const {
       patient, results, analysisId, imageType,
-      scaleFactor, manualLandmarks, imageSrc,
+      scaleFactor, manualLandmarks, imageSrc, landmarksBySymbol,
     } = this.props;
     const { snapshotUrl } = this.state;
 
@@ -194,6 +286,14 @@ export default class ClinicalReport extends React.PureComponent<Props, State> {
               <div className={classes.masthead_right}>
                 <span className={classes.doc_kicker}>Clinical report</span>
                 <span className={classes.doc_date}>{date}</span>
+                {/* Device-persistent clinic identity; empty → screen-only
+                    placeholder, nothing in print. */}
+                <StoredEditable
+                  storageKey={STORAGE_KEY_CLINIC}
+                  className={classes.masthead_clinic}
+                  placeholder="+ Clinic name"
+                  ariaLabel="Clinic name (click to edit)"
+                />
               </div>
             </header>
 
@@ -274,6 +374,13 @@ export default class ClinicalReport extends React.PureComponent<Props, State> {
               </figcaption>
             </figure>
 
+            {hasResults ? (
+              <Wigglegram
+                results={results}
+                landmarksBySymbol={landmarksBySymbol}
+              />
+            ) : null}
+
             <div className={classes.section_label}>
               Analysis results
               {analysisName !== null ? (
@@ -295,6 +402,41 @@ export default class ClinicalReport extends React.PureComponent<Props, State> {
                 {this.renderInterpretation()}
               </div>
             ) : null}
+
+            {/* Clinician certification: ruled signature lines, as on any
+                clinical letterhead. Name and license persist per device;
+                the signature and date rules are signed by hand. */}
+            <div className={classes.sig_section}>
+              <div className={classes.section_label}>Certification</div>
+              <div className={classes.sig_row}>
+                <div className={cx(classes.sig_field, classes.sig_field__wide)}>
+                  <div className={classes.sig_line}>
+                    <StoredEditable
+                      storageKey={STORAGE_KEY_CLINICIAN}
+                      placeholder="Clinician name"
+                      ariaLabel="Clinician name (click to edit)"
+                    />
+                  </div>
+                  <span className={classes.sig_caption}>
+                    Examined by — name &amp; signature
+                  </span>
+                </div>
+                <div className={classes.sig_field}>
+                  <div className={classes.sig_line}>
+                    <StoredEditable
+                      storageKey={STORAGE_KEY_LICENSE}
+                      placeholder="License no."
+                      ariaLabel="License number (click to edit)"
+                    />
+                  </div>
+                  <span className={classes.sig_caption}>License no.</span>
+                </div>
+                <div className={classes.sig_field}>
+                  <div className={classes.sig_line} />
+                  <span className={classes.sig_caption}>Date</span>
+                </div>
+              </div>
+            </div>
 
             <footer className={classes.foot}>
               <span className={classes.foot_brand}>
@@ -510,6 +652,13 @@ export default class ClinicalReport extends React.PureComponent<Props, State> {
 
   private handleKeyDown = (e: KeyboardEvent) => {
     if (e.key === 'Escape' || e.keyCode === 27) {
+      // While a letterhead field is being edited, Escape leaves the field
+      // rather than closing the whole report.
+      const target = e.target as HTMLElement | null;
+      if (target !== null && target.isContentEditable) {
+        target.blur();
+        return;
+      }
       this.props.onRequestClose();
     }
   };
