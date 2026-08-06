@@ -332,11 +332,22 @@ type FetchStatus = {
 
 type Locale = Record<string, string>;
 
+/** Patient sex as recorded for demographics; empty string = unspecified. */
+type PatientSex = 'female' | 'male' | '';
+
 /** A patient record. Kept intentionally minimal — a chart system links later. */
 interface Patient {
   id: string;
   name: string;
   chartId: string;
+  /**
+   * Date of birth as an ISO `YYYY-MM-DD` string, or empty/absent when not
+   * recorded. Optional because records persisted before this field existed
+   * do not carry it.
+   */
+  dateOfBirth?: string;
+  /** Recorded sex, or empty/absent when unspecified (older records). */
+  sex?: PatientSex;
 }
 
 interface StoreState {
@@ -738,16 +749,21 @@ interface Events {
     imageId: string;
     format: 'png' | 'jpeg';
   };
-  /** Patient records (name + chart id; linked to a chart system later). */
+  /** Patient records (name + chart id + demographics). */
   ADD_PATIENT_REQUESTED: {
     id: string;
     name: string;
     chartId: string;
+    /** ISO `YYYY-MM-DD`, or empty when not recorded. */
+    dateOfBirth: string;
+    sex: PatientSex;
   };
   UPDATE_PATIENT_REQUESTED: {
     id: string;
     name: string;
     chartId: string;
+    dateOfBirth: string;
+    sex: PatientSex;
   };
   REMOVE_PATIENT_REQUESTED: {
     id: string;

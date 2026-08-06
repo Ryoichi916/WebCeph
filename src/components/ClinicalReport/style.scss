@@ -198,6 +198,7 @@
 
 .patient_block {
   display: flex;
+  flex-direction: column;
   margin-top: 14px;
   border: 1px solid $border;
   border-radius: 8px;
@@ -205,8 +206,18 @@
   overflow: hidden;
 }
 
+// Two rows of three aligned columns: identity on top, demographics below.
+.patient_row {
+  display: flex;
+
+  + .patient_row {
+    border-top: 1px solid $border;
+  }
+}
+
 .patient_cell {
   flex: 1 1 0;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 3px;

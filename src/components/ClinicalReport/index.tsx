@@ -30,6 +30,7 @@ import { formatMmPx } from 'components/TracingToolbar/CalibrationDialog';
 import { buildProfilogram } from 'analyses/profilogram';
 import { renderTracingSnapshot } from 'utils/tracingSnapshot';
 import { isGeoPoint } from 'utils/math';
+import { formatAgeFull, formatSexFull } from 'utils/patient';
 
 const classes = require('./style.scss');
 
@@ -133,6 +134,16 @@ export default class ClinicalReport extends React.PureComponent<Props, State> {
       .length;
     const hasResults = results.length > 0;
 
+    // Demographics: DOB printed as recorded (ISO, unambiguous), age computed
+    // at the report date since it changes with every visit.
+    const dateOfBirth =
+      patient !== null && patient.dateOfBirth !== undefined &&
+      patient.dateOfBirth !== ''
+        ? patient.dateOfBirth
+        : null;
+    const age = patient !== null ? formatAgeFull(patient.dateOfBirth) : null;
+    const sex = patient !== null ? formatSexFull(patient.sex) : null;
+
     return (
       <div
         className={classes.root}
@@ -188,28 +199,50 @@ export default class ClinicalReport extends React.PureComponent<Props, State> {
 
             <h1 className={classes.doc_title}>Cephalometric Analysis Report</h1>
 
+            {/* Identity row + demographics row; three aligned columns each.
+                Absent optional fields print an em-dash — a clinical report
+                states "not recorded" rather than hiding the field. The report
+                date lives in the masthead, not here. */}
             <div className={classes.patient_block}>
-              <div className={classes.patient_cell}>
-                <span className={classes.patient_label}>Patient</span>
-                <span className={classes.patient_value}>
-                  {patient !== null && patient.name ? patient.name : '—'}
-                </span>
+              <div className={classes.patient_row}>
+                <div className={classes.patient_cell}>
+                  <span className={classes.patient_label}>Patient</span>
+                  <span className={classes.patient_value}>
+                    {patient !== null && patient.name ? patient.name : '—'}
+                  </span>
+                </div>
+                <div className={classes.patient_cell}>
+                  <span className={classes.patient_label}>Chart ID</span>
+                  <span className={classes.patient_value}>
+                    {patient !== null && patient.chartId ? patient.chartId : '—'}
+                  </span>
+                </div>
+                <div className={classes.patient_cell}>
+                  <span className={classes.patient_label}>Analysis</span>
+                  <span className={classes.patient_value}>
+                    {analysisName !== null ? analysisName : '—'}
+                  </span>
+                </div>
               </div>
-              <div className={classes.patient_cell}>
-                <span className={classes.patient_label}>Chart ID</span>
-                <span className={classes.patient_value}>
-                  {patient !== null && patient.chartId ? patient.chartId : '—'}
-                </span>
-              </div>
-              <div className={classes.patient_cell}>
-                <span className={classes.patient_label}>Analysis</span>
-                <span className={classes.patient_value}>
-                  {analysisName !== null ? analysisName : '—'}
-                </span>
-              </div>
-              <div className={classes.patient_cell}>
-                <span className={classes.patient_label}>Report date</span>
-                <span className={classes.patient_value}>{date}</span>
+              <div className={classes.patient_row}>
+                <div className={classes.patient_cell}>
+                  <span className={classes.patient_label}>Date of birth</span>
+                  <span className={classes.patient_value}>
+                    {dateOfBirth !== null ? dateOfBirth : '—'}
+                  </span>
+                </div>
+                <div className={classes.patient_cell}>
+                  <span className={classes.patient_label}>Age at report</span>
+                  <span className={classes.patient_value}>
+                    {age !== null ? age : '—'}
+                  </span>
+                </div>
+                <div className={classes.patient_cell}>
+                  <span className={classes.patient_label}>Sex</span>
+                  <span className={classes.patient_value}>
+                    {sex !== null ? sex : '—'}
+                  </span>
+                </div>
               </div>
             </div>
 

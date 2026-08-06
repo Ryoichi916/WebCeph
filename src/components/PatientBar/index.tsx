@@ -12,6 +12,8 @@ import * as cx from 'classnames';
 
 import Props from './props';
 
+import { formatAgeShort, formatSexShort } from 'utils/patient';
+
 const classes = require('./style.scss');
 
 const actionButtonStyle: React.CSSProperties = {
@@ -65,6 +67,13 @@ export default class PatientBar extends React.PureComponent<Props, { }> {
       activePatient.chartId : null;
     const initials = activePatient !== null ?
       getInitials(activePatient.name || activePatient.chartId || '') : '';
+    // Quiet demographics (e.g. "28 y · F") — shown only when recorded.
+    const demographics = activePatient !== null
+      ? [
+          formatAgeShort(activePatient.dateOfBirth),
+          formatSexShort(activePatient.sex),
+        ].filter((p) => p !== null).join(' · ')
+      : '';
     return (
       <div className={cx(classes.root, className)}>
         <span className={classes.wordmark}>WebCeph</span>
@@ -82,6 +91,9 @@ export default class PatientBar extends React.PureComponent<Props, { }> {
           <span className={classes.patient_name} title={name}>{name}</span>
           {chartId ? (
             <span className={classes.chart_id}>{chartId}</span>
+          ) : null}
+          {demographics !== '' ? (
+            <span className={classes.demographics}>{demographics}</span>
           ) : null}
         </div>
         <span className={classes.spacer} />

@@ -16,9 +16,14 @@ const mapStateToProps = (state: StoreState): StateProps => ({
 });
 
 const mapDispatchToProps = (dispatch: GenericDispatch): DispatchProps => ({
-  onRegister: (name: string, chartId: string) => {
+  onRegister: (
+    name: string,
+    chartId: string,
+    dateOfBirth: string,
+    sex: PatientSex,
+  ) => {
     const id = uniqueId(`patient_${new Date().getTime()}_`);
-    dispatch(addPatient({ id, name, chartId }));
+    dispatch(addPatient({ id, name, chartId, dateOfBirth, sex }));
     dispatch(openPatient({ patientId: id }));
   },
   onOpen: (id: string) => dispatch(openPatient({ patientId: id })),

@@ -12,6 +12,8 @@ import IconArrow from 'material-ui/svg-icons/hardware/keyboard-arrow-right';
 
 import Props from './props';
 
+import { formatAgeShort, formatSexShort } from 'utils/patient';
+
 const classes = require('./style.scss');
 
 type ErrorField = 'name' | 'chartId' | 'both';
@@ -24,6 +26,8 @@ interface ValidationError {
 interface State {
   name: string;
   chartId: string;
+  dateOfBirth: string;
+  sex: PatientSex;
   query: string;
   error: ValidationError | null;
   pendingRemoval: Patient | null;
@@ -135,6 +139,22 @@ const getRegisteredDate = (id: string): string | null => {
 
 const patientDisplayName = (patient: Patient): string =>
   patient.name || patient.chartId || '(unnamed patient)';
+
+/**
+ * Compact demographics for the list row, e.g. `1998/04/12 · F · 28 y`;
+ * null when the record carries neither a date of birth nor a sex.
+ */
+const getDemographicsLine = (patient: Patient): string | null => {
+  const dob = patient.dateOfBirth !== undefined && patient.dateOfBirth !== ''
+    ? patient.dateOfBirth.replace(/-/g, '/')
+    : null;
+  const parts = [
+    dob,
+    formatSexShort(patient.sex),
+    formatAgeShort(patient.dateOfBirth),
+  ].filter((p): p is string => p !== null);
+  return parts.length > 0 ? parts.join(' · ') : null;
+};
 
 /** Inline brand mark: a cephalometric profile with S–N line and landmarks. */
 const BrandMark = () => (
@@ -254,6 +274,8 @@ export default class PatientPicker extends React.PureComponent<Props, State> {
   state: State = {
     name: '',
     chartId: '',
+    dateOfBirth: '',
+    sex: '',
     query: '',
     error: null,
     pendingRemoval: null,
@@ -283,8 +305,15 @@ export default class PatientPicker extends React.PureComponent<Props, State> {
       });
       return;
     }
-    this.props.onRegister(name, chartId);
-    this.setState({ name: '', chartId: '', query: '', error: null });
+    this.props.onRegister(name, chartId, this.state.dateOfBirth, this.state.sex);
+    this.setState({
+      name: '',
+      chartId: '',
+      dateOfBirth: '',
+      sex: '',
+      query: '',
+      error: null,
+    });
   };
 
   private handleKeyDown = (e: React.KeyboardEvent<{}>) => {
@@ -299,6 +328,19 @@ export default class PatientPicker extends React.PureComponent<Props, State> {
 
   private handleChartIdChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     this.setState({ chartId: e.currentTarget.value, error: null });
+  };
+
+  private handleDateOfBirthChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    this.setState({ dateOfBirth: e.currentTarget.value });
+  };
+
+  // Clicking the selected segment again clears the (optional) field.
+  private handleSexFemale = () => {
+    this.setState(({ sex }) => ({ sex: sex === 'female' ? '' : 'female' }));
+  };
+
+  private handleSexMale = () => {
+    this.setState(({ sex }) => ({ sex: sex === 'male' ? '' : 'male' }));
   };
 
   private handleQueryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -325,6 +367,7 @@ export default class PatientPicker extends React.PureComponent<Props, State> {
     const { onOpen } = this.props;
     const registered = getRegisteredDate(patient.id);
     const hasBoth = patient.name !== '' && patient.chartId !== '';
+    const demographics = getDemographicsLine(patient);
     return (
       <li key={patient.id} className={classes.row_item}>
         <button
@@ -342,6 +385,9 @@ export default class PatientPicker extends React.PureComponent<Props, State> {
             <span className={classes.row_meta}>
               {hasBoth ? (
                 <span className={classes.chip}>{patient.chartId}</span>
+              ) : null}
+              {demographics !== null ? (
+                <span className={classes.row_demographics}>{demographics}</span>
               ) : null}
               {registered !== null ? (
                 <span className={classes.row_date}>Added {registered}</span>
@@ -368,7 +414,9 @@ export default class PatientPicker extends React.PureComponent<Props, State> {
 
   render() {
     const { patients } = this.props;
-    const { name, chartId, query, error, pendingRemoval } = this.state;
+    const {
+      name, chartId, dateOfBirth, sex, query, error, pendingRemoval,
+    } = this.state;
 
     const nameHasError =
       error !== null && (error.field === 'name' || error.field === 'both');
@@ -388,6 +436,15 @@ export default class PatientPicker extends React.PureComponent<Props, State> {
     const chartIdInputClass = chartIdHasError
       ? `${classes.field_input} ${classes.field_input_error}`
       : classes.field_input;
+    // The empty date input shows the browser's yyyy/mm/dd scaffold — mute it
+    // to placeholder gray so it does not read as an entered value.
+    const dobInputClass = dateOfBirth === ''
+      ? `${classes.field_input} ${classes.field_input_date} ` +
+        classes.field_input_date_empty
+      : `${classes.field_input} ${classes.field_input_date}`;
+    const now = new Date();
+    const todayISO =
+      `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}`;
 
     const trimmedQuery = query.trim().toLowerCase();
     const visiblePatients = trimmedQuery === ''
@@ -457,61 +514,117 @@ export default class PatientPicker extends React.PureComponent<Props, State> {
             </p>
 
             <div className={classes.form}>
-              <label className={classes.field}>
-                <span className={classes.field_label}>Patient name</span>
-                <input
-                  type="text"
-                  className={nameInputClass}
-                  placeholder="e.g. 山田 太郎"
-                  aria-label="Patient name"
-                  aria-invalid={nameHasError}
-                  value={name}
-                  onChange={this.handleNameChange}
-                  onKeyDown={this.handleKeyDown}
-                />
-                <span className={classes.field_error} role="alert">
-                  {nameMessage !== null ? (
-                    <span className={classes.field_error_inner}>
-                      <ErrorIcon />
-                      {nameMessage}
-                    </span>
-                  ) : null}
-                </span>
-              </label>
-              <label className={classes.field}>
-                <span className={classes.field_label}>Chart ID</span>
-                <input
-                  type="text"
-                  className={chartIdInputClass}
-                  placeholder="e.g. C-0001"
-                  aria-label="Chart ID"
-                  aria-invalid={chartIdHasError}
-                  value={chartId}
-                  onChange={this.handleChartIdChange}
-                  onKeyDown={this.handleKeyDown}
-                />
-                <span className={classes.field_error} role="alert">
-                  {chartIdMessage !== null ? (
-                    <span className={classes.field_error_inner}>
-                      <ErrorIcon />
-                      {chartIdMessage}
-                    </span>
-                  ) : null}
-                </span>
-              </label>
-              <div className={classes.form_action}>
-                <span className={classes.field_label} aria-hidden="true">
-                  &nbsp;
-                </span>
-                <RaisedButton
-                  primary
-                  label="Register"
-                  className={classes.register_btn}
-                  labelStyle={registerLabelStyle}
-                  overlayStyle={transparentOverlay}
-                  onClick={this.register}
-                />
-                <span className={classes.field_error} />
+              <div className={classes.form_row}>
+                <label className={classes.field}>
+                  <span className={classes.field_label}>Patient name</span>
+                  <input
+                    type="text"
+                    className={nameInputClass}
+                    placeholder="e.g. 山田 太郎"
+                    aria-label="Patient name"
+                    aria-invalid={nameHasError}
+                    value={name}
+                    onChange={this.handleNameChange}
+                    onKeyDown={this.handleKeyDown}
+                  />
+                  <span className={classes.field_error} role="alert">
+                    {nameMessage !== null ? (
+                      <span className={classes.field_error_inner}>
+                        <ErrorIcon />
+                        {nameMessage}
+                      </span>
+                    ) : null}
+                  </span>
+                </label>
+                <label className={classes.field}>
+                  <span className={classes.field_label}>Chart ID</span>
+                  <input
+                    type="text"
+                    className={chartIdInputClass}
+                    placeholder="e.g. C-0001"
+                    aria-label="Chart ID"
+                    aria-invalid={chartIdHasError}
+                    value={chartId}
+                    onChange={this.handleChartIdChange}
+                    onKeyDown={this.handleKeyDown}
+                  />
+                  <span className={classes.field_error} role="alert">
+                    {chartIdMessage !== null ? (
+                      <span className={classes.field_error_inner}>
+                        <ErrorIcon />
+                        {chartIdMessage}
+                      </span>
+                    ) : null}
+                  </span>
+                </label>
+              </div>
+              <div className={classes.form_row}>
+                <label className={`${classes.field} ${classes.field_dob}`}>
+                  <span className={classes.field_label}>
+                    Date of birth
+                    <span className={classes.field_optional}>optional</span>
+                  </span>
+                  <input
+                    type="date"
+                    className={dobInputClass}
+                    aria-label="Date of birth"
+                    max={todayISO}
+                    value={dateOfBirth}
+                    onChange={this.handleDateOfBirthChange}
+                    onKeyDown={this.handleKeyDown}
+                  />
+                </label>
+                {/* Not a <label>: clicking the caption of a label containing
+                    buttons would forward the click to the first button and
+                    silently select “Female”. */}
+                <div className={classes.field_sex}>
+                  <span className={classes.field_label}>
+                    Sex
+                    <span className={classes.field_optional}>optional</span>
+                  </span>
+                  <div
+                    className={classes.segmented}
+                    role="group"
+                    aria-label="Sex"
+                  >
+                    <button
+                      type="button"
+                      className={sex === 'female'
+                        ? `${classes.segment} ${classes.segment_active}`
+                        : classes.segment}
+                      aria-pressed={sex === 'female'}
+                      title={sex === 'female' ? 'Click again to clear' : undefined}
+                      onClick={this.handleSexFemale}
+                    >
+                      Female
+                    </button>
+                    <button
+                      type="button"
+                      className={sex === 'male'
+                        ? `${classes.segment} ${classes.segment_active}`
+                        : classes.segment}
+                      aria-pressed={sex === 'male'}
+                      title={sex === 'male' ? 'Click again to clear' : undefined}
+                      onClick={this.handleSexMale}
+                    >
+                      Male
+                    </button>
+                  </div>
+                </div>
+                <span className={classes.form_spacer} />
+                <div className={classes.form_action}>
+                  <span className={classes.field_label} aria-hidden="true">
+                    &nbsp;
+                  </span>
+                  <RaisedButton
+                    primary
+                    label="Register"
+                    className={classes.register_btn}
+                    labelStyle={registerLabelStyle}
+                    overlayStyle={transparentOverlay}
+                    onClick={this.register}
+                  />
+                </div>
               </div>
             </div>
 

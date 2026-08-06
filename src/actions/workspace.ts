@@ -31,7 +31,7 @@ export const unsetScaleFactor = createActionCreator('UNSET_SCALE_FACTOR_REQUESTE
 // Export the current tracing (image + profilogram + points) as a raster image.
 export const exportImage = createActionCreator('EXPORT_IMAGE_REQUESTED');
 
-// Patient records (name + chart id).
+// Patient records (name + chart id + demographics).
 export const addPatient = createActionCreator('ADD_PATIENT_REQUESTED');
 export const updatePatient = createActionCreator('UPDATE_PATIENT_REQUESTED');
 export const removePatient = createActionCreator('REMOVE_PATIENT_REQUESTED');

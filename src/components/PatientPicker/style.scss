@@ -144,12 +144,23 @@
   color: $text-tertiary;
 }
 
-// Register form
+// Register form — two rows: identity (name + chart ID) on top, demographics
+// (date of birth + sex) with the Register action below. The reserved error
+// line under the first row doubles as the inter-row gap.
 .form {
+  display: flex;
+  flex-direction: column;
+  margin-top: 20px;
+}
+
+.form_row {
   display: flex;
   align-items: flex-start;
   gap: 12px;
-  margin-top: 20px;
+
+  & + & {
+    margin-top: 2px;
+  }
 }
 
 .field {
@@ -160,8 +171,25 @@
   gap: 6px;
 }
 
+// Demographics row: fixed-width date field, natural-width segmented control,
+// Register anchored to the right by the flexible spacer.
+.field_dob {
+  flex: 0 0 170px;
+}
+
+.field_sex {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form_spacer {
+  flex: 1 1 0;
+}
+
 // Button column: an invisible label spacer keeps the button aligned with the
-// inputs, and an empty error slot keeps every column the same height.
+// inputs.
 .form_action {
   flex-shrink: 0;
   display: flex;
@@ -175,6 +203,17 @@
   letter-spacing: .06em;
   text-transform: uppercase;
   color: $text-tertiary;
+}
+
+// Quiet "optional" tag inside a field label; lowercase against the
+// uppercase label so it reads as an aside, not part of the field name.
+.field_optional {
+  margin-left: 5px;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: .03em;
+  text-transform: lowercase;
+  color: $text-disabled;
 }
 
 .field_input {
@@ -203,6 +242,77 @@
     outline: none;
     border-color: $primary-600;
     box-shadow: $focus-ring;
+  }
+}
+
+// Native date input: match the text inputs exactly and keep the picker
+// affordance quiet until hovered.
+.field_input_date {
+  &::-webkit-calendar-picker-indicator {
+    opacity: .55;
+    cursor: pointer;
+
+    &:hover {
+      opacity: .85;
+    }
+  }
+}
+
+// While empty, the browser's yyyy/mm/dd scaffold is shown in placeholder
+// gray so it cannot be mistaken for an entered date.
+.field_input_date_empty {
+  color: $text-disabled;
+}
+
+// Sex: two-option segmented control (click the active segment to clear).
+.segmented {
+  display: inline-flex;
+  align-items: stretch;
+  box-sizing: border-box;
+  height: 36px;
+  border: 1px solid $border-strong;
+  border-radius: 6px;
+  background: $bg-surface;
+  overflow: hidden;
+}
+
+.segment {
+  appearance: none;
+  border: none;
+  margin: 0;
+  padding: 0 16px;
+  background: none;
+  font-family: $font-stack;
+  font-size: 13px;
+  font-weight: 500;
+  color: $text-secondary;
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease;
+
+  & + & {
+    border-left: 1px solid $border-strong;
+  }
+
+  &:hover {
+    background: $bg-sunken;
+  }
+
+  &:focus {
+    outline: none;
+  }
+
+  &:focus-visible {
+    box-shadow: inset $focus-ring;
+  }
+}
+
+.segment_active {
+  background: $primary-050;
+  color: $primary-700;
+  font-weight: 600;
+
+  &:hover {
+    background: $primary-050;
   }
 }
 
@@ -455,6 +565,17 @@
   font-variant-numeric: tabular-nums;
 }
 
+// Demographics (DOB · sex · age): quiet secondary metadata, one step
+// stronger than the registration date because it is clinically relevant.
+.row_demographics {
+  font-size: 11.5px;
+  color: $text-tertiary;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 // Registration date: quiet metadata — every row carries the same value on a
 // fresh install, so it must never compete with the name/chart ID.
 .row_date {
@@ -546,6 +667,10 @@
 // ----------------------------------------------------------------- responsive
 
 @media (max-width: 760px) {
+  .form_row {
+    flex-wrap: wrap;
+  }
+
   .card {
     flex-direction: column;
     height: auto;
