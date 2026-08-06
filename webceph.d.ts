@@ -175,7 +175,8 @@ interface Analyses {
     'downs' | 'ricketts_lateral' |
     'common' | 'basic' | 'bjork' |
     'tweed' | 'steiner' | 'basic' |
-    'soft_tissues_lateral'
+    'soft_tissues_lateral' | 'softTissues' |
+    'dental'
   );
   ceph_pa: (
     'ricketts_frontal'

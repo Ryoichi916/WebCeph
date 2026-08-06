@@ -238,6 +238,47 @@ export const buildOutlines = (map: LandmarkMap): Outline[] => {
     outlines.push({ id: 'porion', points: ring, closed: true });
   }
 
+  // ---- 7. Central incisor lozenges --------------------------------------
+  // Classic tracing silhouette of each central incisor: a slender closed
+  // lozenge running along the incisor's long axis, from the incisal edge
+  // (tip) up to the root apex, widest at the crown and tapering to the root.
+  // Drawn only when both the edge and apex landmarks of that incisor are
+  // present (so it appears for the dental analysis but not for skeletal-only
+  // ones). Geometry is derived from the two points, so it tracks them when
+  // dragged, and the width scales with the axis length.
+  const buildIncisor = (edge: Pt, apex: Pt): Point2[] => {
+    const ax = { x: apex.x - edge.x, y: apex.y - edge.y }; // edge -> apex
+    const L = Math.max(1, Math.hypot(ax.x, ax.y));
+    const u = { x: ax.x / L, y: ax.y / L };      // along axis, toward root
+    const p = { x: -u.y, y: u.x };               // perpendicular (labio-lingual)
+    const crownHalf = L * 0.17;
+    const rootHalf = L * 0.085;
+    const at = (t: number, w: number): Point2 => [
+      edge.x + u.x * L * t + p.x * w,
+      edge.y + u.y * L * t + p.y * w,
+    ];
+    return [
+      at(0, 0),               // incisal tip
+      at(0.30, crownHalf),    // labial crown
+      at(0.60, rootHalf),     // labial root surface
+      at(1, 0),               // root apex
+      at(0.60, -rootHalf),    // lingual root surface
+      at(0.30, -crownHalf),   // lingual crown / cingulum
+    ];
+  };
+
+  const U1apex = point(map, 'U1 Apex');
+  const U1edge = point(map, 'U1 Incisal Edge');
+  if (U1apex && U1edge) {
+    outlines.push({ id: 'incisor-upper', points: buildIncisor(U1edge, U1apex), closed: true });
+  }
+
+  const L1apex = point(map, 'L1 Apex');
+  const L1edge = point(map, 'L1 Incisal Edge');
+  if (L1apex && L1edge) {
+    outlines.push({ id: 'incisor-lower', points: buildIncisor(L1edge, L1apex), closed: true });
+  }
+
   return outlines;
 };
 

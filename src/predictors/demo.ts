@@ -50,11 +50,13 @@ const TEMPLATE: { [symbol: string]: [number, number] } = {
   'R2-mandible': [0.303, 0.500],
   'R3-mandible': [0.330, 0.428],
   'R4-mandible': [0.334, 0.615],
-  // Dentition
-  'U1 Apex':         [0.592, 0.443],
-  'U1 Incisal Edge': [0.620, 0.524],
-  'L1 Apex':         [0.575, 0.604],
-  'L1 Incisal Edge': [0.614, 0.530],
+  // Dentition — incisor axes calibrated on the demo film so the dental
+  // analysis reads clinically (U1-SN ~106°, IMPA ~92°, interincisal ~134°,
+  // all within their normal bands for this low-mandibular-plane case).
+  'U1 Apex':         [0.578, 0.438],
+  'U1 Incisal Edge': [0.600, 0.514],
+  'L1 Apex':         [0.545, 0.605],
+  'L1 Incisal Edge': [0.607, 0.523],
   'U4':  [0.556, 0.505],
   'L4':  [0.554, 0.519],
   'U6':  [0.510, 0.508],

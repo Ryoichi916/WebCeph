@@ -24,7 +24,7 @@ const components: AnalysisComponent[] = [
 ];
 
 const analysis: Analysis<'ceph_lateral'> = {
-  id: 'basic',
+  id: 'dental',
   components,
   interpret: defaultInterpretAnalysis(components),
 };

@@ -60,7 +60,8 @@ export type WCephJSON = {
           'common' | 'downs' | 'basic' |
           'bjork' | 'tweed' |
           'steiner' | 'ricketts_lateral' |
-          'soft_tissues_lateral' | 'ricketts_frontal' |
+          'soft_tissues_lateral' | 'softTissues' | 'dental' |
+          'ricketts_frontal' |
           'soft_tissues_photo_frontal' |
           'soft_tissues_photo_lateral' |
           'frontal_face_proportions' |

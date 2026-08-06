@@ -38,6 +38,8 @@ const ANALYSES: Array<{ id: string; name: string; focus: string }> = [
   { id: 'tweed', name: 'Tweed', focus: 'FMA · FMIA · IMPA diagnostic triangle' },
   { id: 'ricketts', name: 'Ricketts', focus: 'Comprehensive skeletal & dental' },
   { id: 'bjork', name: 'Björk', focus: 'Growth direction & jaw rotation' },
+  { id: 'dental', name: 'Dental', focus: 'U1 · IMPA · interincisal relations' },
+  { id: 'softTissues', name: 'Soft Tissue', focus: 'E-line lips & facial esthetics' },
 ];
 
 interface State {
