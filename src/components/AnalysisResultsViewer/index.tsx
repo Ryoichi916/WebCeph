@@ -33,11 +33,13 @@ export const ANALYSIS_NAMES: { [id: string]: string | undefined } = {
   common: 'Common',
   dental: 'Dental',
   downs: 'Downs',
+  jarabak: 'Jarabak',
   ricketts_lateral: 'Ricketts',
   softTissues: 'Soft tissues',
   soft_tissues_lateral: 'Soft tissues',
   steiner: 'Steiner',
   tweed: 'Tweed',
+  wits: 'Wits & vertical',
 };
 
 // One decimal everywhere (design brief); avoid the "-0.0" artifact.

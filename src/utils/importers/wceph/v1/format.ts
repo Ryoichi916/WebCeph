@@ -61,6 +61,7 @@ export type WCephJSON = {
           'bjork' | 'tweed' |
           'steiner' | 'ricketts_lateral' |
           'soft_tissues_lateral' | 'softTissues' | 'dental' |
+          'jarabak' | 'wits' |
           'ricketts_frontal' |
           'soft_tissues_photo_frontal' |
           'soft_tissues_photo_lateral' |

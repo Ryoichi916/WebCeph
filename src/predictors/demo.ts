@@ -57,8 +57,11 @@ const TEMPLATE: { [symbol: string]: [number, number] } = {
   'U1 Incisal Edge': [0.600, 0.514],
   'L1 Apex':         [0.545, 0.605],
   'L1 Incisal Edge': [0.607, 0.523],
-  'U4':  [0.556, 0.505],
-  'L4':  [0.554, 0.519],
+  // Premolar cusps sit slightly lower than the molar cusps so the functional
+  // occlusal plane tilts ~6° down-anteriorly, giving a Wits appraisal ~+1.3 mm
+  // (within the 0 ± 2 mm norm) for this demo case.
+  'U4':  [0.556, 0.512],
+  'L4':  [0.554, 0.526],
   'U6':  [0.510, 0.508],
   'L6':  [0.508, 0.522],
   // Soft tissue profile
