@@ -5,6 +5,8 @@ import * as cx from 'classnames';
 
 import CalibrationDialog, { formatMmPx } from './CalibrationDialog';
 
+import ClinicalReport from 'components/ClinicalReport/connected';
+
 import Popover from 'material-ui/Popover';
 import Menu from 'material-ui/Menu';
 import MenuItem from 'material-ui/MenuItem';
@@ -15,6 +17,7 @@ import IconAutoPlot from 'material-ui/svg-icons/image/flash-auto';
 import IconPlotFromRefs from 'material-ui/svg-icons/action/timeline';
 import IconProfilogram from 'material-ui/svg-icons/image/blur-on';
 import IconSummary from 'material-ui/svg-icons/action/list';
+import IconReport from 'material-ui/svg-icons/action/description';
 import IconExport from 'material-ui/svg-icons/file/file-download';
 import IconArrowUp from 'material-ui/svg-icons/navigation/arrow-drop-up';
 import IconZoomIn from 'material-ui/svg-icons/action/zoom-in';
@@ -41,6 +44,7 @@ interface State {
   openMenu: 'analysis' | 'export' | null;
   anchorEl: Element | null;
   isCalibrationOpen: boolean;
+  isReportOpen: boolean;
 }
 
 const ICON_COLOR = 'currentColor';
@@ -80,7 +84,12 @@ const ZOOM_MAX = 2;
 const ZOOM_STEP = 1.25;
 
 export default class TracingToolbar extends React.PureComponent<Props, State> {
-  state: State = { openMenu: null, anchorEl: null, isCalibrationOpen: false };
+  state: State = {
+    openMenu: null,
+    anchorEl: null,
+    isCalibrationOpen: false,
+    isReportOpen: false,
+  };
 
   render() {
     const {
@@ -94,7 +103,7 @@ export default class TracingToolbar extends React.PureComponent<Props, State> {
       canRedo, onRedoClick,
       scaleFactor,
     } = this.props;
-    const { openMenu, anchorEl, isCalibrationOpen } = this.state;
+    const { openMenu, anchorEl, isCalibrationOpen, isReportOpen } = this.state;
     const isCalibrated = scaleFactor !== null;
     const hasImage = imageId !== null;
     // Before an image exists none of these actions apply — hide the strip
@@ -274,6 +283,17 @@ export default class TracingToolbar extends React.PureComponent<Props, State> {
 
         <button
           type="button"
+          className={classes.button}
+          disabled={!hasImage}
+          title="Open the printable clinical report (print or save as PDF)"
+          onClick={this.openReport}
+        >
+          <IconReport color={ICON_COLOR} style={iconStyle} />
+          <span className={classes.button_label}>Report</span>
+        </button>
+
+        <button
+          type="button"
           className={cx(classes.button, {
             [classes.button__open]: openMenu === 'export',
           })}
@@ -353,6 +373,13 @@ export default class TracingToolbar extends React.PureComponent<Props, State> {
           </Menu>
         </Popover>
 
+        {isReportOpen && (
+          <ClinicalReport
+            imageId={imageId}
+            onRequestClose={this.closeReport}
+          />
+        )}
+
         {isCalibrationOpen && (
           <CalibrationDialog
             scaleFactor={scaleFactor}
@@ -375,6 +402,15 @@ export default class TracingToolbar extends React.PureComponent<Props, State> {
   private handleSummaryClick = (e: React.MouseEvent<HTMLButtonElement>) => {
     e.currentTarget.blur();
     this.props.onShowSummaryClick();
+  };
+
+  private openReport = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.currentTarget.blur();
+    this.setState({ isReportOpen: true });
+  };
+
+  private closeReport = () => {
+    this.setState({ isReportOpen: false });
   };
 
   private openCalibrationDialog = (e: React.MouseEvent<HTMLButtonElement>) => {

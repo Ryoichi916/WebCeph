@@ -12,14 +12,9 @@ import {
 import { isProfilogramShown } from 'store/reducers/workspace/canvas';
 import { getActivePatient } from 'store/reducers/patients';
 import { buildProfilogram } from 'analyses/profilogram';
-import { isGeoPoint } from 'utils/math';
-
-// Match the on-screen tracing exactly (see TracingViewer/style.scss): amber
-// landmark dots with a dark halo stroke, cyan profilogram lines — the export
-// must look like what the clinician saw, and both read on gray radiographs.
-const PROFILOGRAM_COLOR = '#40C4FF';
-const POINT_FILL = '#FFC400';
-const POINT_STROKE = '#14181D';
+// The overlay composition (colors + drawing) is shared with the printable
+// clinical report — see utils/tracingSnapshot.ts.
+import { drawTracingOverlay } from 'utils/tracingSnapshot';
 
 const baseName = (name: string | null): string => {
   if (!name) {
@@ -76,34 +71,7 @@ const middleware = ({ getState }: Store<StoreState>) =>
         return;
       }
       ctx.drawImage(img, 0, 0, width, height);
-
-      // Size the overlay relative to the image so it reads the same as on screen
-      // whatever the image's native resolution.
-      const lineWidth = Math.max(1.5, width * 0.0028);
-      const pointRadius = Math.max(2.5, width * 0.006);
-
-      ctx.lineCap = 'round';
-      ctx.strokeStyle = PROFILOGRAM_COLOR;
-      ctx.lineWidth = lineWidth;
-      segments.forEach((s) => {
-        ctx.beginPath();
-        ctx.moveTo(s.x1, s.y1);
-        ctx.lineTo(s.x2, s.y2);
-        ctx.stroke();
-      });
-
-      ctx.fillStyle = POINT_FILL;
-      ctx.strokeStyle = POINT_STROKE;
-      ctx.lineWidth = Math.max(1, pointRadius * 0.25);
-      Object.keys(manual).forEach((symbol) => {
-        const p = manual[symbol];
-        if (isGeoPoint(p)) {
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, pointRadius, 0, 2 * Math.PI);
-          ctx.fill();
-          ctx.stroke();
-        }
-      });
+      drawTracingOverlay(ctx, width, manual, segments);
 
       const mime = format === 'jpeg' ? 'image/jpeg' : 'image/png';
       canvas.toBlob(

@@ -22,8 +22,12 @@ import {
 
 const classes = require('./style.scss');
 
-/** Display names for the analysis badge in the dialog header. */
-const ANALYSIS_NAMES: { [id: string]: string | undefined } = {
+/**
+ * Display names for the analysis badge in the dialog header.
+ * Exported (with the formatters below) for the printable clinical report,
+ * which must match this dialog's conventions exactly.
+ */
+export const ANALYSIS_NAMES: { [id: string]: string | undefined } = {
   basic: 'Basic',
   bjork: 'Björk',
   common: 'Common',
@@ -37,13 +41,13 @@ const ANALYSIS_NAMES: { [id: string]: string | undefined } = {
 };
 
 // One decimal everywhere (design brief); avoid the "-0.0" artifact.
-const formatNumber = (n: number): string => {
+export const formatNumber = (n: number): string => {
   const s = n.toFixed(1);
   return s === '-0.0' ? '0.0' : s;
 };
 
 // Signed deviation, e.g. "+3.4" / "-29.9"; a rounded zero gets no sign.
-const formatSigned = (n: number): string => {
+export const formatSigned = (n: number): string => {
   const s = formatNumber(Math.abs(n));
   if (s === '0.0') {
     return '0.0';
@@ -52,7 +56,7 @@ const formatSigned = (n: number): string => {
 };
 
 /** Unit suffix for a measurement, e.g. `°` for angles, ` mm` for distances. */
-const getUnitSuffix = (landmark?: CephLandmark): string => {
+export const getUnitSuffix = (landmark?: CephLandmark): string => {
   if (landmark === undefined) {
     return '';
   }
@@ -70,7 +74,7 @@ const getUnitSuffix = (landmark?: CephLandmark): string => {
  * of the reference software: one star per full standard deviation beyond the
  * first, capped at three. The norm range (min–max) is treated as mean ± 1 SD.
  */
-const getSeverityStars = (
+export const getSeverityStars = (
   value: number, mean: number, min: number, max: number,
 ): 0 | 1 | 2 | 3 => {
   const sd = (max - min) / 2;
@@ -90,7 +94,7 @@ const getSeverityStars = (
   return 0;
 };
 
-const STARS: { [n: number]: string } = { 1: '*', 2: '**', 3: '***' };
+export const STARS: { [n: number]: string } = { 1: '*', 2: '**', 3: '***' };
 
 /**
  * Flattens the categorized results into report rows (header + one row per
