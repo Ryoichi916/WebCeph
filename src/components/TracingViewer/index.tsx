@@ -82,6 +82,14 @@ interface ScreenRect {
 const rectsIntersect = (a: ScreenRect, b: ScreenRect): boolean =>
   a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
 
+/** The same rect grown by a margin on every side (for soft-proximity tests). */
+const inflateRect = (r: ScreenRect, m: number): ScreenRect => ({
+  left: r.left - m,
+  right: r.right + m,
+  top: r.top - m,
+  bottom: r.bottom + m,
+});
+
 /** Approximate on-screen bounding box of a label drawn with a candidate. */
 const getLabelRect = (
   sx: number, sy: number, textWidth: number, c: LabelCandidate,
@@ -432,20 +440,30 @@ export class TracingViewer extends React.PureComponent<Props, State> {
         ...LABEL_CANDIDATES,
       ];
       // First candidate that collides with nothing wins; otherwise the least
-      // objectionable one (label/dot overlaps weigh double a line crossing).
+      // objectionable one. Hard overlaps (label on label/dot, line through the
+      // text) weigh most; mere proximity (within a few px of a dot, label or
+      // line) gets a soft penalty so labels are nudged clear of crowded areas
+      // — the N fan and the Pog/Gn/Me chin cluster especially — instead of
+      // parking flush against them. Far candidates carry a small cost so the
+      // leader-line treatment only appears when the near ring is truly full.
       let chosen = candidates[0];
       let bestPenalty = Infinity;
       for (const candidate of candidates) {
         const rect = getLabelRect(sx, sy, textWidth, candidate);
-        let penalty = 0;
+        const softRect = inflateRect(rect, 3);
+        let penalty = candidate.far ? 0.75 : 0;
         for (const other of occupied) {
           if (rectsIntersect(rect, other)) {
-            penalty += 2;
+            penalty += 3;
+          } else if (rectsIntersect(softRect, other)) {
+            penalty += 1;
           }
         }
         for (const line of lines) {
           if (segmentIntersectsRect(line, rect, 1.5)) {
-            penalty += 1;
+            penalty += 1.5;
+          } else if (segmentIntersectsRect(line, rect, 4.5)) {
+            penalty += 0.5;
           }
         }
         if (penalty === 0) {
@@ -588,7 +606,7 @@ export class TracingViewer extends React.PureComponent<Props, State> {
             y1={seg.y1}
             x2={seg.x2}
             y2={seg.y2}
-            stroke="#40C4FF"
+            stroke="#0091EA"
             strokeWidth={1.5}
             opacity={0.85}
             strokeLinecap="round"

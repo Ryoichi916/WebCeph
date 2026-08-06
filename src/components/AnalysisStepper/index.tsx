@@ -95,7 +95,13 @@ export class AnalysisStepper extends React.PureComponent<Props, State> {
       <div className={cx(classes.root, className)}>
         <header className={classes.header}>
           <div className={classes.header_text}>
-            <span className={classes.header_label}>Analysis</span>
+            <span
+              className={cx(classes.header_label, {
+                [classes.header_label__complete]: isComplete,
+              })}
+            >
+              {isComplete ? 'Analysis complete' : 'Analysis'}
+            </span>
             <span className={classes.header_title}>
               {analysisName || '—'}
             </span>
@@ -116,7 +122,9 @@ export class AnalysisStepper extends React.PureComponent<Props, State> {
         </header>
         <div className={classes.progress_track} aria-hidden="true">
           <div
-            className={classes.progress_fill}
+            className={cx(classes.progress_fill, {
+              [classes.progress_fill__complete]: isComplete,
+            })}
             style={{ width: `${progress}%` }}
           />
         </div>

@@ -47,15 +47,27 @@
   fill: #FF6E40;
 }
 
-// Completed analysis lines (S-N, Go-Me, …): cyan strokes with a whisper of a
-// dark casing (drop-shadow) so they stay legible where they cross the bright
-// film regions of the radiograph. Constant 1.5px on-screen weight
+// Completed construction / measurement segments (A-N, B-A, S-Gn, …): a
+// deepened cyan-blue so they hold contrast on the bright film regions, with
+// a whisper of a dark casing (drop-shadow). Constant 1.5px on-screen weight
 // (vector-effect above).
 .vector {
   @extend %landmark;
-  stroke: #40C4FF;
+  stroke: #0091EA;
   stroke-width: 1.5px;
   opacity: 0.85;
+  filter: drop-shadow(0 0 0.75px rgba(20, 24, 29, 0.9));
+}
+
+// Reference planes (S-N, Frankfort, Go-Me, facial plane, …): the anatomical
+// scaffolding of the tracing — heavier, brighter and near-opaque, so the
+// canvas reads with a hierarchy instead of a uniform web of strokes.
+// Classified per symbol in connected.ts / planes.ts.
+.vector_plane {
+  @extend %landmark;
+  stroke: #00B0FF;
+  stroke-width: 2.5px;
+  opacity: 0.95;
   filter: drop-shadow(0 0 0.75px rgba(20, 24, 29, 0.9));
 }
 
@@ -64,14 +76,14 @@
 // only while their step is highlighted.
 .vector_segment {
   @extend %landmark;
-  stroke: #40C4FF;
+  stroke: #0091EA;
   stroke-width: 1.5px;
   opacity: 0;
 }
 
 .vector_extended {
   @extend %landmark;
-  stroke: #40C4FF;
+  stroke: #0091EA;
   stroke-width: 1.5px;
   stroke-dasharray: 6 6;
   opacity: 0;
@@ -79,7 +91,7 @@
 
 .vector_parallel {
   @extend %landmark;
-  stroke: #40C4FF;
+  stroke: #0091EA;
   stroke-width: 1.5px;
   stroke-dasharray: 6 6;
   opacity: 0;
@@ -104,11 +116,14 @@
   }
 
   &.vector,
+  &.vector_plane,
   &.vector_segment,
   &.vector_extended,
   &.vector_parallel {
+    // Above even the heavy reference planes, so the hovered measurement
+    // always reads on top.
     stroke: #FFC400;
-    stroke-width: 2px;
+    stroke-width: 2.75px;
     opacity: 1;
   }
 

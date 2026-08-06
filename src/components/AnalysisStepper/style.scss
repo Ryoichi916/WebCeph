@@ -33,6 +33,12 @@
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: $text-tertiary;
+
+  // All steps done — the micro-label states it outright, pairing with the
+  // green count pill and the full green progress bar.
+  &__complete {
+    color: $success;
+  }
 }
 
 .header_title {
@@ -73,16 +79,26 @@
   }
 }
 
+// Visible track so 0/32, mid-run and complete all read at a glance — $border
+// (not $bg-sunken) because the panel surface is white and the sunken tone
+// would vanish against it.
 .progress_track {
   height: 3px;
   flex-shrink: 0;
-  background: $bg-sunken;
+  background: $border;
 }
 
+// One accent story: progress runs in the same primary blue as the count pill
+// and the current-step marker; done-ness (row checks, complete pill, full bar)
+// is the semantic green. No third hue.
 .progress_fill {
   height: 100%;
-  background: $accent-400;
-  transition: width 300ms ease;
+  background: $primary-600;
+  transition: width 300ms ease, background-color 300ms ease;
+
+  &__complete {
+    background: $success;
+  }
 }
 
 // ---- Step list ------------------------------------------------------------
