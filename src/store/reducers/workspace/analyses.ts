@@ -14,6 +14,7 @@ import {
   getManualLandmarks,
   getSkippedSteps,
   getAnalysisId,
+  getScaleFactor,
 } from './image';
 
 import {
@@ -261,10 +262,21 @@ export const isStepEligibleForComputation = createSelector(
 export const getCalculatedValue = createSelector(
   isStepEligibleForComputation,
   getManualLandmarks,
-  (isEligible, getManual) =>
+  getScaleFactor,
+  (isEligible, getManual, getScale) =>
     (imageId: string): ((step: CephLandmark) => number | undefined) => (step: CephLandmark) => {
     if (isEligible(imageId)(step)) {
-      return tryCalculate(step, getManual(imageId), {});
+      const value = tryCalculate(step, getManual(imageId), {});
+      // Linear measurements come out of the geometry in image pixels; when a
+      // mm/px calibration is set for the image, convert them to millimeters.
+      // Angular values are scale-independent and pass through unchanged.
+      if (typeof value === 'number' && step.unit === 'mm') {
+        const scaleFactor = getScale(imageId);
+        if (scaleFactor !== null && scaleFactor > 0) {
+          return value * scaleFactor;
+        }
+      }
+      return value;
     }
     return undefined;
   },

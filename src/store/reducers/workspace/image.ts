@@ -339,7 +339,10 @@ export const getAnalysisId = createSelector(
 
 export const getScaleFactor = createSelector(
   getImageProps,
-  (getProps) => (id: string) => getProps(id).scaleFactor,
+  (getProps) => (id: string): number | null => {
+    const props = getProps(id);
+    return (props && typeof props.scaleFactor === 'number') ? props.scaleFactor : null;
+  },
 );
 
 // The id of the image being traced in the active workspace. Used by the editor

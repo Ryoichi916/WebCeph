@@ -144,26 +144,382 @@
 }
 
 // Calibration status: real ceph software always says whether linear (mm)
-// measurements can be trusted. Until a calibration ruler is set, angular
-// values are the reliable ones — surface that instead of hiding it.
+// measurements can be trusted. The chip is a real control — clicking it opens
+// the calibration dialog. Until a scale is set it warns (amber); once
+// calibrated it reads as a calm confirmed state showing the mm/px factor.
 .calibration_chip {
   display: inline-flex;
   align-items: center;
   gap: 5px;
   height: 24px;
   padding: 0 10px;
+  margin: 0;
   border-radius: 999px;
+  font-family: inherit;
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
   color: $warn;
   background: $warn-bg;
   border: 1px solid rgba(178, 106, 0, 0.25);
-  cursor: help;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
 
   svg {
     flex-shrink: 0;
+    color: inherit !important;
+    fill: currentColor !important;
+  }
+
+  &:hover {
+    background: #FFEDCC;
+    border-color: rgba(178, 106, 0, 0.45);
+  }
+
+  &:focus {
+    outline: none;
+  }
+
+  &:focus-visible {
+    box-shadow: $focus-ring;
+  }
+
+  &__calibrated {
+    color: $success;
+    background: $success-bg;
+    border-color: rgba(46, 125, 50, 0.28);
+
+    &:hover {
+      background: #D8EEDD;
+      border-color: rgba(46, 125, 50, 0.5);
+    }
+  }
+}
+
+// ---- Calibration dialog ---------------------------------------------------
+// Hand-rolled modal (portaled to <body>): backdrop + level-3 card per the
+// design brief (radius 8, 24px padding, 20/600 title, primary confirm).
+
+.calib_backdrop {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 1400;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(16, 30, 50, 0.45);
+  font-family: $font-stack;
+  animation: calib-fade-in 140ms ease;
+}
+
+@keyframes calib-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.calib_dialog {
+  width: 440px;
+  max-width: calc(100vw - 48px);
+  background: $bg-surface;
+  border-radius: 8px;
+  box-shadow: $shadow-3;
+  padding: 24px;
+  animation: calib-rise 160ms ease;
+}
+
+@keyframes calib-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.calib_header {
+  margin-bottom: 16px;
+}
+
+.calib_title {
+  margin: 0 0 4px;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: $text-primary;
+}
+
+.calib_subtitle {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: $text-tertiary;
+}
+
+// Segmented control for the two entry methods.
+.calib_tabs {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  margin-bottom: 16px;
+  background: $bg-sunken;
+  border-radius: 6px;
+}
+
+.calib_tab {
+  flex: 1;
+  height: 30px;
+  border: none;
+  border-radius: 5px;
+  margin: 0;
+  padding: 0 12px;
+  background: transparent;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  color: $text-secondary;
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease, box-shadow 120ms ease;
+
+  &:hover {
+    color: $primary-600;
+  }
+
+  &:focus {
+    outline: none;
+  }
+
+  &:focus-visible {
+    box-shadow: $focus-ring;
+  }
+
+  &__active {
+    background: $bg-surface;
+    color: $primary-600;
+    font-weight: 600;
+    box-shadow: $shadow-1;
+  }
+}
+
+.calib_hint {
+  margin: 0 0 12px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: $text-secondary;
+}
+
+.calib_fields {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.calib_field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+
+.calib_label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: $text-tertiary;
+}
+
+.calib_input_group {
+  display: flex;
+  align-items: center;
+  height: 36px;
+  border: 1px solid $border-strong;
+  border-radius: 6px;
+  background: $bg-surface;
+  overflow: hidden;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+
+  &:focus-within {
+    border-color: $primary-600;
+    box-shadow: $focus-ring;
+  }
+}
+
+.calib_input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border: none;
+  padding: 0 0 0 12px;
+  font-family: inherit;
+  font-size: 14px;
+  color: $text-primary;
+  font-variant-numeric: tabular-nums;
+  background: transparent;
+
+  &:focus {
+    outline: none;
+  }
+
+  &::placeholder {
+    color: $text-disabled;
+  }
+
+  // The spinner arrows fight the unit suffix visually; inputs are short
+  // decimals, so drop them.
+  -moz-appearance: textfield;
+  appearance: textfield;
+
+  &::-webkit-outer-spin-button,
+  &::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+}
+
+.calib_unit {
+  padding: 0 10px;
+  align-self: stretch;
+  display: inline-flex;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: $text-tertiary;
+  background: $bg-sunken;
+  border-left: 1px solid $border;
+  white-space: nowrap;
+}
+
+// The "=" between the two known-distance fields; aligned with the inputs.
+.calib_fields_divider {
+  align-self: flex-end;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  font-size: 14px;
+  font-weight: 600;
+  color: $text-tertiary;
+  flex-shrink: 0;
+}
+
+// Live result well: neutral while incomplete, primary-tinted once computable,
+// warn-tinted when input is present but invalid.
+.calib_preview {
+  margin-top: 16px;
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  border-radius: 6px;
+  background: $bg-sunken;
+  border: 1px solid $border;
+  font-size: 12.5px;
+  color: $text-tertiary;
+  font-variant-numeric: tabular-nums;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+
+  &__ready {
+    background: $primary-050;
+    border-color: $primary-100;
+    color: $text-secondary;
+  }
+
+  &__invalid {
+    background: $warn-bg;
+    border-color: rgba(178, 106, 0, 0.25);
+    color: $warn;
+  }
+}
+
+.calib_preview_value {
+  margin-left: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: $primary-600;
+}
+
+.calib_preview_alt {
+  margin-left: 10px;
+  color: $text-tertiary;
+}
+
+.calib_footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 24px;
+}
+
+.calib_footer_spacer {
+  flex: 1;
+}
+
+%calib_button_base {
+  height: 36px;
+  padding: 0 16px;
+  margin: 0;
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease, box-shadow 120ms ease;
+
+  &:focus {
+    outline: none;
+  }
+
+  &:focus-visible {
+    box-shadow: $focus-ring;
+  }
+}
+
+.calib_save {
+  @extend %calib_button_base;
+  border: none;
+  background: $primary-600;
+  color: #FFFFFF;
+
+  &:hover:not(:disabled) {
+    background: $primary-500;
+  }
+
+  &:disabled {
+    background: $bg-sunken;
+    color: $text-disabled;
+    cursor: default;
+  }
+}
+
+.calib_cancel {
+  @extend %calib_button_base;
+  border: none;
+  background: transparent;
+  color: $text-secondary;
+
+  &:hover {
+    background: $bg-sunken;
+    color: $text-primary;
+  }
+}
+
+.calib_remove {
+  @extend %calib_button_base;
+  border: none;
+  background: transparent;
+  padding: 0 10px;
+  font-size: 13px;
+  color: $error;
+
+  &:hover {
+    background: $error-bg;
   }
 }
 

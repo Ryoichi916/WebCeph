@@ -3,6 +3,8 @@ import Props from './props';
 
 import * as cx from 'classnames';
 
+import CalibrationDialog, { formatMmPx } from './CalibrationDialog';
+
 import Popover from 'material-ui/Popover';
 import Menu from 'material-ui/Menu';
 import MenuItem from 'material-ui/MenuItem';
@@ -38,6 +40,7 @@ const ANALYSES: Array<{ id: string; name: string; focus: string }> = [
 interface State {
   openMenu: 'analysis' | 'export' | null;
   anchorEl: Element | null;
+  isCalibrationOpen: boolean;
 }
 
 const ICON_COLOR = 'currentColor';
@@ -77,7 +80,7 @@ const ZOOM_MAX = 2;
 const ZOOM_STEP = 1.25;
 
 export default class TracingToolbar extends React.PureComponent<Props, State> {
-  state: State = { openMenu: null, anchorEl: null };
+  state: State = { openMenu: null, anchorEl: null, isCalibrationOpen: false };
 
   render() {
     const {
@@ -89,8 +92,10 @@ export default class TracingToolbar extends React.PureComponent<Props, State> {
       canShowSummary,
       canUndo, onUndoClick,
       canRedo, onRedoClick,
+      scaleFactor,
     } = this.props;
-    const { openMenu, anchorEl } = this.state;
+    const { openMenu, anchorEl, isCalibrationOpen } = this.state;
+    const isCalibrated = scaleFactor !== null;
     const hasImage = imageId !== null;
     // Before an image exists none of these actions apply — hide the strip
     // entirely rather than showing a row of disabled gray labels.
@@ -186,17 +191,28 @@ export default class TracingToolbar extends React.PureComponent<Props, State> {
 
         <span className={classes.spacer} />
 
-        <span
-          className={classes.calibration_chip}
+        <button
+          type="button"
+          className={cx(classes.calibration_chip, {
+            [classes.calibration_chip__calibrated]: isCalibrated,
+          })}
           title={
-            'No mm calibration is set for this image. ' +
-            'Angular measurements are scale-independent and unaffected; ' +
-            'linear (mm) measurements require calibration.'
+            isCalibrated
+              ? `Calibrated: 1 px = ${formatMmPx(scaleFactor!)} mm. ` +
+                'Linear (mm) measurements use this scale; ' +
+                'angular measurements are scale-independent. Click to adjust.'
+              : 'No mm calibration is set for this image. ' +
+                'Angular measurements are scale-independent and unaffected; ' +
+                'linear (mm) measurements require calibration. Click to calibrate.'
           }
+          aria-haspopup="dialog"
+          onClick={this.openCalibrationDialog}
         >
           <IconRuler color="currentColor" style={{ width: 14, height: 14 }} />
-          Not calibrated
-        </span>
+          {isCalibrated
+            ? `Calibrated · ${formatMmPx(scaleFactor!, 3)} mm/px`
+            : 'Not calibrated'}
+        </button>
 
         <span className={classes.separator} />
 
@@ -336,6 +352,15 @@ export default class TracingToolbar extends React.PureComponent<Props, State> {
             </MenuItem>
           </Menu>
         </Popover>
+
+        {isCalibrationOpen && (
+          <CalibrationDialog
+            scaleFactor={scaleFactor}
+            onSave={this.saveCalibration}
+            onRemove={this.removeCalibration}
+            onRequestClose={this.closeCalibrationDialog}
+          />
+        )}
       </div>
     );
   }
@@ -350,6 +375,25 @@ export default class TracingToolbar extends React.PureComponent<Props, State> {
   private handleSummaryClick = (e: React.MouseEvent<HTMLButtonElement>) => {
     e.currentTarget.blur();
     this.props.onShowSummaryClick();
+  };
+
+  private openCalibrationDialog = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.currentTarget.blur();
+    this.setState({ isCalibrationOpen: true });
+  };
+
+  private closeCalibrationDialog = () => {
+    this.setState({ isCalibrationOpen: false });
+  };
+
+  private saveCalibration = (value: number) => {
+    this.setState({ isCalibrationOpen: false });
+    this.props.onSetScaleFactor(value);
+  };
+
+  private removeCalibration = () => {
+    this.setState({ isCalibrationOpen: false });
+    this.props.onUnsetScaleFactor();
   };
 
   private openAnalysisMenu = (e: React.MouseEvent<HTMLButtonElement>) => {

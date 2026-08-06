@@ -15,6 +15,11 @@ export interface StateProps {
   canUndo: boolean;
   /** Whether there is an undone landmark edit that can be reapplied. */
   canRedo: boolean;
+  /**
+   * The mm-per-pixel calibration of the current image, or null when the image
+   * has not been calibrated yet.
+   */
+  scaleFactor: number | null;
 };
 
 export interface DispatchProps {
@@ -27,6 +32,10 @@ export interface DispatchProps {
   onZoomChange(zoom: number): any;
   onUndoClick(): any;
   onRedoClick(): any;
+  /** Store the mm-per-pixel calibration for the current image. */
+  onSetScaleFactor(value: number): any;
+  /** Clear the calibration for the current image. */
+  onUnsetScaleFactor(): any;
 };
 
 export type ConnectableProps = StateProps & DispatchProps;

@@ -11,6 +11,8 @@ import {
   exportImage,
   toggleAnalysisResults,
   setScale,
+  setScaleFactor,
+  unsetScaleFactor,
   undo,
   redo,
 } from 'actions/workspace';
@@ -22,7 +24,9 @@ import {
 } from 'store/reducers/workspace/analyses';
 import { isPerformingBackgroundWork } from 'store/reducers/workspace/workers';
 import { isProfilogramShown, getScale } from 'store/reducers/workspace/canvas';
-import { hasImage, getManualLandmarks, getAnalysisId } from 'store/reducers/workspace/image';
+import {
+  hasImage, getManualLandmarks, getAnalysisId, getScaleFactor,
+} from 'store/reducers/workspace/image';
 
 const mapStateToProps =
   (state: StoreState, { imageId }: OwnProps): StateProps => {
@@ -52,6 +56,7 @@ const mapStateToProps =
       zoom: getScale(state),
       canUndo: canUndo(state),
       canRedo: canRedo(state),
+      scaleFactor: imageId !== null ? getScaleFactor(state)(imageId) : null,
     };
   };
 
@@ -87,6 +92,16 @@ const mapDispatchToProps =
     onZoomChange: (scale: number) => {
       if (imageId !== null) {
         dispatch(setScale({ imageId, scale }));
+      }
+    },
+    onSetScaleFactor: (value: number) => {
+      if (imageId !== null) {
+        dispatch(setScaleFactor({ imageId, value }));
+      }
+    },
+    onUnsetScaleFactor: () => {
+      if (imageId !== null) {
+        dispatch(unsetScaleFactor({ imageId }));
       }
     },
   });
