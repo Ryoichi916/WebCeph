@@ -1,0 +1,70 @@
+@import 'src/_variables.scss';
+
+.title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-family: $font-stack;
+}
+
+.title_heading {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: $text-primary;
+}
+
+.title_caption {
+  font-size: 12.5px;
+  font-weight: 400;
+  color: $text-tertiary;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fields {
+  margin-top: 4px;
+}
+
+.remove_identity {
+  margin: 8px 0 0;
+  font-family: $font-stack;
+  font-size: 14px;
+  font-weight: 600;
+  color: $text-primary;
+}
+
+.remove_text {
+  margin: 8px 0 4px;
+  font-family: $font-stack;
+  font-size: 13px;
+  line-height: 1.55;
+  color: $text-secondary;
+}
+
+// What saving will change, stated before it is saved.
+.effect {
+  &__ok,
+  &__warn {
+    margin: 12px 0 0;
+    padding: 10px 12px;
+    border-radius: 6px;
+    font-family: $font-stack;
+    font-size: 12.5px;
+    line-height: 1.5;
+  }
+
+  &__ok {
+    background: $primary-050;
+    border: 1px solid $primary-100;
+    color: $primary-900;
+  }
+
+  &__warn {
+    background: $warn-bg;
+    border: 1px solid #F0DDB8;
+    color: #8A5200;
+  }
+}

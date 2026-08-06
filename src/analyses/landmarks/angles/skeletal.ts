@@ -179,11 +179,20 @@ export const IMPA = L1_MP;
  * Frankfort–mandibular incisor angle
  * Angle between the lower incisor to the Frankfort plane
  */
-export const FMIA = angleBetweenLines(
-  FH, L1Axis,
-  'Frankfort–mandibular incisor angle',
-  'FMIA',
-);
+export const FMIA: CephAngle = {
+  ...angleBetweenLines(
+    FH, L1Axis,
+    'Frankfort–mandibular incisor angle',
+    'FMIA',
+  ),
+  // The third angle of the Tweed triangle. FMIA closes as the lower incisor
+  // proclines (labial) and opens as it retroclines (lingual), so the two
+  // out-of-range indications are the mirror image of IMPA's.
+  interpret: defaultInterpetLandmark(
+    'lowerIncisorInclination',
+    ['labial', 'normal', 'lingual'],
+  ),
+};
 
 /**
  * The y-axis is measured as the acute angle formed by the intersection of a line

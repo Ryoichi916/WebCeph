@@ -13,6 +13,7 @@ const importFile: Importer = async (fileToImport, options) => {
   const {
     ids = [uniqueId('imported_image_')],
     workspaceId,
+    meta,
   } = options;
   const [imageId] = ids;
   const actions: GenericAction[] = [
@@ -28,12 +29,27 @@ const importFile: Importer = async (fileToImport, options) => {
       cb(error);
     };
   });
+  // Only spread record metadata the caller actually supplied: an explicit
+  // `undefined` would overwrite the reducer's defaults with nothing.
+  const recordMeta: Partial<ImageRecordMeta> = {};
+  if (meta !== undefined) {
+    if (meta.type !== undefined) {
+      recordMeta.type = meta.type;
+    }
+    if (meta.timepoint !== undefined) {
+      recordMeta.timepoint = meta.timepoint;
+    }
+    if (meta.captureDate !== undefined) {
+      recordMeta.captureDate = meta.captureDate;
+    }
+  }
   actions.push(loadImageSucceeded({
     id: imageId,
     name: fileToImport.name,
     data: dataURL,
     height,
     width,
+    ...recordMeta,
   }));
   actions.push(setActiveImageId({ imageId, workspaceId }));
   return actions;

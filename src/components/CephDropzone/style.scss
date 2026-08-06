@@ -54,6 +54,15 @@
   text-wrap: balance;
 }
 
+// ---- Record details form --------------------------------------------------
+// The three record fields live in components/RecordMetaFields (shared with the
+// "Edit details" dialog); only their placement inside the drop card is here.
+
+.record_form_slot {
+  max-width: 560px;
+  margin: -8px 0 24px;
+}
+
 .dropzone_load_demo {
   display: flex;
   flex-direction: column;

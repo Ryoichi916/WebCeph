@@ -1,0 +1,477 @@
+@import 'src/_variables.scss';
+
+.root {
+  display: flex;
+  flex-direction: row;
+  flex-grow: 1;
+  min-height: 0;
+  height: 100%;
+  font-family: $font-stack;
+}
+
+// Imaging column: the dark zone plus the same 44px bottom strip the tracing
+// editor has, so switching rail tiles never shifts the canvas height.
+.canvas {
+  flex-grow: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+// Same dark imaging zone as the tracing canvas so the record still reads as
+// part of the same app; the image is contained, never cropped.
+.viewport {
+  flex-grow: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: $canvas-bg;
+
+  // Zoomed past fit: the image keeps its own pixels and the well scrolls.
+  &__zoomed {
+    align-items: flex-start;
+    justify-content: flex-start;
+    overflow: auto;
+  }
+}
+
+.image {
+  flex: 0 0 auto;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  box-shadow: $shadow-2;
+}
+
+.no_image {
+  font-size: 14px;
+  color: $canvas-text;
+}
+
+// ---- Bottom strip ----------------------------------------------------------
+
+.toolbar {
+  flex: 0 0 auto;
+  box-sizing: border-box;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 8px;
+  background: $bg-surface;
+  border-top: 1px solid $border;
+  box-shadow: $shadow-1;
+}
+
+.tool_button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  color: $text-secondary;
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease;
+
+  &:hover:not(:disabled) {
+    background: $primary-050;
+    color: $primary-600;
+  }
+
+  &:focus {
+    outline: none;
+    box-shadow: $focus-ring;
+  }
+
+  &:disabled {
+    color: $text-disabled;
+    cursor: default;
+  }
+
+  &__icon {
+    padding: 0 6px;
+  }
+}
+
+.zoom_group {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.zoom_value {
+  min-width: 52px;
+  justify-content: center;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: $text-primary;
+}
+
+.zoom_divider {
+  width: 1px;
+  height: 20px;
+  margin: 0 4px;
+  background: $border;
+}
+
+.toolbar_note {
+  margin-left: auto;
+  padding-right: 8px;
+  font-size: 12.5px;
+  color: $text-tertiary;
+}
+
+// ---- Right panel -----------------------------------------------------------
+// Same geometry as the analysis stepper.
+
+.panel {
+  box-sizing: border-box;
+  width: 320px;
+  flex-shrink: 0;
+  min-height: 0;
+  padding: 16px;
+  overflow-y: auto;
+  background: $bg-surface;
+  border-left: 1px solid $border;
+  color: $text-primary;
+}
+
+.panel_head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid $border;
+}
+
+.panel_eyebrow {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: $text-tertiary;
+}
+
+.panel_title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: $text-primary;
+}
+
+.meta {
+  margin: 0;
+  padding: 4px 0 0;
+}
+
+.meta_row {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid $border;
+}
+
+.meta_key {
+  // Wide enough for the longest key ("Capture date") to stay on one line.
+  flex: 0 0 104px;
+  white-space: nowrap;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: $text-tertiary;
+}
+
+.meta_value {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+  color: $text-primary;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  &__num {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+.meta_unset {
+  font-weight: 400;
+  color: $text-disabled;
+}
+
+// ---- Record actions --------------------------------------------------------
+
+.panel_actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 10px 0 2px;
+}
+
+.panel_action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: $primary-600;
+  cursor: pointer;
+  transition: background-color 120ms ease;
+
+  &:hover:not(:disabled) {
+    background: $primary-050;
+  }
+
+  &:focus {
+    outline: none;
+    box-shadow: $focus-ring;
+  }
+
+  &:disabled {
+    color: $text-disabled;
+    cursor: default;
+  }
+
+  &__danger {
+    color: $error;
+
+    &:hover:not(:disabled) {
+      background: $error-bg;
+    }
+  }
+}
+
+.note {
+  display: flex;
+  gap: 10px;
+  margin: 12px 0 8px;
+  padding: 12px;
+  border: 1px solid #F0DDB8;
+  border-radius: 8px;
+  background: $warn-bg;
+}
+
+.note_icon {
+  flex: 0 0 auto;
+  line-height: 0;
+  padding-top: 1px;
+}
+
+.note_body {
+  min-width: 0;
+}
+
+.note_title {
+  display: block;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #8A5200;
+}
+
+.note_text {
+  margin: 6px 0 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: #8A5200;
+}
+
+// ---- Record context --------------------------------------------------------
+// The patient's other timepoints, so the panel's lower half carries the record
+// series instead of 330px of nothing.
+
+.context {
+  margin: 16px 0 12px;
+  padding-top: 12px;
+  border-top: 1px solid $border;
+}
+
+.context_head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.context_title {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: $text-tertiary;
+}
+
+.context_nav {
+  display: inline-flex;
+  gap: 2px;
+}
+
+.nav_button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid $border;
+  border-radius: 6px;
+  background: $bg-surface;
+  color: $text-secondary;
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease,
+    border-color 120ms ease;
+
+  &:hover:not(:disabled) {
+    border-color: $primary-500;
+    background: $primary-050;
+    color: $primary-600;
+  }
+
+  &:focus {
+    outline: none;
+    box-shadow: $focus-ring;
+  }
+
+  &:disabled {
+    color: $text-disabled;
+    cursor: default;
+  }
+}
+
+.context_list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.context_item {
+  box-sizing: border-box;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px;
+  border: 1px solid $border;
+  border-radius: 8px;
+  background: $bg-surface;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease;
+
+  &:hover:not(:disabled) {
+    border-color: $primary-500;
+  }
+
+  &:focus {
+    outline: none;
+    box-shadow: $focus-ring;
+  }
+
+  &__current {
+    background: $primary-050;
+    border-color: $primary-600;
+    box-shadow: inset 3px 0 0 $primary-600;
+    cursor: default;
+  }
+}
+
+.context_thumb {
+  flex: 0 0 auto;
+  position: relative;
+  width: 32px;
+  height: 40px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: $canvas-bg;
+  border: 1px solid $border-strong;
+}
+
+.context_thumb_img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+}
+
+.context_text {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.context_label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: $text-primary;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.context_current_tag {
+  flex: 0 0 auto;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: $primary-100;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: $primary-900;
+}
+
+.context_sub {
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  color: $text-tertiary;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.context_flag {
+  flex: 0 0 auto;
+  padding: 0 6px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  background: $success-bg;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: $success;
+  white-space: nowrap;
+}

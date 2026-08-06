@@ -1,0 +1,720 @@
+@import 'src/_variables.scss';
+
+// The simulated tracing's hue. Deliberately not cyan (the tracing), not amber
+// (landmarks / profilogram) and not the superimposition's orange: a violet
+// reads as "hypothetical" and cannot be mistaken for measured geometry.
+$sim-hue: #C08BFF;
+$current-hue: #40C4FF;
+
+// ---- Full-screen shell ------------------------------------------------------
+
+// Above the toolbar and its popovers, like the clinical report (2200).
+.root {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 2200;
+  display: flex;
+  flex-direction: column;
+  background: $canvas-bg;
+  font-family: $font-stack;
+}
+
+:global(body.treatment-simulation-open) {
+  overflow: hidden;
+}
+
+// ---- Top chrome -------------------------------------------------------------
+
+.chrome {
+  flex: 0 0 auto;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 0 20px;
+  background: rgba(0, 0, 0, .35);
+  border-bottom: 1px solid rgba(255, 255, 255, .08);
+}
+
+.chrome_title {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: $text-on-dark;
+}
+
+.chrome_hint {
+  font-size: 12px;
+  font-weight: 400;
+  color: rgba(242, 245, 248, .55);
+}
+
+.chrome_actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.chrome_identity {
+  font-size: 12.5px;
+  color: rgba(199, 208, 217, .78);
+  white-space: nowrap;
+}
+
+.chrome_button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 36px;
+  padding: 0 14px;
+  border: 1px solid rgba(255, 255, 255, .25);
+  border-radius: 6px;
+  background: transparent;
+  color: $text-on-dark;
+  font-family: $font-stack;
+  font-size: 13.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease;
+
+  &:hover {
+    background: rgba(255, 255, 255, .10);
+  }
+
+  &:focus {
+    outline: none;
+  }
+
+  &:focus-visible {
+    box-shadow: $focus-ring;
+  }
+
+  &[disabled] {
+    opacity: .45;
+    cursor: default;
+  }
+}
+
+.chrome_button__primary {
+  background: $primary-600;
+  border-color: $primary-600;
+  font-weight: 600;
+
+  &:hover {
+    background: $primary-500;
+    border-color: $primary-500;
+  }
+}
+
+// ---- Body -------------------------------------------------------------------
+
+.body {
+  flex: 1 1 auto;
+  display: flex;
+  min-height: 0;
+}
+
+.figure_column {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  padding: 16px 16px 0;
+}
+
+.figure {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid $canvas-border;
+  border-radius: 8px;
+  background: #0E1216;
+  overflow: hidden;
+}
+
+.svg {
+  width: 100%;
+  height: 100%;
+}
+
+// ---- Tracing hues -----------------------------------------------------------
+
+.film {
+  opacity: .58;
+}
+
+.casing {
+  fill: none;
+  stroke: rgba(20, 24, 29, .62);
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.outline {
+  fill: none;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.dot {
+  stroke: $canvas-bg;
+  stroke-width: 1.2;
+  vector-effect: non-scaling-stroke;
+}
+
+.current {
+  .outline { stroke: $current-hue; }
+  .dot { fill: $current-hue; }
+}
+
+// Dashed, so the simulated tracing is legible as a proposal even in a
+// black-and-white print or to a red-green colour-blind reader.
+.simulated {
+  .outline {
+    stroke: $sim-hue;
+    stroke-width: 2.1;
+    stroke-dasharray: 7 4.5;
+  }
+
+  .dot {
+    fill: $sim-hue;
+  }
+}
+
+.vector {
+  stroke: rgba(255, 255, 255, .8);
+  stroke-width: 1.2;
+  vector-effect: non-scaling-stroke;
+}
+
+.vector_head {
+  fill: rgba(255, 255, 255, .85);
+}
+
+// ---- Legend -----------------------------------------------------------------
+
+.legend {
+  flex: 0 0 auto;
+  padding: 12px 4px 14px;
+}
+
+.legend_keys {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.key {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.key_swatch {
+  width: 26px;
+  height: 0;
+  border-top-width: 3px;
+  border-top-style: solid;
+  border-radius: 2px;
+}
+
+.key__current .key_swatch { border-top-color: $current-hue; }
+
+.key__simulated .key_swatch {
+  border-top-style: dashed;
+  border-top-color: $sim-hue;
+}
+
+.key_text {
+  font-size: 13px;
+  font-weight: 600;
+  color: $text-on-dark;
+}
+
+.legend_plan {
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(192, 139, 255, .16);
+  color: #E6D2FF;
+  font-size: 12.5px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.legend_note {
+  margin: 8px 0 0;
+  max-width: 96ch;
+  font-size: 12px;
+  line-height: 1.5;
+  color: rgba(199, 208, 217, .72);
+}
+
+// ---- Panel ------------------------------------------------------------------
+
+.panel {
+  flex: 0 0 430px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: $bg-surface;
+  border-left: 1px solid $border;
+}
+
+.panel_head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 14px 16px 12px;
+  border-bottom: 1px solid $border;
+}
+
+.panel_title {
+  font-size: 16px;
+  font-weight: 600;
+  color: $text-primary;
+}
+
+.panel_sub {
+  font-size: 12.5px;
+  color: $text-tertiary;
+  font-variant-numeric: tabular-nums;
+}
+
+.panel_scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 14px 16px 20px;
+}
+
+.disclaimer {
+  margin: 0 0 16px;
+  padding: 10px 12px;
+  border: 1px solid #FFE0B2;
+  border-left: 3px solid $warn;
+  border-radius: 6px;
+  background: $warn-bg;
+  font-size: 12px;
+  line-height: 1.55;
+  color: #6B4200;
+
+  strong { font-weight: 600; }
+}
+
+// ---- Sliders ----------------------------------------------------------------
+
+.control {
+  padding: 10px 0 12px;
+  border-bottom: 1px solid $border;
+}
+
+.control__off {
+  opacity: .62;
+}
+
+.control_head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.control_label {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: $text-primary;
+}
+
+.control_value {
+  font-size: 13px;
+  font-weight: 600;
+  color: $text-tertiary;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.control__on {
+  .control_value {
+    color: $primary-700;
+  }
+}
+
+.slider {
+  display: block;
+  width: 100%;
+  height: 20px;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  -webkit-appearance: none;
+  appearance: none;
+  cursor: pointer;
+
+  &:focus {
+    outline: none;
+  }
+
+  &::-webkit-slider-runnable-track {
+    height: 4px;
+    border-radius: 2px;
+    background: $bg-sunken;
+    border: 1px solid $border;
+  }
+
+  &::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    margin-top: -7px;
+    border: none;
+    border-radius: 999px;
+    background: $primary-600;
+    box-shadow: $shadow-1;
+  }
+
+  &::-moz-range-track {
+    height: 4px;
+    border-radius: 2px;
+    background: $bg-sunken;
+    border: 1px solid $border;
+  }
+
+  &::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    border: none;
+    border-radius: 999px;
+    background: $primary-600;
+  }
+
+  &:focus-visible::-webkit-slider-thumb {
+    box-shadow: $focus-ring;
+  }
+
+  &[disabled] {
+    cursor: default;
+
+    &::-webkit-slider-thumb { background: $text-disabled; }
+    &::-moz-range-thumb { background: $text-disabled; }
+  }
+}
+
+.control_scale {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-top: 2px;
+  font-size: 10.5px;
+  color: $text-tertiary;
+  font-variant-numeric: tabular-nums;
+}
+
+.control_zero {
+  color: $text-disabled;
+}
+
+.control_help {
+  margin: 7px 0 0;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: $text-secondary;
+}
+
+.control_reason {
+  margin: 7px 0 0;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: $warn;
+}
+
+// ---- Soft tissue ------------------------------------------------------------
+
+.soft {
+  padding: 14px 0 4px;
+  border-bottom: 1px solid $border;
+}
+
+.soft_head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.soft_title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: $text-primary;
+}
+
+.seg {
+  display: inline-flex;
+  padding: 2px;
+  border: 1px solid $border-strong;
+  border-radius: 8px;
+  background: $bg-sunken;
+}
+
+.seg_button {
+  height: 24px;
+  padding: 0 11px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: $text-secondary;
+  font-family: $font-stack;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+
+  &:hover {
+    color: $text-primary;
+  }
+
+  &:focus {
+    outline: none;
+  }
+
+  &:focus-visible {
+    box-shadow: $focus-ring;
+  }
+}
+
+.seg_button__on {
+  background: $bg-surface;
+  color: $primary-700;
+  font-weight: 600;
+  box-shadow: $shadow-1;
+}
+
+.soft_note {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: $text-secondary;
+
+  strong { font-weight: 600; }
+}
+
+.soft_empty {
+  margin: 8px 0 0;
+  font-size: 11.5px;
+  color: $text-tertiary;
+}
+
+.soft_list {
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.soft_row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 0;
+  border-top: 1px solid $border;
+  font-size: 11.5px;
+}
+
+.soft_symbol {
+  flex: 0 0 42px;
+  font-weight: 600;
+  color: $text-primary;
+}
+
+.soft_name {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: $text-tertiary;
+}
+
+.soft_ratio {
+  flex: 0 0 auto;
+  color: $text-secondary;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+// ---- Value table ------------------------------------------------------------
+
+.values {
+  padding-top: 16px;
+}
+
+.values_head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.values_title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: $text-primary;
+}
+
+.values_sub {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: $text-tertiary;
+}
+
+.values_empty {
+  margin: 10px 0 0;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: $text-secondary;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+
+  th, td {
+    padding: 6px 4px;
+    text-align: left;
+    vertical-align: baseline;
+  }
+
+  thead th {
+    border-bottom: 1px solid $border-strong;
+    font-size: 10.5px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    color: $text-tertiary;
+  }
+
+  tbody tr + tr td {
+    border-top: 1px solid $border;
+  }
+}
+
+.col_name { width: auto; }
+.col_num { text-align: right; }
+.col_norm { text-align: right; width: 68px; }
+
+.cell_name {
+  min-width: 0;
+}
+
+.symbol {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: $text-primary;
+}
+
+.name {
+  display: block;
+  margin-top: 1px;
+  font-size: 11px;
+  color: $text-tertiary;
+}
+
+.cell_num {
+  text-align: right;
+  font-size: 12.5px;
+  color: $text-secondary;
+  white-space: nowrap;
+}
+
+.cell_sim {
+  font-weight: 600;
+  color: $text-primary;
+}
+
+.cell_in {
+  color: $success;
+}
+
+.cell_out {
+  color: $warn;
+}
+
+.cell_change {
+  font-weight: 600;
+  color: $primary-700;
+}
+
+.cell_norm {
+  text-align: right;
+  font-size: 11.5px;
+  color: $text-tertiary;
+  white-space: nowrap;
+}
+
+.footnotes {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid $border;
+}
+
+.footnote {
+  margin: 0 0 8px;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: $text-tertiary;
+
+  em { font-style: italic; }
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+}
+
+.footnote__warn {
+  color: $warn;
+}
+
+// ---- Empty state ------------------------------------------------------------
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin: auto;
+  padding: 40px;
+  max-width: 520px;
+  text-align: center;
+}
+
+.empty_title {
+  font-size: 20px;
+  font-weight: 400;
+  color: $canvas-text;
+}
+
+.empty_hint {
+  font-size: 13px;
+  line-height: 1.6;
+  color: rgba(199, 208, 217, .6);
+}

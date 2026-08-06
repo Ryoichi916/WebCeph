@@ -58,6 +58,57 @@
   gap: 10px;
 }
 
+// ---- Scope switch (segmented control, screen chrome only) -------------------
+
+// Lives inside .chrome, which @media print hides outright — the switch is a
+// preview control and must never reach the paper.
+.seg {
+  display: inline-flex;
+  padding: 2px;
+  border: 1px solid rgba(255, 255, 255, .18);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, .06);
+}
+
+.seg_button {
+  height: 28px;
+  padding: 0 14px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: rgba(242, 245, 248, .72);
+  font-family: $font-stack;
+  font-size: 12.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease;
+
+  &:hover {
+    color: $text-on-dark;
+    background: rgba(255, 255, 255, .08);
+  }
+
+  &:focus {
+    outline: none;
+  }
+
+  &:focus-visible {
+    box-shadow: $focus-ring;
+  }
+}
+
+.seg_button__on {
+  background: $bg-surface;
+  color: $primary-700;
+  font-weight: 600;
+
+  &:hover {
+    background: $bg-surface;
+    color: $primary-700;
+  }
+}
+
 .chrome_button {
   display: inline-flex;
   align-items: center;
@@ -132,42 +183,52 @@
 
 .masthead {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: space-between;
   gap: 16px;
-  padding-bottom: 16px;
+  padding-bottom: 14px;
   border-bottom: 2px solid $primary-700;
 }
 
-.brand {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.brand_text {
+// The practice owns the letterhead. The software is credited in the footer.
+.masthead_left {
   display: flex;
   flex-direction: column;
+  min-width: 0;
 }
 
-.brand_word {
-  font-size: 20px;
+.clinic_name {
+  font-size: 24px;
   font-weight: 700;
-  letter-spacing: .01em;
+  letter-spacing: -.01em;
+  line-height: 1.15;
   color: $primary-900;
-  line-height: 1.2;
 }
 
-.brand_sub {
-  margin-top: 1px;
+.clinic_line {
+  margin-top: 4px;
+  font-size: 12.5px;
+  color: $text-secondary;
+}
+
+// Screen-only wayfinding for the two fields that are typed further down.
+.clinic_hint {
+  margin-top: 4px;
   font-size: 11.5px;
-  color: $text-tertiary;
+  color: $text-disabled;
+}
+
+@media print {
+  .clinic_hint {
+    display: none;
+  }
 }
 
 .masthead_right {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
+  flex: 0 0 auto;
 }
 
 .doc_kicker {
@@ -183,14 +244,6 @@
   font-size: 12px;
   color: $text-secondary;
   font-variant-numeric: tabular-nums;
-}
-
-.masthead_clinic {
-  margin-top: 5px;
-  font-size: 12.5px;
-  font-weight: 600;
-  color: $text-secondary;
-  text-align: right;
 }
 
 // ---- Letterhead editable fields --------------------------------------------
@@ -336,17 +389,332 @@
   padding: 2px 9px;
 }
 
+// ---- Summary of findings (combined report contents page) --------------------
+
+.ov {
+  border: 1px solid $border;
+  border-radius: 8px;
+  overflow: hidden;
+  page-break-inside: avoid;
+}
+
+.ov_row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 7px 12px;
+  background: $bg-surface;
+
+  &:nth-child(even) {
+    background: #FAFBFC;
+  }
+
+  + .ov_row {
+    border-top: 1px solid $border;
+  }
+}
+
+// Column heads: the right-hand fraction ("8/8") is unreadable without one.
+.ov_row__head {
+  padding-top: 5px;
+  padding-bottom: 5px;
+  background: $bg-sunken !important;
+
+  .ov_name,
+  .ov_findings,
+  .ov_count {
+    font-size: 9.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    color: $text-tertiary;
+  }
+}
+
+.ov_name {
+  flex: 0 0 96px;
+  font-size: 12px;
+  font-weight: 700;
+  color: $primary-900;
+}
+
+.ov_findings {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+}
+
+.ov_pair {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.ov_cat {
+  font-size: 10.5px;
+  color: $text-secondary;
+  white-space: nowrap;
+}
+
+.ov_none {
+  font-size: 11px;
+  color: $text-tertiary;
+}
+
+.ov_more {
+  font-size: 10.5px;
+  color: $text-tertiary;
+  white-space: nowrap;
+}
+
+.ov_count {
+  flex: 0 0 auto;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: $text-tertiary;
+  font-variant-numeric: tabular-nums;
+}
+
+.ov_caption {
+  margin: 8px 0 0;
+  font-size: 10.5px;
+  line-height: 1.45;
+  color: $text-tertiary;
+}
+
+// Marks a category the analyses disagree on, resolved in the note below.
+.ov_differs {
+  margin-left: 3px;
+  font-weight: 700;
+  color: $warn;
+}
+
+// ---- Caveats that change how the numbers must be read -----------------------
+
+// Reserved for a fact that qualifies every measurement on the paper (no image
+// scale, for instance). Amber attention treatment — never the quietest text on
+// the page.
+.caveat {
+  margin: 10px 0 0;
+  padding: 8px 12px;
+  border: 1px solid #F0DFBC;
+  border-left: 3px solid $warn;
+  border-radius: 6px;
+  background: $warn-bg;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: #7A4A00;
+}
+
+// ---- Where the analyses differ (cross-analysis disagreement) ----------------
+
+.diverge {
+  margin-top: 10px;
+  padding: 9px 12px 10px;
+  border: 1px solid $border;
+  border-radius: 6px;
+  background: #FAFBFC;
+  page-break-inside: avoid;
+}
+
+.diverge_head {
+  display: block;
+  margin-bottom: 5px;
+  font-size: 9.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .1em;
+  color: $text-secondary;
+}
+
+.diverge_row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 3px 0;
+
+  + .diverge_row {
+    border-top: 1px dotted $border;
+  }
+}
+
+.diverge_cat {
+  flex: 0 0 108px;
+  font-size: 11px;
+  font-weight: 600;
+  color: $text-primary;
+}
+
+.diverge_sources {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px 14px;
+}
+
+.diverge_src {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  font-size: 10.5px;
+  color: $text-tertiary;
+}
+
+.diverge_src_analysis {
+  font-weight: 600;
+  color: $text-secondary;
+}
+
+.diverge_src_ind {
+  font-weight: 600;
+  color: $text-primary;
+}
+
+.diverge_src_num {
+  font-variant-numeric: tabular-nums;
+}
+
+.diverge_note {
+  display: block;
+  margin-top: 6px;
+  font-size: 10.5px;
+  line-height: 1.45;
+  color: $text-tertiary;
+}
+
+// ---- Document keys (printed once, in the front matter) ----------------------
+
+.keys {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid $border;
+}
+
+.keys_line {
+  font-size: 10.5px;
+  color: $text-tertiary;
+}
+
+// ---- One analysis section inside the combined report ------------------------
+
+.sec {
+  margin-top: 26px;
+}
+
+// The heading and its wigglegram travel together across a page break, so a
+// section heading can never be orphaned at the foot of a page and the chart
+// is never cut in half.
+.sec_keep {
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+
+// `break-after: avoid` keeps a heading with the table that follows it. Applied
+// unconditionally it also glued the *next* section's heading to a section that
+// ends here, pushing both onto a fresh page and leaving a dead band behind.
+.sec_keep__leading {
+  page-break-after: avoid;
+  break-after: avoid;
+}
+
+.sec_head {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  padding-bottom: 6px;
+  border-bottom: 1.5px solid $primary-700;
+}
+
+.sec_index {
+  flex: 0 0 auto;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: $primary-700;
+  color: #FFFFFF;
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 17px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.sec_name {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -.005em;
+  color: $primary-900;
+}
+
+.sec_active {
+  padding: 1px 7px;
+  border: 1px solid $primary-100;
+  border-radius: 999px;
+  background: $primary-050;
+  color: $primary-700;
+  font-size: 9.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+}
+
+.sec_focus {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 11px;
+  color: $text-tertiary;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sec_count {
+  flex: 0 0 auto;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  color: $text-tertiary;
+  font-variant-numeric: tabular-nums;
+}
+
+// Honest placeholder for an analysis nothing computes for yet.
+.sec_pending {
+  margin: 10px 0 0;
+  padding: 9px 12px;
+  border: 1px dashed $border-strong;
+  border-radius: 6px;
+  background: #FAFBFC;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: $text-secondary;
+}
+
 // ---- Radiograph figure -----------------------------------------------------
 
 .figure {
   margin: 0;
 }
 
+// The mount hugs the film. A full-width frame around a portrait radiograph is
+// three-quarters empty black — the film printed smaller than the table above it.
 .figure_frame {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 10px;
+  width: fit-content;
+  max-width: 100%;
+  margin: 0 auto;
+  padding: 8px;
   background: $canvas-bg;
   border: 1px solid $border-strong;
   border-radius: 6px;
@@ -355,7 +723,7 @@
 .figure_image {
   display: block;
   max-width: 100%;
-  max-height: 300px;
+  max-height: 340px;
   border-radius: 2px;
 }
 
@@ -381,6 +749,12 @@
 
 .wiggle_section {
   page-break-inside: avoid;
+}
+
+// Inside a combined-report section the chart carries no label of its own, so
+// it needs the breathing room the label used to provide.
+.sec_keep .wiggle_section {
+  margin-top: 12px;
 }
 
 .wiggle_svg {
@@ -536,15 +910,15 @@
   font-weight: 400;
 }
 
+// Wraps rather than truncates: there is 300pt of unused width in this column,
+// and a printed record must not carry "…facial height ratio (S-Go /".
 .measurement_name {
   display: block;
-  max-width: 220px;
+  max-width: 320px;
   font-size: 10.5px;
   line-height: 1.3;
   color: $text-tertiary;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
 }
 
 .cell_numeric {
@@ -596,12 +970,78 @@
   font-weight: 700;
 }
 
+// The pointer to where this measurement is tabulated in full. Left-aligned in
+// the span it occupies, so it cannot be mistaken for a number in the NORM
+// column — the value itself stays in the VALUE cell.
 .cell_crossref {
-  text-align: right;
-  font-size: 11.5px;
+  text-align: left;
+  padding-left: 14px !important;
+  font-size: 10.5px;
+  font-style: italic;
+  color: $text-tertiary;
+  white-space: normal;
+}
+
+// ---- Single-measurement section (a table of one row is not a table) ---------
+
+.single {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 9px 12px;
+  border: 1px solid $border;
+  border-radius: 6px;
+  background: #FAFBFC;
+  page-break-inside: avoid;
+}
+
+.single_finding {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  align-items: flex-start;
+  min-width: 132px;
+}
+
+.single_measurement {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.single_name {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: $text-primary;
+}
+
+.single_symbol {
+  font-size: 10.5px;
+  color: $text-tertiary;
+}
+
+.single_numbers {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.single_value {
+  font-size: 16px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: $text-primary;
+}
+
+.single_norm {
+  font-size: 10.5px;
   color: $text-tertiary;
   font-variant-numeric: tabular-nums;
-  white-space: nowrap;
 }
 
 .legend {
@@ -621,52 +1061,66 @@
   color: $text-disabled;
 }
 
+// Accounts, on the printed record, for measurements the table could not
+// report. Sits under the SD legend as a footnote; prints in the warning tint,
+// which stays legible in grayscale.
+.legend_note {
+  display: block;
+  margin-top: 5px;
+  color: $warn;
+}
+
 .empty_note {
   margin: 4px 0 0;
   font-size: 12.5px;
   color: $text-secondary;
 }
 
-// ---- Clinical interpretation -----------------------------------------------
+// ---- Closing block: notes, certification, footer ----------------------------
 
-.interp_section {
+// Notes, certification and footer close the document together and never split
+// across a page — the block *is* the end of the report.
+.tail {
+  page-break-inside: avoid;
+  break-inside: avoid;
+  margin-top: 20px;
+}
+
+.notes {
   page-break-inside: avoid;
 }
 
-.interp_grid {
+.notes_hint {
+  font-size: 9.5px;
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+  color: $text-tertiary;
+}
+
+.notes_rules {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px 10px;
+  flex-direction: column;
+  gap: 24px;
+  padding: 10px 0 2px;
 }
 
-.interp_item {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 10px 6px 12px;
-  border: 1px solid $border;
-  border-radius: 6px;
-  background: #FAFBFC;
+.notes_rule {
+  display: block;
+  height: 0;
+  border-bottom: 1px solid $border;
 }
-
-.interp_category {
-  font-size: 12px;
-  font-weight: 600;
-  color: $text-primary;
-  white-space: nowrap;
-}
-
-// ---- Certification / signature block ---------------------------------------
 
 .sig_section {
   page-break-inside: avoid;
+  margin-top: 18px;
 }
 
 .sig_row {
   display: flex;
   align-items: flex-end;
   gap: 28px;
-  margin-top: 26px;
+  margin-top: 14px;
 }
 
 .sig_field {
@@ -709,14 +1163,16 @@
 
 // ---- Footer ----------------------------------------------------------------
 
+// The closing rule answers the masthead's opening one, so the document reads
+// as finished rather than cut off wherever on the page it happens to end.
 .foot {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: 16px;
   margin-top: auto;
-  padding-top: 12px;
-  border-top: 1px solid $border;
+  padding-top: 10px;
+  border-top: 2px solid $primary-700;
   font-size: 10.5px;
   color: $text-tertiary;
 }
@@ -808,13 +1264,10 @@
     page-break-inside: avoid;
   }
 
-  // Compact the layout under print margins so a typical analysis
-  // (Downs/Steiner) fits on a single A4 page. The zoom acts as a gentle
-  // shrink-to-fit in Chromium's print pipeline; browsers that ignore it
-  // simply paginate onto a second page.
-  .paper {
-    zoom: 0.88;
-  }
+  // No shrink-to-fit zoom. It set the two scopes at two different type scales
+  // (0.88 against 1), so a practice printing both got two visibly different
+  // letterheads and 6.6pt column heads on one of them — and a rich analysis
+  // spilled onto a second page anyway. One scale, both scopes.
 
   .doc_title {
     margin-top: 14px;
@@ -830,11 +1283,11 @@
   }
 
   .figure_frame {
-    padding: 8px;
+    padding: 7px;
   }
 
   .figure_image {
-    max-height: 230px;
+    max-height: 330px;
   }
 
   .table td {
@@ -850,5 +1303,31 @@
   .foot {
     margin-top: 20px;
     page-break-inside: avoid;
+  }
+
+  // ---- Combined (multi-analysis) printout -----------------------------------
+
+  // Every analysis' table repeats its column headers on each page it spills
+  // onto, and a finding group (the rowSpan'd "Finding" cell plus its
+  // measurements) is never cut across a page.
+  .table thead {
+    display: table-header-group;
+  }
+
+  .table tbody {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  .sec {
+    margin-top: 20px;
+  }
+
+  .paper__combined .sec_keep {
+    // Chromium honours break-after: avoid on a block, but a section whose
+    // wigglegram is suppressed (fewer than two comparable measurements) has
+    // little height to keep — the extra top margin gives the break a cheaper
+    // place to land just above the heading.
+    margin-top: 4px;
   }
 }

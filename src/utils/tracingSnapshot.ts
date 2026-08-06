@@ -80,11 +80,69 @@ export const drawTracingOverlay = (
   });
 };
 
+/** Padding kept around the traced region when cropping, as a fraction of it. */
+const CROP_PADDING = 0.18;
+/** Below this many placed points a bounding box is not representative. */
+const CROP_MIN_POINTS = 4;
+
+interface Crop {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/**
+ * The region of the film that carries the tracing, padded generously and
+ * clamped to the image. A lateral ceph is mostly empty field: printed whole it
+ * reduces the anatomy to a stamp in the middle of a black rectangle. Returns
+ * `null` when there is too little tracing to crop around, in which case the
+ * whole film is used.
+ */
+const contentCrop = (
+  manual: ManualLandmarks, width: number, height: number,
+): Crop | null => {
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  let count = 0;
+  Object.keys(manual).forEach((symbol) => {
+    const p = manual[symbol];
+    if (!isGeoPoint(p)) {
+      return;
+    }
+    count += 1;
+    minX = Math.min(minX, p.x);
+    minY = Math.min(minY, p.y);
+    maxX = Math.max(maxX, p.x);
+    maxY = Math.max(maxY, p.y);
+  });
+  if (count < CROP_MIN_POINTS || maxX <= minX || maxY <= minY) {
+    return null;
+  }
+  const padX = (maxX - minX) * CROP_PADDING;
+  const padY = (maxY - minY) * CROP_PADDING;
+  const x = Math.max(0, Math.floor(minX - padX));
+  const y = Math.max(0, Math.floor(minY - padY));
+  return {
+    x,
+    y,
+    width: Math.min(width, Math.ceil(maxX + padX)) - x,
+    height: Math.min(height, Math.ceil(maxY + padY)) - y,
+  };
+};
+
 /**
  * Composites the radiograph + tracing overlay to an offscreen canvas and
  * resolves with a data URL, for embedding the traced image in documents
  * (e.g. the printable clinical report). Resolves with `null` when the image
  * fails to load or a 2D context is unavailable.
+ *
+ * With `cropToTracing` the canvas is limited to the traced region plus padding,
+ * which is what the printed report wants: the film then fills the space the
+ * page gives it instead of surrounding the anatomy with empty field. The
+ * tracing itself is drawn identically either way.
  */
 export const renderTracingSnapshot = (
   src: string,
@@ -92,17 +150,25 @@ export const renderTracingSnapshot = (
   height: number,
   manual: ManualLandmarks,
   segments: Segment[],
+  cropToTracing: boolean = false,
 ): Promise<string | null> => {
   return new Promise((resolve) => {
     const img = new Image();
     img.onload = () => {
+      const crop = cropToTracing
+        ? contentCrop(manual, width, height)
+        : null;
       const canvas = document.createElement('canvas');
-      canvas.width = width;
-      canvas.height = height;
+      canvas.width = crop !== null ? crop.width : width;
+      canvas.height = crop !== null ? crop.height : height;
       const ctx = canvas.getContext('2d');
       if (ctx === null) {
         resolve(null);
         return;
+      }
+      if (crop !== null) {
+        // Draw in image coordinates, with the crop's origin at the canvas'.
+        ctx.translate(-crop.x, -crop.y);
       }
       ctx.drawImage(img, 0, 0, width, height);
       drawTracingOverlay(ctx, width, manual, segments);

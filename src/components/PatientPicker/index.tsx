@@ -13,6 +13,9 @@ import IconArrow from 'material-ui/svg-icons/hardware/keyboard-arrow-right';
 import Props from './props';
 
 import { formatAgeShort, formatSexShort } from 'utils/patient';
+// Same ISO -> YYYY/MM/DD formatter the records surfaces use, so the date the
+// user typed is echoed in exactly the form every other screen prints.
+import { formatCaptureDate } from 'utils/records';
 
 const classes = require('./style.scss');
 
@@ -445,6 +448,8 @@ export default class PatientPicker extends React.PureComponent<Props, State> {
     const now = new Date();
     const todayISO =
       `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}`;
+    // The typed date restated locale-independently (see the echo below).
+    const dobEcho = formatCaptureDate(dateOfBirth);
 
     const trimmedQuery = query.trim().toLowerCase();
     const visiblePatients = trimmedQuery === ''
@@ -573,6 +578,17 @@ export default class PatientPicker extends React.PureComponent<Props, State> {
                     onChange={this.handleDateOfBirthChange}
                     onKeyDown={this.handleKeyDown}
                   />
+                  {/* `input[type=date]` paints in the browser's locale, so US
+                      Chrome shows 08/06/2026 — ambiguous on a clinical record.
+                      Every display surface in this app writes YYYY/MM/DD, so
+                      the parsed value is echoed here in that form. */}
+                  <span
+                    className={dobEcho !== null
+                      ? `${classes.field_echo} ${classes.field_echo_set}`
+                      : classes.field_echo}
+                  >
+                    {dobEcho !== null ? dobEcho : 'YYYY/MM/DD'}
+                  </span>
                 </label>
                 {/* Not a <label>: clicking the caption of a label containing
                     buttons would forward the click to the first button and

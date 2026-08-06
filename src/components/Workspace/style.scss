@@ -12,6 +12,13 @@
   flex-grow: 1;
   display: flex;
   flex-direction: column;
+  // Never let the editor's contents (the zoomed radiograph) widen the workspace
+  // past its box. Without this the canvas' natural width propagated out through
+  // the flex chain, the workspace grew a horizontal scroll, and the fit-to-view
+  // measurement fed off that larger box — a loop that pushed the bottom toolbar
+  // off the left edge on a freshly added image.
+  min-width: 0;
+  max-width: 100%;
 }
 
 .lens {

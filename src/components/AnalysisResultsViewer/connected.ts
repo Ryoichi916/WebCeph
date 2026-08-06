@@ -12,11 +12,14 @@ import {
 import {
   getCategorizedAnalysisResults,
   getActiveAnalysis,
+  hasUnreportableLinearMeasurements,
 } from 'store/reducers/workspace/analyses';
 
 import {
   getActiveImageId,
   getAnalysisId,
+  getImageTimepoint,
+  getImageCaptureDate,
 } from 'store/reducers/workspace/image';
 
 import {
@@ -34,16 +37,22 @@ const mapStateToProps: MapStateToProps<StateProps, OwnProps, StoreState> = (stat
     return {
       results: [],
       analysisId: null,
+      timepoint: null,
+      captureDate: null,
       landmarksBySymbol: EMPTY_LANDMARKS,
+      needsScaleForLinear: false,
     };
   }
   const analysis = getActiveAnalysis(state)(activeImageId);
   return {
     results: getCategorizedAnalysisResults(state)(activeImageId),
     analysisId: getAnalysisId(state)(activeImageId),
+    timepoint: getImageTimepoint(state)(activeImageId),
+    captureDate: getImageCaptureDate(state)(activeImageId),
     landmarksBySymbol: analysis !== null
       ? keyBy(map(analysis.components, c => c.landmark), l => l.symbol)
       : EMPTY_LANDMARKS,
+    needsScaleForLinear: hasUnreportableLinearMeasurements(state)(activeImageId),
   };
 };
 

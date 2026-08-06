@@ -7,6 +7,8 @@ import { createSelector } from 'reselect';
 import { getTracingImageId } from './settings';
 import { getActiveWorkspaceId } from './activeId';
 
+import { isTraceableImageType } from 'utils/records';
+
 const KEY_IMAGES: StoreKey = 'images.props';
 const KEY_IMAGES_LOAD_STATUS: StoreKey = 'images.status';
 const KEY_TRACING: StoreKey = 'images.tracing';
@@ -16,6 +18,11 @@ const KEY_TRACING: StoreKey = 'images.tracing';
 const defaultImageProps = {
   name: null as string | null,
   type: 'ceph_lateral' as ImageType,
+  // Records metadata (see utils/records). Null means "not recorded" — the
+  // upload form supplies real values the user has seen, and nothing here
+  // invents a timepoint or a capture date on the user's behalf.
+  timepoint: null as string | null,
+  captureDate: null as string | null,
   // Natural pixel dimensions of the loaded image; filled from the
   // LOAD_IMAGE_SUCCEEDED payload. Used to render the tracing canvas at the right
   // aspect ratio and to auto-fit the zoom.
@@ -36,25 +43,56 @@ const defaultImageProps = {
   },
 };
 
+type ImageEntry = StoreState[typeof KEY_IMAGES][string];
+
+/**
+ * Keeps an image's active analysis consistent with its record type: only the
+ * lateral cephalogram is traceable here, so a frontal ceph / panoramic /
+ * photograph carries no active analysis. Without this, a photograph inherited
+ * the lateral-ceph default and the stepper would offer to measure SNA on it.
+ */
+const reconcileAnalysisWithType = (entry: ImageEntry): ImageEntry => {
+  if (isTraceableImageType(entry.type)) {
+    // The reverse case: a film that was filed under the wrong type had its
+    // analysis cleared. Correcting the type back to a lateral ceph (records
+    // dashboard → Edit details) must hand it a usable analysis again, or the
+    // stepper would open with no steps and canvas clicks would name nothing.
+    if (entry.analysis && entry.analysis.activeId === null) {
+      return {
+        ...entry,
+        analysis: {
+          ...entry.analysis,
+          activeId: defaultImageProps.analysis.activeId,
+        },
+      };
+    }
+    return entry;
+  }
+  if (entry.analysis && entry.analysis.activeId === null) {
+    return entry;
+  }
+  return { ...entry, analysis: { ...entry.analysis, activeId: null } };
+};
+
 const imagesReducer = handleActions<typeof KEY_IMAGES>(
   {
     SET_IMAGE_PROPS: (state, { payload }) => {
       return {
         ...state,
-        [payload.id]: {
+        [payload.id]: reconcileAnalysisWithType({
           ...state[payload.id],
           ...payload,
-        },
+        } as ImageEntry),
       };
     },
     LOAD_IMAGE_SUCCEEDED: (state, { payload }) => {
       return {
         ...state,
-        [payload.id]: {
+        [payload.id]: reconcileAnalysisWithType({
           ...defaultImageProps,
           ...state[payload.id],
           ...payload,
-        },
+        } as ImageEntry),
       };
     },
     CLOSE_IMAGE_REQUESTED: (state, { payload: { imageId } }) => {
@@ -301,6 +339,45 @@ export const hasImage = createSelector(
   ),
 );
 
+// ---- Records metadata ------------------------------------------------------
+
+/** What kind of film/photograph this image is (see utils/records). */
+export const getImageType = createSelector(
+  getImageProps,
+  (getProps) => (id: string): ImageType | null => {
+    const props = getProps(id);
+    return (props && props.type) || null;
+  },
+);
+
+/** The image's treatment timepoint label (`T1`, `T2`, …), if recorded. */
+export const getImageTimepoint = createSelector(
+  getImageProps,
+  (getProps) => (id: string): string | null => {
+    const props = getProps(id);
+    return (props && props.timepoint) || null;
+  },
+);
+
+/** The image's ISO capture date, if recorded. */
+export const getImageCaptureDate = createSelector(
+  getImageProps,
+  (getProps) => (id: string): string | null => {
+    const props = getProps(id);
+    return (props && props.captureDate) || null;
+  },
+);
+
+/**
+ * Whether this image can be traced and analysed. The single predicate the
+ * editor, the rail and the dashboard share, so a panoramic film is never
+ * offered a cephalometric stepper.
+ */
+export const isImageTraceable = createSelector(
+  getImageType,
+  (getType) => (id: string): boolean => isTraceableImageType(getType(id)),
+);
+
 export const getAllTracingData = (state: StoreState) => state[KEY_TRACING];
 export const getTracingDataByImageId = createSelector(
   getAllTracingData,
@@ -342,6 +419,20 @@ export const getScaleFactor = createSelector(
   (getProps) => (id: string): number | null => {
     const props = getProps(id);
     return (props && typeof props.scaleFactor === 'number') ? props.scaleFactor : null;
+  },
+);
+
+/**
+ * Whether the image carries a usable mm/px scale. Linear (mm) measurements are
+ * only reportable in millimeters once it is set, so this is the single
+ * predicate the analyses, the stepper, the summary and the printed report all
+ * share when deciding whether to report or suppress them.
+ */
+export const hasScaleFactor = createSelector(
+  getScaleFactor,
+  (getScale) => (id: string): boolean => {
+    const scaleFactor = getScale(id);
+    return scaleFactor !== null && scaleFactor > 0;
   },
 );
 

@@ -6,6 +6,12 @@ import {
 
 import { getTracingImageId } from 'store/reducers/workspace/settings';
 import { isSummaryShown } from 'store/reducers/workspace/analyses';
+import {
+  isImageTraceable,
+  getAllImages,
+} from 'store/reducers/workspace/image';
+
+import { getDefaultTimepoint } from 'utils/records';
 
 import { importFileRequested, loadImageFromURL } from 'actions/workspace';
 
@@ -19,9 +25,14 @@ import {
 
 const mapStateToProps: MapStateToProps<StateProps, OwnProps, StoreState> =
   (state: StoreState, { workspaceId }: OwnProps): StateProps => {
+    const imageId = getTracingImageId(state)(workspaceId);
     return {
-      imageId: getTracingImageId(state)(workspaceId),
+      imageId,
       isSummaryShown: isSummaryShown(state),
+      isImageTraceable: imageId !== null ? isImageTraceable(state)(imageId) : true,
+      // The next timepoint in the series: T1 for the first image on file, T2
+      // for the second, and so on.
+      defaultTimepoint: getDefaultTimepoint(Object.keys(getAllImages(state)).length),
     };
   };
 
@@ -30,8 +41,10 @@ import { DEMO_IMAGE_URL as url } from 'utils/config';
 const mapDispatchToProps: MapDispatchToPropsFunction<DispatchProps, OwnProps> =
   (dispatch: GenericDispatch, { workspaceId }: OwnProps): DispatchProps => {
     return {
-      onFilesDrop: ([file]) => dispatch(importFileRequested({ file, workspaceId })),
-      onDemoButtonClick: () => dispatch(loadImageFromURL({ url, workspaceId })),
+      onFilesDrop: ([file], meta) =>
+        dispatch(importFileRequested({ file, workspaceId, meta })),
+      onDemoButtonClick: (meta) =>
+        dispatch(loadImageFromURL({ url, workspaceId, meta })),
     };
   };
 

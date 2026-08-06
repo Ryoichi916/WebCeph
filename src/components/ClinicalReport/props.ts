@@ -19,10 +19,23 @@ export interface StateProps {
   imageHeight: number | null;
   /** The image type (e.g. `ceph_lateral`), for the snapshot caption. */
   imageType: ImageType | null;
+  /**
+   * Record identity of the film being reported on: its timepoint label and its
+   * ISO capture date. Both print in the patient band, and the capture date is
+   * what the stated age is computed against.
+   */
+  timepoint: string | null;
+  captureDate: string | null;
   /** Manually placed/auto-plotted landmarks, for the tracing overlay. */
   manualLandmarks: ManualLandmarks;
   /** mm-per-pixel calibration, or null when the image is not calibrated. */
   scaleFactor: number | null;
+  /**
+   * True when the analysis interprets linear (mm) measurements that were
+   * suppressed for want of an image scale. Their rows are absent from the
+   * printed table, so a footnote accounts for them on the record.
+   */
+  needsScaleForLinear: boolean;
 }
 
 export interface DispatchProps {

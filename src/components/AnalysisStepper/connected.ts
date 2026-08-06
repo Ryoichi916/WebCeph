@@ -14,6 +14,7 @@ import {
   getActiveAnalysisSteps,
   isStepSkippable,
   isStepRemovable,
+  isStepValuePendingScale,
 } from 'store/reducers/workspace/analyses';
 import {
   getHighlightedStep,
@@ -23,7 +24,6 @@ import {
 } from 'store/reducers/workspace';
 import {
   getAnalysisId,
-  getScaleFactor,
 } from 'store/reducers/workspace/image';
 import { getNameForAnalysis } from 'components/AnalysisSelector/strings';
 
@@ -45,7 +45,7 @@ const mapStateToProps = (state: StoreState): StateFromStore => {
     steps: getActiveAnalysisSteps(state)(imageId),
     getStepState: getStepState(state)(imageId),
     getStepValue: getCalculatedValue(state)(imageId),
-    isCalibrated: imageId !== null && getScaleFactor(state)(imageId) !== null,
+    isStepValuePendingScale: isStepValuePendingScale(state)(imageId),
     highlightedStep: getHighlightedStep(state),
     isStepRemovable,
     isStepSkippable,

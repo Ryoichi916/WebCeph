@@ -16,7 +16,14 @@ import {
 } from 'utils/math';
 
 export const bjorkSum: CephAngularSum = {
-  ...angularSum([NSAr, SArGo, ArGoMe], 'Björk\'s sum', 'Björk'),
+  // Named for what it measures rather than after its author: printed next to
+  // the "Björk" symbol (and under a "Björk" section heading) "Björk's sum" only
+  // repeated the name three times without saying what was summed.
+  ...angularSum(
+    [NSAr, SArGo, ArGoMe],
+    'Sum of the saddle, articular and gonial angles',
+    'Björk',
+  ),
   interpret: defaultInterpetLandmark(
     'growthPattern',
     ['horizontal', 'normal', 'vertical'],

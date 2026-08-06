@@ -105,6 +105,10 @@ export const posteriorAnteriorFacialHeightRatio: CephLandmark = {
   name: 'Posterior / anterior facial height ratio (S-Go / N-Me)',
   symbol: 'S-Go/N-Me',
   type: 'ratio',
+  // A percentage, not a length: the mm/px scale factor cancels in the quotient,
+  // so the unit is carried explicitly rather than left blank (a bare "72.8" in
+  // a clinical table could be read as degrees or millimetres).
+  unit: 'percent',
   imageType: 'ceph_lateral',
   components: [line(S, Go), line(N, Me)],
   calculate: () => (posterior: GeoVector, anterior: GeoVector) => () => {

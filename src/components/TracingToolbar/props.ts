@@ -25,6 +25,26 @@ export interface StateProps {
    * has not been calibrated yet.
    */
   scaleFactor: number | null;
+  /**
+   * Whether two of the patient's images carry tracings that can be registered
+   * against each other (see components/Superimposition/selectors).
+   */
+  canSuperimpose: boolean;
+  /**
+   * The Superimpose button's tooltip: the invitation when it is available, and
+   * precisely what is missing when it is not.
+   */
+  superimposeReason: string;
+  /**
+   * Whether this image's tracing carries enough geometry for at least one
+   * treatment movement to be simulated (see analyses/simulation).
+   */
+  canSimulate: boolean;
+  /**
+   * The Simulate button's tooltip: the invitation when it is available, and
+   * precisely what is missing when it is not.
+   */
+  simulateReason: string;
 };
 
 export interface DispatchProps {

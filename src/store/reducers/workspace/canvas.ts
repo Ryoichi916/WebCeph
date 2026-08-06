@@ -3,7 +3,7 @@ import { createSelector } from 'reselect';
 import Tools from 'editorTools';
 
 import { getActiveWorkspaceId } from './activeId';
-import { getWorkspaceSettingsById } from './settings';
+import { getWorkspaceSettingsById, getAllWorkspacesSettings } from './settings';
 
 const KEY_CANVAS_MOUSE_POSITION: StoreKey = 'workspace.canvas.mouse.position';
 const KEY_CANVAS_TOOL_ID: StoreKey = 'workspace.canvas.tools.activeToolId';
@@ -98,7 +98,23 @@ export const getCanvasDimensions = (state: StoreState): { width: number; height:
   const settings = workspaceId !== null
     ? getWorkspaceSettingsById(state)(workspaceId)
     : null;
-  const rect = settings && settings.contentRect;
+  let rect = settings && settings.contentRect;
+  if (rect === null || rect === undefined) {
+    // A workspace added later (a second timepoint from the image rail) may not
+    // have been measured yet: React reuses the same Workspace element across
+    // tab switches, so its ResizeObserver does not fire again. Every workspace
+    // occupies the same content box, so borrow a sibling's measurement rather
+    // than falling back to the whole window — which over-scales the image by
+    // the width of the rail and the stepper.
+    const all = getAllWorkspacesSettings(state);
+    for (const id of Object.keys(all)) {
+      const other = all[id] && all[id].contentRect;
+      if (other && other.width > 0 && other.height > 0) {
+        rect = other;
+        break;
+      }
+    }
+  }
   if (rect && rect.width > 0 && rect.height > 0) {
     // The observed element can be stretched by its own (overflowing) canvas
     // content, so its measurement must never exceed the viewport — otherwise

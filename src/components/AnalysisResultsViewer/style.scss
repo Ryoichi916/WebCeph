@@ -49,6 +49,29 @@
   white-space: nowrap;
 }
 
+// Which film the results came from: the record's timepoint, then its date.
+.title_timepoint {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 9px;
+  border-radius: 999px;
+  background: $primary-600;
+  color: #FFFFFF;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .02em;
+  white-space: nowrap;
+}
+
+.title_filmdate {
+  font-size: 12.5px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: $text-tertiary;
+  white-space: nowrap;
+}
+
 .title_caption {
   margin-top: 2px;
   font-size: 12.5px;
@@ -326,6 +349,14 @@
 .legend_dot {
   margin: 0 8px;
   color: $text-disabled;
+}
+
+// Quiet accounting for measurements the table could not report — sits under
+// the SD legend so it reads as a footnote, not as an error.
+.legend_note {
+  display: block;
+  margin-top: 6px;
+  color: $warn;
 }
 
 .empty {

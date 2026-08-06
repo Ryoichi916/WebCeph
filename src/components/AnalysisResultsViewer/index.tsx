@@ -20,6 +20,8 @@ import {
   mapIndicationToString,
 } from './strings';
 
+import { formatCaptureDate } from 'utils/records';
+
 const classes = require('./style.scss');
 
 /**
@@ -67,6 +69,10 @@ export const getUnitSuffix = (landmark?: CephLandmark): string => {
   }
   if (landmark.unit === 'mm' || landmark.unit === 'cm' || landmark.unit === 'in') {
     return ` ${landmark.unit}`;
+  }
+  // Dimensionless measurements expressed as a percentage (facial-height ratio).
+  if (landmark.unit === 'percent') {
+    return ' %';
   }
   return '';
 };
@@ -230,7 +236,10 @@ export class AnalysisResultsViewer extends React.PureComponent<Props, ViewerStat
   }
 
   render() {
-    const { open, onRequestClose, results, analysisId, landmarksBySymbol } = this.props;
+    const {
+      open, onRequestClose, results, analysisId, landmarksBySymbol,
+      needsScaleForLinear, timepoint, captureDate,
+    } = this.props;
     const { copied } = this.state;
     const analysisName = analysisId !== null
       ? (ANALYSIS_NAMES[analysisId] || analysisId)
@@ -261,6 +270,16 @@ export class AnalysisResultsViewer extends React.PureComponent<Props, ViewerStat
                 <h3 className={classes.title_heading}>Analysis summary</h3>
                 {analysisName !== null ? (
                   <span className={classes.title_badge}>{analysisName}</span>
+                ) : null}
+                {/* Which film these numbers came from — read off the record, so
+                    it is absent rather than invented when unrecorded. */}
+                {timepoint !== null ? (
+                  <span className={classes.title_timepoint}>{timepoint}</span>
+                ) : null}
+                {formatCaptureDate(captureDate) !== null ? (
+                  <span className={classes.title_filmdate}>
+                    Film {formatCaptureDate(captureDate)}
+                  </span>
                 ) : null}
               </div>
               <span className={classes.title_caption}>
@@ -454,6 +473,14 @@ export class AnalysisResultsViewer extends React.PureComponent<Props, ViewerStat
               <span className={classes.legend_stars}>**</span> over 2 SD
               <span className={classes.legend_dot}>·</span>
               <span className={classes.legend_stars}>***</span> over 3 SD
+              {needsScaleForLinear ? (
+                // The mm measurements of this analysis are missing above, not
+                // normal — account for them instead of leaving a silent gap.
+                <span className={classes.legend_note}>
+                  Linear measurements need an image scale — set it from the
+                  calibration chip in the toolbar. Angular values are unaffected.
+                </span>
+              ) : null}
             </div>
           </div>
         ) : (

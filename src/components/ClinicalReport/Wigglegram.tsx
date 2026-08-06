@@ -4,10 +4,11 @@ import map from 'lodash/map';
 
 // Same formatting/severity conventions as the results table (see index.tsx).
 import {
-  formatNumber,
   getUnitSuffix,
   getSeverityStars,
 } from 'components/AnalysisResultsViewer';
+
+import { printNumber } from './copy';
 
 const classes = require('./style.scss');
 
@@ -16,11 +17,25 @@ interface Props {
   results: Array<CategorizedAnalysisResult<Category>>;
   /** Landmark definitions keyed by symbol, for names and units. */
   landmarksBySymbol: { [symbol: string]: CephLandmark | undefined };
+  /**
+   * Whether to print the "Norm deviation profile" section label above the
+   * chart. The combined report suppresses it: each of its sections is already
+   * headed by the analysis' name, and the caption under the chart says what
+   * the chart is — seven repetitions of the label would only add noise.
+   */
+  showLabel?: boolean;
+  /**
+   * Whether to print the key that explains the shaded bands. The combined
+   * report prints it once in its front matter rather than under all of its
+   * charts.
+   */
+  showKey?: boolean;
 }
 
 interface Row {
   symbol: string;
-  name: string | null;
+  /** Measurement name, wrapped over at most two lines; empty when unnamed. */
+  nameLines: string[];
   valueLabel: string;
   normLabel: string;
   /** Standardized deviation (value − mean) / SD, clamped to ±3. */
@@ -41,14 +56,24 @@ const VALUE_W = 64;
 const AXIS_L = LABEL_W + 12;
 const AXIS_R = WIDTH - VALUE_W - 16;
 const HEADER_H = 24;
-const ROW_H = 30;
+/** Row height with a one-line name; two-line names need a taller row. */
+const ROW_H_1 = 30;
+const ROW_H_2 = 36;
 const FOOT_H = 6;
 
-/** Longest measurement name that fits the label column at 9.5px. */
-const MAX_NAME_CHARS = 34;
+/**
+ * Characters of a measurement name that fit the label column on one line at
+ * 9.5px. Longer names wrap onto a second line rather than being cut off — a
+ * printed clinical record must not carry `"…ratio (S-Go /"`.
+ */
+const NAME_CHARS_PER_LINE = 34;
+/** Lines a name may occupy before it is (finally) elided. */
+const NAME_MAX_LINES = 2;
 
-// Severity ink indexed by star count; matches the results-table chips.
-const SEVERITY_INK = ['#1565C0', '#B26A00', '#C62828', '#C62828'];
+// Severity ink indexed by star count. Index 0 is the body ink, not a colour:
+// a value within its norm must look the same here as in the results table,
+// where an unstarred value carries no colour override.
+const SEVERITY_INK = ['#1F2933', '#B26A00', '#C62828', '#C62828'];
 
 /** Chart x-coordinate of a standardized deviation z ∈ [−3, +3]. */
 const xOf = (z: number) => AXIS_L + ((z + 3) / 6) * (AXIS_R - AXIS_L);
@@ -62,6 +87,37 @@ const AXIS_TICKS: Array<{ z: number; label: string }> = [
   { z: 2, label: '+2' },
   { z: 3, label: '+3 SD' },
 ];
+
+/**
+ * Greedy word wrap for a measurement name inside the label column. SVG has no
+ * text flow, so the break is computed here and drawn as separate lines. A name
+ * that will not fit even in two lines is elided at the end of the last line —
+ * but at that point the results table below carries it in full.
+ */
+const wrapName = (name: string): string[] => {
+  const words = name.split(' ');
+  const lines: string[] = [];
+  let line = '';
+  words.forEach((word) => {
+    const candidate = line === '' ? word : `${line} ${word}`;
+    if (candidate.length <= NAME_CHARS_PER_LINE || line === '') {
+      line = candidate;
+    } else {
+      lines.push(line);
+      line = word;
+    }
+  });
+  if (line !== '') {
+    lines.push(line);
+  }
+  if (lines.length <= NAME_MAX_LINES) {
+    return lines;
+  }
+  const kept = lines.slice(0, NAME_MAX_LINES);
+  const last = kept[NAME_MAX_LINES - 1];
+  kept[NAME_MAX_LINES - 1] = `${last.slice(0, NAME_CHARS_PER_LINE - 1)}…`;
+  return kept;
+};
 
 /**
  * Flattens the categorized results into one wigglegram row per measurement.
@@ -94,14 +150,11 @@ const buildRows = (
         landmark.name !== symbol
           ? landmark.name
           : null;
-      const name = rawName !== null && rawName.length > MAX_NAME_CHARS
-        ? `${rawName.slice(0, MAX_NAME_CHARS - 1)}…`
-        : rawName;
       rows.push({
         symbol,
-        name,
-        valueLabel: `${formatNumber(value)}${unit}`,
-        normLabel: `${formatNumber(mean)} ± ${formatNumber(sd)}`,
+        nameLines: rawName !== null ? wrapName(rawName) : [],
+        valueLabel: `${printNumber(value)}${unit}`,
+        normLabel: `${printNumber(mean)} ± ${printNumber(sd)}`,
         z: Math.max(-3, Math.min(3, rawZ)),
         clamped: Math.abs(rawZ) > 3,
         stars: getSeverityStars(value, mean, min, max),
@@ -112,28 +165,52 @@ const buildRows = (
 };
 
 /**
+ * How to read the chart. Printed under the chart in the single-analysis report
+ * and once in the combined report's front matter — exported so the two can
+ * never drift apart.
+ */
+export const WigglegramKey = () => (
+  <span>
+    Wigglegram: each measurement scaled to its own standard deviation
+    <span className={classes.legend_dot}>·</span>
+    shaded band: norm mean ± 1 SD, lighter ± 2 SD
+    <span className={classes.legend_dot}>·</span>
+    ▸ beyond ± 3 SD
+  </span>
+);
+
+/**
  * The classic cephalometric "wigglegram" (norm-deviation polygon): one row per
  * measurement, each scaled to its own standard deviation, with the norm band
  * shaded (±1 SD dark, ±2 SD light) and the patient's standardized values
  * joined dot-to-dot down the rows. Pure inline SVG — prints exactly.
  */
-const Wigglegram = ({ results, landmarksBySymbol }: Props) => {
+const Wigglegram = ({
+  results, landmarksBySymbol, showLabel = true, showKey = true,
+}: Props) => {
   const rows = buildRows(results, landmarksBySymbol);
   if (rows.length < 2) {
     // A one-point polygon carries no profile information; the table suffices.
     return null;
   }
 
+  // One row height for the whole chart (an even grid is what makes the polygon
+  // readable), sized for the tallest label in it.
+  const rowHeight = rows.some((r) => r.nameLines.length > 1)
+    ? ROW_H_2
+    : ROW_H_1;
   const chartTop = HEADER_H;
-  const chartBottom = HEADER_H + rows.length * ROW_H;
+  const chartBottom = HEADER_H + rows.length * rowHeight;
   const height = chartBottom + FOOT_H;
 
-  const centerY = (i: number) => chartTop + i * ROW_H + ROW_H / 2;
+  const centerY = (i: number) => chartTop + i * rowHeight + rowHeight / 2;
   const polyPoints = map(rows, (r, i) => `${xOf(r.z)},${centerY(i)}`).join(' ');
 
   return (
     <div className={classes.wiggle_section}>
-      <div className={classes.section_label}>Norm deviation profile</div>
+      {showLabel ? (
+        <div className={classes.section_label}>Norm deviation profile</div>
+      ) : null}
       <svg
         className={classes.wiggle_svg}
         width={WIDTH}
@@ -166,9 +243,9 @@ const Wigglegram = ({ results, landmarksBySymbol }: Props) => {
           <line
             key={`sep-${r.symbol}`}
             x1={0}
-            y1={chartTop + i * ROW_H}
+            y1={chartTop + i * rowHeight}
             x2={WIDTH}
-            y2={chartTop + i * ROW_H}
+            y2={chartTop + i * rowHeight}
             stroke="#EDF1F5"
             strokeWidth={1}
           />
@@ -211,20 +288,31 @@ const Wigglegram = ({ results, landmarksBySymbol }: Props) => {
         {map(rows, (r, i) => {
           const y = centerY(i);
           const ink = SEVERITY_INK[r.stars];
+          // Symbol sits on the row's optical centre when it stands alone, and
+          // rises just enough to seat one or two name lines beneath it.
+          const nameCount = r.nameLines.length;
+          const symbolY = nameCount === 0
+            ? y + 3.5
+            : (nameCount === 1 ? y - 2 : y - 6);
           return (
             <g key={`row-${r.symbol}`}>
               <text
                 className={classes.wiggle_symbol}
                 x={2}
-                y={r.name !== null ? y - 2 : y + 3.5}
+                y={symbolY}
               >
                 {r.symbol}
               </text>
-              {r.name !== null ? (
-                <text className={classes.wiggle_name} x={2} y={y + 10}>
-                  {r.name}
+              {map(r.nameLines, (lineText, lineIndex) => (
+                <text
+                  key={`name-${lineIndex}`}
+                  className={classes.wiggle_name}
+                  x={2}
+                  y={symbolY + 12 + lineIndex * 10}
+                >
+                  {lineText}
                 </text>
-              ) : null}
+              ))}
               <text
                 className={classes.wiggle_value}
                 x={WIDTH - 2}
@@ -285,13 +373,11 @@ const Wigglegram = ({ results, landmarksBySymbol }: Props) => {
           );
         })}
       </svg>
-      <div className={classes.wiggle_legend}>
-        Each measurement scaled to its own standard deviation
-        <span className={classes.legend_dot}>·</span>
-        shaded band: norm mean ± 1 SD, lighter ± 2 SD
-        <span className={classes.legend_dot}>·</span>
-        ▸ beyond ± 3 SD
-      </div>
+      {showKey ? (
+        <div className={classes.wiggle_legend}>
+          <WigglegramKey />
+        </div>
+      ) : null}
     </div>
   );
 };

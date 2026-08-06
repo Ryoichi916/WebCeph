@@ -35,6 +35,14 @@ export type WCephJSON = {
         'photo_lateral' | 'photo_frontal' |
         'panoramic' | null
       );
+      /**
+       * Treatment timepoint label of this image, e.g. `T1`. Optional: files
+       * written before the records layer existed carry no timepoint, and they
+       * must keep importing.
+       */
+      timepoint?: string | null;
+      /** ISO `YYYY-MM-DD` capture date of this image. Optional, as above. */
+      captureDate?: string | null;
       flipX: boolean;
       flipY: boolean;
       /** Wether the image colors should be inverted */

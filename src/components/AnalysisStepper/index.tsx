@@ -50,6 +50,9 @@ const formatStepValue = (step: CephLandmark, value: number): string => {
   if (step.unit === 'mm' || step.unit === 'cm' || step.unit === 'in') {
     return `${rounded} ${step.unit}`;
   }
+  if (step.unit === 'percent') {
+    return `${rounded} %`;
+  }
   return rounded;
 };
 
@@ -81,7 +84,7 @@ export class AnalysisStepper extends React.PureComponent<Props, State> {
       analysisName,
       getStepState,
       getStepValue,
-      isCalibrated,
+      isStepValuePendingScale,
       isStepRemovable,
       onRemoveLandmarkClick,
       onStepMouseEnter, onStepMouseLeave,
@@ -118,7 +121,12 @@ export class AnalysisStepper extends React.PureComponent<Props, State> {
             {isComplete
               ? <IconDone color="currentColor" style={{ width: 13, height: 13 }} />
               : null}
-            {doneCount}/{total}
+            {/* The unit is spelled out: this counts every step of the analysis
+                (landmarks plus the lines and angles computed from them), while
+                the records dashboard counts landmarks only. Unlabelled, the
+                stepper's "32/32" and the card's "10 of 10" read as a
+                contradiction about the same tracing. */}
+            {doneCount}/{total} steps
           </span>
         </header>
         <div className={classes.progress_track} aria-hidden="true">
@@ -185,7 +193,7 @@ export class AnalysisStepper extends React.PureComponent<Props, State> {
                   <span className={classes.step_value}>
                     {formatStepValue(step, value)}
                   </span>
-                ) : step.unit === 'mm' && !isCalibrated ? (
+                ) : isStepValuePendingScale(step) ? (
                   // A linear measurement has no honest value until the image
                   // scale is known — say so instead of leaving the row blank.
                   <span

@@ -31,6 +31,9 @@ export const unsetScaleFactor = createActionCreator('UNSET_SCALE_FACTOR_REQUESTE
 // Export the current tracing (image + profilogram + points) as a raster image.
 export const exportImage = createActionCreator('EXPORT_IMAGE_REQUESTED');
 
+// Patient records dashboard (the timeline of every image on file).
+export const setRecordsDashboardShown = createActionCreator('SET_RECORDS_DASHBOARD_SHOWN');
+
 // Patient records (name + chart id + demographics).
 export const addPatient = createActionCreator('ADD_PATIENT_REQUESTED');
 export const updatePatient = createActionCreator('UPDATE_PATIENT_REQUESTED');
@@ -96,5 +99,11 @@ export const superimposeImages = createActionCreator('SUPERIMPOSE_IMAGES_REQUEST
 export const setActiveWorkspace = createActionCreator('SET_ACTIVE_WORKSPACE');
 export const addNewWorkspace = createActionCreator('ADD_NEW_WORKSPACE');
 export const removeWorkspace = createActionCreator('REMOVE_WORKSPACE');
+/**
+ * Drops an image from the record: removes its props, load status and tracing,
+ * and detaches it from the workspace that held it. Dispatched by the records
+ * dashboard's and record viewer's "Remove from record" action.
+ */
+export const closeImage = createActionCreator('CLOSE_IMAGE_REQUESTED');
 
 export const traceImage = createActionCreator('TRACE_IMAGE_REQUESTED');

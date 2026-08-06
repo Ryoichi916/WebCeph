@@ -4,6 +4,13 @@ declare const __BUILD_TIMESTAMP__: number;
 
 type AngularUnit = 'degree' | 'radian';
 type LinearUnit = 'mm' | 'cm' | 'in';
+/**
+ * Unit of a dimensionless measurement expressed as a percentage (e.g. the
+ * posterior/anterior facial-height ratio). Carrying it explicitly is what lets
+ * the stepper, the Summary dialog and the printed report all state "72.8 %"
+ * instead of a bare number a reader could mistake for degrees or millimetres.
+ */
+type RatioUnit = 'percent';
 
 type LandmarkType = 'angle' | 'point' | 'line' | 'distance' | 'sum' | 'ratio';
 
@@ -95,7 +102,7 @@ interface CephLandmark {
 
   description?: string;
   type: LandmarkType;
-  unit?: AngularUnit | LinearUnit;
+  unit?: AngularUnit | LinearUnit | RatioUnit;
 
   /**
    * Some landmarks are composed of more basic components; for example, a line is
@@ -444,6 +451,8 @@ interface StoreState {
     [T in ImageType]: AnalysisId<T>;
   };
   'analyses.summary.isShown': boolean;
+  /** Whether the patient records dashboard (timeline of every image) is open. */
+  'records.dashboard.isShown': boolean;
   'workspaces.order': string[];
   'workspaces.activeWorkspaceId': string | null;
   'workspaces.settings': {
@@ -474,9 +483,31 @@ type ImageBlobData = {
   height: number;
 };
 
+/**
+ * The record-keeping metadata of an image: what kind of film/photograph it is,
+ * which treatment timepoint it belongs to, and when it was taken. Stored per
+ * image alongside the display props so a patient's images form a real records
+ * series rather than an unordered pile.
+ */
+type ImageRecordMeta = {
+  /** A null value indicates that the image type is not set or is unknown */
+  type: ImageType | null;
+  /**
+   * Clinical timepoint label, e.g. `T1`, `T2`, `Pre-treatment`. Free text so
+   * clinics can keep their own naming; null when not recorded.
+   */
+  timepoint: string | null;
+  /** ISO `YYYY-MM-DD` date the image was captured; null when not recorded. */
+  captureDate: string | null;
+};
+
 type CephImageData<T extends ImageType> = {
   /** A null value indicates that the image type is not set or is unknown */
   type: T | null;
+  /** @see ImageRecordMeta */
+  timepoint: string | null;
+  /** @see ImageRecordMeta */
+  captureDate: string | null;
   scaleFactor: number | null;
   flipX: boolean;
   flipY: boolean;
@@ -528,6 +559,8 @@ interface Events {
   LOAD_IMAGE_FROM_URL_REQUESTED: {
     url: string;
     workspaceId: string;
+    /** Record metadata for the loaded image. @see ImageRecordMeta */
+    meta?: Partial<ImageRecordMeta>;
   };
   EXPORT_FILE_REQUESTED: {
     format: ExportFileFormat;
@@ -542,6 +575,12 @@ interface Events {
   IMPORT_FILE_REQUESTED: {
     file: File;
     workspaceId: string;
+    /**
+     * Record metadata chosen by the user before the file was added (image type,
+     * timepoint, capture date). Absent for imports that carry their own
+     * metadata, e.g. a .wceph project file.
+     */
+    meta?: Partial<ImageRecordMeta>;
   };
   IMPORT_FILE_SUCCEEDED: {
     workspaceId: string;
@@ -559,7 +598,7 @@ interface Events {
     workspaceId: string;
   };
   LOAD_IMAGE_SUCCEEDED: (
-    { id: string } & ImageBlobData
+    { id: string } & ImageBlobData & Partial<ImageRecordMeta>
   );
   LOAD_IMAGE_FAILED: {
     id: string;
@@ -740,6 +779,10 @@ interface Events {
   };
   TOGGLE_ANALYSIS_RESULTS_REQUESTED: void;
   TOGGLE_PROFILOGRAM_REQUESTED: void;
+  /** Open/close the patient records dashboard. */
+  SET_RECORDS_DASHBOARD_SHOWN: {
+    isShown: boolean;
+  };
   /** Set the active analysis for a specific image. */
   SET_ACTIVE_ANALYSIS_REQUESTED: {
     imageId: string;
@@ -944,6 +987,8 @@ type ImportOptions = Partial<{
   loadWorkspaceSettings: boolean;
   loadSuperimpositionState: boolean;
   treatmentStagesToLoad: string[];
+  /** Record metadata to stamp on the imported image. @see ImageRecordMeta */
+  meta: Partial<ImageRecordMeta>;
 }> & {
   workspaceId: string;
 };

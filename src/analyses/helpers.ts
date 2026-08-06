@@ -515,7 +515,11 @@ export function resolveSeverity<C extends Category>(
   });
   const pairs = map(counts, (value, severity: Severity) => ({ value, severity }));
   const max = maxBy(pairs, ({ value }) => value);
-  return max!.severity;
+  // A finding whose landmarks all interpret themselves without stating a
+  // severity (ANB does) has nothing to resolve. That is 'none', not a crash:
+  // it happens whenever such a landmark is the only one in its category, as
+  // ANB is in Steiner's analysis.
+  return max === undefined ? 'none' : max.severity;
 };
 
 export const indexAnalysisResults = <C extends Category>(

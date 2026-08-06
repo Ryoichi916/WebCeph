@@ -6,11 +6,13 @@
 .root {
   display: flex;
   align-items: center;
-  gap: 4px;
+  // Tight gaps: the strip carries fourteen actions (Superimpose and Simulate
+  // included) and must not clip the last one at a 1440px viewport.
+  gap: 2px;
   height: 44px;
   min-height: 44px;
   flex-shrink: 0;
-  padding: 0 12px;
+  padding: 0 10px;
   background: $bg-surface;
   border-top: 1px solid $border;
   box-shadow: 0 -1px 2px rgba(16, 30, 50, .06);
@@ -24,7 +26,7 @@
   align-items: center;
   gap: 6px;
   height: 32px;
-  padding: 0 10px;
+  padding: 0 8px;
   margin: 0;
   border: none;
   border-radius: 6px;
@@ -78,6 +80,27 @@
     }
   }
 
+  // The superimposition action. With Simulate added the strip no longer fits
+  // fourteen labelled actions at the 1440px reference viewport, so this one
+  // falls back to its icon (its tooltip still names it) rather than pushing
+  // Export off the end of the bar. Simulate keeps its label down to 1330px,
+  // because a flagship action nobody can name is an action nobody finds.
+  &__superimpose {
+    @media (max-width: 1560px) {
+      .button_label {
+        display: none;
+      }
+    }
+  }
+
+  &__simulate {
+    @media (max-width: 1330px) {
+      .button_label {
+        display: none;
+      }
+    }
+  }
+
   // While the button's popover menu is open.
   &__open {
     color: $primary-600;
@@ -99,7 +122,7 @@
 .separator {
   width: 1px;
   height: 20px;
-  margin: 0 6px;
+  margin: 0 3px;
   background: $border;
   flex-shrink: 0;
 }

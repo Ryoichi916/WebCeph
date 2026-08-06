@@ -6,12 +6,15 @@ import { StateProps, OwnProps } from './props';
 import {
   getCategorizedAnalysisResults,
   getActiveAnalysis,
+  hasUnreportableLinearMeasurements,
 } from 'store/reducers/workspace/analyses';
 import {
   getAnalysisId,
   getImageProps,
   getManualLandmarks,
   getScaleFactor,
+  getImageTimepoint,
+  getImageCaptureDate,
 } from 'store/reducers/workspace/image';
 import { getActivePatient } from 'store/reducers/patients';
 
@@ -33,8 +36,11 @@ const mapStateToProps =
         imageWidth: null,
         imageHeight: null,
         imageType: null,
+        timepoint: null,
+        captureDate: null,
         manualLandmarks: EMPTY_MANUAL,
         scaleFactor: null,
+        needsScaleForLinear: false,
       };
     }
     const analysis = getActiveAnalysis(state)(imageId);
@@ -50,8 +56,11 @@ const mapStateToProps =
       imageWidth: (image && image.width) || null,
       imageHeight: (image && image.height) || null,
       imageType: (image && image.type) || null,
+      timepoint: getImageTimepoint(state)(imageId),
+      captureDate: getImageCaptureDate(state)(imageId),
       manualLandmarks: getManualLandmarks(state)(imageId),
       scaleFactor: getScaleFactor(state)(imageId),
+      needsScaleForLinear: hasUnreportableLinearMeasurements(state)(imageId),
     };
   };
 

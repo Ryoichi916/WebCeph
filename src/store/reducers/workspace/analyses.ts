@@ -15,6 +15,7 @@ import {
   getSkippedSteps,
   getAnalysisId,
   getScaleFactor,
+  hasScaleFactor,
 } from './image';
 
 import {
@@ -261,34 +262,68 @@ export const isStepEligibleForComputation = createSelector(
   },
 );
 
-export const getCalculatedValue = createSelector(
+/**
+ * The step's value straight out of the geometry — linear measurements are
+ * still in image pixels here. Not exported: nothing outside this module should
+ * mistake a pixel distance for a millimeter one.
+ */
+const getRawCalculatedValue = createSelector(
   isStepEligibleForComputation,
   getManualLandmarks,
-  getScaleFactor,
-  (isEligible, getManual, getScale) =>
-    (imageId: string): ((step: CephLandmark) => number | undefined) => (step: CephLandmark) => {
-    if (isEligible(imageId)(step)) {
-      const value = tryCalculate(step, getManual(imageId), {});
-      // Linear measurements come out of the geometry in image pixels; when a
-      // mm/px calibration is set for the image, convert them to millimeters.
-      // Angular values are scale-independent and pass through unchanged.
-      //
-      // Without a calibration there is no honest millimeter value to report:
-      // the raw pixel distance compared against a mm norm would read as a
-      // gross deviation (a lip 1 mm behind the E-line showed as "-10.1 mm
-      // ***"). Report it as uncalculated instead — `interpret` skips
-      // non-numeric values, so the measurement drops out of the summary,
-      // report and wigglegram until the image is calibrated.
-      if (typeof value === 'number' && step.unit === 'mm') {
-        const scaleFactor = getScale(imageId);
-        if (scaleFactor === null || scaleFactor <= 0) {
-          return undefined;
-        }
-        return value * scaleFactor;
+  (isEligible, getManual) =>
+    (imageId: string) => (step: CephLandmark): number | undefined => {
+      if (!isEligible(imageId)(step)) {
+        return undefined;
       }
-      return value;
+      return tryCalculate(step, getManual(imageId), {});
+    },
+);
+
+export const getCalculatedValue = createSelector(
+  getRawCalculatedValue,
+  getScaleFactor,
+  hasScaleFactor,
+  (getRaw, getScale, isScaled) =>
+    (imageId: string): ((step: CephLandmark) => number | undefined) => (step: CephLandmark) => {
+    const value = getRaw(imageId)(step);
+    // Linear measurements come out of the geometry in image pixels; when a
+    // mm/px calibration is set for the image, convert them to millimeters.
+    // Angular values are scale-independent and pass through unchanged.
+    //
+    // Without a calibration there is no honest millimeter value to report:
+    // the raw pixel distance compared against a mm norm would read as a
+    // gross deviation (a lip 1 mm behind the E-line showed as "-10.1 mm
+    // ***"). Report it as uncalculated instead — `interpret` skips
+    // non-numeric values, so the measurement drops out of the summary,
+    // report and wigglegram until the image is calibrated.
+    if (typeof value === 'number' && step.unit === 'mm') {
+      if (!isScaled(imageId)) {
+        return undefined;
+      }
+      return value * getScale(imageId)!;
     }
-    return undefined;
+    return value;
+  },
+);
+
+/**
+ * Whether a step's value is being withheld only for want of an image scale:
+ * the geometry already yields a number, but it is a linear measurement and
+ * there is no mm/px calibration to express it in millimeters.
+ *
+ * Deliberately narrower than "is an unscaled mm step" — several `line`
+ * landmarks are declared with `unit: 'mm'` yet never produce a value at all
+ * (e.g. the pterygoid vertical), and promising those a number once the image
+ * is calibrated would be its own small lie.
+ */
+export const isStepValuePendingScale = createSelector(
+  getRawCalculatedValue,
+  hasScaleFactor,
+  (getRaw, isScaled) => (imageId: string) => (step: CephLandmark): boolean => {
+    if (step.unit !== 'mm' || isScaled(imageId)) {
+      return false;
+    }
+    return typeof getRaw(imageId)(step) === 'number';
   },
 );
 
@@ -437,4 +472,23 @@ export const getCategorizedAnalysisResults = createSelector(
 export const canShowSummary = createSelector(
   getCategorizedAnalysisResults,
   (getResults) => (imageId: string) => !isEmpty(getResults(imageId)),
+);
+
+/**
+ * Whether the active analysis interprets linear (mm) measurements that cannot
+ * be reported because the image has no mm/px scale. `getCalculatedValue`
+ * suppresses those values, which silently removes their rows from the summary,
+ * the printed report and the wigglegram — this drives the footnote that tells
+ * the clinician why they are missing and how to get them back.
+ */
+export const hasUnreportableLinearMeasurements = createSelector(
+  getActiveAnalysis,
+  isStepValuePendingScale,
+  (getAnalysis, isPendingScale) => (imageId: string): boolean => {
+    const analysis = getAnalysis(imageId);
+    return analysis !== null && some(
+      analysis.components,
+      (c) => isPendingScale(imageId)(c.landmark),
+    );
+  },
 );

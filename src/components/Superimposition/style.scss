@@ -1,0 +1,811 @@
+@import 'src/_variables.scss';
+
+// ---- Full-screen shell ------------------------------------------------------
+
+// Above the toolbar and its popovers, like the clinical report (2200).
+.root {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 2200;
+  display: flex;
+  flex-direction: column;
+  background: $canvas-bg;
+  font-family: $font-stack;
+}
+
+:global(body.superimposition-open) {
+  overflow: hidden;
+}
+
+// ---- Top chrome -------------------------------------------------------------
+
+.chrome {
+  flex: 0 0 auto;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  background: rgba(0, 0, 0, .35);
+  border-bottom: 1px solid rgba(255, 255, 255, .08);
+}
+
+.chrome_title {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  color: $text-on-dark;
+}
+
+.chrome_hint {
+  font-size: 12px;
+  font-weight: 400;
+  color: rgba(242, 245, 248, .55);
+}
+
+.chrome_actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.chrome_error {
+  font-size: 12.5px;
+  color: #FFAB91;
+}
+
+.chrome_button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 36px;
+  padding: 0 14px;
+  border: 1px solid rgba(255, 255, 255, .25);
+  border-radius: 6px;
+  background: transparent;
+  color: $text-on-dark;
+  font-family: $font-stack;
+  font-size: 13.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease;
+
+  &:hover {
+    background: rgba(255, 255, 255, .10);
+  }
+
+  &:focus {
+    outline: none;
+  }
+
+  &:focus-visible {
+    box-shadow: $focus-ring;
+  }
+
+  &[disabled] {
+    opacity: .45;
+    cursor: default;
+  }
+}
+
+.chrome_button__primary {
+  background: $primary-600;
+  border-color: $primary-600;
+  font-weight: 600;
+
+  &:hover {
+    background: $primary-500;
+    border-color: $primary-500;
+  }
+}
+
+// ---- Timepoint / registration controls --------------------------------------
+
+.controls {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 8px 20px;
+  background: $canvas-panel;
+  border-bottom: 1px solid $canvas-border;
+}
+
+.pickers {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.picker_tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 26px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  color: $canvas-bg;
+}
+
+.picker_tag__t1 { background: #40C4FF; }
+.picker_tag__t2 { background: #FF8A65; }
+
+.picker_arrow {
+  color: rgba(199, 208, 217, .6);
+  font-size: 15px;
+}
+
+.select {
+  max-width: 300px;
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid rgba(255, 255, 255, .22);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, .06);
+  color: $canvas-text;
+  font-family: $font-stack;
+  font-size: 12.5px;
+  cursor: pointer;
+
+  // Native options are drawn by the OS on a light menu; keep them readable.
+  option {
+    color: $text-primary;
+    background: $bg-surface;
+  }
+
+  &:focus {
+    outline: none;
+    box-shadow: $focus-ring;
+  }
+}
+
+.interval {
+  margin-left: 4px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .07);
+  color: $canvas-text;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.seg_group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.seg_label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: rgba(199, 208, 217, .7);
+}
+
+.seg {
+  display: inline-flex;
+  padding: 2px;
+  border: 1px solid rgba(255, 255, 255, .18);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, .06);
+}
+
+.seg_button {
+  height: 26px;
+  padding: 0 13px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: rgba(242, 245, 248, .74);
+  font-family: $font-stack;
+  font-size: 12.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease;
+
+  &:hover {
+    color: $text-on-dark;
+    background: rgba(255, 255, 255, .08);
+  }
+
+  &:focus {
+    outline: none;
+  }
+
+  &:focus-visible {
+    box-shadow: $focus-ring;
+  }
+
+  &[disabled] {
+    color: rgba(242, 245, 248, .32);
+    cursor: default;
+    background: transparent;
+  }
+}
+
+.seg_button__on {
+  background: $bg-surface;
+  color: $primary-700;
+  font-weight: 600;
+
+  &:hover {
+    background: $bg-surface;
+    color: $primary-700;
+  }
+}
+
+// ---- Body -------------------------------------------------------------------
+
+.body {
+  flex: 1 1 auto;
+  display: flex;
+  min-height: 0;
+}
+
+.figure_column {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  padding: 16px 16px 0;
+}
+
+.figure {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid $canvas-border;
+  border-radius: 8px;
+  background: #0E1216;
+  overflow: hidden;
+}
+
+.svg {
+  width: 100%;
+  height: 100%;
+}
+
+// ---- Tracing hues -----------------------------------------------------------
+
+// The film is context only, but a lateral ceph is already a dark image: dimming
+// it much below this leaves an unreadable smudge under the tracings.
+.film {
+  opacity: .62;
+}
+
+.casing {
+  fill: none;
+  stroke: rgba(20, 24, 29, .62);
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.outline {
+  fill: none;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.dot {
+  stroke: $canvas-bg;
+  stroke-width: 1.2;
+  vector-effect: non-scaling-stroke;
+}
+
+.t1 {
+  .outline { stroke: #40C4FF; }
+  .dot { fill: #40C4FF; }
+}
+
+.t2 {
+  .outline { stroke: #FF8A65; }
+  .dot { fill: #FF8A65; }
+}
+
+.reg_ring {
+  fill: none;
+  stroke: #FFFFFF;
+  stroke-width: 1.4;
+  stroke-dasharray: 3 3;
+  opacity: .85;
+  vector-effect: non-scaling-stroke;
+}
+
+.reg_text {
+  fill: #FFFFFF;
+  stroke: rgba(20, 24, 29, .85);
+  paint-order: stroke;
+  stroke-linejoin: round;
+  font-family: $font-stack;
+  font-weight: 600;
+}
+
+// ---- Legend -----------------------------------------------------------------
+
+.legend {
+  flex: 0 0 auto;
+  padding: 12px 4px 14px;
+}
+
+.legend_keys {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.key {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.key_swatch {
+  width: 26px;
+  height: 0;
+  border-top-width: 3px;
+  border-top-style: solid;
+  border-radius: 2px;
+}
+
+.key__t1 .key_swatch { border-top-color: #40C4FF; }
+.key__t2 .key_swatch { border-top-color: #FF8A65; }
+
+.key_text {
+  font-size: 13px;
+  font-weight: 600;
+  color: $text-on-dark;
+  font-variant-numeric: tabular-nums;
+}
+
+.legend_interval {
+  font-size: 12.5px;
+  color: rgba(199, 208, 217, .8);
+  font-variant-numeric: tabular-nums;
+}
+
+.legend_registration {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.legend_basis {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: $canvas-text;
+}
+
+.legend_numbers {
+  font-size: 12px;
+  color: rgba(199, 208, 217, .62);
+  font-variant-numeric: tabular-nums;
+}
+
+.legend_note {
+  margin: 6px 0 0;
+  max-width: 92ch;
+  font-size: 12px;
+  line-height: 1.5;
+  color: rgba(199, 208, 217, .72);
+}
+
+.legend_note__warn {
+  color: #FFCC80;
+}
+
+// ---- Change panel -----------------------------------------------------------
+
+.panel {
+  flex: 0 0 420px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: $bg-surface;
+  border-left: 1px solid $border;
+}
+
+.panel_head {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 14px 16px 12px;
+  border-bottom: 1px solid $border;
+}
+
+.panel_title {
+  font-size: 16px;
+  font-weight: 600;
+  color: $text-primary;
+}
+
+.panel_sub {
+  font-size: 12.5px;
+  color: $text-tertiary;
+  font-variant-numeric: tabular-nums;
+}
+
+.panel_scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 16px 16px;
+}
+
+.panel_empty {
+  margin: 20px 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: $text-secondary;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+
+  th, td {
+    padding: 7px 6px;
+    text-align: left;
+    vertical-align: baseline;
+  }
+
+  thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: $bg-surface;
+    border-bottom: 1px solid $border-strong;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: $text-tertiary;
+  }
+
+  tbody tr + tr td {
+    border-top: 1px solid $border;
+  }
+}
+
+.col_name { width: auto; }
+.col_num { text-align: right; }
+.col_bar { width: 54px; }
+
+.group_row td, .group_row th {
+  padding-top: 14px;
+}
+
+.group_head {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: $primary-700;
+  background: $primary-050;
+  border-radius: 4px;
+  padding: 5px 8px !important;
+}
+
+.cell_name {
+  min-width: 0;
+}
+
+.symbol {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: $text-primary;
+}
+
+.name {
+  display: block;
+  margin-top: 1px;
+  font-size: 11.5px;
+  color: $text-tertiary;
+}
+
+.cell_num {
+  text-align: right;
+  font-size: 13px;
+  color: $text-secondary;
+  white-space: nowrap;
+}
+
+.cell_change {
+  font-weight: 600;
+  color: $text-primary;
+}
+
+.cell_bar {
+  padding-left: 8px !important;
+}
+
+// Bidirectional magnitude bar: centred axis, fill to the right for an
+// increase and to the left for a decrease. Relative to the largest change of
+// the same kind in this table — a reading aid, not a clinical threshold.
+.bar {
+  position: relative;
+  display: block;
+  width: 46px;
+  height: 12px;
+}
+
+.bar_axis {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  background: $border-strong;
+}
+
+.bar_fill {
+  position: absolute;
+  top: 3px;
+  height: 6px;
+  border-radius: 2px;
+}
+
+.bar_fill__pos {
+  left: 50%;
+  background: $primary-600;
+}
+
+.bar_fill__neg {
+  right: 50%;
+  background: $accent-600;
+}
+
+.footnotes {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid $border;
+}
+
+.footnote {
+  margin: 0 0 8px;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: $text-tertiary;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+}
+
+// ---- Empty states -----------------------------------------------------------
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin: auto;
+  padding: 40px;
+  max-width: 520px;
+  text-align: center;
+}
+
+.empty_title {
+  font-size: 20px;
+  font-weight: 400;
+  color: $canvas-text;
+}
+
+.empty_hint {
+  font-size: 13px;
+  line-height: 1.6;
+  color: rgba(199, 208, 217, .6);
+}
+
+// ---- Print ------------------------------------------------------------------
+
+// Screen-only running head; the printed sheet needs the identity, the screen
+// already has it in the app's top bar.
+.print_head {
+  display: none;
+}
+
+@page {
+  size: A4 portrait;
+  margin: 14mm;
+}
+
+@media print {
+  // Hide the app and every other portal; print the superimposition alone.
+  :global(body.superimposition-open) > * {
+    display: none !important;
+  }
+
+  :global(body.superimposition-open) {
+    overflow: visible;
+    background: #FFFFFF !important;
+  }
+
+  :global(html) {
+    background: #FFFFFF !important;
+  }
+
+  :global(body.superimposition-open) > .root {
+    display: block !important;
+    position: static;
+    background: #FFFFFF;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .chrome,
+  .controls {
+    display: none !important;
+  }
+
+  .print_head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    padding-bottom: 6px;
+    border-bottom: 2px solid $primary-700;
+  }
+
+  .print_head_title {
+    font-size: 15px;
+    font-weight: 600;
+    color: $primary-900;
+  }
+
+  .print_head_id {
+    font-size: 12px;
+    color: $text-secondary;
+  }
+
+  // Figure over table, both on white; block flow paginates reliably.
+  .body {
+    display: block;
+  }
+
+  .figure_column {
+    padding: 10px 0 0;
+  }
+
+  .figure {
+    display: block;
+    // Sized so a typical comparison (figure + legend + change table + notes)
+    // reaches one A4 sheet instead of spilling two lines onto a second.
+    height: 78mm;
+    border: 1px solid $border;
+    background: #FFFFFF;
+    page-break-inside: avoid;
+  }
+
+  // On paper the tracings must be dark ink on white, and the radiograph only a
+  // faint underlay — a dark film would print as a black rectangle.
+  .film {
+    opacity: .25;
+  }
+
+  .casing {
+    stroke: rgba(255, 255, 255, .9);
+    stroke-width: 3.4;
+  }
+
+  .t1 {
+    .outline { stroke: #10538F; }
+    .dot { fill: #10538F; }
+  }
+
+  .t2 {
+    .outline { stroke: #C0431A; }
+    .dot { fill: #C0431A; }
+  }
+
+  .dot {
+    stroke: #FFFFFF;
+  }
+
+  .reg_ring {
+    stroke: $text-primary;
+  }
+
+  .reg_text {
+    fill: $text-primary;
+    stroke: #FFFFFF;
+  }
+
+  .key__t1 .key_swatch { border-top-color: #10538F; }
+  .key__t2 .key_swatch { border-top-color: #C0431A; }
+
+  .legend {
+    padding: 10px 0 0;
+    page-break-inside: avoid;
+  }
+
+  .key_text { color: $text-primary; }
+  .legend_interval,
+  .legend_basis { color: $text-secondary; }
+  .legend_numbers,
+  .legend_note { color: $text-secondary; }
+  .legend_note__warn { color: $warn; }
+
+  .panel {
+    flex: none;
+    display: block;
+    border-left: none;
+    background: #FFFFFF;
+  }
+
+  .panel_head {
+    padding: 14px 0 6px;
+  }
+
+  .panel_scroll {
+    overflow: visible;
+    padding: 0;
+  }
+
+  .table thead th {
+    position: static;
+  }
+
+  // Tighter rows on paper: the whole comparison should reach one sheet.
+  .table th,
+  .table td {
+    padding: 4px 6px;
+  }
+
+  .footnotes {
+    margin-top: 8px;
+    padding-top: 7px;
+    page-break-inside: avoid;
+  }
+
+  .footnote {
+    margin-bottom: 4px;
+    font-size: 10px;
+    line-height: 1.4;
+  }
+
+  .legend_note {
+    margin-top: 4px;
+  }
+
+  .table tbody {
+    page-break-inside: avoid;
+  }
+
+  .bar_fill__pos { background: $primary-700; }
+  .bar_fill__neg { background: $accent-600; }
+}
