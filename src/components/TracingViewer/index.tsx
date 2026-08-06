@@ -13,6 +13,14 @@ import Props from './props';
 import GeoViewer from 'components/GeoViewer';
 import { isGeoPoint, isGeoVector } from 'utils/math';
 import { mapCursor } from 'utils/constants';
+import {
+  buildOutlines,
+  outlineToSvgPath,
+  OUTLINE_COLOR,
+  OUTLINE_WIDTH,
+  OUTLINE_OPACITY,
+  LandmarkMap,
+} from './outlines';
 
 const classes = require('./style.scss');
 
@@ -233,6 +241,7 @@ export class TracingViewer extends React.PureComponent<Props, State> {
               </g>
             </g>
             <g transform={this.getTransformAttribute()}>
+              {this.renderOutlines()}
               <GeoViewer
                 top={0}
                 left={0}
@@ -590,6 +599,60 @@ export class TracingViewer extends React.PureComponent<Props, State> {
     }
     this.props.onLandmarkMoved(draggedSymbol, Math.round(dragX), Math.round(dragY));
     this.setState({ draggedSymbol: null });
+  };
+
+  /**
+   * Anatomical outline tracings (soft-tissue profile, mandible, maxilla, sella,
+   * orbital rim, ear-rod) derived from the placed landmarks. Fine curved strokes
+   * that read as a hand tracing, distinct from the straighter measurement/plane
+   * segments. Purely decorative: pointer-events off so they never interfere with
+   * landmark hit-testing or dragging. Follows live drag via getRenderedLandmarks.
+   */
+  private renderOutlines = () => {
+    const { isHighlightMode } = this.props;
+    const map: LandmarkMap = {};
+    this.getRenderedLandmarks().forEach(({ symbol, value }) => {
+      if (isGeoPoint(value)) {
+        map[symbol] = value;
+      }
+    });
+    const outlines = buildOutlines(map);
+    if (outlines.length === 0) {
+      return null;
+    }
+    return (
+      <g opacity={isHighlightMode ? 0.35 : 1} pointerEvents="none">
+        {outlines.map((outline) => {
+          const d = outlineToSvgPath(outline);
+          return (
+            <g key={outline.id}>
+              {/* Dark casing so the fine light stroke reads on bright bone. */}
+              <path
+                d={d}
+                fill="none"
+                stroke="rgba(20, 24, 29, 0.55)"
+                strokeWidth={OUTLINE_WIDTH + 1.6}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                vectorEffect="non-scaling-stroke"
+                pointerEvents="none"
+              />
+              <path
+                d={d}
+                fill="none"
+                stroke={OUTLINE_COLOR}
+                strokeWidth={OUTLINE_WIDTH}
+                strokeOpacity={OUTLINE_OPACITY}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                vectorEffect="non-scaling-stroke"
+                pointerEvents="none"
+              />
+            </g>
+          );
+        })}
+      </g>
+    );
   };
 
   private renderProfilogram = () => {

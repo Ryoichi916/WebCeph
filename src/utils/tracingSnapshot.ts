@@ -1,5 +1,11 @@
 import { Segment } from 'analyses/profilogram';
 import { isGeoPoint } from 'utils/math';
+import {
+  buildOutlines,
+  strokeOutlineOnCanvas,
+  OUTLINE_COLOR,
+  OUTLINE_OPACITY,
+} from 'components/TracingViewer/outlines';
 
 /**
  * Shared canvas composition for the tracing overlay (profilogram lines +
@@ -29,6 +35,28 @@ export const drawTracingOverlay = (
   const pointRadius = Math.max(2.5, width * 0.006);
 
   ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+
+  // Anatomical outline tracings (soft-tissue profile, mandible, maxilla, sella,
+  // orbital rim, ear-rod) — shared geometry with the on-screen SVG overlay
+  // (see components/TracingViewer/outlines.ts). Drawn first so the measurement
+  // segments and landmark dots sit on top. Thin fine strokes, like a hand
+  // tracing.
+  const outlines = buildOutlines(manual);
+  if (outlines.length > 0) {
+    const outlineWidth = Math.max(1, width * 0.0018);
+    ctx.save();
+    // Dark casing under the fine light stroke, so it reads on bright bone.
+    ctx.strokeStyle = 'rgba(20, 24, 29, 0.55)';
+    ctx.lineWidth = outlineWidth + Math.max(1.4, width * 0.0022);
+    outlines.forEach((outline) => strokeOutlineOnCanvas(ctx, outline));
+    ctx.strokeStyle = OUTLINE_COLOR;
+    ctx.globalAlpha = OUTLINE_OPACITY;
+    ctx.lineWidth = outlineWidth;
+    outlines.forEach((outline) => strokeOutlineOnCanvas(ctx, outline));
+    ctx.restore();
+  }
+
   ctx.strokeStyle = PROFILOGRAM_COLOR;
   ctx.lineWidth = lineWidth;
   segments.forEach((s) => {
