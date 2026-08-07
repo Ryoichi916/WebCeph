@@ -57,6 +57,12 @@ export const getCommandForStep = (landmark: CephLandmark): string => {
       (typeof landmark.name === 'string' && /angle/i.test(landmark.name));
     return alreadySaysAngle ? `Calculate ${base}` : `Calculate ${base} Angle`;
   } else if (landmark.type === 'distance') {
+    // A named measurement is named, not described by its first two components:
+    // overjet is not "the distance between OP and U1 Incisal Edge", and saying
+    // so would mislabel the step. Its full definition is on the second line.
+    if (shouldAbbreviate(landmark)) {
+      return `Measure ${landmark.symbol}`;
+    }
     const [from, to] = landmark.components;
     return `Measure distance between ${from.symbol} and ${to.symbol}`;
   } else if (landmark.type === 'sum') {

@@ -131,12 +131,25 @@ export default class TracingToolbar extends React.PureComponent<Props, State> {
           })}
           disabled={!hasImage}
           title="Switch the active cephalometric analysis"
+          // Stated explicitly so the accessible name never depends on whether
+          // the strip is wide enough to render the "Analysis: " qualifier.
+          aria-label={
+            activeAnalysis ? `Analysis: ${activeAnalysis.name}` : 'Analysis'
+          }
           aria-haspopup="true"
           onClick={this.openAnalysisMenu}
         >
           <IconAnalysis color={ICON_COLOR} style={iconStyle} />
-          <span className={classes.button_label}>
-            {activeAnalysis ? `Analysis: ${activeAnalysis.name}` : 'Analysis'}
+          {/* The "Analysis: " qualifier is CSS-generated (see
+              `.label_analysis`) and is dropped on a narrow strip so the two
+              clinical actions at the far end keep their names. The analysis
+              name, the icon, the tooltip and the aria-label all stay. */}
+          <span
+            className={cx(classes.button_label, {
+              [classes.label_analysis]: !!activeAnalysis,
+            })}
+          >
+            {activeAnalysis ? activeAnalysis.name : 'Analysis'}
           </span>
           <IconArrowUp color={ICON_COLOR} style={caretStyle} />
         </button>
@@ -188,10 +201,13 @@ export default class TracingToolbar extends React.PureComponent<Props, State> {
           className={classes.button}
           disabled={!canPlotFromReferences}
           title="Place the remaining landmarks at standard positions from Sella and Nasion"
+          aria-label="Plot from S & N"
           onClick={onPlotFromReferencesClick}
         >
           <IconPlotFromRefs color={ICON_COLOR} style={iconStyle} />
-          <span className={classes.button_label}>Plot from S & N</span>
+          <span className={cx(classes.button_label, classes.label_refs)}>
+            S &amp; N
+          </span>
         </button>
 
         <button
@@ -224,13 +240,24 @@ export default class TracingToolbar extends React.PureComponent<Props, State> {
                 'Angular measurements are scale-independent and unaffected; ' +
                 'linear (mm) measurements require calibration. Click to calibrate.'
           }
+          aria-label={
+            isCalibrated
+              ? `Calibrated · ${formatMmPx(scaleFactor!, 3)} mm/px`
+              : 'Not calibrated'
+          }
           aria-haspopup="dialog"
           onClick={this.openCalibrationDialog}
         >
           <IconRuler color="currentColor" style={{ width: 14, height: 14 }} />
-          {isCalibrated
-            ? `Calibrated · ${formatMmPx(scaleFactor!, 3)} mm/px`
-            : 'Not calibrated'}
+          {/* The number *is* the calibration; the CSS-generated word before it
+              (see `.chip_value`) is the first thing to go when the strip has to
+              make room for a named clinical action. The chip's tint, tooltip
+              and aria-label keep saying the film is calibrated either way. */}
+          {isCalibrated ? (
+            <span className={classes.chip_value}>
+              {`${formatMmPx(scaleFactor!, 3)} mm/px`}
+            </span>
+          ) : 'Not calibrated'}
         </button>
 
         <span className={classes.separator} />

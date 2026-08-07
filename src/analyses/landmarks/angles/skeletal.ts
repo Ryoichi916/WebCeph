@@ -287,8 +287,17 @@ export const downsABPlaneAngle: CephAngle = {
  */
 export const facialAngle: CephAngle = {
   ...angleBetweenLines(flipVector(FH), NPog, 'Facial Angle'),
+  // `defaultInterpetLandmark` reads its indications as [below min, in band,
+  // above max]. A facial angle *above* the norm puts pogonion further forward:
+  // a prominent chin and a prognathic mandible, which is a **concave** profile
+  // — and a facial angle below the norm is the retrognathic, **convex** one.
+  // The skeletal-profile pair used to be the other way round, so this landmark
+  // contradicted both itself (it called the same chin "prominent" while calling
+  // the profile "convex") and the rest of the app: on one patient Ricketts read
+  // "Skeletal profile — Convex" off this angle while Downs read "Concave" off
+  // the angle of convexity, from the same tracing on the same screen.
   interpret: composeInterpretation(
-    defaultInterpetLandmark('skeletalProfile', ['concave', 'normal', 'convex']),
+    defaultInterpetLandmark('skeletalProfile', ['convex', 'normal', 'concave']),
     defaultInterpetLandmark('chin', ['recessive', 'normal', 'prominent']),
   ),
 };

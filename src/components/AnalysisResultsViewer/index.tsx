@@ -22,26 +22,37 @@ import {
 
 import { formatCaptureDate } from 'utils/records';
 
+import LATERAL_ANALYSES from 'analyses/lateral';
+
 const classes = require('./style.scss');
 
 /**
  * Display names for the analysis badge in the dialog header.
  * Exported (with the formatters below) for the printable clinical report,
  * which must match this dialog's conventions exactly.
+ *
+ * Every shipped lateral analysis is seeded from `LATERAL_ANALYSES` — the same
+ * source the toolbar menu and the combined report read — so the three can never
+ * disagree about what an analysis is called. Keying this map by hand had already
+ * let them drift: the store keeps the analysis *module* name (`ricketts`) while
+ * only the module's own `analysis.id` (`ricketts_lateral`) was listed here, so
+ * the summary header and the single-analysis report both printed a bare
+ * lowercase "ricketts" where the toolbar and the combined report said
+ * "Ricketts".
+ *
+ * The entries below the seed are the ids that are not lateral analyses in their
+ * own right: `basic` and `common` (composed building blocks) and the legacy
+ * `analysis.id` spellings that older saved projects still carry.
  */
 export const ANALYSIS_NAMES: { [id: string]: string | undefined } = {
+  ...LATERAL_ANALYSES.reduce(
+    (names, { id, name }) => Object.assign(names, { [id]: name }),
+    {} as { [id: string]: string | undefined },
+  ),
   basic: 'Basic',
-  bjork: 'Björk',
   common: 'Common',
-  dental: 'Dental',
-  downs: 'Downs',
-  jarabak: 'Jarabak',
   ricketts_lateral: 'Ricketts',
-  softTissues: 'Soft tissues',
   soft_tissues_lateral: 'Soft tissues',
-  steiner: 'Steiner',
-  tweed: 'Tweed',
-  wits: 'Wits & vertical',
 };
 
 // One decimal everywhere (design brief); avoid the "-0.0" artifact.

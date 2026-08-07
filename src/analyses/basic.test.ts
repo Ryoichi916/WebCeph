@@ -45,6 +45,27 @@ describe('Basic Analysis', () => {
       x: 1189,
       y: 1633,
     },
+    // The dental analysis (which the basic analysis composes) reports overjet
+    // and overbite against the functional occlusal plane, so the plane's four
+    // cusp points have to be on the film for the basic analysis to be fully
+    // computable. Posterior to the incisors and stepping down towards them,
+    // as they sit on a real lateral ceph.
+    'U6': {
+      x: 1010,
+      y: 1330,
+    },
+    'L6': {
+      x: 1008,
+      y: 1348,
+    },
+    'U4': {
+      x: 1175,
+      y: 1360,
+    },
+    'L4': {
+      x: 1173,
+      y: 1378,
+    },
   };
   const expected: Array<CategorizedAnalysisResult<Category>> = [
     {

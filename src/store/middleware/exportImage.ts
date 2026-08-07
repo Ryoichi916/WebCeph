@@ -56,9 +56,17 @@ const middleware = ({ getState }: Store<StoreState>) =>
     // filed against the patient; fall back to the image name.
     const patient = getActivePatient(state);
     const ext = format === 'jpeg' ? 'jpg' : 'png';
-    const stem = patient
-      ? [patient.chartId, patient.name].filter(Boolean).join('_').replace(/[^\w.\-]+/g, '_')
-      : baseName(getImageName(state)(imageId));
+    // Sanitising drops every character a file name cannot carry — which is
+    // every CJK name among them. Collapse the runs of separators that leaves
+    // and trim them off the ends, so a Japanese name yields `C-0001-tracing.png`
+    // rather than the malformed `C-0001__-tracing.png`. Same rule as the
+    // superimposition and treatment-simulation exports.
+    const stem = (patient
+      ? [patient.chartId, patient.name].filter(Boolean).join('_')
+      : baseName(getImageName(state)(imageId)))
+      .replace(/[^\w.\-]+/g, '_')
+      .replace(/_{2,}/g, '_')
+      .replace(/^[_.\-]+|[_.\-]+$/g, '');
     const filename = `${stem || 'tracing'}-tracing.${ext}`;
 
     const img = new Image();

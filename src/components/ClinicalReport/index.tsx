@@ -35,6 +35,16 @@ import ResultsTable, { DeviationKey } from './ResultsTable';
 import FindingsOverview from './FindingsOverview';
 import { AnalysisSections, PendingNote } from './AnalysisSection';
 import { findDivergences, divergentCategorySet } from './divergence';
+// The practice identity is shared with every other printable view (the
+// superimposition sheet included), so a document from this app is never signed
+// to two different standards.
+import {
+  STORAGE_KEY_CLINIC,
+  STORAGE_KEY_CLINICIAN,
+  STORAGE_KEY_LICENSE,
+  readStored,
+  writeStored,
+} from './letterhead';
 
 const classes = require('./style.scss');
 
@@ -51,35 +61,6 @@ const IMAGE_TYPE_NAMES: { [type: string]: string | undefined } = {
   panoramic: 'Panoramic radiograph',
   photo_lateral: 'Lateral photograph',
   photo_frontal: 'Frontal photograph',
-};
-
-/**
- * localStorage keys for the clinic/clinician identity. This is presentation
- * identity (letterhead), not patient data, so device-local storage is the
- * honest scope: it prints on every report generated from this machine.
- */
-const STORAGE_KEY_CLINIC = 'webceph-report-clinic-name';
-const STORAGE_KEY_CLINICIAN = 'webceph-report-clinician-name';
-const STORAGE_KEY_LICENSE = 'webceph-report-clinician-license';
-
-const readStored = (key: string): string => {
-  try {
-    return localStorage.getItem(key) || '';
-  } catch {
-    return '';
-  }
-};
-
-const writeStored = (key: string, value: string) => {
-  try {
-    if (value === '') {
-      localStorage.removeItem(key);
-    } else {
-      localStorage.setItem(key, value);
-    }
-  } catch {
-    // Storage unavailable (private mode) — the field still edits on screen.
-  }
 };
 
 interface StoredEditableProps {

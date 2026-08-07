@@ -80,21 +80,17 @@
     }
   }
 
-  // The superimposition action. With Simulate added the strip no longer fits
-  // fourteen labelled actions at the 1440px reference viewport, so this one
-  // falls back to its icon (its tooltip still names it) rather than pushing
-  // Export off the end of the bar. Simulate keeps its label down to 1330px,
-  // because a flagship action nobody can name is an action nobody finds.
-  &__superimpose {
-    @media (max-width: 1560px) {
-      .button_label {
-        display: none;
-      }
-    }
-  }
-
+  // Superimpose and Simulate keep their names at every ordinary laptop width.
+  // They used to lose them first — at 1560px and 1330px — which meant that on
+  // the 1440px reference viewport, and worse at 1280px, the strip ended in two
+  // anonymous glyphs wedged between "Report" and "Export". A flagship clinical
+  // action nobody can name is an action nobody finds, so the room is taken
+  // from qualifiers that carry no information instead (see
+  // `.label_qualifier`), and only below 1180px — where nothing else is left to
+  // give — do these two fall back to their tooltips.
+  &__superimpose,
   &__simulate {
-    @media (max-width: 1330px) {
+    @media (max-width: 1180px) {
       .button_label {
         display: none;
       }
@@ -119,12 +115,65 @@
   line-height: 1;
 }
 
+// Words inside a label that repeat what the icon, the tint or the tooltip
+// already says: "Analysis: " before the analysis name, "Plot from " before
+// "S & N", "Calibrated · " before the mm/px figure. These are the first thing
+// the strip gives up when it runs out of room — before, and instead of, the
+// *name* of a clinical action. Nothing here is a fact the reader loses: the
+// name that carries the meaning stays on screen at every width, and each
+// control's `aria-label` states the whole phrase regardless.
+//
+// They are generated content rather than markup on purpose: a hidden <span>
+// would still sit in the DOM's text, so a text search — a screen reader's
+// find, a test's locator — would keep matching a phrase nobody can see.
+.label_analysis::before { content: 'Analysis: '; }
+.label_refs::before { content: 'Plot from '; }
+.chip_value::before { content: 'Calibrated · '; }
+
+@media (max-width: 1500px) {
+  .label_analysis::before,
+  .label_refs::before,
+  .chip_value::before {
+    content: '';
+  }
+}
+
 .separator {
   width: 1px;
   height: 20px;
   margin: 0 3px;
   background: $border;
   flex-shrink: 0;
+}
+
+// Below this the strip tightens its own whitespace before it takes the name
+// off any button. Padding is the cheapest thing the toolbar owns; a label is
+// the most expensive, because it is the only thing that says what an action
+// does without hovering it.
+@media (max-width: 1340px) {
+  .root {
+    gap: 1px;
+    padding: 0 6px;
+  }
+
+  .button {
+    gap: 5px;
+    padding: 0 5px;
+  }
+
+  .separator {
+    margin: 0 1px;
+  }
+
+  .zoom_value {
+    min-width: 46px;
+    padding: 0 6px;
+    margin: 0 1px;
+  }
+
+  .calibration_chip {
+    padding: 0 8px;
+  }
 }
 
 .spacer {

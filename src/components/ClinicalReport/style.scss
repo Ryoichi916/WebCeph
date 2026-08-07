@@ -125,6 +125,17 @@
   cursor: pointer;
   transition: background-color 120ms ease, border-color 120ms ease;
 
+  svg {
+    flex-shrink: 0;
+    // mui SvgIcon writes an inline `color` from the theme onto the <svg>
+    // itself, so `fill: currentColor` resolves against the theme's dark ink
+    // rather than against this button's light text — a near-black glyph on a
+    // dark chrome. Force the icon to follow the button's own colour instead.
+    // (Same fix as TracingToolbar's `.button svg`.)
+    color: inherit !important;
+    fill: currentColor !important;
+  }
+
   &:hover {
     background: rgba(255, 255, 255, .1);
   }
