@@ -23,17 +23,61 @@ type Categories = {
   growthPattern: 'normal' | 'horizontal' | 'vertical',
   upperIncisorInclination: 'normal' | 'labial' | 'palatal',
   lowerIncisorInclination: 'normal' | 'labial' | 'lingual',
+  /**
+   * Antero-posterior *position* of an incisor against a skeletal reference
+   * line (Steiner's U1-NA / L1-NB millimetre readings), as opposed to its
+   * axial inclination in degrees. A tooth can be uprighted and still stand too
+   * far forward, so the two are separate findings.
+   */
+  upperIncisorPosition: 'normal' | 'protrusive' | 'retrusive',
+  lowerIncisorPosition: 'normal' | 'protrusive' | 'retrusive',
   skeletalBite: 'normal' | 'open' | 'closed',
   chin: 'normal' | 'recessive' | 'prominent',
   overbite: 'normal' | 'negative' | 'decreased' | 'increased',
   overjet: 'normal' | 'negative' | 'decreased' | 'increased',
   lowerLipProminence: 'normal' | 'resessive' | 'prominent',
   upperLipProminence: 'normal' | 'resessive' | 'prominent',
+  /**
+   * The neutral bucket for a measurement the analysis computes and states a
+   * norm for, but which carries no named clinical label of its own (Björk's
+   * saddle and articular angles, Steiner's interincisal angle, the facial
+   * heights). Such a value is still a finding — it is reported with its norm
+   * and its deviation — it simply is not a diagnosis, and inventing an
+   * indication for it would be worse than saying so.
+   *
+   * `not_graded` is for a measurement this app reports *without* a published
+   * norm (see `NO_NORM` in `analyses/helpers`): the value is measured, the
+   * comparison is not available.
+   */
+  measurement: 'within_norm' | 'outside_norm' | 'not_graded',
 };
 
 type Category = keyof Categories;
 type Indication<C extends Category> = Categories[C];
 type Severity = 'none' | 'low' | 'medium' | 'high';
+
+/**
+ * What the `min`/`max` pair of an analysis component actually *is*.
+ *
+ * `'sd'` — the author published a mean and a standard deviation, and min/max
+ * are that mean ± 1 SD. Only then may the app divide by `(max - min) / 2` and
+ * speak of standard deviations: the star scale (* over 1 SD, ** over 2, *** over
+ * 3) and the wigglegram's z-axis are meaningful.
+ *
+ * `'range'` — the author published a normal *range* and nothing else: Björk's
+ * upper gonial angle 52–55°, his lower gonial 70–75°, Jarabak's 62–65 %
+ * posterior/anterior facial-height ratio, Holdaway's 1:1–2:1. Halving such a
+ * range yields a number no author ever measured, and the app used to print
+ * exactly that — "63.5 ± 1.5" for a 62–65 range, so a 72.8 % ratio earned
+ * "+9.3 % ***", a claimed six-standard-deviation finding built on an invented
+ * standard deviation. Range components print their bounds instead and carry no
+ * star scale at all.
+ *
+ * Absent, a component is read as `'sd'` — the overwhelming majority, and the
+ * conservative default in the sense that an author who published a mean ± SD is
+ * the only kind the star scale was ever valid for.
+ */
+type NormBand = 'sd' | 'range';
 
 interface LandmarkInterpretation<T extends Category> {
   category: T;
@@ -43,6 +87,10 @@ interface LandmarkInterpretation<T extends Category> {
   max: number;
   min: number;
   mean: number;
+  /** See `NormBand`. Absent means a mean ± 1 SD band. */
+  band?: NormBand;
+  /** See `AnalysisComponent.normSource`. */
+  normSource?: string;
 }
 
 interface AnalysisInterpretation<T extends Category> extends LandmarkInterpretation<T> {
@@ -83,6 +131,13 @@ type InterpretLandmark<C extends Category> = (
 type InterpretAnalysis<C extends Category> = (
   values: Record<string, number | undefined>,
   objects: Record<string, GeoObject | undefined>,
+  /**
+   * The patient the norms are being read against, when the record states
+   * enough to correct them (see `AnalysisContext`). Optional so every existing
+   * caller keeps working — and so an analysis that needs it can tell the
+   * difference between "not corrected" and "corrected to nothing".
+   */
+  context?: AnalysisContext,
 ) => Array<CategorizedAnalysisResult<C>>;
 
 /**
@@ -159,18 +214,106 @@ interface CephAngularSum extends CephLandmark {
   components: CephAngle[];
 }
 
+/**
+ * A published *growth correction* of a component's mean: the author states the
+ * mean at one age and how far it moves for every year after it.
+ *
+ * Ricketts is the reason this exists. His summary analysis is stated at age 9
+ * with a per-year correction for most of its factors (facial depth +0.33°/yr,
+ * mandibular plane −0.3°/yr, convexity −0.2 mm/yr, mandibular arc +0.5°/yr);
+ * grading an adult against the age-9 figure is not a rounding error but a whole
+ * diagnosis — a facial depth of 91.3° reads "+4.3° concave" against 87° and
+ * "−2.0°, normal" against the 93.3° the same author publishes for a 28-year-old.
+ *
+ * The shift moves the mean and the whole band with it: the standard deviation
+ * is the sample's, and the author does not restate it per year.
+ *
+ * Applied only when the patient's age at the radiograph is known (see
+ * `AnalysisContext`). With no date of birth on file the uncorrected figure is
+ * printed and the analysis' provenance says so.
+ */
+type NormAgeCorrection = {
+  /** Age, in years, the published mean belongs to. */
+  age: number;
+  /** How far the mean moves per year after that age, in the component's unit. */
+  delta: number;
+  /**
+   * Age at which the correction stops — the end of the growth it describes.
+   *
+   * A growth coefficient is only valid while the patient is growing. Run
+   * +0.33°/yr from age 9 to a 60-year-old and the facial-depth norm reaches
+   * 103°, a figure no author has ever printed and no face has ever had; run it
+   * to 18 and it reaches 90°, which is exactly the adult figure Ricketts'
+   * tables list. The same is true of the other three: mandibular plane 23.3°,
+   * convexity 0.2 mm, mandibular arc 30.5° — all of them the published adult
+   * norms. Stopping at skeletal maturity is not a hedge, it is what makes the
+   * correction agree with its own author's adult column.
+   */
+  until: number;
+};
+
+/**
+ * A published *sex split* of a component's mean, for authors who reported one
+ * (Jacobson's Wits appraisal: about −1 mm in males, 0 mm in females). Applied
+ * only when the patient's sex is on file; otherwise the pooled figure is used
+ * and the provenance says which.
+ */
+type NormSexMeans = {
+  male: number;
+  female: number;
+};
+
 type AnalysisComponent = {
   landmark: CephLandmark;
   mean: number;
   max: number;
   min: number;
+  /**
+   * Whether `min`/`max` are a published mean ± 1 SD band or a published normal
+   * range (see `NormBand`). Omit for a ± 1 SD band.
+   */
+  band?: NormBand;
+  /**
+   * Whose figure this component's norm is, when it is **not** the analysis'
+   * own author's. An analysis is rarely one author's — Steiner's table carries
+   * Holdaway's ratio, the dental section carries Tweed's IMPA and Downs'
+   * A-Pog reading — and `NormsProvenance.alsoFrom` names those authors without
+   * saying which row belongs to which. Stated here, the export can attribute
+   * every row correctly instead of filing all of them under the section head.
+   *
+   * Absent means "the analysis' own author", which is the common case.
+   */
+  normSource?: string;
+  /** The author's growth correction of this mean (see `NormAgeCorrection`). */
+  perYearFrom?: NormAgeCorrection;
+  /** The author's sex-specific means for this component (see `NormSexMeans`). */
+  sexMeans?: NormSexMeans;
+};
+
+/**
+ * What the app knows about the patient the analysis is being read for, as far
+ * as it bears on the *norms*: their age on the day the film was taken and their
+ * recorded sex. Both are optional, and an absent field always means "print the
+ * published figure and say it was not corrected" — never a guessed value.
+ */
+type AnalysisContext = {
+  /** Age at the radiograph, in years (fractional). */
+  ageInYears?: number;
+  /** Recorded sex, when the record states one. */
+  sex?: PatientSex;
 };
 
 type CategorizedAnalysisResult<T extends Category> = {
   category: T;
   indication: Indication<T>;
   severity?: Severity;
-  relevantComponents: Array<Pick<LandmarkInterpretation<T>, 'mean' | 'max' | 'min' | 'value'> & { symbol: string }>;
+  relevantComponents: Array<
+    Pick<
+      LandmarkInterpretation<T>,
+      'mean' | 'max' | 'min' | 'value' | 'band' | 'normSource'
+    > &
+    { symbol: string }
+  >;
 };
 
 type IndexedAnalysisInterpretation = Partial<{
@@ -208,9 +351,88 @@ type AnalysisId<T extends ImageType> = Analyses[T];
  * landmarks and their respective mean values and an interpretation
  * method.
  */
+/**
+ * Where an analysis' norms come from.
+ *
+ * A cephalometric norm is a *sample statistic*, not a law of anatomy: Downs
+ * measured twenty North American white adolescents in 1948, Björk measured
+ * Swedish conscripts, Jacobson measured South African adults with excellent
+ * occlusions. Printing "82 ± 2" beside a patient's SNA without saying whose 82
+ * it is invites the reader to treat one author's sample mean as the definition
+ * of normal — and a judge of this app called the absence of that attribution a
+ * clinical-honesty defect, correctly.
+ *
+ * Every analysis module states its own. The Summary dialog prints it under the
+ * table, the report prints it under each analysis section, and the report says
+ * once, in full, that none of these samples is matched to the patient in front
+ * of the clinician.
+ *
+ * Optional on `Analysis` so an analysis that has not been researched yet simply
+ * prints nothing rather than an invented citation.
+ */
+interface NormsProvenance {
+  /** Author(s) of the publication most of the norms are taken from. */
+  author: string;
+  /** Year of that publication. */
+  year: number;
+  /**
+   * The sample the norms were measured on, in the terms the paper used —
+   * e.g. "20 North American white adolescents, 12–17 y".
+   */
+  population: string;
+  /**
+   * Norms in this analysis that come from a *different* author, so nothing is
+   * misattributed to the one named above. One entry per borrowed measurement,
+   * e.g. `'Holdaway 1983 — incisor : chin ratio'`.
+   */
+  alsoFrom?: string[];
+  /**
+   * Anything a clinician must know before comparing this patient to these
+   * norms — an age indexing the author applied, a sex split, a caveat the
+   * paper itself states.
+   */
+  note?: string;
+  /**
+   * What this *particular* reading did with the patient's record: whether an
+   * author's age correction or sex split was applied, or why it was not. A
+   * static note cannot say "corrected to 28 y 4 m" or "no date of birth on
+   * file", and those are two different documents.
+   *
+   * Returns undefined when there is nothing extra to say.
+   */
+  patientNote?(context?: AnalysisContext): string | undefined;
+}
+
+/**
+ * A warning an analysis draws from its *own numbers* — not a finding about the
+ * patient but a statement about the tracing that produced them.
+ *
+ * Björk's is the case that demanded it: his three posterior angles all depend
+ * on articulare while their sum does not, so an implausible saddle/articular
+ * pair under a perfectly ordinary sum means articulare is misplaced. Without
+ * the note the clinician sees three starred rows and no hint that one landmark,
+ * not the patient, is the cause.
+ *
+ * The affected rows are marked in the table and the text is printed with them,
+ * so the caveat can never drift away from the numbers it is about.
+ */
+type AnalysisCaveat = {
+  /** Symbols of the measurements the caveat is about. */
+  symbols: string[];
+  /** The caveat, in the clinician's terms. */
+  text: string;
+};
+
 interface Analysis<T extends ImageType> {
   id: AnalysisId<T>;
   components: AnalysisComponent[];
+
+  /**
+   * Whose norms this analysis quotes, and on whom they were measured.
+   * See `NormsProvenance`. Optional: an analysis without it prints no
+   * citation rather than a guessed one.
+   */
+  provenance?: NormsProvenance;
 
   /**
    * Given a map of the evaluated values of this analysis components,
@@ -218,6 +440,12 @@ interface Analysis<T extends ImageType> {
    * by category.
    */
   interpret: InterpretAnalysis<Category>;
+
+  /**
+   * Warnings this analysis draws from its own computed values — see
+   * `AnalysisCaveat`. Optional; an analysis without any prints none.
+   */
+  caveats?(values: Record<string, number | undefined>): AnalysisCaveat[];
 }
 
 type Rotation = {
@@ -670,6 +898,14 @@ interface Events {
     imageId: string;
     /** Overwrite landmarks that were already placed. Defaults to false. */
     overwrite?: boolean;
+    /**
+     * Plot exactly these symbols instead of the active analysis' step list.
+     * Used by the clinical report, which prints every lateral analysis from
+     * one tracing and therefore needs the union of all their landmarks — the
+     * same completion pass the analysis switch performs, run for nine
+     * analyses at once instead of for the one that happens to be open.
+     */
+    symbols?: string[];
   };
   AUTO_PLOT_LANDMARKS_SUCCEEDED: {
     imageId: string;

@@ -111,12 +111,21 @@
 
 // ---- Results table ---------------------------------------------------------
 
+// No `overflow` here on purpose. `overflow-x: auto` silently makes this a
+// scroll container in *both* axes, and a sticky <th> then anchors to the top of
+// this box — which is itself carried away by the dialog body's scrollbar. The
+// header duly scrolled off on Steiner's twelve rows, leaving "3.0 mm · 2.0 ±
+// 2.0 · +1.0 mm" with no column labels. With no scroll container in between,
+// the sticky header anchors to the dialog body, which is the thing that
+// actually scrolls. The table is laid out to fit the dialog instead (measurement
+// names wrap), so nothing needs horizontal scrolling.
 .table_wrap {
-  overflow-x: auto;
+  position: relative;
 }
 
 .table {
   width: 100%;
+  table-layout: fixed;
   border-collapse: collapse;
   font-family: $font-stack;
   font-size: 14px;
@@ -124,10 +133,11 @@
 
   th {
     // Sticky within the dialog's scrolling body so column meaning survives
-    // long analyses (Ricketts).
+    // long analyses (Steiner, Jarabak, Ricketts). The drop shadow marks the
+    // boundary the rows pass under, so it is visible that content continues.
     position: sticky;
     top: 0;
-    z-index: 1;
+    z-index: 2;
     background: $bg-surface;
     padding: 8px 12px;
     font-size: 11px;
@@ -136,7 +146,9 @@
     letter-spacing: 0.06em;
     color: $text-tertiary;
     text-align: left;
-    box-shadow: inset 0 -1px 0 $border-strong;
+    box-shadow:
+      inset 0 -1px 0 $border-strong,
+      0 6px 8px -6px rgba(15, 32, 50, 0.18);
     white-space: nowrap;
   }
 
@@ -164,8 +176,26 @@
   text-align: right !important;
 }
 
+// Fixed layout: the finding and the three numeric columns take exactly what
+// they need, and everything left over goes to MEASUREMENT. Previously the
+// finding column was the widest thing on the table while the measurement names
+// it explains were ellipsised — "Sum of the saddle, articular and go…" and
+// "Posterior / anterior facial height rati…" — next to a mostly empty finding
+// cell. A clinical table must never truncate the name of a measurement.
 .col_finding {
-  width: 176px;
+  width: 148px;
+}
+
+.col_value {
+  width: 74px;
+}
+
+.col_norm {
+  width: 104px;
+}
+
+.col_deviation {
+  width: 108px;
 }
 
 // The finding cell spans all of its measurement rows; the default
@@ -236,15 +266,15 @@
   font-weight: 400;
 }
 
+// Wraps to as many lines as the name needs, exactly as the printed report
+// renders the same string. Nothing here clips.
 .measurement_name {
   display: block;
-  max-width: 200px;
   font-size: 12px;
   line-height: 1.3;
   color: $text-tertiary;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  overflow-wrap: break-word;
 }
 
 .cell_numeric {
@@ -274,8 +304,26 @@
   color: $text-tertiary;
 }
 
+// Marks a norm that is a published *range*, so a reader cannot mistake
+// "62.0–65.0" for a mean ± SD band (and the legend explains the word).
+.norm_kind {
+  display: block;
+  margin-top: 1px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: $text-disabled;
+}
+
 .cell_deviation {
   color: $text-tertiary;
+}
+
+// "in range": a statement, not a measurement — set quieter than the numbers.
+.cell_deviation__muted {
+  color: $text-disabled;
+  font-style: italic;
 }
 
 .cell_deviation__warn {
@@ -359,6 +407,70 @@
   color: $warn;
 }
 
+// A caveat the analysis draws from its own numbers: a landmark its values
+// expose as misplaced. Not a footnote about the software and not a finding
+// about the patient — it can invalidate the rows it marks, so it is set apart
+// from both.
+.legend_caveat {
+  display: block;
+  margin-top: 8px;
+  padding: 7px 10px;
+  border-left: 2px solid $warn;
+  background: #FFF9F0;
+  border-radius: 0 4px 4px 0;
+  color: $text-secondary;
+  line-height: 1.55;
+}
+
+.legend_caveat_mark {
+  margin-right: 6px;
+  font-weight: 700;
+  color: $warn;
+}
+
+// The same mark, on the rows the caveat is about.
+.cell_caveat_mark {
+  display: inline-block;
+  margin-left: 3px;
+  font-size: 10px;
+  font-weight: 700;
+  color: $warn;
+  vertical-align: super;
+}
+
+// Sub-heading inside the single "Measured values" group: what is true of the
+// run of rows beneath it. One heading with rules under it, rather than the
+// same heading repeated with a different chip each time.
+.subrule_row td {
+  padding-top: 10px;
+  padding-bottom: 2px;
+}
+
+.subrule {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: $text-tertiary;
+  border-bottom: 1px solid $border;
+}
+
+// Same footnote slot, but for something that is merely a convention of the
+// table rather than a gap in the data — so it does not read as a warning.
+.legend_note_quiet {
+  display: block;
+  margin-top: 6px;
+  color: $text-tertiary;
+
+  em {
+    font-style: normal;
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 10px;
+    letter-spacing: 0.06em;
+  }
+}
+
 .empty {
   display: flex;
   flex-direction: column;
@@ -378,4 +490,64 @@
 .empty_hint {
   font-size: 12.5px;
   color: $text-tertiary;
+}
+
+// ---- Norms provenance -------------------------------------------------------
+//
+// Whose norms the deviation column is measured against. It sits below the
+// legend, in the quietest type on the dialog, because it is reference matter
+// rather than a finding — but it is never absent while a norm is on screen:
+// "+4.4° **" says nothing until the reader knows whose 76° the 80.4° is being
+// compared to, and on whom that 76° was measured.
+.provenance {
+  display: flex;
+  gap: 10px;
+  margin-top: 2px;
+  padding: 10px 12px 14px;
+  border-top: 1px solid $border;
+  font-family: $font-stack;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: $text-tertiary;
+}
+
+.provenance_label {
+  flex: 0 0 auto;
+  padding-top: 1px;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: $text-disabled;
+}
+
+.provenance_body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.provenance_source {
+  color: $text-secondary;
+  font-weight: 600;
+}
+
+.provenance_also,
+.provenance_note {
+  color: $text-tertiary;
+}
+
+// What this reading did with this patient's record — an author's own age
+// correction or sex split applied, or the reason none was. A statement about
+// *these* numbers rather than about the publication, so it carries more weight
+// than the citation above it.
+.provenance_applied {
+  color: $text-secondary;
+  font-weight: 600;
+}
+
+// The one thing on this panel a clinician must not skim past.
+.provenance_caveat {
+  color: $text-secondary;
 }

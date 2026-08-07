@@ -4,12 +4,13 @@ import * as cx from 'classnames';
 
 import map from 'lodash/map';
 
-import { getSeverityStars } from 'components/AnalysisResultsViewer';
+import { chipToneFor } from 'components/AnalysisResultsViewer';
 import {
   mapCategoryToString,
   mapIndicationToString,
 } from 'components/AnalysisResultsViewer/strings';
 
+import { NEUTRAL_CATEGORY } from 'analyses/helpers';
 import { AnalysisEvaluation } from 'analyses/evaluate';
 import { LateralAnalysisEntry } from 'analyses/lateral';
 
@@ -23,29 +24,29 @@ const MAX_FINDINGS = 4;
 interface Finding {
   category: Category;
   indication: Indication<Category>;
-  /** Worst severity among the measurements backing this finding (0-3). */
-  worst: number;
 }
 
 /**
- * The analysis' findings ordered for a one-line summary: the ones furthest
- * from their norm first, since those are what a reader scanning the overview
- * needs to see. Ties keep the analysis' own order.
+ * The analysis' findings ordered for a one-line summary: the abnormal ones
+ * first, since those are what a reader scanning the overview needs to see.
+ * Ties keep the analysis' own order.
+ *
+ * Ordering (and chip colour) follow the *indication*, not the worst star count
+ * in the group: the same conclusion has to look the same here as it does in the
+ * analysis' own section further down, and a group's worst member is not that
+ * conclusion's severity.
  */
 const summarize = (results: AnalysisEvaluation['results']): Finding[] => {
-  const findings: Finding[] = map(results, ({
-    category, indication, relevantComponents,
-  }) => ({
-    category,
-    indication,
-    worst: Math.max(0, ...map(
-      relevantComponents,
-      ({ value, mean, min, max }) => getSeverityStars(value, mean, min, max),
-    )),
-  }));
+  const findings: Finding[] = map(results.filter(
+    // The neutral bucket carries measured values that name no clinical
+    // finding, so it has no place in a list of headline findings — every one
+    // of its rows is printed in full in the analysis' own section below.
+    (r) => r.category !== NEUTRAL_CATEGORY,
+  ), ({ category, indication }) => ({ category, indication }));
+  const rank = (f: Finding) => (chipToneFor(f.indication) === 'warn' ? 0 : 1);
   return findings
     .map((f, i) => ({ f, i }))
-    .sort((a, b) => (b.f.worst - a.f.worst) || (a.i - b.i))
+    .sort((a, b) => (rank(a.f) - rank(b.f)) || (a.i - b.i))
     .map(({ f }) => f);
 };
 
@@ -88,9 +89,8 @@ const FindingsOverview = (
         <div key={entry.id} className={classes.ov_row}>
           <span className={classes.ov_name}>{entry.name}</span>
           <span className={classes.ov_findings}>
-            {shown.length > 0 ? shown.map(({ category, indication, worst }) => {
-              const isNormalIndication =
-                indication === 'normal' || indication === 'class1';
+            {shown.length > 0 ? shown.map(({ category, indication }) => {
+              const tone = chipToneFor(indication);
               const differs =
                 divergentCategories[category as string] === true;
               return (
@@ -108,10 +108,9 @@ const FindingsOverview = (
                   </span>
                   <span
                     className={cx(classes.chip, classes.chip__interp, {
-                      [classes.chip__success]: worst === 0 && isNormalIndication,
-                      [classes.chip__neutral]: worst === 0 && !isNormalIndication,
-                      [classes.chip__warn]: worst === 1,
-                      [classes.chip__error]: worst >= 2,
+                      [classes.chip__success]: tone === 'success',
+                      [classes.chip__neutral]: tone === 'neutral',
+                      [classes.chip__warn]: tone === 'warn',
                     })}
                   >
                     {mapIndicationToString(indication) || '—'}

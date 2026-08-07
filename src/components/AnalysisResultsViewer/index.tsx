@@ -22,6 +22,11 @@ import {
 
 import { formatCaptureDate } from 'utils/records';
 
+import {
+  hasNorm, isSdBand, normSd, rangeExcess,
+  gradeAgainstNorm, NEUTRAL_CATEGORY, NEUTRAL_GRADE_LABELS,
+} from 'analyses/helpers';
+
 import LATERAL_ANALYSES from 'analyses/lateral';
 
 const classes = require('./style.scss');
@@ -91,13 +96,22 @@ export const getUnitSuffix = (landmark?: CephLandmark): string => {
 /**
  * Number of severity markers for a value, following the clinical convention
  * of the reference software: one star per full standard deviation beyond the
- * first, capped at three. The norm range (min–max) is treated as mean ± 1 SD.
+ * first, capped at three.
+ *
+ * **Only a component whose norm is a real mean ± 1 SD band can carry stars.**
+ * A component whose author published a plain range (`band: 'range'`) has no
+ * standard deviation, and halving the range to manufacture one is how this
+ * table came to print "+9.3 % ***" — a claimed six-SD finding — for Jarabak's
+ * 62–65 % ratio. `normSd` returns NaN for those, and NaN fails every
+ * comparison below, so they score zero stars by construction.
  */
 export const getSeverityStars = (
-  value: number, mean: number, min: number, max: number,
+  value: number, mean: number, min: number, max: number, band?: NormBand,
 ): 0 | 1 | 2 | 3 => {
-  const sd = (max - min) / 2;
-  if (sd <= 0) {
+  // A measurement reported without a published norm (see `NO_NORM`) has
+  // nothing to deviate from, so it carries no severity markers.
+  const sd = normSd(mean, min, max, band);
+  if (!(sd > 0)) {
     return 0;
   }
   const t = Math.abs(value - mean) / sd;
@@ -116,37 +130,283 @@ export const getSeverityStars = (
 export const STARS: { [n: number]: string } = { 1: '*', 2: '**', 3: '***' };
 
 /**
+ * What the norm column shows for a measurement the app reports without a
+ * published norm: an em dash, never a plausible-looking number. Same string in
+ * the deviation column, since there is nothing to deviate from.
+ */
+export const NO_NORM_TEXT = '—';
+
+/**
+ * The bounds of a published range, e.g. "62.0–65.0". A range that reaches
+ * below zero is written "-1.0 to 1.0" instead: an en dash between a negative
+ * lower bound and its upper bound reads as a subtraction.
+ */
+export const formatRange = (min: number, max: number): string => (
+  min < 0
+    ? `${formatNumber(min)} to ${formatNumber(max)}`
+    : `${formatNumber(min)}–${formatNumber(max)}`
+);
+
+/**
+ * The norm cell's text for any component, in one place so the dialog, the
+ * printed report and the clipboard/CSV export can never describe the same
+ * norm three different ways.
+ */
+export const formatNorm = (
+  mean: number, min: number, max: number, band?: NormBand,
+): string => {
+  if (!hasNorm(mean, min, max)) {
+    return NO_NORM_TEXT;
+  }
+  if (!isSdBand(band)) {
+    return formatRange(min, max);
+  }
+  return `${formatNumber(mean)} ± ${formatNumber((max - min) / 2)}`;
+};
+
+/** What a range component's deviation column says while the value is inside. */
+export const IN_RANGE_TEXT = 'in range';
+
+/**
+ * The deviation cell's text. An SD component reports its signed distance from
+ * the mean; a range component reports how far it lies beyond the nearer bound
+ * (and says "in range" while it lies between them), because a range has no
+ * mean to subtract from.
+ */
+export const formatDeviation = (
+  value: number, mean: number, min: number, max: number,
+  unit: string, band?: NormBand,
+): string => {
+  if (!hasNorm(mean, min, max)) {
+    return NO_NORM_TEXT;
+  }
+  if (!isSdBand(band)) {
+    const excess = rangeExcess(value, min, max);
+    return excess === 0 ? IN_RANGE_TEXT : `${formatSigned(excess)}${unit}`;
+  }
+  return `${formatSigned(value - mean)}${unit}`;
+};
+
+/**
+ * Whether a finding's conclusion is a clinically *normal* one. Drives the chip
+ * colour on every surface that prints a finding — the Summary dialog, the
+ * report's tables and its findings overview — so that one conclusion cannot
+ * appear in three tints on three pages of one document.
+ */
+export const isNormalIndication = (indication: Indication<Category>): boolean => (
+  indication === 'normal' ||
+  indication === 'class1' ||
+  indication === 'within_norm'
+);
+
+/**
+ * Chip tone for a finding. Driven by the **indication**, never by the worst
+ * severity in the group: the report used to tint the chip by the group's worst
+ * star count, so "Growth pattern — Horizontal" printed amber under Björk and
+ * red under Jarabak, one above the other on the same page, from the same
+ * tracing. Severity still shows — on the value and deviation of the individual
+ * row that carries it, where it belongs.
+ */
+export type ChipTone = 'success' | 'neutral' | 'warn';
+
+export const chipToneFor = (indication: Indication<Category>): ChipTone => {
+  if (isNormalIndication(indication)) {
+    return 'success';
+  }
+  // A measurement this app states no norm for is not abnormal; it is ungraded.
+  if (indication === 'not_graded') {
+    return 'neutral';
+  }
+  return 'warn';
+};
+
+/**
+ * The one-line citation for an analysis' norms: author, year and the sample
+ * they were measured on — "Downs 1948 · 20 North American white adolescents,
+ * 12–17 y".
+ *
+ * Exported so the Summary dialog and the printed report cite the same norms in
+ * the same words. A cephalometric norm is a sample statistic, and a table of
+ * deviations that never names the sample lets one author's twenty adolescents
+ * pass for the definition of normal.
+ */
+export const formatProvenanceSource = (p: NormsProvenance): string => (
+  `${p.author} ${p.year} · ${p.population}`
+);
+
+/**
+ * The sentence every surface that prints a norm has to carry once: these
+ * samples are not this patient. Ethnicity, age and sex all move cephalometric
+ * means by more than the standard deviations the star scale grades against.
+ */
+export const NORMS_NOT_MATCHED =
+  'Published norms are not matched to this patient’s ethnicity, age or sex. ' +
+  'Read a deviation as a difference from the cited sample, not as a ' +
+  'diagnosis.';
+
+/**
+ * The provenance block that opens the clipboard/CSV export.
+ *
+ * The exported table is the artifact most likely to end up pasted into a chart
+ * note or a spreadsheet, where none of the app's own framing travels with it —
+ * and this file's own docstring states the principle the export used to
+ * violate: "a table of deviations that never names the sample lets one author's
+ * twenty adolescents pass for the definition of normal". A deviation column
+ * detached from its citation is exactly that table.
+ *
+ * Written as leading `key<TAB>value` lines rather than as extra columns so the
+ * numbers below stay a clean rectangle a spreadsheet can sort.
+ */
+const buildProvenanceRows = (
+  analysisId: string | null,
+  provenance: NormsProvenance | null,
+  captureDate: string | null,
+  timepoint: string | null,
+): string[][] => {
+  const rows: string[][] = [];
+  const analysisName = analysisId !== null
+    ? (ANALYSIS_NAMES[analysisId] || analysisId)
+    : null;
+  if (analysisName !== null) {
+    rows.push(['Analysis', analysisName]);
+  }
+  if (timepoint !== null) {
+    rows.push(['Timepoint', timepoint]);
+  }
+  const filmDate = formatCaptureDate(captureDate);
+  if (filmDate !== null) {
+    rows.push(['Film date', filmDate]);
+  }
+  if (provenance !== null) {
+    rows.push(['Norms', formatProvenanceSource(provenance)]);
+    if (provenance.alsoFrom !== undefined && provenance.alsoFrom.length > 0) {
+      provenance.alsoFrom.forEach((entry, i) => {
+        rows.push([i === 0 ? 'Also from' : '', entry]);
+      });
+    }
+    if (provenance.note !== undefined) {
+      rows.push(['Note', provenance.note]);
+    }
+  }
+  rows.push(['Caveat', NORMS_NOT_MATCHED]);
+  // A blank line so the table below starts on its own header row.
+  rows.push([]);
+  return rows;
+};
+
+/**
  * Flattens the categorized results into report rows (header + one row per
  * measurement) for the clipboard/CSV export actions. Values are formatted
  * exactly as displayed so the exported report matches the on-screen table.
+ *
+ * Two columns exist for the reader on the other end of a paste:
+ *
+ *  - **Norm type** — "mean ± 1 SD" or "published range", because "62.0–65.0"
+ *    must not be pasted onward and read as a ± 1 SD band.
+ *  - **Norms source** — whose figure this particular row is graded against.
+ *    An analysis is rarely one author's: Steiner's table carries Holdaway's
+ *    ratio, the dental section carries Tweed's IMPA and Downs' A-Pog reading,
+ *    and a spreadsheet that flattens all of them under one heading attributes
+ *    every one of them to the wrong paper.
+ *
+ * The neutral bucket's rows carry their **own** grading rather than the
+ * group's: it is one group spanning outside-norm, within-norm and ungraded
+ * rows (see `defaultInterpretAnalysis`), so the group's indication would be
+ * true of only the first run of them.
  */
 const buildReportRows = (
   results: Props['results'],
   landmarksBySymbol: Props['landmarksBySymbol'],
+  provenance: NormsProvenance | null,
 ): string[][] => {
+  const primarySource = provenance !== null
+    ? formatProvenanceSource(provenance)
+    : '';
   const rows: string[][] = [[
     'Finding', 'Interpretation', 'Measurement', 'Name',
-    'Value', 'Norm ± SD', 'Deviation', 'Severity',
+    'Value', 'Norm', 'Norm type', 'Deviation', 'Severity', 'Norms source',
   ]];
   results.forEach(({ category, indication, relevantComponents }) => {
-    relevantComponents.forEach(({ symbol, value, mean, min, max }) => {
+    relevantComponents.forEach((
+      { symbol, value, mean, min, max, band, normSource },
+    ) => {
       const landmark = landmarksBySymbol[symbol];
       const unit = getUnitSuffix(landmark);
-      const stars = getSeverityStars(value, mean, min, max);
+      const stars = getSeverityStars(value, mean, min, max, band);
       const name = landmark !== undefined ? landmark.name : undefined;
+      const graded = hasNorm(mean, min, max);
+      const rowIndication = category === NEUTRAL_CATEGORY
+        ? gradeAgainstNorm(value, min, max, mean)
+        : indication;
+      const borrowed = normSource;
       rows.push([
         mapCategoryToString(category) || '',
-        mapIndicationToString(indication) || '',
+        mapIndicationToString(rowIndication) || '',
         symbol,
         name !== undefined && name !== symbol ? name : '',
         formatNumber(value) + unit,
-        `${formatNumber(mean)} ± ${formatNumber((max - min) / 2)}`,
-        formatSigned(value - mean) + unit,
+        formatNorm(mean, min, max, band),
+        graded ? (isSdBand(band) ? 'mean ± 1 SD' : 'published range') : '',
+        formatDeviation(value, mean, min, max, unit, band),
         stars > 0 ? STARS[stars] : '',
+        graded ? (borrowed !== undefined ? borrowed : primarySource) : '',
       ]);
     });
   });
   return rows;
+};
+
+/**
+ * The neutral bucket is emitted as **one** group whose rows carry three
+ * different gradings (see `defaultInterpretAnalysis`), so the table rules a
+ * sub-heading over each run of them rather than printing the same category
+ * heading three times with a different chip each. Every other group is a list
+ * of rows exactly as before.
+ */
+type ResultRow =
+  CategorizedAnalysisResult<Category>['relevantComponents'][0];
+type TableEntry =
+  | { kind: 'rule'; key: string; label: string }
+  | { kind: 'row'; key: string; component: ResultRow };
+
+const neutralEntries = (
+  category: Category, components: ResultRow[],
+): TableEntry[] => {
+  if (category !== NEUTRAL_CATEGORY) {
+    return components.map((component) => ({
+      kind: 'row' as 'row', key: component.symbol, component,
+    }));
+  }
+  const entries: TableEntry[] = [];
+  let previous: string | null = null;
+  components.forEach((component) => {
+    const { value, mean, min, max } = component;
+    const grading = gradeAgainstNorm(value, min, max, mean) as string;
+    if (grading !== previous) {
+      previous = grading;
+      entries.push({
+        kind: 'rule',
+        key: `rule/${grading}`,
+        label: NEUTRAL_GRADE_LABELS[grading] || '',
+      });
+    }
+    entries.push({ kind: 'row', key: component.symbol, component });
+  });
+  return entries;
+};
+
+/** Symbol → footnote marker for the analysis' caveats (see `AnalysisCaveat`). */
+const caveatMarkers = (
+  caveats: AnalysisCaveat[],
+): { [symbol: string]: string | undefined } => {
+  const markers: { [symbol: string]: string | undefined } = {};
+  caveats.forEach((caveat, i) => {
+    const marker = i === 0 ? '†' : '‡';
+    caveat.symbols.forEach((symbol) => {
+      markers[symbol] = marker;
+    });
+  });
+  return markers;
 };
 
 const csvEscape = (cell: string): string => (
@@ -249,8 +509,14 @@ export class AnalysisResultsViewer extends React.PureComponent<Props, ViewerStat
   render() {
     const {
       open, onRequestClose, results, analysisId, landmarksBySymbol,
-      needsScaleForLinear, timepoint, captureDate,
+      needsScaleForLinear, timepoint, captureDate, provenance,
+      caveats, analysisContext,
     } = this.props;
+    const markers = caveatMarkers(caveats);
+    const patientNote =
+      provenance !== null && typeof provenance.patientNote === 'function'
+        ? provenance.patientNote(analysisContext)
+        : undefined;
     const { copied } = this.state;
     const analysisName = analysisId !== null
       ? (ANALYSIS_NAMES[analysisId] || analysisId)
@@ -262,10 +528,14 @@ export class AnalysisResultsViewer extends React.PureComponent<Props, ViewerStat
     // The first finding shows the full row; later findings reference it
     // instead of repeating identical numbers.
     const firstCategoryOf: { [symbol: string]: Category | undefined } = {};
+    let hasRangeRow = false;
     results.forEach(({ category, relevantComponents }) => {
-      relevantComponents.forEach(({ symbol }) => {
+      relevantComponents.forEach(({ symbol, mean, min, max, band }) => {
         if (firstCategoryOf[symbol] === undefined) {
           firstCategoryOf[symbol] = category;
+        }
+        if (hasNorm(mean, min, max) && !isSdBand(band)) {
+          hasRangeRow = true;
         }
       });
     });
@@ -354,72 +624,96 @@ export class AnalysisResultsViewer extends React.PureComponent<Props, ViewerStat
                   <tr>
                     <th className={classes.col_finding}>Finding</th>
                     <th>Measurement</th>
-                    <th className={classes.col_numeric}>Value</th>
-                    <th className={classes.col_numeric}>Norm ± SD</th>
-                    <th className={classes.col_numeric}>Deviation</th>
+                    <th className={cx(classes.col_numeric, classes.col_value)}>Value</th>
+                    <th className={cx(classes.col_numeric, classes.col_norm)}>Norm</th>
+                    <th className={cx(classes.col_numeric, classes.col_deviation)}>
+                      Deviation
+                    </th>
                   </tr>
                 </thead>
                 {map(results, ({ category, indication, relevantComponents }) => {
-                  // The finding's overall tone follows its worst measurement.
-                  const worst = Math.max(0, ...map(
-                    relevantComponents,
-                    ({ value, mean, min, max }) => getSeverityStars(value, mean, min, max),
-                  ));
-                  // Green is reserved for genuinely normal findings; an atypical
-                  // indication whose values sit within norm (e.g. a "tendency")
-                  // gets a neutral chip instead.
-                  const isNormalIndication = indication === 'normal' || indication === 'class1';
                   const chipClass = cx(classes.chip, {
-                    [classes.chip__success]: worst === 0 && isNormalIndication,
-                    [classes.chip__neutral]: worst === 0 && !isNormalIndication,
-                    [classes.chip__warn]: worst === 1,
-                    [classes.chip__error]: worst >= 2,
+                    [classes.chip__success]: chipToneFor(indication) === 'success',
+                    [classes.chip__neutral]: chipToneFor(indication) === 'neutral',
+                    [classes.chip__warn]: chipToneFor(indication) === 'warn',
                   });
+                  const isNeutral = category === NEUTRAL_CATEGORY;
+                  const entries = neutralEntries(category, relevantComponents);
                   return (
-                    <tbody key={category} className={classes.group}>
-                      {map(relevantComponents, (component, i) => {
-                        const { symbol, value, mean, min, max } = component;
-                        const landmark = landmarksBySymbol[symbol];
-                        const unit = getUnitSuffix(landmark);
-                        const stars = getSeverityStars(value, mean, min, max);
-                        const sd = (max - min) / 2;
-                        const name = landmark !== undefined ? landmark.name : undefined;
+                    <tbody key={`${category}/${indication}`} className={classes.group}>
+                      {map(entries, (entry, i) => {
+                        // The heading spans the group, sub-rules included. The
+                        // neutral bucket carries no chip: it holds rows with
+                        // three different gradings and the rules below say
+                        // which is which, row by row.
                         const findingCell = i === 0 ? (
                           <td
-                            rowSpan={relevantComponents.length}
+                            rowSpan={entries.length}
                             className={classes.cell_finding}
                           >
                             <span className={classes.finding_category}>
                               {mapCategoryToString(category) || '—'}
                             </span>
-                            <span className={chipClass}>
-                              {mapIndicationToString(indication) || '—'}
-                            </span>
+                            {isNeutral ? null : (
+                              <span className={chipClass}>
+                                {mapIndicationToString(indication) || '—'}
+                              </span>
+                            )}
                           </td>
                         ) : null;
+                        if (entry.kind === 'rule') {
+                          return (
+                            <tr key={entry.key} className={classes.subrule_row}>
+                              {findingCell}
+                              <td colSpan={4} className={classes.subrule}>
+                                {entry.label}
+                              </td>
+                            </tr>
+                          );
+                        }
+                        const component = entry.component;
+                        const { symbol, value, mean, min, max, band } = component;
+                        const landmark = landmarksBySymbol[symbol];
+                        const unit = getUnitSuffix(landmark);
+                        const stars = getSeverityStars(value, mean, min, max, band);
+                        const graded = hasNorm(mean, min, max);
+                        const outOfRange =
+                          graded && !isSdBand(band) && rangeExcess(value, min, max) !== 0;
+                        const name = landmark !== undefined ? landmark.name : undefined;
+                        const marker = markers[symbol];
+                        const symbolCell = (muted: boolean) => (
+                          <td className={classes.cell_measurement}>
+                            <span
+                              className={cx(classes.measurement_symbol, {
+                                [classes.measurement_symbol__muted]: muted,
+                              })}
+                            >
+                              {symbol}
+                              {marker !== undefined ? (
+                                <span
+                                  className={classes.cell_caveat_mark}
+                                  title="See the note under the table"
+                                >
+                                  {marker}
+                                </span>
+                              ) : null}
+                            </span>
+                            {name !== undefined && name !== symbol ? (
+                              <span className={classes.measurement_name} title={name}>
+                                {name}
+                              </span>
+                            ) : null}
+                          </td>
+                        );
                         const firstCategory = firstCategoryOf[symbol];
                         if (firstCategory !== undefined && firstCategory !== category) {
                           // Shared measurement, already listed in full under an
                           // earlier finding — cross-reference it instead of
                           // repeating the identical row.
                           return (
-                            <tr key={symbol}>
+                            <tr key={entry.key}>
                               {findingCell}
-                              <td className={classes.cell_measurement}>
-                                <span
-                                  className={cx(
-                                    classes.measurement_symbol,
-                                    classes.measurement_symbol__muted,
-                                  )}
-                                >
-                                  {symbol}
-                                </span>
-                                {name !== undefined && name !== symbol ? (
-                                  <span className={classes.measurement_name} title={name}>
-                                    {name}
-                                  </span>
-                                ) : null}
-                              </td>
+                              {symbolCell(true)}
                               <td colSpan={3} className={classes.cell_crossref}>
                                 {formatNumber(value)}{unit}
                                 {' — see '}
@@ -429,19 +723,12 @@ export class AnalysisResultsViewer extends React.PureComponent<Props, ViewerStat
                           );
                         }
                         return (
-                          <tr key={symbol}>
+                          <tr key={entry.key}>
                             {findingCell}
-                            <td className={classes.cell_measurement}>
-                              <span className={classes.measurement_symbol}>{symbol}</span>
-                              {name !== undefined && name !== symbol ? (
-                                <span className={classes.measurement_name} title={name}>
-                                  {name}
-                                </span>
-                              ) : null}
-                            </td>
+                            {symbolCell(false)}
                             <td
                               className={cx(classes.cell_numeric, classes.cell_value, {
-                                [classes.cell_value__warn]: stars === 1,
+                                [classes.cell_value__warn]: stars === 1 || outOfRange,
                                 [classes.cell_value__error]: stars >= 2,
                               })}
                             >
@@ -449,20 +736,26 @@ export class AnalysisResultsViewer extends React.PureComponent<Props, ViewerStat
                             </td>
                             <td
                               className={cx(classes.cell_numeric, classes.cell_norm)}
-                              title={`Normal range: ${formatNumber(min)} to ${formatNumber(max)}${unit}`}
+                              title={!graded
+                                ? 'Measured value — this app states no published norm for it'
+                                : isSdBand(band)
+                                  ? `Mean ± 1 SD (${formatNumber(min)} to ${formatNumber(max)}${unit})`
+                                  : `Published normal range, no standard deviation stated`}
                             >
-                              {formatNumber(mean)}
-                              <span className={classes.norm_sd}>
-                                {' ± '}{formatNumber(sd)}
-                              </span>
+                              {formatNorm(mean, min, max, band)}
+                              {graded && !isSdBand(band) ? (
+                                <span className={classes.norm_kind}>range</span>
+                              ) : null}
                             </td>
                             <td
                               className={cx(classes.cell_numeric, classes.cell_deviation, {
-                                [classes.cell_deviation__warn]: stars === 1,
+                                [classes.cell_deviation__warn]: stars === 1 || outOfRange,
                                 [classes.cell_deviation__error]: stars >= 2,
+                                [classes.cell_deviation__muted]:
+                                  graded && !isSdBand(band) && !outOfRange,
                               })}
                             >
-                              {formatSigned(value - mean)}{unit}
+                              {formatDeviation(value, mean, min, max, unit, band)}
                               {/* The slot is always rendered so the numbers stay
                                   aligned whether or not a row carries markers. */}
                               <span className={classes.deviation_stars}>
@@ -484,6 +777,27 @@ export class AnalysisResultsViewer extends React.PureComponent<Props, ViewerStat
               <span className={classes.legend_stars}>**</span> over 2 SD
               <span className={classes.legend_dot}>·</span>
               <span className={classes.legend_stars}>***</span> over 3 SD
+              {hasRangeRow ? (
+                // Says out loud which rows the star scale does *not* apply to,
+                // so "62.0–65.0 · +0.5 %" is never read as half an SD.
+                <span className={classes.legend_note_quiet}>
+                  Rows marked <em>range</em> carry a published normal range, not a
+                  mean ± SD: their author stated no standard deviation, so they
+                  are graded in or out of range and carry no stars. Their
+                  deviation is the distance beyond the nearer bound.
+                </span>
+              ) : null}
+              {/* What the analysis' own numbers say about the *tracing* — a
+                  landmark they expose as misplaced. Printed before the
+                  housekeeping notes: it can invalidate the rows it marks. */}
+              {map(caveats, (caveat, i) => (
+                <span key={i} className={classes.legend_caveat}>
+                  <span className={classes.legend_caveat_mark}>
+                    {i === 0 ? '†' : '‡'}
+                  </span>
+                  {caveat.text}
+                </span>
+              ))}
               {needsScaleForLinear ? (
                 // The mm measurements of this analysis are missing above, not
                 // normal — account for them instead of leaving a silent gap.
@@ -493,6 +807,40 @@ export class AnalysisResultsViewer extends React.PureComponent<Props, ViewerStat
                 </span>
               ) : null}
             </div>
+            {/* Whose norms these are. Quiet, but present on every table the
+                app shows: the deviation column is meaningless without it. */}
+            {provenance !== null ? (
+              <div className={classes.provenance}>
+                <span className={classes.provenance_label}>Norms</span>
+                <span className={classes.provenance_body}>
+                  <span className={classes.provenance_source}>
+                    {formatProvenanceSource(provenance)}
+                  </span>
+                  {provenance.alsoFrom !== undefined
+                    && provenance.alsoFrom.length > 0 ? (
+                    <span className={classes.provenance_also}>
+                      Also: {provenance.alsoFrom.join('; ')}
+                    </span>
+                  ) : null}
+                  {provenance.note !== undefined ? (
+                    <span className={classes.provenance_note}>
+                      {provenance.note}
+                    </span>
+                  ) : null}
+                  {/* What this reading did with this patient's record: an
+                      author's age correction or sex split applied, or the
+                      reason it was not. */}
+                  {patientNote !== undefined ? (
+                    <span className={classes.provenance_applied}>
+                      {patientNote}
+                    </span>
+                  ) : null}
+                  <span className={classes.provenance_caveat}>
+                    {NORMS_NOT_MATCHED}
+                  </span>
+                </span>
+              </div>
+            ) : null}
           </div>
         ) : (
           <div className={classes.empty}>
@@ -508,7 +856,11 @@ export class AnalysisResultsViewer extends React.PureComponent<Props, ViewerStat
 
   private handleCopyTable = () => {
     const { results, landmarksBySymbol } = this.props;
-    const text = buildReportRows(results, landmarksBySymbol)
+    const { provenance, captureDate, timepoint, analysisId } = this.props;
+    const text = [
+      ...buildProvenanceRows(analysisId, provenance, captureDate, timepoint),
+      ...buildReportRows(results, landmarksBySymbol, provenance),
+    ]
       .map((cells) => cells.join('\t'))
       .join('\n');
     copyTextToClipboard(text).then((ok) => {
@@ -526,8 +878,14 @@ export class AnalysisResultsViewer extends React.PureComponent<Props, ViewerStat
   };
 
   private handleExportCsv = () => {
-    const { results, landmarksBySymbol, analysisId } = this.props;
-    const rows = buildReportRows(results, landmarksBySymbol);
+    const {
+      results, landmarksBySymbol, analysisId, provenance, captureDate,
+      timepoint,
+    } = this.props;
+    const rows = [
+      ...buildProvenanceRows(analysisId, provenance, captureDate, timepoint),
+      ...buildReportRows(results, landmarksBySymbol, provenance),
+    ];
     // BOM so Excel opens the °/± characters as UTF-8.
     const csv = '\uFEFF' + rows.map(
       (cells) => cells.map(csvEscape).join(','),

@@ -66,6 +66,11 @@ export interface AnalysisEvaluation {
    * plotting more points would not help.
    */
   isEmpty: boolean;
+  /**
+   * Warnings the analysis draws from its own numbers — a landmark the values
+   * say is misplaced, not a finding about the patient (see `AnalysisCaveat`).
+   */
+  caveats: AnalysisCaveat[];
 }
 
 /**
@@ -83,7 +88,12 @@ export const getReportableSymbols = (
 ): string[] => {
   const means: { [symbol: string]: number | undefined } = {};
   analysis.components.forEach(({ landmark, mean }) => {
-    means[landmark.symbol] = mean;
+    // A component reported without a published norm (see `NO_NORM`) has a mean
+    // of NaN, which `interpret` refuses to report. The probe asks "what would
+    // this analysis report if nothing were missing?", so it stands in a finite
+    // value — the answer must be yes for such a measurement, which does reach
+    // the table as a measured value.
+    means[landmark.symbol] = isFinite(mean) ? mean : 0;
   });
   try {
     const symbols: { [symbol: string]: true } = {};
@@ -112,6 +122,13 @@ export const evaluateAnalysis = (
   analysis: Analysis<ImageType>,
   manualLandmarks: { [symbol: string]: GeoObject | undefined },
   scaleFactor: number | null,
+  /**
+   * The patient the norms are read against, so an author's age correction or
+   * sex split is applied here exactly as the store applies it to the active
+   * analysis (see `adjustComponentsForPatient`). Omitted, the published
+   * figures are used unchanged.
+   */
+  context?: AnalysisContext,
 ): AnalysisEvaluation => {
   // Same step list the store builds for the active analysis.
   const steps = getStepsForAnalysis(analysis, false);
@@ -223,7 +240,10 @@ export const evaluateAnalysis = (
     }
   });
 
-  const results = analysis.interpret(values, objects);
+  const results = analysis.interpret(values, objects, context);
+  const caveats = typeof analysis.caveats === 'function'
+    ? analysis.caveats(values)
+    : [];
 
   // --- honest accounting of what could not be reported ----------------------
 
@@ -269,6 +289,7 @@ export const evaluateAnalysis = (
     totalCount,
     missingSymbols,
     isEmpty: totalCount === 0,
+    caveats,
   };
 };
 

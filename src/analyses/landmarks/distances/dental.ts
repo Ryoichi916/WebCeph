@@ -8,6 +8,10 @@ import {
   functionalOcclusalPlane,
 } from 'analyses/landmarks/lines/dental';
 
+import {
+  upperFirstMolarCusp, lowerFirstMolarCusp, lowerFirstPremolarCusp,
+} from 'analyses/landmarks/points/dental';
+
 /**
  * Overjet and overbite — the two incisor relationships an orthodontic or
  * orthognathic plan is built around.
@@ -153,5 +157,114 @@ export const overbite: CephLandmark = {
       'overbite',
       ['decreased', 'normal', 'increased'],
     )(value, min, max, mean);
+  },
+};
+
+/**
+ * The antero-posterior relationship of the first molars, as a signed
+ * millimetre distance along the functional occlusal plane: positive when the
+ * lower molar cusp lies **mesial** (anterior) to the upper one, which is the
+ * Class III direction, negative when it lies distal, the Class II one.
+ *
+ * It is reported **without a norm, and without a class**, and the distinction
+ * matters. Angle's classification is read from the mesiobuccal cusp of the
+ * upper molar against the buccal groove of the lower — two features of the
+ * crown that a lateral cephalogram superimposes both sides of and that this
+ * app plots as a single "cusp of the first molar" each. The distance between
+ * those two plotted points is a real, reproducible measurement of how the
+ * arches sit against each other, and it is the quantity a space analysis or a
+ * VTO needs; it is *not* Angle's class, and printing "Class I" from it would be
+ * claiming a reading this film cannot give. The class belongs on the study
+ * models or in the mouth.
+ */
+export const molarRelationship: CephLandmark = {
+  name: 'Molar relationship',
+  description:
+    'Signed distance from the lower first-molar cusp to the upper one along ' +
+    'the functional occlusal plane. Positive = lower molar mesial to the ' +
+    'upper (Class III direction). Not Angle\'s classification.',
+  type: 'distance',
+  symbol: 'Molar rel.',
+  unit: 'mm',
+  imageType: 'ceph_lateral',
+  components: [
+    functionalOcclusalPlane, upperFirstMolarCusp, lowerFirstMolarCusp,
+  ],
+  map: (_plane: GeoVector, u6: GeoPoint, l6: GeoPoint) => ({
+    x1: u6.x, y1: u6.y, x2: l6.x, y2: l6.y,
+  }),
+  calculate: () => (
+    occlusalPlane: GeoVector, u6: GeoPoint, l6: GeoPoint,
+  ) => () => {
+    const ant = anteriorOf(occlusalPlane);
+    if (ant === null) {
+      return 0;
+    }
+    return (l6.x - u6.x) * ant.ux + (l6.y - u6.y) * ant.uy;
+  },
+};
+
+/**
+ * Depth of the curve of Spee in the lower arch: the perpendicular distance
+ * from the lower first-premolar cusp — the deepest point of the curve on an
+ * ordinary arch — to the line joining the lower incisal edge and the lower
+ * first-molar cusp. Positive for the usual concave curve, negative for a
+ * reversed one.
+ *
+ * Every point it needs is already plotted for the occlusal plane and the
+ * incisor axes, so it costs the clinician nothing, and it is the measurement
+ * that says how much arch length levelling the bite will consume.
+ *
+ * **No norm is stated.** The figures in circulation ("flat to 2 mm", "1.5 mm
+ * average") are clinical rules of thumb read on study models, over the whole
+ * buccal segment and with the canine included; this is a three-point
+ * approximation on one film. The depth is honest, a norm for it would not be.
+ */
+export const curveOfSpeeDepth: CephLandmark = {
+  name: 'Curve of Spee depth',
+  description:
+    'Perpendicular distance from the lower first-premolar cusp to the line ' +
+    'from the lower incisal edge to the lower first-molar cusp. Positive is ' +
+    'the usual concave curve; negative is a reversed curve.',
+  type: 'distance',
+  symbol: 'Spee',
+  unit: 'mm',
+  imageType: 'ceph_lateral',
+  components: [
+    functionalOcclusalPlane, U1_INCISAL_EDGE, U1_APEX,
+    L1_INCISAL_EDGE, lowerFirstPremolarCusp, lowerFirstMolarCusp,
+  ],
+  map: (
+    _plane: GeoVector, _u1Tip: GeoPoint, _u1Apex: GeoPoint,
+    l1Tip: GeoPoint, _l4: GeoPoint, l6: GeoPoint,
+  ) => ({
+    x1: l1Tip.x, y1: l1Tip.y, x2: l6.x, y2: l6.y,
+  }),
+  calculate: () => (
+    occlusalPlane: GeoVector,
+    u1Tip: GeoPoint, u1Apex: GeoPoint,
+    l1Tip: GeoPoint, l4: GeoPoint, l6: GeoPoint,
+  ) => () => {
+    const ant = anteriorOf(occlusalPlane);
+    if (ant === null) {
+      return 0;
+    }
+    // Which way is up is decided from the upper incisor's own axis, exactly as
+    // the overbite decides it — the film need not hang perfectly upright.
+    const up = superiorOf(ant, u1Tip, u1Apex);
+    const chordX = l6.x - l1Tip.x;
+    const chordY = l6.y - l1Tip.y;
+    const len = Math.sqrt(chordX * chordX + chordY * chordY);
+    if (!isFinite(len) || len === 0) {
+      return 0;
+    }
+    // Signed distance of L4 from the incisor-to-molar chord, positive when it
+    // lies inferior to it (a concave curve of Spee).
+    const offX = l4.x - l1Tip.x;
+    const offY = l4.y - l1Tip.y;
+    const along = (offX * chordX + offY * chordY) / (len * len);
+    const perpX = offX - along * chordX;
+    const perpY = offY - along * chordY;
+    return -(perpX * up.ux + perpY * up.uy);
   },
 };

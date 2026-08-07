@@ -13,7 +13,9 @@ import Props from './props';
 
 // The report must match the Summary dialog's conventions exactly (formatting,
 // units, severity stars), so it reuses that component's exported helpers.
-import { ANALYSIS_NAMES } from 'components/AnalysisResultsViewer';
+import {
+  ANALYSIS_NAMES, NORMS_NOT_MATCHED,
+} from 'components/AnalysisResultsViewer';
 import { mapCategoryToString } from 'components/AnalysisResultsViewer/strings';
 
 import { formatMmPx } from 'components/TracingToolbar/CalibrationDialog';
@@ -25,15 +27,19 @@ import {
   AnalysisEvaluation,
 } from 'analyses/evaluate';
 import { LATERAL_ANALYSES, LateralAnalysisEntry } from 'analyses/lateral';
-import { renderTracingSnapshot } from 'utils/tracingSnapshot';
+import { getStepsForAnalysis, isStepManual } from 'analyses/helpers';
+import { renderTracingSnapshot, ManualLandmarks } from 'utils/tracingSnapshot';
 import { isGeoPoint } from 'utils/math';
-import { formatAgeFull, formatSexFull } from 'utils/patient';
+import {
+  formatAgeFull, formatSexFull, getAnalysisContext,
+} from 'utils/patient';
 import { parseCaptureDate, formatCaptureDate } from 'utils/records';
 
 import Wigglegram, { WigglegramKey } from './Wigglegram';
 import ResultsTable, { DeviationKey } from './ResultsTable';
 import FindingsOverview from './FindingsOverview';
 import { AnalysisSections, PendingNote } from './AnalysisSection';
+import NormsNote from './NormsNote';
 import { findDivergences, divergentCategorySet } from './divergence';
 // The practice identity is shared with every other printable view (the
 // superimposition sheet included), so a document from this app is never signed
@@ -47,6 +53,18 @@ import {
 } from './letterhead';
 
 const classes = require('./style.scss');
+
+/**
+ * Ruled lines in the "Clinical notes & plan" area. Sized so that when the
+ * closing block lands on a page of its own — which it does whenever the tables
+ * above it fill the previous page — the writing area occupies most of it,
+ * instead of leaving the bottom half of the last sheet blank. See
+ * `.notes_rules` in style.scss.
+ */
+const NOTE_RULES: number[] = [
+  0, 1, 2, 3, 4, 5, 6, 7, 8, 9,
+  10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
+];
 
 /**
  * Global (unhashed) body class toggled while the report is open; the print
@@ -138,6 +156,16 @@ const PRINT_FONT =
   '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Hiragino Sans", ' +
   '"Hiragino Kaku Gothic ProN", "Noto Sans JP", Meiryo, sans-serif';
 
+/**
+ * The key to the two conventions that recur on every printed page: the
+ * severity stars in the DEVIATION column and the wigglegram's shaded bands.
+ * Set in the running foot so it is on the page the marks are on, whichever
+ * page that is.
+ */
+const RUNNING_KEY =
+  'Deviation: * over 1 SD · ** over 2 SD · *** over 3 SD  |  ' +
+  'Wigglegram: shaded band ±1 SD, lighter ±2 SD';
+
 /** A CSS string literal, safe to interpolate into a generated stylesheet. */
 const cssString = (text: string): string => (
   `"${text.replace(/[\r\n]+/g, ' ').replace(/[\\"]/g, (m) => `\\${m}`)}"`
@@ -196,6 +224,7 @@ export default class ClinicalReport extends React.PureComponent<Props, State> {
   private sectionsCache: {
     manualLandmarks: Props['manualLandmarks'];
     scaleFactor: number | null;
+    context: AnalysisContext;
     sections: Section[];
   } | null = null;
 
@@ -208,6 +237,7 @@ export default class ClinicalReport extends React.PureComponent<Props, State> {
     manualLandmarks: Props['manualLandmarks'];
     scaleFactor: number | null;
     analysisId: string | null;
+    context: AnalysisContext;
     evaluation: AnalysisEvaluation | null;
   } | null = null;
 
@@ -215,6 +245,25 @@ export default class ClinicalReport extends React.PureComponent<Props, State> {
     document.addEventListener('keydown', this.handleKeyDown);
     document.body.classList.add(BODY_OPEN_CLASS);
     this.renderSnapshot();
+    this.ensureLandmarksForAllAnalyses();
+  }
+
+  componentDidUpdate(prevProps: Props, prevState: State) {
+    // The completion pass above adds the landmarks the other analyses need
+    // (see `ensureLandmarksForAllAnalyses`), which arrive after the first
+    // paint. The figure's caption counts them the moment they do, so the
+    // figure itself has to be redrawn with them — otherwise the paper says
+    // "37 landmarks traced" under a picture of 26.
+    //
+    // The scope switch changes the film too: the single-analysis paper prints
+    // only its own analysis' landmarks and planes.
+    if (
+      prevProps.manualLandmarks !== this.props.manualLandmarks ||
+      prevProps.analysisId !== this.props.analysisId ||
+      prevState.scope !== this.state.scope
+    ) {
+      this.renderSnapshot();
+    }
   }
 
   componentWillUnmount() {
@@ -229,7 +278,7 @@ export default class ClinicalReport extends React.PureComponent<Props, State> {
   private renderReport() {
     const {
       patient, results, analysisId, imageType, timepoint, captureDate,
-      scaleFactor, manualLandmarks, imageSrc, landmarksBySymbol,
+      scaleFactor, imageSrc, landmarksBySymbol,
     } = this.props;
     const { snapshotUrl, scope, clinic, clinician, license } = this.state;
     const isCombined = scope === 'all';
@@ -250,10 +299,28 @@ export default class ClinicalReport extends React.PureComponent<Props, State> {
     const imageTypeName =
       (imageType !== null && IMAGE_TYPE_NAMES[imageType]) ||
       'Radiograph';
-    const landmarkCount = Object.keys(manualLandmarks)
-      .filter((s) => isGeoPoint(manualLandmarks[s]))
-      .length;
+    // Which landmarks the figure carries, and how many of the ones this paper's
+    // analysis needs are placed (see `getFilmLandmarks`).
+    const film = this.getFilmLandmarks();
     const hasResults = results.length > 0;
+
+    // Said once, prominently, under the patient block — for either scope. Every
+    // section used to repeat the same two lines under its own table, which made
+    // the most consequential fact on the paper read like boilerplate.
+    const withheldLinear = isCombined
+      ? this.getSections().some((s) => s.evaluation.pendingScaleCount > 0)
+      : this.props.needsScaleForLinear;
+    const scaleBanner = (scaleFactor === null && withheldLinear) ? (
+      <p className={classes.caveat}>
+        <strong className={classes.caveat_head}>
+          Millimetre measurements are withheld from this report.
+        </strong>
+        This radiograph has no image scale, so no distance on it can be stated
+        in millimetres. Set the scale from the calibration chip in the toolbar
+        and reprint. Angles and ratios are unaffected and are reported in full
+        below.
+      </p>
+    ) : null;
 
     // Demographics: DOB printed as recorded (ISO, unambiguous). Age is stated
     // at the *radiograph*, not at the print date — a cephalometric norm is read
@@ -477,8 +544,22 @@ export default class ClinicalReport extends React.PureComponent<Props, State> {
               </div>
             </div>
 
+            {/* One statement about the image scale for the whole document,
+                where the reader meets the patient — not the same two lines
+                repeated under every table below. */}
+            {scaleBanner}
+
             <div className={classes.section_label}>Traced radiograph</div>
-            <figure className={classes.figure}>
+            <figure
+              className={cx(classes.figure, {
+                // The calibration banner costs the cover about 16 mm. Without
+                // this the figure no longer fits under it and Chromium moves
+                // the whole thing to page 2, leaving the cover half empty —
+                // so on an uncalibrated film the film prints a little smaller
+                // rather than a page later.
+                [classes.figure__tight]: scaleBanner !== null,
+              })}
+            >
               <div className={classes.figure_frame}>
                 {(snapshotUrl || imageSrc) ? (
                   <img
@@ -495,15 +576,44 @@ export default class ClinicalReport extends React.PureComponent<Props, State> {
               <figcaption className={classes.figure_caption}>
                 {imageTypeName}
                 <span className={classes.caption_dot}>·</span>
-                {landmarkCount > 0
-                  ? `${landmarkCount} landmarks traced`
+                {film.placed > 0
+                  ? (film.scopeName !== null
+                    ? `${film.placed} of ${film.required} landmarks traced ` +
+                      `for ${film.scopeName}`
+                    : `${film.placed} landmarks traced`)
                   : 'No landmarks traced'}
                 <span className={classes.caption_dot}>·</span>
                 {scaleFactor !== null
                   ? `Calibrated: 1 px = ${formatMmPx(scaleFactor)} mm`
                   : 'Not calibrated — angular values unaffected'}
               </figcaption>
+              {/* What the reader is looking at. Without a key the tags, the
+                  white curves and the pale straight lines are three
+                  indistinguishable kinds of ink. */}
+              <figcaption className={classes.figure_key}>
+                <span className={classes.figkey_item}>
+                  <span className={classes.figkey_outline} />
+                  Anatomical tracing
+                </span>
+                <span className={classes.figkey_item}>
+                  <span className={classes.figkey_plane} />
+                  {film.scopeName !== null
+                    ? `${film.scopeName} reference planes`
+                    : 'Reference planes'}
+                </span>
+                <span className={classes.figkey_item}>
+                  <span className={classes.figkey_point} />
+                  Landmark, labelled with its symbol
+                </span>
+              </figcaption>
             </figure>
+
+            {/* Said once for the whole document, before any number is read.
+                Every table below grades a value against some author's sample,
+                and not one of those samples is this patient — the single
+                statement a printed cephalometric report most needs and the one
+                this app used to leave to the reader's own knowledge. */}
+            <p className={classes.norms_caveat}>{NORMS_NOT_MATCHED}</p>
 
             {isCombined ? this.renderCombinedBody() : (
               <div>
@@ -528,6 +638,10 @@ export default class ClinicalReport extends React.PureComponent<Props, State> {
                 {hasResults
                   ? this.renderActiveResultsTable()
                   : this.renderActiveEmptyState()}
+                <NormsNote
+                  provenance={this.getActiveProvenance()}
+                  context={this.getAnalysisContext()}
+                />
               </div>
             )}
 
@@ -547,11 +661,9 @@ export default class ClinicalReport extends React.PureComponent<Props, State> {
                   </span>
                 </div>
                 <div className={classes.notes_rules}>
-                  <span className={classes.notes_rule} />
-                  <span className={classes.notes_rule} />
-                  <span className={classes.notes_rule} />
-                  <span className={classes.notes_rule} />
-                  <span className={classes.notes_rule} />
+                  {NOTE_RULES.map((i) => (
+                    <span key={i} className={classes.notes_rule} />
+                  ))}
                 </div>
               </div>
 
@@ -628,10 +740,6 @@ export default class ClinicalReport extends React.PureComponent<Props, State> {
       reported += evaluation.reportedCount;
       total += evaluation.totalCount;
     });
-    // Only worth saying when a millimetre measurement was actually withheld.
-    const anyPendingScale = sections.some(
-      (s) => s.evaluation.pendingScaleCount > 0,
-    );
     const divergences = findDivergences(sections);
 
     return (
@@ -659,15 +767,8 @@ export default class ClinicalReport extends React.PureComponent<Props, State> {
             : ''}
         </p>
 
-        {anyPendingScale ? (
-          // The most consequential caveat on the page: it must not be the
-          // quietest text on it.
-          <p className={classes.caveat}>
-            Millimetre measurements are withheld throughout: this radiograph
-            has no image scale. Set it from the calibration chip in the toolbar
-            and reprint — angular values and ratios are unaffected.
-          </p>
-        ) : null}
+        {/* The image-scale caveat is stated once, under the patient block —
+            see `scaleBanner` in `renderReport`. */}
 
         {divergences.length > 0 ? (
           <div className={classes.diverge}>
@@ -715,19 +816,63 @@ export default class ClinicalReport extends React.PureComponent<Props, State> {
         <AnalysisSections
           sections={sections}
           activeAnalysisId={analysisId}
+          context={this.getAnalysisContext()}
         />
       </div>
     );
   }
 
-  /** Memoized (landmark set × scale factor) evaluation of every analysis. */
+  /**
+   * Completes the tracing for every analysis this document can print, before
+   * it prints any of them.
+   *
+   * The report evaluates all nine lateral analyses from one landmark set, but
+   * the app only ever plots the landmarks the *active* analysis needs. An
+   * analysis the clinician never opened was therefore reported from a partial
+   * tracing — and a partial tracing does not report a partial finding, it
+   * reports a *different* one, because a category is graded from whichever of
+   * its measurements happen to have computed. The soft-tissue section read
+   * "Skeletal profile — Normal" from four of its seven measurements and
+   * "Concave" from all seven, and dropped "Chin prominence — Recessive"
+   * entirely, on the same tracing, depending only on which analysis was open.
+   *
+   * This is the pass `store/middleware/analysisSwitch` already runs on every
+   * analysis change, for the union of all the analyses instead of for one: the
+   * same predictor, the same single undoable batch, and — the part that makes
+   * it safe — the same rule that a landmark already placed by hand is never
+   * overwritten (see `predictionsToLandmarks`). An untraced image is left
+   * untouched: an empty canvas stays empty until the clinician asks for a plot.
+   */
+  private ensureLandmarksForAllAnalyses() {
+    const { manualLandmarks, onPlotMissingLandmarks } = this.props;
+    if (Object.keys(manualLandmarks).length === 0) {
+      return;
+    }
+    const missing: { [symbol: string]: true } = {};
+    LATERAL_ANALYSES.forEach(({ analysis }) => {
+      getStepsForAnalysis(analysis, false).forEach((step) => {
+        if (isStepManual(step) && manualLandmarks[step.symbol] === undefined) {
+          missing[step.symbol] = true;
+        }
+      });
+    });
+    const symbols = Object.keys(missing);
+    if (symbols.length > 0) {
+      onPlotMissingLandmarks(symbols);
+    }
+  }
+
+  /** Memoized (landmark set × scale factor × patient) evaluation of every analysis. */
   private getSections(): Section[] {
     const { manualLandmarks, scaleFactor } = this.props;
+    const context = this.getAnalysisContext();
     const cache = this.sectionsCache;
     if (
       cache !== null &&
       cache.manualLandmarks === manualLandmarks &&
-      cache.scaleFactor === scaleFactor
+      cache.scaleFactor === scaleFactor &&
+      cache.context.ageInYears === context.ageInYears &&
+      cache.context.sex === context.sex
     ) {
       return cache.sections;
     }
@@ -739,11 +884,11 @@ export default class ClinicalReport extends React.PureComponent<Props, State> {
       (entry): Section => ({
         entry,
         evaluation: evaluateAnalysis(
-          entry.analysis, manualLandmarks, scaleFactor,
+          entry.analysis, manualLandmarks, scaleFactor, context,
         ),
       }),
     );
-    this.sectionsCache = { manualLandmarks, scaleFactor, sections };
+    this.sectionsCache = { manualLandmarks, scaleFactor, context, sections };
     return sections;
   }
 
@@ -762,12 +907,15 @@ export default class ClinicalReport extends React.PureComponent<Props, State> {
    */
   private getActiveEvaluation(): AnalysisEvaluation | null {
     const { analysisId, manualLandmarks, scaleFactor } = this.props;
+    const context = this.getAnalysisContext();
     const cache = this.activeCache;
     if (
       cache !== null &&
       cache.manualLandmarks === manualLandmarks &&
       cache.scaleFactor === scaleFactor &&
-      cache.analysisId === analysisId
+      cache.analysisId === analysisId &&
+      cache.context.ageInYears === context.ageInYears &&
+      cache.context.sex === context.sex
     ) {
       return cache.evaluation;
     }
@@ -776,21 +924,54 @@ export default class ClinicalReport extends React.PureComponent<Props, State> {
     )[0];
     const evaluation = entry === undefined
       ? null
-      : evaluateAnalysis(entry.analysis, manualLandmarks, scaleFactor);
+      : evaluateAnalysis(entry.analysis, manualLandmarks, scaleFactor, context);
     this.activeCache = {
-      manualLandmarks, scaleFactor, analysisId, evaluation,
+      manualLandmarks, scaleFactor, analysisId, context, evaluation,
     };
     return evaluation;
   }
 
+  /**
+   * The patient these norms are read against — age on the day of the film and
+   * recorded sex — built exactly as the store builds it for the editor, so the
+   * report and the Summary dialog can never grade the same tracing against two
+   * different norms. See `AnalysisContext`.
+   */
+  private getAnalysisContext(): AnalysisContext {
+    const { patient, captureDate } = this.props;
+    return getAnalysisContext(patient, parseCaptureDate(captureDate));
+  }
+
+  /**
+   * Whose norms the active analysis quotes. Looked up from the same registry
+   * the combined report's sections read, so the two scopes of this one
+   * document can never cite the same analysis differently.
+   */
+  private getActiveProvenance(): NormsProvenance | undefined {
+    const { analysisId } = this.props;
+    if (analysisId === null) {
+      return undefined;
+    }
+    const entry = LATERAL_ANALYSES.filter(
+      (e) => e.id === analysisId || e.analysis.id === analysisId,
+    )[0];
+    return entry === undefined ? undefined : entry.analysis.provenance;
+  }
+
   /** The active analysis' table, with the same footnotes its section gets. */
   private renderActiveResultsTable() {
-    const { results, landmarksBySymbol, needsScaleForLinear } = this.props;
+    const { results, landmarksBySymbol, needsScaleForLinear, analysisId } =
+      this.props;
     const evaluation = this.getActiveEvaluation();
     return (
       <ResultsTable
         results={results}
         landmarksBySymbol={landmarksBySymbol}
+        analysisName={
+          analysisId !== null
+            ? (ANALYSIS_NAMES[analysisId] || analysisId)
+            : undefined
+        }
         needsScaleForLinear={needsScaleForLinear}
         missingLandmarkCount={
           evaluation !== null ? evaluation.missingLandmarkCount : 0
@@ -798,6 +979,7 @@ export default class ClinicalReport extends React.PureComponent<Props, State> {
         missingSymbols={
           evaluation !== null ? evaluation.missingSymbols : undefined
         }
+        caveats={evaluation !== null ? evaluation.caveats : undefined}
       />
     );
   }
@@ -822,11 +1004,16 @@ export default class ClinicalReport extends React.PureComponent<Props, State> {
 
   /**
    * The running head and foot of every printed page: patient name, chart ID and
-   * report date, plus "Page n of N". Generated at render time because the
-   * strings are patient data, and expressed as `@page` margin boxes — the only
-   * mechanism that repeats reliably across pages and can count them.
-   * Suppressed on page 1, which already carries the letterhead and the patient
-   * block in full.
+   * report date, the star/wigglegram key, plus "Page n of N". Generated at
+   * render time because the strings are patient data, and expressed as `@page`
+   * margin boxes — the only mechanism that repeats reliably across pages and
+   * can count them. Suppressed on page 1, which already carries the letterhead
+   * and the patient block in full.
+   *
+   * The key repeats because the marks it explains do: the deviation stars and
+   * the wigglegram bands appear on every analysis section, and a document that
+   * defines them once on page 2 leaves pages 3–13 carrying *, ** and ***
+   * against nothing.
    */
   private renderRunningPageStyle(patientLine: string, docLine: string) {
     const box = (align: string) => (
@@ -836,7 +1023,7 @@ export default class ClinicalReport extends React.PureComponent<Props, State> {
     const css = [
       '@page {',
       '  size: A4 portrait;',
-      '  margin: 15mm 12mm 14mm;',
+      '  margin: 15mm 12mm 15mm;',
       '  @top-left {',
       `    content: ${cssString(patientLine)};`,
       `    ${box('left')} color: #52616F; font-weight: 600;`,
@@ -848,8 +1035,8 @@ export default class ClinicalReport extends React.PureComponent<Props, State> {
       '    vertical-align: bottom; padding-bottom: 3.5mm;',
       '  }',
       '  @bottom-left {',
-      `    content: ${cssString('Cephalometric analysis report')};`,
-      `    ${box('left')}`,
+      `    content: ${cssString(RUNNING_KEY)};`,
+      `    ${box('left')} font-size: 7pt;`,
       '    vertical-align: top; padding-top: 3mm;',
       '  }',
       '  @bottom-right {',
@@ -887,20 +1074,75 @@ export default class ClinicalReport extends React.PureComponent<Props, State> {
     this.setState({ license });
   };
 
+  /**
+   * The manual landmarks the analysis in `scope` actually uses, and how many of
+   * them are placed. In `active` scope that is the open analysis' own step
+   * list: a film captioned "Downs" may not carry the other eight analyses'
+   * points and planes, and its caption may not count them. In `all` scope every
+   * placed landmark belongs to the document.
+   */
+  private getFilmLandmarks(): {
+    landmarks: ManualLandmarks;
+    placed: number;
+    required: number;
+    /** The analysis the film is scoped to, or null when it carries all of them. */
+    scopeName: string | null;
+  } {
+    const { manualLandmarks, analysisId } = this.props;
+    const placedAll = Object.keys(manualLandmarks)
+      .filter((s) => isGeoPoint(manualLandmarks[s]));
+    const entry = this.state.scope === 'all' || analysisId === null
+      ? undefined
+      : LATERAL_ANALYSES.filter(
+        (e) => e.id === analysisId || e.analysis.id === analysisId,
+      )[0];
+    if (entry === undefined) {
+      return {
+        landmarks: manualLandmarks,
+        placed: placedAll.length,
+        required: placedAll.length,
+        scopeName: null,
+      };
+    }
+    const required: string[] = [];
+    getStepsForAnalysis(entry.analysis, false).forEach((step) => {
+      if (isStepManual(step) && required.indexOf(step.symbol) === -1) {
+        required.push(step.symbol);
+      }
+    });
+    const landmarks: ManualLandmarks = {};
+    let placed = 0;
+    required.forEach((symbol) => {
+      const value = manualLandmarks[symbol];
+      if (isGeoPoint(value)) {
+        landmarks[symbol] = value;
+        placed += 1;
+      }
+    });
+    return {
+      landmarks, placed, required: required.length, scopeName: entry.name,
+    };
+  }
+
   private renderSnapshot() {
     const { imageSrc, imageWidth, imageHeight, manualLandmarks } = this.props;
     if (imageSrc === null || !imageWidth || !imageHeight) {
       return;
     }
-    // The report always shows the full tracing (profilogram + points),
-    // independent of the on-screen profilogram toggle — the tracing is what
-    // the report documents.
+    const film = this.getFilmLandmarks();
+    // The anatomical outlines are always built from the whole tracing — the
+    // anatomy is not one analysis' property — but the dots, the tags and the
+    // planes are those of the analysis this paper reports on.
     renderTracingSnapshot(
       imageSrc, imageWidth, imageHeight,
-      manualLandmarks, buildProfilogram(manualLandmarks),
-      // Cropped to the traced region: the report has one figure and a fixed
-      // amount of page for it.
-      true,
+      manualLandmarks, buildProfilogram(film.landmarks),
+      {
+        // Cropped to the traced region: the report has one figure and a fixed
+        // amount of page for it.
+        crop: true,
+        pointLandmarks: film.landmarks,
+        labels: true,
+      },
     ).then((url) => {
       if (url !== null) {
         this.setState({ snapshotUrl: url });

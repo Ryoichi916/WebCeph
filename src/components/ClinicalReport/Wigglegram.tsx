@@ -7,6 +7,7 @@ import {
   getUnitSuffix,
   getSeverityStars,
 } from 'components/AnalysisResultsViewer';
+import { normSd } from 'analyses/helpers';
 
 import { printNumber } from './copy';
 
@@ -132,13 +133,18 @@ const buildRows = (
   const rows: Row[] = [];
   const seen: { [symbol: string]: true | undefined } = {};
   results.forEach(({ relevantComponents }) => {
-    relevantComponents.forEach(({ symbol, value, mean, min, max }) => {
+    relevantComponents.forEach(({ symbol, value, mean, min, max, band }) => {
       if (seen[symbol] === true) {
         return;
       }
       seen[symbol] = true;
-      const sd = (max - min) / 2;
-      if (sd <= 0) {
+      // `normSd` is NaN for a measurement with no norm at all *and* for one
+      // whose norm is a published range rather than a mean ± SD — a range has
+      // no standard deviation, so it has no place on an axis measured in them.
+      // (Halving the range to make one is what printed Jarabak's ratio at six
+      // "standard deviations" from a norm nobody stated as one.)
+      const sd = normSd(mean, min, max, band);
+      if (!isFinite(sd) || sd <= 0) {
         return;
       }
       const landmark = landmarksBySymbol[symbol];
@@ -157,7 +163,7 @@ const buildRows = (
         normLabel: `${printNumber(mean)} ± ${printNumber(sd)}`,
         z: Math.max(-3, Math.min(3, rawZ)),
         clamped: Math.abs(rawZ) > 3,
-        stars: getSeverityStars(value, mean, min, max),
+        stars: getSeverityStars(value, mean, min, max, band),
       });
     });
   });

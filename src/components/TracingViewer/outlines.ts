@@ -23,6 +23,15 @@ import { isGeoPoint } from 'utils/math';
 
 /** Shared visual identity — imported by both the SVG overlay and the canvas. */
 export const OUTLINE_COLOR = '#7EC8FF';
+/**
+ * The same identity taken to full contrast for a rasterised film (image export,
+ * printed report). There the anatomical tracing is the primary graphic — it is
+ * what a cephalometric report is *about* — so it is drawn at full weight in
+ * near-white while the analysis planes recede behind it. On screen the planes
+ * are interactive and keep their own weight, which is why this is a second
+ * constant rather than a change to the one above.
+ */
+export const OUTLINE_PRINT_COLOR = '#EAF6FF';
 /** On-screen stroke weight (px). Thinner than the 1.5px measurement segments
  *  and much thinner than the 2.5px reference planes, for a fine hand-traced look. */
 export const OUTLINE_WIDTH = 1.15;

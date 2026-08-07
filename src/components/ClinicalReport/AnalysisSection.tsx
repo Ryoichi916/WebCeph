@@ -7,6 +7,7 @@ import { LateralAnalysisEntry } from 'analyses/lateral';
 
 import ResultsTable from './ResultsTable';
 import Wigglegram from './Wigglegram';
+import NormsNote from './NormsNote';
 import { formatSymbolList, landmarksAre, itOrThem } from './copy';
 
 const classes = require('./style.scss');
@@ -20,6 +21,8 @@ export interface AnalysisSectionProps {
   index: number;
   /** True for the analysis currently active in the editor. */
   isActive: boolean;
+  /** The patient the norms were read against, for this section's norms note. */
+  context?: AnalysisContext;
 }
 
 /**
@@ -85,10 +88,10 @@ export const PendingNote = (
  * still waiting for landmarks. Nothing is ever blanked or zeroed.
  */
 const AnalysisSection = (props: AnalysisSectionProps) => {
-  const { entry, evaluation, index, isActive } = props;
+  const { entry, evaluation, index, isActive, context } = props;
   const {
     results, landmarksBySymbol, reportedCount, missingLandmarkCount,
-    pendingScaleCount, totalCount,
+    pendingScaleCount, totalCount, caveats,
   } = evaluation;
   const hasResults = results.length > 0;
 
@@ -130,12 +133,18 @@ const AnalysisSection = (props: AnalysisSectionProps) => {
         <ResultsTable
           results={results}
           landmarksBySymbol={landmarksBySymbol}
+          analysisName={entry.name}
           needsScaleForLinear={pendingScaleCount > 0}
           missingLandmarkCount={missingLandmarkCount}
           missingSymbols={evaluation.missingSymbols}
+          caveats={caveats}
           showKey={false}
         />
       ) : null}
+      {/* Whose norms this section's deviations are measured against. Printed
+          under every section, computable or not: an analysis that reported
+          nothing still told the reader which author it would have used. */}
+      <NormsNote provenance={entry.analysis.provenance} context={context} />
     </section>
   );
 };
@@ -151,6 +160,8 @@ export interface AnalysisSectionsProps {
   }>;
   /** The analysis id active in the editor, marked in its heading. */
   activeAnalysisId: string | null;
+  /** The patient the norms were read against (see `AnalysisContext`). */
+  context?: AnalysisContext;
 }
 
 /**
@@ -173,6 +184,7 @@ export const AnalysisSections = (props: AnalysisSectionsProps) => (
         evaluation={evaluation}
         index={i + 1}
         isActive={isActiveEntry(entry, props.activeAnalysisId)}
+        context={props.context}
       />
     ))}
   </div>

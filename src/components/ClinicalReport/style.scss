@@ -406,10 +406,16 @@
   border: 1px solid $border;
   border-radius: 8px;
   overflow: hidden;
-  page-break-inside: avoid;
 }
 
+// The contents table may break across pages — a *row* may not. Kept whole, the
+// block was too tall for the space left under the radiograph on page 1, so it
+// moved to page 2 and left the cover two-thirds empty; broken between rows it
+// starts under the figure and the cover carries a finding instead of only
+// metadata.
 .ov_row {
+  page-break-inside: avoid;
+  break-inside: avoid;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -509,15 +515,25 @@
 // scale, for instance). Amber attention treatment — never the quietest text on
 // the page.
 .caveat {
-  margin: 10px 0 0;
-  padding: 8px 12px;
+  margin: 12px 0 0;
+  padding: 9px 13px;
   border: 1px solid #F0DFBC;
-  border-left: 3px solid $warn;
+  border-left: 4px solid $warn;
   border-radius: 6px;
   background: $warn-bg;
   font-size: 11.5px;
-  line-height: 1.45;
+  line-height: 1.5;
   color: #7A4A00;
+  page-break-inside: avoid;
+}
+
+// The one line of it a reader who skims must not be able to miss.
+.caveat_head {
+  display: block;
+  margin-bottom: 2px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #6B4100;
 }
 
 // ---- Where the analyses differ (cross-analysis disagreement) ----------------
@@ -611,6 +627,16 @@
 .keys_line {
   font-size: 10.5px;
   color: $text-tertiary;
+}
+
+// On paper the same key is in the running foot of every page — which is the
+// whole point of putting it there — so the front-matter copy would be a second
+// statement of it three centimetres above the first. The screen preview has no
+// running foot, so it keeps this one.
+@media print {
+  .keys {
+    display: none;
+  }
 }
 
 // ---- One analysis section inside the combined report ------------------------
@@ -716,32 +742,46 @@
   margin: 0;
 }
 
-// The mount hugs the film. A full-width frame around a portrait radiograph is
-// three-quarters empty black — the film printed smaller than the table above it.
+// The mount hugs the film. A dark rounded panel around the radiograph put a
+// piece of application UI on a clinical page — a printed cephalometric figure
+// sits on white paper inside a hairline rule, and the film supplies its own
+// black. The frame is sized by the image, which is driven off the *width* of
+// the page (see `.figure_image`) rather than a pixel height: a 340 px-tall
+// screenshot in the middle of a 186 mm column left 40 % of the sheet empty.
+// The film is 150 mm across — the width of the page, less its margins and a
+// little air — in both the preview and the print, so what the clinician
+// approves on screen is the sheet that comes out of the printer.
 .figure_frame {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: fit-content;
+  box-sizing: border-box;
+  width: 150mm;
   max-width: 100%;
   margin: 0 auto;
-  padding: 8px;
-  background: $canvas-bg;
-  border: 1px solid $border-strong;
-  border-radius: 6px;
+  padding: 0;
+  background: #FFFFFF;
+  border: 1px solid $text-disabled;
+  border-radius: 0;
 }
 
+// Width-driven, with the height as a backstop only: an unusually tall crop is
+// letterboxed rather than squashed. A radiograph reproduced at a different
+// scale horizontally and vertically is not a radiograph any more — every angle
+// on it would be wrong — so `object-fit: contain` is load-bearing here, not
+// decoration.
 .figure_image {
   display: block;
-  max-width: 100%;
-  max-height: 340px;
-  border-radius: 2px;
+  width: 100%;
+  height: auto;
+  max-height: 168mm;
+  object-fit: contain;
 }
 
 .figure_missing {
   padding: 48px 0;
   font-size: 13px;
-  color: $canvas-text;
+  color: $text-tertiary;
 }
 
 .figure_caption {
@@ -754,6 +794,63 @@
 .caption_dot {
   margin: 0 7px;
   color: $text-disabled;
+}
+
+// ---- Figure key -------------------------------------------------------------
+//
+// Three kinds of ink are drawn on the film and none of them is self-evident on
+// paper. Printed under the caption, at caption weight.
+.figure_key {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 4px 18px;
+  margin-top: 5px;
+  font-size: 10px;
+  color: $text-tertiary;
+}
+
+.figkey_item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+// Swatches drawn on a dark strip, because that is the ground they appear on.
+.figkey_outline,
+.figkey_plane {
+  display: inline-block;
+  width: 22px;
+  height: 9px;
+  border-radius: 2px;
+  background: #26303A;
+  position: relative;
+
+  &::after {
+    content: '';
+    position: absolute;
+    left: 2px;
+    right: 2px;
+    top: 50%;
+  }
+}
+
+.figkey_outline::after {
+  border-top: 2.2px solid #EAF6FF;
+}
+
+.figkey_plane::after {
+  border-top: 1px solid #93AEC6;
+}
+
+.figkey_point {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #FFC400;
+  border: 1px solid #14181D;
 }
 
 // ---- Norm deviation profile (wigglegram) -----------------------------------
@@ -852,6 +949,19 @@
 
 .col_finding {
   width: 168px;
+}
+
+// The analysis this table belongs to, carried in the header row so it repeats
+// on every page the table spills onto (`thead { display: table-header-group }`).
+// A finding group orphaned at the top of a page is otherwise unattributable.
+.th_scope {
+  display: block;
+  margin-top: 2px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: $primary-700;
 }
 
 .cell_finding {
@@ -958,6 +1068,19 @@
   color: $text-tertiary;
 }
 
+// Marks a norm that is the author's published *range* rather than a mean ± SD,
+// so "62.0–65.0" can never be read on paper as a band with a standard
+// deviation behind it. The document key explains the word once.
+.norm_kind {
+  display: block;
+  margin-top: 1px;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: $text-tertiary;
+}
+
 .cell_deviation {
   color: $text-tertiary;
 }
@@ -993,67 +1116,10 @@
   white-space: normal;
 }
 
-// ---- Single-measurement section (a table of one row is not a table) ---------
-
-.single {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 9px 12px;
-  border: 1px solid $border;
-  border-radius: 6px;
-  background: #FAFBFC;
-  page-break-inside: avoid;
-}
-
-.single_finding {
-  flex: 0 0 auto;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  align-items: flex-start;
-  min-width: 132px;
-}
-
-.single_measurement {
-  flex: 1 1 auto;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.single_name {
-  font-size: 12.5px;
-  font-weight: 600;
-  color: $text-primary;
-}
-
-.single_symbol {
-  font-size: 10.5px;
-  color: $text-tertiary;
-}
-
-.single_numbers {
-  flex: 0 0 auto;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 2px;
-}
-
-.single_value {
-  font-size: 16px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  color: $text-primary;
-}
-
-.single_norm {
-  font-size: 10.5px;
-  color: $text-tertiary;
-  font-variant-numeric: tabular-nums;
-}
+// (A single-measurement analysis is printed as a table like every other one:
+// its "highlight card" made one section of the report present its value, norm
+// and deviation in a layout no other section used. The wigglegram is what gets
+// suppressed below two measurements — see Wigglegram.tsx.)
 
 .legend {
   margin-top: 8px;
@@ -1081,6 +1147,56 @@
   color: $warn;
 }
 
+// A caveat the analysis draws from its own numbers (a landmark its values say
+// is misplaced). Set apart from the housekeeping footnotes: it can invalidate
+// the rows it names, so it may not read as small print about the software.
+.legend_caveat {
+  display: block;
+  margin-top: 6px;
+  padding: 5px 8px;
+  border-left: 2px solid $warn;
+  background: #FFF9F0;
+  font-size: 10.5px;
+  line-height: 1.5;
+  color: $text-secondary;
+  page-break-inside: avoid;
+}
+
+.legend_caveat_mark {
+  margin-right: 5px;
+  font-weight: 700;
+  color: $warn;
+}
+
+// The same mark on the rows the caveat is about, so a reader who never reaches
+// the footnote still sees that these numbers are being questioned.
+.cell_caveat_mark {
+  display: inline-block;
+  margin-left: 3px;
+  font-weight: 700;
+  color: $warn;
+  vertical-align: super;
+  font-size: 9px;
+}
+
+// Sub-heading inside the single "Measured values" group: what is true of the
+// run of rows under it (outside the norm, within it, reported without one).
+// One category heading with rules beneath beats the same heading printed three
+// times with a different chip each — which is what it used to be.
+.subrule_row td {
+  padding-top: 7px;
+  padding-bottom: 2px;
+}
+
+.subrule {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: $text-tertiary;
+  border-bottom: 1px solid $border;
+}
+
 .empty_note {
   margin: 4px 0 0;
   font-size: 12.5px;
@@ -1094,11 +1210,17 @@
 .tail {
   page-break-inside: avoid;
   break-inside: avoid;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
   margin-top: 20px;
 }
 
 .notes {
   page-break-inside: avoid;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
 }
 
 .notes_hint {
@@ -1109,10 +1231,19 @@
   color: $text-tertiary;
 }
 
+// The ruled writing area. It is deliberately the elastic part of the closing
+// block: the single-analysis printout used to end with roughly the bottom
+// 45 % of its last page blank under the certification, and blank paper on a
+// clinical record is worse than useless — it is where the reader wants to
+// write. `flex: 1` lets it take whatever height the last page has left over,
+// with `min-height` guaranteeing a usable amount even on a full page.
 .notes_rules {
   display: flex;
+  flex: 1 1 auto;
   flex-direction: column;
-  gap: 24px;
+  justify-content: space-between;
+  gap: 22px;
+  min-height: 132px;
   padding: 10px 0 2px;
 }
 
@@ -1291,14 +1422,65 @@
 
   .section_label {
     margin: 16px 0 8px;
+    // A section heading never prints alone at the foot of a page. The
+    // single-analysis report used to leave "ANALYSIS RESULTS · JARABAK
+    // ANALYSIS" stranded at the bottom of page 1 with its table starting on
+    // page 2.
+    page-break-after: avoid;
+    break-after: avoid;
   }
 
+  // ...and the column headers never print without at least the first group of
+  // rows under them.
+  .table thead {
+    page-break-after: avoid;
+    break-after: avoid;
+  }
+
+  // ---- Closing block, pinned to the foot of the last page -------------------
+  //
+  // Notes, certification and footer are the end of the document, and the
+  // certification is a signature block: it belongs at the bottom of the sheet,
+  // not floating in the middle of one with a third of the paper blank beneath
+  // it. Given a page of its own and an explicit page height, the flex column
+  // does exactly that — the ruled writing area absorbs whatever is left over,
+  // and the signature lines and footer sit on the bottom margin.
+  //
+  // (The block already needed most of a page for its twenty rules, so the
+  // forced break costs no paper it was not going to use.)
+  .tail {
+    page-break-before: always;
+    break-before: page;
+    height: 260mm;
+  }
+
+  .notes_rules {
+    min-height: 0;
+    gap: 0;
+  }
+
+  // On paper the film is driven off the width of the column, not off a pixel
+  // height, and it sits on white behind a hairline rule — no panel, no radius.
   .figure_frame {
-    padding: 7px;
+    padding: 0;
+    background: #FFFFFF;
+    border-radius: 0;
   }
 
+  // The cover has to hold the front matter, the film, its caption and the
+  // norms statement. 150 mm of film comes to ~157 mm of height for a lateral
+  // crop, which is what page 1 has left; when the calibration banner is also
+  // on the cover the film gives back the 16 mm the banner took.
   .figure_image {
-    max-height: 330px;
+    max-height: 160mm;
+  }
+
+  .figure__tight .figure_frame {
+    width: 130mm;
+  }
+
+  .figure__tight .figure_image {
+    max-height: 140mm;
   }
 
   .table td {
@@ -1341,4 +1523,67 @@
     // place to land just above the heading.
     margin-top: 4px;
   }
+}
+
+// ---- Norms provenance -------------------------------------------------------
+//
+// Under every results table: whose norms this section's deviation column is
+// measured against, and on whom they were measured. Set small and quiet — it
+// is reference matter, not a finding — but it prints on the paper, because a
+// deviation filed in a chart or posted to a colleague is unreadable without
+// the sample it deviates from.
+.norms {
+  margin: 6px 0 0;
+  padding: 6px 8px;
+  border-left: 2px solid $border;
+  font-size: 9.5px;
+  line-height: 1.5;
+  color: $text-tertiary;
+  page-break-inside: avoid;
+}
+
+.norms_label {
+  margin-right: 6px;
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: $text-disabled;
+}
+
+.norms_source {
+  font-weight: 600;
+  color: $text-secondary;
+}
+
+.norms_also,
+.norms_note {
+  display: block;
+  margin-top: 2px;
+}
+
+// What this reading did with this patient's record (an age correction applied,
+// or the reason none was). It is a statement about *these* numbers rather than
+// about the publication, so it carries a little more weight than the citation
+// above it.
+.norms_applied {
+  display: block;
+  margin-top: 3px;
+  font-weight: 600;
+  color: $text-secondary;
+}
+
+// The document-level statement, printed once above the results. Deliberately
+// stronger than the per-section citations: it is the caveat that decides how
+// every number below may be read.
+.norms_caveat {
+  margin: 12px 0 0;
+  padding: 7px 10px;
+  border: 1px solid $border;
+  border-left: 3px solid $text-tertiary;
+  border-radius: 5px;
+  background: #FAFBFC;
+  font-size: 10.5px;
+  line-height: 1.45;
+  color: $text-secondary;
 }

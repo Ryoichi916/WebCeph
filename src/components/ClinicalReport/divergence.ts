@@ -19,10 +19,11 @@
 import { getUnitSuffix } from 'components/AnalysisResultsViewer';
 import { mapIndicationToString } from 'components/AnalysisResultsViewer/strings';
 
+import { NEUTRAL_CATEGORY, normSd } from 'analyses/helpers';
 import { AnalysisEvaluation } from 'analyses/evaluate';
 import { LateralAnalysisEntry } from 'analyses/lateral';
 
-import { printNumber } from './copy';
+import { printNumber, printNorm } from './copy';
 
 export interface DivergenceSource {
   /** Display name of the analysis reaching this conclusion. */
@@ -51,10 +52,16 @@ export interface DivergenceSection {
 type Component =
   CategorizedAnalysisResult<Category>['relevantComponents'][0];
 
-/** Standardized distance from the norm mean; 0 when the norm has no spread. */
-const zScore = ({ value, mean, min, max }: Component): number => {
-  const sd = (max - min) / 2;
-  return sd <= 0 ? 0 : Math.abs(value - mean) / sd;
+/**
+ * Standardized distance from the norm mean; 0 when the component has no
+ * standard deviation to standardize by — no norm at all, or a norm published
+ * as a plain range (see `normSd`). Used only to rank candidates for "which
+ * measurement drives this finding", so a 0 makes such a component the last
+ * resort rather than inventing a spread for it.
+ */
+const zScore = ({ value, mean, min, max, band }: Component): number => {
+  const sd = normSd(mean, min, max, band);
+  return (!isFinite(sd) || sd <= 0) ? 0 : Math.abs(value - mean) / sd;
 };
 
 /**
@@ -103,6 +110,11 @@ export const findDivergences = (
 
   sections.forEach(({ entry, evaluation }) => {
     evaluation.results.forEach((result) => {
+      // The neutral bucket holds plain measured values, not conclusions, so
+      // two analyses "disagreeing" about it means nothing worth printing.
+      if (result.category === NEUTRAL_CATEGORY) {
+        return;
+      }
       const component = drivingComponent(result, evaluation.landmarksBySymbol);
       if (component === null) {
         return;
@@ -116,13 +128,16 @@ export const findDivergences = (
       indications[category][indication as string] = true;
       const landmark = evaluation.landmarksBySymbol[component.symbol];
       const unit = getUnitSuffix(landmark);
-      const sd = (component.max - component.min) / 2;
       byCategory[category].push({
         analysis: entry.name,
         indication: mapIndicationToString(indication) || String(indication),
         symbol: component.symbol,
         value: `${printNumber(component.value)}${unit}`,
-        norm: `${printNumber(component.mean)} ± ${printNumber(sd)}`,
+        // Whatever the component's norm actually is — a mean ± SD or a
+        // published range — printed the same way the tables print it.
+        norm: printNorm(
+          component.mean, component.min, component.max, component.band,
+        ),
       });
     });
   });

@@ -9,6 +9,7 @@ import {
   MeasurementKind,
 } from 'analyses/superimposition';
 import { LATERAL_ANALYSES } from 'analyses/lateral';
+import { hasNorm, normSd } from 'analyses/helpers';
 // The anatomical curves are the editor's own — the very module the tracing is
 // drawn with, exactly as `analyses/superimposition` uses it.
 import { buildOutlines, Outline } from 'components/TracingViewer/outlines';
@@ -958,32 +959,27 @@ export const simulatedOutlines = (
  * analysis, so they arrive here down the same `evaluate()` path as every other
  * row — this view computes nothing privately.
  *
- * The interincisal angle and the lower anterior face height (ANS–Me) are
- * deliberately absent: both are *defined* by an analysis module but neither is
- * interpreted by it, so the app reports them nowhere — not in the Summary, not
- * in the printed report, not in a superimposition. Listing them here would mean
- * computing them through a second, private code path, and this view does not do
- * that. See `NOT_INTERPRETED` for the note the UI shows instead.
+ * The interincisal angle and the lower anterior face height used to be absent:
+ * both are *defined* by an analysis module but interpreted by neither, and a
+ * measurement without an interpretation used to reach no table at all. They
+ * now reach the Summary and the report as measured values against their norms
+ * (see `defaultInterpretAnalysis`), down the same `evaluate()` path as every
+ * other row here, so they are listed.
  */
 export const KEY_MEASUREMENTS: string[] = [
   'Overjet', 'Overbite',
   'ANB', 'Wits', 'SNA', 'SNB',
   'FMPA', 'NAPog',
-  'U1-SN', 'IMPA',
+  'U1-SN', 'IMPA', 'U1-L1',
+  'ANS-Me (mm)',
   'Ls-E-line', 'Li-E-line',
 ];
 
-/**
- * Measurements a clinician would expect in a VTO that this app defines but
- * never reports, because no analysis module interprets them. Named on screen so
- * their absence is a disclosed limitation rather than an oversight.
- */
-export const NOT_INTERPRETED: string[] = [
-  'the interincisal angle (U1-L1)',
-  'lower anterior face height (ANS-Me)',
-];
-
-export interface Norm { mean: number; min: number; max: number; }
+export interface Norm {
+  mean: number; min: number; max: number;
+  /** Whether min/max are a mean ± 1 SD band or a published range. */
+  band?: NormBand;
+}
 
 /**
  * Norm bands, taken from the analysis modules' own `AnalysisComponent` entries
@@ -998,10 +994,16 @@ const buildNorms = (): {
   const norms: { [symbol: string]: Norm } = {};
   const kinds: { [symbol: string]: MeasurementKind } = {};
   LATERAL_ANALYSES.forEach(({ analysis }) => {
-    analysis.components.forEach(({ landmark, mean, min, max }) => {
-      if (norms[landmark.symbol] === undefined) {
-        norms[landmark.symbol] = { mean, min, max };
+    analysis.components.forEach(({ landmark, mean, min, max, band }) => {
+      if (kinds[landmark.symbol] === undefined) {
         kinds[landmark.symbol] = measurementKind(landmark);
+      }
+      // A measurement the analyses state no norm for (see `NO_NORM`) gets no
+      // entry at all, so the change table prints an em dash for it instead of
+      // comparing it against NaN — which reads as "outside the norm band" and
+      // would have flagged every plan that touched it.
+      if (norms[landmark.symbol] === undefined && hasNorm(mean, min, max)) {
+        norms[landmark.symbol] = { mean, min, max, band };
       }
     });
   });
@@ -1092,11 +1094,11 @@ const isImplausible = (
   if (norm === null) {
     return false;
   }
-  const sd = (norm.max - norm.min) / 2;
+  const sd = normSd(norm.mean, norm.min, norm.max, norm.band);
   const floor = kind === 'linear'
     ? PLAUSIBILITY.linear
     : (kind === 'ratio' ? PLAUSIBILITY.ratio : PLAUSIBILITY.angular);
-  const reach = Math.max(sd > 0 ? PLAUSIBILITY.sd * sd : 0, floor);
+  const reach = Math.max(isFinite(sd) && sd > 0 ? PLAUSIBILITY.sd * sd : 0, floor);
   return Math.abs(value - norm.mean) > reach;
 };
 

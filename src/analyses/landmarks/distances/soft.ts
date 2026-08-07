@@ -5,7 +5,7 @@ import {
 } from 'analyses/landmarks/points/soft';
 
 import {
-  ELine,
+  ELine, SLine,
 } from 'analyses/landmarks/lines/soft';
 
 import { getSegmentLength } from 'utils/math';
@@ -39,7 +39,7 @@ const signedDistanceToELine: CalculateLandmark<number, GeoObject, GeoObject> =
     };
 
 export const lowerLipToELine: CephDistance = {
-  ...distance(Li, ELine),
+  ...distance(Li, ELine, 'Lower lip to E-line', 'Li-E-line'),
   calculate: signedDistanceToELine,
   interpret: defaultInterpetLandmark(
     'lowerLipProminence',
@@ -48,10 +48,42 @@ export const lowerLipToELine: CephDistance = {
 };
 
 export const upperLipToELine: CephDistance = {
-  ...distance(Ls, ELine),
+  ...distance(Ls, ELine, 'Upper lip to E-line', 'Ls-E-line'),
   calculate: signedDistanceToELine,
   interpret: defaultInterpetLandmark(
     'upperLipProminence',
     ['resessive', 'normal', 'prominent'],
-  )
-}
+  ),
+};
+
+/**
+ * Steiner's S-line readings, the soft-tissue half of his analysis: the upper
+ * and lower lip measured against the line from soft-tissue pogonion to the
+ * middle of the columella (see `SLine`). Same sign convention as the E-line —
+ * a lip in front of the line is positive.
+ *
+ * Steiner's statement is that the lips *touch* the line, i.e. a norm of zero;
+ * he published no standard deviation for it, so the components that use these
+ * landmarks declare a ± 1 mm tolerance as a `RANGE` and carry no star scale.
+ *
+ * These two are the reason Steiner's analysis could be completed at all without
+ * new landmarks: Ls, Li, Sn, Pn and Pog' are already plotted for the
+ * soft-tissue analysis, so nothing extra is asked of the clinician.
+ */
+export const lowerLipToSLine: CephDistance = {
+  ...distance(Li, SLine, 'Lower lip to S-line', 'Li-Sline'),
+  calculate: signedDistanceToELine,
+  interpret: defaultInterpetLandmark(
+    'lowerLipProminence',
+    ['resessive', 'normal', 'prominent'],
+  ),
+};
+
+export const upperLipToSLine: CephDistance = {
+  ...distance(Ls, SLine, 'Upper lip to S-line', 'Ls-Sline'),
+  calculate: signedDistanceToELine,
+  interpret: defaultInterpetLandmark(
+    'upperLipProminence',
+    ['resessive', 'normal', 'prominent'],
+  ),
+};

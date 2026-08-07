@@ -1,7 +1,7 @@
 import { line } from 'analyses/helpers';
 
 import {
-  N, S, A, Po, Or, Pog, Go, Me, ANS, PNS, Pt, Gn, Ba,
+  N, S, A, B, Po, Or, Pog, Go, Me, ANS, PNS, Pt, Gn, Ba,
   U1_APEX, U1_INCISAL_EDGE,
   L1_APEX, L1_INCISAL_EDGE,
 } from 'analyses/landmarks/points/skeletal';
@@ -47,6 +47,27 @@ export const dentalPlane = APog;
  * Mandiblular Plane (Go-Me)
  */
 export const MP = line(Go, Me);
+
+/**
+ * Steiner's mandibular plane, gonion to gnathion.
+ *
+ * Kept distinct from `MP` (Go-Me) on purpose: Steiner drew the plane to
+ * gnathion and published its norm against S-N (32°) for that construction, so
+ * reporting Go-Me under Steiner's norm would be quoting one author's figure
+ * for another author's line.
+ */
+export const GoGn = line(Go, Gn, 'Mandibular plane (Go-Gn)', 'Go-Gn');
+
+/**
+ * The N-A line — the reference Steiner measures the maxilla's incisor against.
+ */
+export const NA = line(N, A);
+
+/**
+ * The N-B line — the reference Steiner measures the lower incisor and the
+ * chin against.
+ */
+export const NB = line(N, B);
 
 /**
  * A line connecting sella to nasion.

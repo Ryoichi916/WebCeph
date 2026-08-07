@@ -90,6 +90,51 @@ export const formatAgeFull = (
     : `${parts.years} y`;
 };
 
+/**
+ * Chronological age in (fractional) years at `at`, or null when the date of
+ * birth is absent or invalid. Months are carried as twelfths: an age indexed
+ * norm moves by a fraction of a degree a year, so rounding to whole years
+ * before applying it would throw away most of the correction on a growing
+ * patient.
+ */
+export const getAgeInYears = (
+  dateOfBirth: string | undefined,
+  at: Date = new Date(),
+): number | null => {
+  const parts = getAgeParts(dateOfBirth, at);
+  return parts !== null ? parts.years + parts.months / 12 : null;
+};
+
+/**
+ * What the analyses need to know about the patient in order to apply their
+ * authors' own age and sex indexing of the norms (see `AnalysisContext`).
+ *
+ * `at` is the day the radiograph was taken when the record states one — a
+ * cephalometric norm is read against the age on the film, not against the age
+ * on the day the report is printed. Nothing is invented: a patient with no date
+ * of birth yields a context with no age, and every analysis falls back to the
+ * published figure and says so.
+ */
+export const getAnalysisContext = (
+  patient: { dateOfBirth?: string; sex?: PatientSex } | null,
+  at: Date | null = null,
+): AnalysisContext => {
+  if (patient === null) {
+    return {};
+  }
+  const ageInYears = getAgeInYears(
+    patient.dateOfBirth, at === null ? new Date() : at,
+  );
+  const context: AnalysisContext = {};
+  if (ageInYears !== null) {
+    context.ageInYears = ageInYears;
+  }
+  if (patient.sex === 'male' || patient.sex === 'female') {
+    context.sex = patient.sex;
+  }
+  return context;
+};
+
 /** Single-letter sex for compact metadata lines: F / M. */
 export const formatSexShort = (
   sex: PatientSex | undefined,

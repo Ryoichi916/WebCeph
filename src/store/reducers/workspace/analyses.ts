@@ -16,7 +16,12 @@ import {
   getAnalysisId,
   getScaleFactor,
   hasScaleFactor,
+  getImageCaptureDate,
 } from './image';
+
+import { getActivePatient } from 'store/reducers/patients';
+import { getAnalysisContext } from 'utils/patient';
+import { parseCaptureDate } from 'utils/records';
 
 import {
   getStepsForAnalysis,
@@ -454,18 +459,52 @@ export const getAllCalculatedValues = createSelector(
   },
 );
 
+/**
+ * The patient these norms are being read against — their age on the day of the
+ * film and their recorded sex — so an analysis that carries its author's own
+ * age indexing (Ricketts) or sex split (Jacobson's Wits) grades this patient
+ * rather than the author's reference child. Empty when nothing is on record,
+ * in which case every analysis prints its published figure and says so.
+ */
+export const getPatientAnalysisContext = createSelector(
+  getActivePatient,
+  getImageCaptureDate,
+  (patient, getCaptureDate) => (imageId: string): AnalysisContext => (
+    getAnalysisContext(patient, parseCaptureDate(getCaptureDate(imageId)))
+  ),
+);
+
 export const getCategorizedAnalysisResults = createSelector(
   getActiveAnalysis,
   getAllCalculatedValues,
   getAllGeoObjects,
-  (getAnalysis, getValues, getObjects) => (imageId: string): Array<CategorizedAnalysisResult<Category>> => {
+  getPatientAnalysisContext,
+  (getAnalysis, getValues, getObjects, getContext) =>
+    (imageId: string): Array<CategorizedAnalysisResult<Category>> => {
+      const analysis = getAnalysis(imageId);
+      const objects = getObjects(imageId);
+      const values = getValues(imageId);
+      if (analysis !== null) {
+        return analysis.interpret(values, objects, getContext(imageId));
+      }
+      return [];
+    },
+);
+
+/**
+ * Warnings the active analysis draws from its own values (see
+ * `AnalysisCaveat`) — a misplaced landmark its numbers expose, printed with the
+ * rows it affects rather than left for the clinician to infer.
+ */
+export const getAnalysisCaveats = createSelector(
+  getActiveAnalysis,
+  getAllCalculatedValues,
+  (getAnalysis, getValues) => (imageId: string): AnalysisCaveat[] => {
     const analysis = getAnalysis(imageId);
-    const objects = getObjects(imageId);
-    const values = getValues(imageId);
-    if (analysis !== null) {
-      return analysis.interpret(values, objects);
+    if (analysis === null || typeof analysis.caveats !== 'function') {
+      return [];
     }
-    return [];
+    return analysis.caveats(getValues(imageId));
   },
 );
 

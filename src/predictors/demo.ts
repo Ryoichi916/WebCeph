@@ -16,15 +16,51 @@ const frac = (n: number): number => n - Math.floor(n);
  * Anatomically plausible landmark positions for a standard lateral cephalogram
  * (patient facing right), expressed as fractions of the image width/height.
  *
- * The template is calibrated against the bundled sample cephalogram (see
- * utils/sampleCeph.ts) and yields clinically believable values for the common
- * analyses (e.g. SNA ~ 85°, ANB ~ 1.6°, FMA ~ 24°, IMPA ~ 83°, gonial angle
- * ~ 129°), instead of a random point cloud.
+ * The template is calibrated against the sample lateral cephalogram used
+ * throughout development: S sits on the sella turcica, Po on the external
+ * auditory meatus, Go on the gonial angle, Me on menton. It yields clinically
+ * believable values for the common analyses (SNA ~ 85°, ANB ~ 1.6°, FMA ~ 24°,
+ * IMPA ~ 92°, saddle ~ 115°, articular ~ 134°, gonial ~ 139°) instead of a
+ * random point cloud.
  *
- * The case is deliberately a horizontal grower: Gn sits far enough forward
- * that the Y axis-FH angle lands ~2.2 SD below the Downs norm, so the demo
- * exercises the full severity scale of the results table (the ** / red tier),
- * not just single-star deviations.
+ * The case is deliberately a horizontal grower — Björk's sum ~ 388° (below the
+ * 396 ± 6 norm), the Y axis-FH angle ~ 55° (below the Downs norm) and a
+ * posterior/anterior facial-height ratio well above Jarabak's 62–65 band all
+ * agree on it — so the demo shows one consistent picture across the nine
+ * analyses rather than a contradiction between them.
+ *
+ * Two placements were wrong until this revision and are worth recording,
+ * because both produced numbers no clinician would accept:
+ *
+ *  - **Articulare** sat 15 px from porion — 1.6 mm at the demo's own scale —
+ *    when it belongs 10–20 mm postero-inferior to it. The saddle angle read
+ *    98.9°, a value not seen in humans, and the articular angle 160.1°. The sum
+ *    of the three posterior angles is fixed by N, S, Go and Me, so it was
+ *    unaffected, and that is precisely why the fault survived: the
+ *    growth-pattern reading looked right while its three components did not.
+ *    Ar now sits ~12 mm postero-inferior to porion, on the posterior border of
+ *    the condylar neck, and basion has followed it so the clivus S→Ar→Ba runs
+ *    down and back instead of folding forward.
+ *
+ *    The three angles now read 115° / 134° / 139° — a low saddle and a wide
+ *    gonial angle, each about 1.5 SD off its norm, all three values that occur
+ *    in patients. They are not centred on their norms, and cannot be while the
+ *    rest of the tracing stays on the film's own anatomy: sella, gonion and
+ *    menton are where this skull actually puts them, and with those four points
+ *    fixed the three angles are forced to sum to ~388°. Moving gonion to centre
+ *    them would have taken it 16 mm off the mandibular angle it is traced on —
+ *    trading a visible, checkable tracing for flattering numbers, which is the
+ *    wrong trade in this app.
+ *
+ *  - **Gnathion** sat directly below pogonion instead of at the pogonion–menton
+ *    midpoint this app's own step description asks for, opening a 10° gap
+ *    between Go-Gn/SN and Go-Me/SN — two lines that differ by a few degrees on
+ *    a real tracing. Steiner therefore read a 14° counter-clockwise mandibular
+ *    rotation off the same mandible that Downs, Tweed and Ricketts all called
+ *    normal. Gn is now the midpoint, and pogonion has been brought down onto
+ *    the symphysis outline, which halves the gap to ~4.9° (Go-Gn/SN 23.0°
+ *    against SN-MP 27.8°) and drops Steiner's reading to the same
+ *    one-star band the others sit in.
  */
 const TEMPLATE: { [symbol: string]: [number, number] } = {
   // Cranial base
@@ -32,8 +68,14 @@ const TEMPLATE: { [symbol: string]: [number, number] } = {
   'N':   [0.640, 0.295],
   'Po':  [0.295, 0.380],
   'Or':  [0.585, 0.405],
-  'Ba':  [0.276, 0.448],
-  'Ar':  [0.284, 0.393],
+  // Basion — carried posterior-inferior with articulare so the clivus S→Ar→Ba
+  // still runs down and back in one line rather than folding forward, which is
+  // what it did while basion sat *in front of* articulare.
+  'Ba':  [0.228, 0.452],
+  // Articulare — the posterior border of the condylar neck where it crosses
+  // the cranial base: ~12 mm postero-inferior to porion, not the 1.6 mm it used
+  // to sit at, which is what produced a 98.9° saddle angle.
+  'Ar':  [0.242, 0.391],
   'Pt':  [0.435, 0.398],
   // Maxilla
   'ANS': [0.630, 0.430],
@@ -41,15 +83,37 @@ const TEMPLATE: { [symbol: string]: [number, number] } = {
   'A':   [0.613, 0.462],
   // Mandible
   'B':   [0.581, 0.596],
-  'Pog': [0.607, 0.647],
-  'Gn':  [0.610, 0.668],
+  'Pog': [0.604, 0.670],
+  // Gnathion — the midpoint of pogonion and menton, as the step description
+  // for this landmark states. Anything else splits the two mandibular-plane
+  // readings (Go-Gn and Go-Me) that every analysis assumes agree.
+  'Gn':  [0.580, 0.682],
   'Me':  [0.556, 0.694],
   'Go':  [0.318, 0.578],
-  'PM':  [0.601, 0.617],
-  'R1-mandible': [0.356, 0.500],
-  'R2-mandible': [0.303, 0.500],
-  'R3-mandible': [0.330, 0.428],
-  'R4-mandible': [0.334, 0.615],
+  'PM':  [0.590, 0.618],
+  // D point — the centre of the bony symphysis, so it sits inside the chin
+  // between B and Me and a few millimetres lingual to the labial cortex, not
+  // on the outline. Placed there it reads SND ≈ 80°, about 3° below this
+  // tracing's SNB, which is the relation Steiner's norms (SNB 80, SND 76)
+  // describe.
+  'D':   [0.552, 0.638],
+  // Dc — the centre of the condylar neck where the Ba-N plane crosses it,
+  // which is what Ricketts measures the mandibular arc from. It sits about
+  // 5 mm below articulare and a little in front of it: Ar is on the posterior
+  // *border* of the neck at the cranial base, Dc on the neck's axis.
+  'Dc':  [0.276, 0.437],
+  // The four ramus-border points Xi (the centre of the ramus) is constructed
+  // from. They used to describe a ramus 4 mm wide — R1 at 0.356 and R2 at
+  // 0.303 — which is a quarter of any human ramus, and Xi inherited the error:
+  // Ricketts' lower facial height, the one factor this app already measured
+  // from Xi, read 8° wide because of it. They are now taken off this skull's
+  // own anatomy: R2 sits on the Ar→Go posterior border at mid-ramus height,
+  // R1 one ramus-width (~30 mm at life size) in front of it, R3 in the sigmoid
+  // notch and R4 on the Go-Me lower border directly below R3.
+  'R1-mandible': [0.402, 0.490],
+  'R2-mandible': [0.282, 0.490],
+  'R3-mandible': [0.340, 0.425],
+  'R4-mandible': [0.340, 0.589],
   // Dentition — incisor axes calibrated on the demo film so the dental
   // analysis reads clinically (U1-SN ~106°, IMPA ~92°, interincisal ~134°,
   // all within their normal bands for this low-mandibular-plane case).

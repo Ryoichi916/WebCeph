@@ -1,7 +1,9 @@
 import { connect } from 'react-redux';
 
 import ClinicalReport from './index';
-import { StateProps, OwnProps } from './props';
+import { StateProps, DispatchProps, OwnProps } from './props';
+
+import { autoPlotLandmarks } from 'actions/workspace';
 
 import {
   getCategorizedAnalysisResults,
@@ -64,4 +66,37 @@ const mapStateToProps =
     };
   };
 
-export default connect(mapStateToProps)(ClinicalReport);
+/**
+ * The report's one dispatch: complete the tracing for the analyses it is about
+ * to print.
+ *
+ * The combined printout evaluates all nine lateral analyses from the placed
+ * landmarks, but only the *active* analysis' landmarks are ever plotted — the
+ * analysis-switch middleware fills in what a newly selected analysis needs, and
+ * nothing filled in what an analysis the user never opened needs. So the same
+ * tracing produced a different document depending on which analysis happened to
+ * be open when the report was opened: with Wits active, the Soft Tissue section
+ * printed "4 of 7 measured" and concluded "Skeletal profile — Normal"; after a
+ * visit to the Soft Tissue analysis it printed 7 of 7 and concluded "Concave",
+ * with an entire finding — "Chin prominence — Recessive", two of its three
+ * measurements over two standard deviations out — that the first document
+ * silently omitted. A clinician signs the certification block under that.
+ *
+ * This runs the identical completion pass (the same `autoPlotLandmarks`
+ * dispatch, the same predictor, the same single undoable batch, and the same
+ * refusal to overwrite anything already placed) for the union of every
+ * analysis' landmarks instead of for one analysis' — see
+ * `index.tsx#componentDidMount`.
+ */
+const mapDispatchToProps = (
+  dispatch: GenericDispatch, { imageId }: OwnProps,
+): DispatchProps => ({
+  onPlotMissingLandmarks: (symbols: string[]) => {
+    if (imageId === null || symbols.length === 0) {
+      return;
+    }
+    dispatch(autoPlotLandmarks({ imageId, symbols }));
+  },
+});
+
+export default connect(mapStateToProps, mapDispatchToProps)(ClinicalReport);

@@ -29,7 +29,6 @@ import {
   valueForControl,
   withControlValue,
   EMPTY_PLAN,
-  NOT_INTERPRETED,
   isPlanEmpty,
   planKey,
   ControlAvailability,
@@ -58,7 +57,7 @@ import {
 
 // Number formatting and unit suffixes are the app's, not this view's.
 import { getUnitSuffix } from 'components/AnalysisResultsViewer';
-import { printNumber, printSigned } from 'components/ClinicalReport/copy';
+import { printNumber, printSigned, printNorm } from 'components/ClinicalReport/copy';
 import { formatMmPx } from 'components/TracingToolbar/CalibrationDialog';
 // The practice identity is the clinical report's, read back here so every
 // printed sheet this app produces is signed to the same standard.
@@ -1138,7 +1137,9 @@ export default class TreatmentSimulation extends React.PureComponent<Props, Stat
                     </th>
                     <th className={classes.col_norm}>
                       Norm
-                      <span className={classes.th_sub}>mean ± SD</span>
+                      <span className={classes.th_sub}>
+                        mean ± SD, or the author's range
+                      </span>
                     </th>
                   </tr>
                 </thead>
@@ -1191,13 +1192,6 @@ export default class TreatmentSimulation extends React.PureComponent<Props, Stat
                 here. The full set for the <em>current</em> tracing is in Summary.
               </p>
             ) : null}
-            <p className={classes.footnote}>
-              Also absent, and not because of this tracing:{' '}
-              {NOT_INTERPRETED.join(' and ')}. Both are defined by an analysis
-              module but interpreted by none, so this app reports them nowhere —
-              and this view will not compute them behind the analyses’ back to fill
-              the gap.
-            </p>
             <p className={classes.footnote}>
               Every value is computed by the same code path as the Summary dialog
               and the printed report — the analysis modules evaluated against the
@@ -1279,7 +1273,7 @@ export default class TreatmentSimulation extends React.PureComponent<Props, Stat
         </td>
         <td className={classes.cell_norm}>
           {norm !== null
-            ? `${printNumber(norm.mean)} ± ${printNumber((norm.max - norm.min) / 2)}`
+            ? printNorm(norm.mean, norm.min, norm.max, norm.band)
             : '—'}
         </td>
       </tr>

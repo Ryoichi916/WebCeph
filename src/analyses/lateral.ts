@@ -41,12 +41,12 @@ export const LATERAL_ANALYSES: LateralAnalysisEntry[] = [
   },
   {
     id: 'steiner', name: 'Steiner',
-    focus: 'SNA · SNB · ANB skeletal relations',
+    focus: 'Skeletal, dental & chin relations to S-N',
     analysis: steiner,
   },
   {
     id: 'tweed', name: 'Tweed',
-    focus: 'FMA · FMIA · IMPA diagnostic triangle',
+    focus: 'FMA · FMIA · IMPA triangle & Y axis',
     analysis: tweed,
   },
   {
@@ -56,17 +56,17 @@ export const LATERAL_ANALYSES: LateralAnalysisEntry[] = [
   },
   {
     id: 'bjork', name: 'Björk',
-    focus: 'Growth direction & jaw rotation',
+    focus: 'Posterior angles, gonial split & sum',
     analysis: bjork,
   },
   {
     id: 'jarabak', name: 'Jarabak',
-    focus: 'Posterior angles & growth ratio',
+    focus: 'Growth ratio & facial heights',
     analysis: jarabak,
   },
   {
     id: 'dental', name: 'Dental',
-    focus: 'U1 · IMPA · interincisal relations',
+    focus: 'Bite, incisor inclination & position',
     analysis: dental,
   },
   {

@@ -5,7 +5,9 @@
  * section and the findings overview read identically.
  */
 
-import { formatNumber, formatSigned } from 'components/AnalysisResultsViewer';
+import {
+  formatNumber, formatSigned, formatNorm, formatDeviation,
+} from 'components/AnalysisResultsViewer';
 
 /**
  * Replaces the ASCII hyphen-minus with the typographic minus sign (U+2212),
@@ -23,6 +25,21 @@ export const printNumber = (n: number): string => minusSign(formatNumber(n));
 
 /** A signed deviation as printed on paper: "+2.6" / "−8.3", aligned widths. */
 export const printSigned = (n: number): string => minusSign(formatSigned(n));
+
+/**
+ * A component's norm as printed on paper — "32.0 ± 5.0" for a mean ± 1 SD
+ * band, "62.0–65.0" for a published range, an em dash when the app states no
+ * norm. Same source of truth as the Summary dialog, with the paper's minus.
+ */
+export const printNorm = (
+  mean: number, min: number, max: number, band?: NormBand,
+): string => minusSign(formatNorm(mean, min, max, band));
+
+/** A component's deviation as printed on paper (see `formatDeviation`). */
+export const printDeviation = (
+  value: number, mean: number, min: number, max: number,
+  unit: string, band?: NormBand,
+): string => minusSign(formatDeviation(value, mean, min, max, unit, band));
 
 /** Landmark symbols listed inline before the list is abbreviated. */
 const MAX_SYMBOLS = 6;

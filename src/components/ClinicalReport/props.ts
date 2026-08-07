@@ -39,6 +39,14 @@ export interface StateProps {
 }
 
 export interface DispatchProps {
+  /**
+   * Plots the named landmarks if they are not placed yet — the same completion
+   * pass the analysis switch runs, invoked by the report for the *union* of
+   * every analysis it prints. Without it, "All analyses" reported whichever
+   * analyses happened to share the open analysis' landmarks and quietly
+   * truncated the rest (see `index.tsx#ensureLandmarksForAllAnalyses`).
+   */
+  onPlotMissingLandmarks(symbols: string[]): any;
 }
 
 export type ConnectableProps = StateProps & DispatchProps;
