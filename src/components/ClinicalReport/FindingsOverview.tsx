@@ -81,6 +81,16 @@ const FindingsOverview = (
       <span className={classes.ov_findings}>Headline findings</span>
       <span className={classes.ov_count}>Measured</span>
     </div>
+    {/* The key to the marker, immediately under the head — where a reader meets
+        the first marked finding, not 700px below it at the foot of the page. */}
+    {Object.keys(divergentCategories).length > 0 ? (
+      <div className={classes.ov_key}>
+        <span className={classes.ov_differs}>differs</span>
+        marks a finding the analyses do not agree on; the values behind each
+        reading are set side by side in “Where the analyses differ” below. It is
+        not a comment on the finding itself.
+      </div>
+    ) : null}
     {sections.map(({ entry, evaluation }) => {
       const findings = summarize(evaluation.results);
       const shown = findings.slice(0, MAX_FINDINGS);
@@ -97,12 +107,16 @@ const FindingsOverview = (
                 <span key={category} className={classes.ov_pair}>
                   <span className={classes.ov_cat}>
                     {mapCategoryToString(category) || '—'}
+                    {/* A word, not "≠". Set between a finding and its verdict,
+                        the sign read as negation — "Skeletal profile ≠ Normal",
+                        i.e. *not* normal — the exact inverse of what it means,
+                        and its key was at the foot of the page. */}
                     {differs ? (
                       <span
                         className={classes.ov_differs}
-                        title="This category differs between analyses"
+                        title="The analyses on this sheet do not agree on this finding — see “Where the analyses differ”"
                       >
-                        ≠
+                        differs
                       </span>
                     ) : null}
                   </span>

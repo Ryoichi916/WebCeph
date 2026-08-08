@@ -558,13 +558,26 @@
   // a 700px column with nothing above or below it, and opening the disclosure
   // re-centred the whole block under the reader's eye. Level with the top edge
   // of the film it reads as the figure's caption, and it grows downwards.
+  // 300px, not 380: the film is height-bound (it keeps the frame's aspect, and
+  // at this viewport it is already as large as that aspect allows), so every
+  // pixel this column does not need is a pixel the change table can have — and
+  // this column needs four lines and a disclosure. At 380 the rail beside it was
+  // wrapping "Mandibular plane to S-N" onto three lines while this column
+  // carried a 380px band of nothing under its last line.
+  //
+  // Stretched to the film's height with a hairline down its left edge: it is the
+  // figure's caption column, and the whole account of how the comparison is to
+  // be read opens into it (see `renderTableNotes`) — 250 words that used to be
+  // set as 8pt footnotes at the bottom of the 400px data rail. Bounded and
+  // scrollable, so opening it can never push the film out of the frame.
   .legend {
-    flex: 0 1 380px;
-    align-self: flex-start;
+    flex: 0 1 300px;
+    align-self: stretch;
     min-width: 0;
     max-height: 100%;
     overflow-y: auto;
-    padding: 2px 0 8px;
+    padding: 2px 0 8px 16px;
+    border-left: 1px solid $canvas-border;
   }
 }
 
@@ -577,6 +590,15 @@
   min-height: 0;
   background: $bg-surface;
   border-left: 1px solid $border;
+}
+
+// Wide enough for the measurement names not to wrap: the table is what this
+// view is read from, and the width comes out of the legend column beside the
+// figure (see the breakpoint there), never out of the film.
+@media screen and (min-width: 1360px) {
+  .panel {
+    flex: 0 0 500px;
+  }
 }
 
 .panel_head {
@@ -967,8 +989,15 @@
     flex: 0 0 auto;
     align-self: flex-start;
     // Keep in step with PRINT_FIGURE_HEIGHT_MM in index.tsx, which sizes the
-    // figure's annotation type from it.
-    height: 112mm;
+    // figure's annotation type from it. 142mm, not 112: the change table now
+    // starts its own sheet (see `.panel` below), so the first sheet is the
+    // figure's — and a printed radiograph is worth every millimetre of it. The
+    // ceiling is the legend beside it: the frame is taller than it is wide, so
+    // every millimetre of figure height costs ~0.74 mm of legend width, and the
+    // explanation has to stay a readable measure (~50 characters). At 142mm the
+    // film is a third larger than it was and the two columns end together, near
+    // the foot of the sheet, instead of two thirds up it.
+    height: 142mm;
     border: 1px solid $border;
     background: #FFFFFF;
     page-break-inside: avoid;
@@ -1038,15 +1067,39 @@
   .legend_note { color: $text-secondary; }
   .legend_note__warn { color: $warn; }
 
+  // The change table starts a sheet of its own.
+  //
+  // Not decoration: `break-after: avoid` on the section header is not honoured
+  // by Chrome in this position, and left to flow, sheet 1 ended with the words
+  // "Change · T2 − T1 · 32 comparable measurements over 5 mo" and nothing under
+  // them — the table began on sheet 2 regardless. A section header on one sheet
+  // and its numbers on the next is worse than a sheet break, and sheet 1 is a
+  // complete document in itself: the registered figure, what was held fixed, and
+  // how the comparison is to be read.
   .panel {
     flex: none;
     display: block;
     border-left: none;
     background: #FFFFFF;
+    page-break-before: always;
+    break-before: page;
   }
 
+  // The section header travels with the first rows it heads. Left breakable, it
+  // printed "Change · T2 − T1 · 32 comparable measurements over 5 mo" at the
+  // foot of sheet 1 with nothing under it — the table began on sheet 2 and 45 %
+  // of the first sheet was white.
   .panel_head {
     padding: 14px 0 6px;
+    page-break-after: avoid;
+    break-after: avoid;
+  }
+
+  // …and the column heads never print without at least the first group under
+  // them, for the same reason.
+  .table thead {
+    page-break-after: avoid;
+    break-after: avoid;
   }
 
   .panel_scroll {

@@ -3,6 +3,8 @@ import * as ReactDOM from 'react-dom';
 
 import * as cx from 'classnames';
 
+import { Helmet } from 'react-helmet';
+
 import { saveAs } from 'file-saver';
 
 import IconPrint from 'material-ui/svg-icons/action/print';
@@ -64,6 +66,9 @@ import {
   parseCaptureDate,
 } from 'utils/records';
 import { formatAgeFull, formatSexFull } from 'utils/patient';
+// A saved PDF is named after the document title, so this sheet titles itself
+// from the patient and the pair rather than from the image's file name.
+import { printDocumentTitle } from 'utils/printTitle';
 
 import {
   renderSuperimpositionSnapshot,
@@ -85,7 +90,7 @@ const BODY_OPEN_CLASS = 'superimposition-open';
  * from this constant rather than from the on-screen layout, which is a
  * different size and is not re-measured while Chrome paginates.
  */
-const PRINT_FIGURE_HEIGHT_MM = 112;
+const PRINT_FIGURE_HEIGHT_MM = 142;
 const PRINT_FIGURE_HEIGHT_PX = (PRINT_FIGURE_HEIGHT_MM / 25.4) * 96;
 
 /** Rendered size of annotation labels, in CSS pixels, on screen and on paper. */
@@ -172,6 +177,47 @@ const uncalibratedFilms = (t1: TimepointRecord, t2: TimepointRecord): string => 
     return `${missing[0]} is not calibrated`;
   }
   return 'a measurement is missing a scale on one film';
+};
+
+/**
+ * Which measurement kinds carry a Δ/max bar, and what each bar is drawn
+ * against. **The single source of truth for both the bars and the sentence that
+ * explains them**: the row renderer used to draw a bar for any kind present in
+ * `scales` while the footnote listed only two of them, so the ratio bucket got
+ * bars against a reference the footnote never named — a −3.0 % change drawn
+ * longer than a +1.7 mm one, under a sentence that mentioned only degrees and
+ * millimetres.
+ *
+ * The ratio bucket is excluded rather than given a third clause, because it is
+ * not one kind: `measurementKind` puts a percentage (S-Go/N-Me, 72.8 %) and a
+ * dimensionless ratio (Holdaway, 0.3) in the same bucket, and a bar comparing
+ * those two against one reference length would be a comparison of unlike
+ * quantities. Those rows keep their numbers and lose only the reading aid.
+ */
+const BAR_KINDS: Array<{ kind: string; name: string; unit: string }> = [
+  { kind: 'angular', name: 'angular', unit: '°' },
+  { kind: 'linear', name: 'linear', unit: ' mm' },
+];
+
+/** True when this kind's changes are drawn as bars (see `BAR_KINDS`). */
+const hasBars = (kind: string): boolean => (
+  BAR_KINDS.filter((k) => k.kind === kind).length > 0
+);
+
+/** One clause per kind that carries bars: "angular, against 5.0°". */
+const barKindClauses = (scales: { [kind: string]: BarScale }): string[] => {
+  const clauses: string[] = [];
+  BAR_KINDS.forEach(({ kind, name, unit }) => {
+    // The same test the row renderer draws a bar under, `max > 0` included: two
+    // tracings that agree to the decimal give a kind a reference length of
+    // zero, and the clause then read "angular, against 0.0°" under a column
+    // with no bars in it at all.
+    const scale = scales[kind];
+    if (scale !== undefined && scale.count > 1 && scale.max > 0) {
+      clauses.push(`${name}, against ${printNumber(scale.max)}${unit}`);
+    }
+  });
+  return clauses;
 };
 
 /**
@@ -334,6 +380,20 @@ export default class Superimposition extends React.PureComponent<Props, State> {
         aria-modal="true"
         aria-label="Superimposition"
       >
+        {/* A saved PDF is named after `document.title`, which the app sets from
+            the workspace — the image's file name. Held only while this view is
+            mounted; react-helmet restores the app's title on close. */}
+        <Helmet
+          title={printDocumentTitle(
+            this.props.patient,
+            'Cephalometric superimposition',
+            pair !== null
+              ? [
+                `${shortLabel(pair.t1, 'T1')} → ${shortLabel(pair.t2, 'T2')}`,
+              ]
+              : [],
+          )}
+        />
         {this.renderPrintHead(pair)}
 
         <div className={classes.chrome}>
@@ -579,7 +639,7 @@ export default class Superimposition extends React.PureComponent<Props, State> {
                 </div>
               </div>
             )}
-            {this.renderLegend(t1, t2, registration, interval)}
+            {this.renderLegend(t1, t2, registration, interval, changes)}
           </div>
           {this.renderChanges(changes, t1, t2, interval)}
         </div>
@@ -885,6 +945,7 @@ export default class Superimposition extends React.PureComponent<Props, State> {
     t2: TimepointRecord,
     registration: ReturnType<typeof buildRegistration>,
     interval: string | null,
+    changes: ChangeTable,
   ) {
     const { basis } = registration;
     const rotation = printSigned(registration.rotationDeg);
@@ -945,8 +1006,83 @@ export default class Superimposition extends React.PureComponent<Props, State> {
             tracings are the plotted landmarks — nothing here is predicted or
             simulated.
           </p>
+          {/* How the Change table is to be read. It is stated here, in the
+              column the figure leaves free, rather than under the table: five
+              stacked paragraphs of 8pt grey at the foot of a 400px rail were
+              longer than several of the table's own groups. On paper this
+              disclosure prints open (see AboutDisclosure), so a filed sheet
+              still carries every word. */}
+          {this.renderTableNotes(changes)}
         </AboutDisclosure>
       </div>
+    );
+  }
+
+  /**
+   * How the Change table is to be read: what the Δ/max bars are drawn against,
+   * what is missing from the table and why, and the two things a change figure
+   * is not (registration-dependent, or comparable with a norm).
+   *
+   * Rendered inside the legend's "About this view" disclosure, not under the
+   * table: the rail is 400px wide and these were five stacked paragraphs of
+   * 8pt grey at the foot of it, longer than several of the table's own groups,
+   * while the column beside the figure sat empty. The print stylesheet expands
+   * every disclosure, so the printed sheet is unchanged.
+   */
+  private renderTableNotes(changes: ChangeTable) {
+    if (changes.rowCount === 0) {
+      return null;
+    }
+    const barKinds = barKindClauses(changes.scales);
+    return (
+      <React.Fragment>
+        {changes.oneSidedCount > 0 ? (
+          <p>
+            Another {changes.oneSidedCount}{' '}
+            {changes.oneSidedCount === 1 ? 'measurement is' : 'measurements are'}{' '}
+            omitted from the table: only one of the two tracings yields{' '}
+            {changes.oneSidedCount === 1 ? 'it' : 'them'}, so there is no change
+            to report. Plot the missing landmarks on that timepoint.
+          </p>
+        ) : null}
+        {changes.neitherCount > 0 ? (
+          <p>
+            {measurementsAre(changes.neitherCount)} absent from the table
+            entirely — neither film can compute{' '}
+            {changes.neitherCount === 1 ? 'it' : 'them'}
+            {changes.neitherSymbols.length > 0
+              ? ` (${formatSymbolList(changes.neitherSymbols)})`
+              : ''}
+            {changes.missingBothSymbols.length > 0
+              ? `. ${landmarkCount(changes.missingBothSymbols.length)} ` +
+                `${changes.missingBothSymbols.length === 1 ? 'is' : 'are'} ` +
+                'unplaced on both tracings ' +
+                `(${formatSymbolList(changes.missingBothSymbols)}); ` +
+                'plotting them on each film unlocks those analyses'
+              : ''}
+            .
+          </p>
+        ) : null}
+        {barKinds.length > 0 ? (
+          <p>
+            Δ/max compares each change with the largest change of its own kind
+            in the table ({barKinds.join('; ')}) — right of the axis for an
+            increase, left for a decrease. Kinds are never drawn against each
+            other, and a kind with a single row gets no bar, because it would
+            have nothing to compare against.
+          </p>
+        ) : null}
+        <p>
+          The values are properties of each tracing on its own, so they do not
+          change with the registration: switching the basis rearranges the
+          overlay, never the numbers.
+        </p>
+        <p>
+          Norms are not shown: a superimposition reports change, and a change
+          has no norm. Read each value against its analysis in the Summary or
+          the clinical report.
+        </p>
+      </React.Fragment>
     );
   }
 
@@ -956,23 +1092,19 @@ export default class Superimposition extends React.PureComponent<Props, State> {
     t2: TimepointRecord,
     interval: string | null,
   ) {
-    const angular = changes.scales['angular'];
-    const linear = changes.scales['linear'];
-    const barKinds: string[] = [];
-    if (angular !== undefined && angular.count > 1) {
-      barKinds.push(`angular, against ${printNumber(angular.max)}°`);
-    }
-    if (linear !== undefined && linear.count > 1) {
-      barKinds.push(`linear, against ${printNumber(linear.max)} mm`);
-    }
-
     return (
       <div className={classes.panel}>
         <div className={classes.panel_head}>
           <span className={classes.panel_title}>Change</span>
+          {/* "Comparable", because a second count — the measurements only one
+              tracing yields — is stated in the notes beside the figure. The
+              two are the same number on this pair of films, and an unqualified
+              "32 measurements" in both places read as a contradiction. */}
           <span className={classes.panel_sub}>
             T2 − T1 · {changes.rowCount}{' '}
-            {changes.rowCount === 1 ? 'measurement' : 'measurements'}
+            {changes.rowCount === 1
+              ? 'comparable measurement'
+              : 'comparable measurements'}
             {/* Print-only: on screen the interval is in the controls row. */}
             {interval !== null ? (
               <span className={classes.print_only}>{` over ${interval}`}</span>
@@ -1019,6 +1151,12 @@ export default class Superimposition extends React.PureComponent<Props, State> {
             </table>
           )}
 
+          {/* Two notes only, and both change how the rows above them must be
+              read: the reproducibility floor that dims a row, and the scale the
+              millimetre rows are waiting on. Everything else the table needs
+              explaining — what is omitted, what Δ/max is drawn against, that a
+              change has no norm — is stated in the notes beside the figure (see
+              `renderTableNotes`), which is where the free column is. */}
           <div className={classes.footnotes}>
             {changes.rowCount > 0 ? (
               <p className={classes.footnote}>
@@ -1035,33 +1173,6 @@ export default class Superimposition extends React.PureComponent<Props, State> {
                 .
               </p>
             ) : null}
-            {changes.oneSidedCount > 0 ? (
-              <p className={classes.footnote}>
-                {changes.oneSidedCount}{' '}
-                {changes.oneSidedCount === 1 ? 'measurement is' : 'measurements are'}{' '}
-                omitted: only one of the two tracings yields{' '}
-                {changes.oneSidedCount === 1 ? 'it' : 'them'}, so there is no
-                change to report. Plot the missing landmarks on that timepoint.
-              </p>
-            ) : null}
-            {changes.neitherCount > 0 ? (
-              <p className={classes.footnote}>
-                {measurementsAre(changes.neitherCount)} absent from this table
-                entirely — neither film can compute{' '}
-                {changes.neitherCount === 1 ? 'it' : 'them'}
-                {changes.neitherSymbols.length > 0
-                  ? ` (${formatSymbolList(changes.neitherSymbols)})`
-                  : ''}
-                {changes.missingBothSymbols.length > 0
-                  ? `. ${landmarkCount(changes.missingBothSymbols.length)} ` +
-                    `${changes.missingBothSymbols.length === 1 ? 'is' : 'are'} ` +
-                    'unplaced on both tracings ' +
-                    `(${formatSymbolList(changes.missingBothSymbols)}); ` +
-                    'plotting them on each film unlocks those analyses'
-                  : ''}
-                .
-              </p>
-            ) : null}
             {changes.isLinearPendingScale ? (
               <p className={classes.footnote}>
                 Linear (mm) measurements are omitted: {uncalibratedFilms(t1, t2)},
@@ -1070,25 +1181,6 @@ export default class Superimposition extends React.PureComponent<Props, State> {
                 scale-independent and unaffected.
               </p>
             ) : null}
-            {barKinds.length > 0 ? (
-              <p className={classes.footnote}>
-                Δ/max compares each change with the largest change of its own
-                kind in this table ({barKinds.join('; ')}) — right of the axis
-                for an increase, left for a decrease. Angular and linear bars
-                are never drawn against each other, and a kind with a single row
-                gets no bar, because it would have nothing to compare against.
-              </p>
-            ) : null}
-            <p className={classes.footnote}>
-              These values are properties of each tracing on its own, so they do
-              not change with the registration: switching the basis rearranges
-              the overlay, never the numbers.
-            </p>
-            <p className={classes.footnote}>
-              Norms are not shown: a superimposition reports change, and a
-              change has no norm. Read each value against its analysis in the
-              Summary or the clinical report.
-            </p>
           </div>
         </div>
       </div>
@@ -1103,8 +1195,10 @@ export default class Superimposition extends React.PureComponent<Props, State> {
     // table — a reading aid, never a clinical threshold. A kind with a single
     // row has nothing to compare against, so it gets no bar rather than a
     // full-width one that would read as a maximal change; and a change of zero
-    // gets no mark at all rather than a stub that reads as dust.
-    const scale = scales[row.kind];
+    // gets no mark at all rather than a stub that reads as dust. Which kinds are
+    // drawn at all is `BAR_KINDS`, the same list the explanation is written
+    // from — so a bar can never appear against a reference nothing names.
+    const scale = hasBars(row.kind) ? scales[row.kind] : undefined;
     const fraction = scale !== undefined && scale.max > 0 && scale.count > 1
       ? Math.min(1, Math.abs(row.change) / scale.max)
       : 0;

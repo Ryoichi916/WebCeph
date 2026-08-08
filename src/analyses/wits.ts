@@ -4,6 +4,8 @@ import {
   posteriorAnteriorFacialHeightRatio,
   upperAnteriorFaceHeightShare,
   anteriorFacialHeight,
+  posteriorFacialHeight,
+  upperAnteriorFacialHeight,
   lowerAnteriorFacialHeight,
 } from 'analyses/landmarks/distances/skeletal';
 
@@ -35,9 +37,12 @@ import { defaultInterpretAnalysis, NO_NORM, RANGE } from 'analyses/helpers';
  *    rather than means with standard deviations, so both are declared with
  *    `RANGE` and carry no star scale — and both are unitless, so they survive
  *    on an uncalibrated film where the millimetre heights below do not.
- *  - **Two absolute heights**, total and lower anterior, reported *without* a
- *    norm: their normal millimetre values are age- and sex-specific and this
- *    app will not print one adult figure beside a growing patient's film.
+ *  - **The four absolute heights** the two proportions are built from — total
+ *    (N-Me), posterior (S-Go), upper anterior (N-ANS) and lower anterior
+ *    (ANS-Me) — reported *without* a norm: their normal millimetre values are
+ *    age- and sex-specific and this app will not print one adult figure beside
+ *    a growing patient's film. They are tabulated so each ratio above can be
+ *    checked against the lengths it was actually taken from.
  *
  * A true McNamara appraisal would belong here too, but it is built on
  * effective jaw lengths measured from **Condylion** (Co-A, Co-Gn), and this
@@ -114,6 +119,26 @@ const components: AnalysisComponent[] = [
     // height below so the proportion above can be checked against the two
     // lengths it is made of.
     landmark: anteriorFacialHeight,
+    ...NO_NORM,
+  },
+  {
+    // Posterior facial height (S-Go) — the numerator of the S-Go/N-Me ratio
+    // above. It is *already computed* on this screen (the ratio cannot be had
+    // without it) and the stepper prints its millimetres, but it was not a
+    // component, so the one surface a clinician reads the ratio on never showed
+    // the length it was taken from: the section promised the proportion "can be
+    // checked against the two lengths it is made of" while tabulating only one
+    // of them. Declared exactly as Jarabak's section declares the same
+    // measurement — no norm, because a normal S-Go in millimetres is age- and
+    // sex-specific.
+    landmark: posteriorFacialHeight,
+    ...NO_NORM,
+  },
+  {
+    // Upper anterior facial height (N-ANS) — likewise the numerator of the
+    // N-ANS/N-Me share above, measured and shown in the stepper but previously
+    // absent from the table.
+    landmark: upperAnteriorFacialHeight,
     ...NO_NORM,
   },
   {

@@ -113,9 +113,20 @@ export const getDefaultTimepoint = (existingImageCount: number): string =>
   `T${existingImageCount + 1}`;
 
 /**
- * A capture date for display: locale-independent `YYYY/MM/DD` (matching the
- * patient picker), or null when the date is missing or malformed — never a
- * guessed or silently substituted date.
+ * A date for display, or null when it is missing or malformed — never a guessed
+ * or silently substituted date.
+ *
+ * **One format everywhere: ISO `YYYY-MM-DD`.** This is the format the report
+ * already printed the date of birth in, it is the format the value is stored in,
+ * and it is the only one that cannot be read as either 08/04 or 04/08 by a
+ * clinician reading a chart in a country other than the one the film was taken
+ * in. The dashboard, the report header, the film-date chips and the record
+ * details all read from here, so the same day can never appear as `1998/04/12`
+ * on one surface and `1998-04-12` on the next.
+ *
+ * (The native date *input* still renders in the browser's own locale — that is
+ * the platform's control, not ours; the echo underneath it is what states the
+ * date unambiguously.)
  */
 export const formatCaptureDate = (
   captureDate: string | null | undefined,
@@ -127,8 +138,15 @@ export const formatCaptureDate = (
   if (match === null) {
     return null;
   }
-  return `${match[1]}/${match[2]}/${match[3]}`;
+  return `${match[1]}-${match[2]}-${match[3]}`;
 };
+
+/**
+ * @see formatCaptureDate — the same formatter, named for the dates that are not
+ * capture dates (a patient's date of birth). One function, so no surface can
+ * drift into a second date format.
+ */
+export const formatDisplayDate = formatCaptureDate;
 
 /**
  * A capture date as a local `Date`, or null when missing or malformed.

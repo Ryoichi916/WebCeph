@@ -3,6 +3,8 @@ import * as ReactDOM from 'react-dom';
 
 import * as cx from 'classnames';
 
+import { Helmet } from 'react-helmet';
+
 import { saveAs } from 'file-saver';
 
 import IconClose from 'material-ui/svg-icons/navigation/close';
@@ -59,7 +61,7 @@ import {
 import AboutDisclosure from 'components/AboutDisclosure';
 
 // Number formatting and unit suffixes are the app's, not this view's.
-import { getUnitSuffix } from 'components/AnalysisResultsViewer';
+import { getUnitSuffix, roundToDisplay } from 'components/AnalysisResultsViewer';
 import { printNumber, printSigned, printNorm } from 'components/ClinicalReport/copy';
 import { formatMmPx } from 'components/TracingToolbar/CalibrationDialog';
 // The practice identity is the clinical report's, read back here so every
@@ -67,6 +69,9 @@ import { formatMmPx } from 'components/TracingToolbar/CalibrationDialog';
 import { readLetterhead, formatClinicianLine } from 'components/ClinicalReport/letterhead';
 
 import { formatCaptureDate, parseCaptureDate } from 'utils/records';
+// A saved PDF is named after the document title, so this sheet titles itself
+// from the patient and the film rather than from the image's file name.
+import { printDocumentTitle } from 'utils/printTitle';
 import { formatAgeFull, formatSexFull } from 'utils/patient';
 import { renderSuperimpositionSnapshot } from 'utils/superimpositionSnapshot';
 
@@ -263,6 +268,16 @@ export default class TreatmentSimulation extends React.PureComponent<Props, Stat
         aria-modal="true"
         aria-label="Treatment simulation"
       >
+        {/* A saved PDF is named after `document.title`, which the app sets from
+            the workspace — the image's file name. Held only while this view is
+            mounted; react-helmet restores the app's title on close. */}
+        <Helmet
+          title={printDocumentTitle(
+            this.props.patient,
+            'Treatment simulation',
+            [this.filmLabel()],
+          )}
+        />
         {this.renderPrintHead()}
 
         <div className={classes.chrome}>
@@ -945,12 +960,22 @@ export default class TreatmentSimulation extends React.PureComponent<Props, Stat
     // What the control moves, and the plane its millimetres are measured along
     // — rendered at rest as well as engaged, so the panel is readable before it
     // is touched and so touching a slider cannot shift everything below it.
+    //
+    // Two clauses: the short one under the control (one line, which is all a
+    // slider is owed here — the plane is *named*, and the mm/px calibration and
+    // the "measured along the plane named under each control" statement are
+    // under the film), the full one on the tooltip.
     const planeClause = reference === null
       ? ''
       : (spec.id === 'impaction'
         ? ` Impaction runs superiorly ${reference.upName}; downgraft inferiorly along the same axis.`
         : ` Measured along the ${reference.name} (${reference.from}).`);
-    const help = `${spec.short}${planeClause}`;
+    const planeHelp = reference === null
+      ? ''
+      : (spec.id === 'impaction'
+        ? ` Superiorly ${reference.upName}.`
+        : ` Along the ${reference.name}.`);
+    const help = `${spec.short}${planeHelp}`;
     // The tooltip carries the full statement, which is longer than a line.
     const title = isAvailable
       ? `${spec.description}${planeClause}`
@@ -1063,6 +1088,12 @@ export default class TreatmentSimulation extends React.PureComponent<Props, Stat
               under it; individual response varies by roughly ±0.3, so read the
               simulated profile as a direction, not a measurement.
             </p>
+            {/* The ratio table lives *inside* the disclosure it belongs to.
+                Rendered inline, ten rows of it sat under a collapsed "About
+                these ratios" heading and pushed Key measurements — the reason
+                this view exists — below the fold, so five sliders were served
+                by two thirds of a panel of prose. Nothing is lost: the numbers
+                are one click away on screen and print open on paper. */}
             <AboutDisclosure label="About these ratios">
               <p>
                 The ratios are means from the orthognathic and
@@ -1071,22 +1102,23 @@ export default class TreatmentSimulation extends React.PureComponent<Props, Stat
                 relapse are not modelled. Glabella and soft-tissue nasion are
                 held — nothing here moves the cranium or the nasal bones.
               </p>
+              {rows.length > 0 ? (
+                <ul className={classes.soft_list}>
+                  {rows.map(({ ratio, drivers }) => (
+                    <li key={ratio.symbol} className={classes.soft_row}>
+                      <span className={classes.soft_symbol}>{ratio.symbol}</span>
+                      <span className={classes.soft_name}>{ratio.name}</span>
+                      <span className={classes.soft_ratio}>
+                        {drivers
+                          .map((d) => `${d.value.toFixed(1)} × ${d.driver}`)
+                          .join(' + ')}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
             </AboutDisclosure>
-            {rows.length > 0 ? (
-              <ul className={classes.soft_list}>
-                {rows.map(({ ratio, drivers }) => (
-                  <li key={ratio.symbol} className={classes.soft_row}>
-                    <span className={classes.soft_symbol}>{ratio.symbol}</span>
-                    <span className={classes.soft_name}>{ratio.name}</span>
-                    <span className={classes.soft_ratio}>
-                      {drivers
-                        .map((d) => `${d.value.toFixed(1)} × ${d.driver}`)
-                        .join(' + ')}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
+            {rows.length === 0 ? (
               <p className={classes.soft_empty}>
                 {isPlanEmpty(plan)
                   ? 'No movement is being passed to the soft tissue yet — ' +
@@ -1095,8 +1127,14 @@ export default class TreatmentSimulation extends React.PureComponent<Props, Stat
                     'set above have a ratio of zero for every point in the ' +
                     'table.'}
               </p>
-            )}
-            {this.renderProfileProvenance()}
+            ) : null}
+            {/* Only once soft tissue is actually being driven. The amber "the
+                profile curve is a silhouette inferred from the skeletal
+                profile" caution used to print in the zero state as well —
+                the panel's most emphatic colour, spent on a caveat about a
+                displacement that was not happening yet, directly under "no
+                movement is being passed to the soft tissue". */}
+            {rows.length > 0 ? this.renderProfileProvenance() : null}
           </React.Fragment>
         ) : (
           <React.Fragment>
@@ -1284,7 +1322,16 @@ export default class TreatmentSimulation extends React.PureComponent<Props, Stat
       isCorrected, isWorsened, isSimulatedImplausible,
     } = entry;
     const unit = getUnitSuffix(row.landmark);
-    const hasChange = Math.abs(row.change) >= 0.05;
+    // The change is derived from the values **as printed**, not from the full
+    // precision behind them: at one decimal, a true change of 0.04 printed
+    // CURRENT −0.9, SIMULATED −0.8 and CHANGE "—", three cells of one row
+    // contradicting each other. Rounding the two columns first makes the row
+    // arithmetic true on the face of it — simulated − current — and "—" then
+    // means only what it says: the two printed values are the same.
+    const shownChange = roundToDisplay(
+      roundToDisplay(row.t2) - roundToDisplay(row.t1),
+    );
+    const hasChange = Math.abs(shownChange) >= 0.05;
     // Green is reserved for a real correction — out of the norm band, then in
     // it. Tinting a value green merely because it happens to sit inside its
     // band, as it already did before the plan, would tell a clinician the plan
@@ -1336,7 +1383,7 @@ export default class TreatmentSimulation extends React.PureComponent<Props, Stat
           ) : null}
         </td>
         <td className={cx(classes.cell_num, classes.cell_change)}>
-          {hasChange ? `${printSigned(row.change)}${unit}` : '—'}
+          {hasChange ? `${printSigned(shownChange)}${unit}` : '—'}
         </td>
         <td className={classes.cell_norm}>
           {norm !== null

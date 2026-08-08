@@ -598,11 +598,38 @@
   color: $text-tertiary;
 }
 
-// Marks a category the analyses disagree on, resolved in the note below.
+// Marks a finding the analyses disagree on, decoded by `.ov_key` directly under
+// the column heads. A word in a bordered tag, never the bare "≠" this used to
+// be: between a finding's name and its verdict the sign read as negation
+// ("Skeletal profile ≠ Normal" = not normal), which is the inverse of what it
+// says, and nothing near it explained the mark.
 .ov_differs {
-  margin-left: 3px;
+  display: inline-block;
+  margin: 0 4px 0 5px;
+  font-size: 7.5px;
   font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .1em;
   color: $warn;
+  vertical-align: 1.5px;
+}
+
+// The key to that tag, immediately under the column heads: it used to be one
+// clause at the end of the paragraph closing the "Where the analyses differ"
+// table, ~700px below the first mark it explained.
+.ov_key {
+  padding: 5px 12px 6px;
+  border-top: 1px solid $border;
+  border-bottom: 1px solid $border;
+  background: $warn-bg;
+  font-size: 9.5px;
+  line-height: 1.5;
+  color: #7A4A00;
+
+  .ov_differs {
+    margin: 0 4px 0 0;
+    font-size: 8px;
+  }
 }
 
 // ---- Caveats that change how the numbers must be read -----------------------
@@ -634,13 +661,22 @@
 
 // ---- Where the analyses differ (cross-analysis disagreement) ----------------
 
+// Breakable **between rows**, exactly as the summary table above it is (see
+// `.ov_row`). Kept whole, this block is ~90 mm tall and could not share the
+// sheet the summary of findings ends on: it took a sheet of its own, left 60 % of
+// it white and pushed the whole report one side longer.
 .diverge {
   margin-top: 10px;
   padding: 9px 12px 10px;
   border: 1px solid $border;
   border-radius: 6px;
   background: #FAFBFC;
-  page-break-inside: avoid;
+}
+
+// The heading travels with its first row.
+.diverge_head_keep {
+  page-break-after: avoid;
+  break-after: avoid;
 }
 
 .diverge_head {
@@ -658,6 +694,9 @@
   align-items: baseline;
   gap: 10px;
   padding: 3px 0;
+  // A row may not be cut in half, even though the block may break between rows.
+  page-break-inside: avoid;
+  break-inside: avoid;
 
   + .diverge_row {
     border-top: 1px dotted $border;
@@ -1308,29 +1347,28 @@ $cont-line-height: 13px;
 // instead of a second row whose whole printed content was "norm and deviation
 // under “Skeletal profile”". Matches the Summary dialog's copy of this block
 // (see AnalysisResultsViewer/style.scss) so screen and paper agree.
+// A borrowed finding: a **sub-card**, indented and tinted, with its own left
+// rule — the same treatment the Summary dialog gives it. Printed as a plain
+// block under a 26px hairline, it sat level with the *next* measurement's row
+// (page 3 and page 6 of the combined report: "Chin prominence · Normal" level
+// with NAPog −5.8°*, amber and asterisked), and the only thing saying otherwise
+// was a 9px caption. A clinician cross-checking it against the summary page —
+// which cites Or-Po,N-Pog correctly — would read the two sheets as disagreeing.
 .also_finding {
   display: block;
-  margin-top: 8px;
-
-  // A short rule, not a full-width one: a full-width border inside the finding
-  // cell landed within a pixel or two of the row divider in the columns beside
-  // it, so the second finding read as belonging to the *next* measurement's row
-  // rather than as a second conclusion inside this cell.
-  &::before {
-    content: '';
-    display: block;
-    width: 26px;
-    margin-bottom: 5px;
-    border-top: 1px solid $border-strong;
-  }
+  margin-top: 12px;
+  padding: 5px 0 2px 8px;
+  border-left: 2px solid $border-strong;
+  background: $bg-sunken;
+  border-radius: 0 3px 3px 0;
 }
 
+// Inline in the heading: the measurement is read with the finding's name, not as
+// a 9px line floating above it.
 .also_label {
-  display: block;
-  margin-bottom: 1px;
-  font-size: 9px;
-  font-weight: 500;
-  color: $text-disabled;
+  font-size: .82em;
+  font-weight: 400;
+  color: $text-secondary;
   white-space: normal;
   overflow-wrap: anywhere;
 }
@@ -1460,6 +1498,31 @@ $cont-line-height: 13px;
   flex-direction: column;
 }
 
+// The closing block when it has a **whole side of A4 to itself** — which the
+// combined report's always does (see `NOTE_RULES_SHEET`). One sheet, one job:
+// the writing area fills it, and the certification and footer sit at the foot of
+// the page where a signature belongs, instead of four short rules and a
+// signature row at the top of an 80 %-white sheet.
+//
+// 250mm, not 273: the page area is 273mm and a flex box that measured the whole
+// of it would spill onto a fourteenth side on the first rounding error.
+.tail__own_sheet {
+  min-height: 250mm;
+  justify-content: space-between;
+
+  // Full-width rules at a writing pitch, not the two-column shorthand the
+  // flowing tail uses: there is room here for lines somebody can actually write
+  // a plan on.
+  .notes_rules {
+    column-count: 1;
+    padding-top: 10px;
+  }
+
+  .notes_rule {
+    height: 7.5mm;
+  }
+}
+
 .notes_hint {
   font-size: 9.5px;
   font-weight: 500;
@@ -1534,6 +1597,16 @@ $cont-line-height: 13px;
   .editable {
     border-bottom: none;
   }
+}
+
+// The grey prompt on the Date rule — the same treatment `.editable`'s
+// placeholder gets, because the field beside it has one and this one is filled
+// in with a pen. Screen only (see the print block).
+.sig_hint {
+  font-size: 12px;
+  font-weight: 400;
+  font-style: italic;
+  color: $text-disabled;
 }
 
 .sig_caption {
@@ -1707,10 +1780,38 @@ $cont-line-height: 13px;
     break-inside: avoid;
   }
 
+  // The signature sheet starts a sheet, deliberately. It costs no paper: the
+  // combined report's tail already landed alone on the last side — this only
+  // stops it landing alone *and* empty.
+  .tail__own_sheet {
+    page-break-before: always;
+    break-before: page;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
   // A signature is written on the rule, not in it: 30px of clearance above it
   // is screen affordance, and 4px of it per field is 12px of the paper.
   .sig_line {
     min-height: 26px;
+  }
+
+  // The screen prompt on the Date rule is an affordance, not content.
+  .sig_hint {
+    display: none;
+  }
+
+  // The borrowed-finding sub-card, tightened for paper: the tint and the left
+  // rule do the separating here, so it needs less air than it does on screen —
+  // and nine sections of it must not cost a sheet.
+  .also_finding {
+    margin-top: 8px;
+    padding: 3px 0 1px 7px;
+  }
+
+  .ov_key {
+    padding: 4px 12px 5px;
+    font-size: 9px;
   }
 
   .sig_caption {

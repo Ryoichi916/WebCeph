@@ -419,10 +419,14 @@ export interface ControlSpec {
   /** One sentence on what is actually moved, shown as the control's help text. */
   description: string;
   /**
-   * The same fact in one line, shown under *every* control at rest. The full
-   * `description` stays on the control's tooltip. A panel of five unexplained
-   * sliders whose only documentation appears once you have already moved one
-   * is not a panel a clinician can read before acting.
+   * The same fact in **one line**, shown under *every* control at rest — a panel
+   * of five unexplained sliders whose only documentation appears once you have
+   * already moved one is not a panel a clinician can read before acting.
+   *
+   * One line means one line: at the panel's width these ran to two and three
+   * each, and five of them came to a paragraph of grey between the reader and
+   * the measurements. The full `description`, and the plane the millimetres are
+   * measured along, stay on the control's tooltip.
    */
   short: string;
 }
@@ -441,9 +445,7 @@ export const SIMULATION_CONTROLS: ControlSpec[] = [
       'Translates B, Pogonion, Gnathion, Menton, Gonion and the lower ' +
       'dentition as one rigid body. Articulare is held, so the condyle stays ' +
       'in its fossa.',
-    short:
-      'Moves the whole mandible and the lower dentition as one rigid body; ' +
-      'the condyle is held in its fossa.',
+    short: 'Moves the mandible and lower dentition as one rigid body.',
   },
   {
     id: 'maxilla',
@@ -457,9 +459,7 @@ export const SIMULATION_CONTROLS: ControlSpec[] = [
     description:
       'Translates ANS, PNS, A point and the upper dentition as one rigid ' +
       'body — the Le Fort I segment.',
-    short:
-      'Moves the Le Fort I segment — ANS, PNS, A point and the upper ' +
-      'dentition — forward or back as one rigid body.',
+    short: 'Moves the Le Fort I segment forward or back as one body.',
   },
   {
     id: 'impaction',
@@ -474,9 +474,7 @@ export const SIMULATION_CONTROLS: ControlSpec[] = [
       'Moves the same segment vertically: impaction lifts it superiorly, ' +
       'downgraft lowers it inferiorly. The mandible does not autorotate — ' +
       'that is a separate movement this app does not model.',
-    short:
-      'Raises (impaction) or lowers (downgraft) the same Le Fort I segment. ' +
-      'The mandible does not autorotate.',
+    short: 'Raises or lowers the same segment; no autorotation.',
   },
   {
     id: 'u1',
@@ -490,9 +488,7 @@ export const SIMULATION_CONTROLS: ControlSpec[] = [
     description:
       'Tips the incisal edge about the U1 root apex, which is held. This is ' +
       'crown tipping, not bodily retraction, and no space closure is implied.',
-    short:
-      'Tips the upper incisal edge about its root apex — crown tipping only, ' +
-      'no bodily retraction and no space closure.',
+    short: 'Tips the upper incisal edge about its apex; tipping only.',
   },
   {
     id: 'l1',
@@ -506,8 +502,7 @@ export const SIMULATION_CONTROLS: ControlSpec[] = [
     description:
       'Tips the incisal edge about the L1 root apex, which is held. Crown ' +
       'tipping only.',
-    short:
-      'Tips the lower incisal edge about its root apex — crown tipping only.',
+    short: 'Tips the lower incisal edge about its apex; tipping only.',
   },
 ];
 

@@ -35,8 +35,8 @@ export interface RecordMetaFieldsProps {
  *
  * The capture date uses `input[type=date]`, which renders in the browser's
  * locale (US Chrome shows 08/06/2026). Every display surface in this app writes
- * dates as `YYYY/MM/DD`, so the parsed value is echoed under the field in that
- * form — on a clinical record an ambiguous 08/06 is not acceptable.
+ * dates as ISO `YYYY-MM-DD`, so the parsed value is echoed under the field in
+ * that form — on a clinical record an ambiguous 08/06 is not acceptable.
  */
 export default class RecordMetaFields
   extends React.PureComponent<RecordMetaFieldsProps, { }> {
@@ -95,7 +95,7 @@ export default class RecordMetaFields
                 [classes.record_help__unset]: dateEcho === null,
               })}
             >
-              {dateEcho !== null ? dateEcho : 'YYYY/MM/DD'}
+              {dateEcho !== null ? dateEcho : 'YYYY-MM-DD'}
             </span>
           </label>
         </div>

@@ -70,6 +70,18 @@ export const formatNumber = (n: number): string => {
   return s === '-0.0' ? '0.0' : s;
 };
 
+/**
+ * A value rounded to the one decimal it is *shown* at — `formatNumber`'s
+ * rounding, as a number.
+ *
+ * For arithmetic that a reader can check against the printed columns: a
+ * difference taken between two full-precision values can contradict the same
+ * difference taken between the two figures on screen (−0.9 and −0.8 printed
+ * with a change of "—", because the true change was 0.04). Rounding first is
+ * what makes a printed row add up.
+ */
+export const roundToDisplay = (n: number): number => parseFloat(n.toFixed(1));
+
 // Signed deviation, e.g. "+3.4" / "-29.9"; a rounded zero gets no sign.
 export const formatSigned = (n: number): string => {
   const s = formatNumber(Math.abs(n));
@@ -460,11 +472,17 @@ const AlsoFindings = ({ also }: { also: AlsoFinding[] }) => (
   <span>
     {map(also, (f, i) => (
       <span key={i} className={classes.also_finding}>
-        <span className={classes.also_label}>
-          {alsoFindingLabel(f.symbols)}
-        </span>
         <span className={classes.finding_category}>
           {mapCategoryToString(f.category) || '—'}
+          {/* Attribution in the heading itself, so the measurement this
+              conclusion was graded from is read with its name and not mistaken
+              for the row it happens to sit level with. */}
+          <span className={classes.also_label}>
+            {/* The break opportunity is before the dash, not after it: in a
+                120px FINDING column the attribution wraps, and a dash left
+                hanging at the end of the heading reads as an unfinished line. */}
+            {` \u2014\u00A0${alsoFindingLabel(f.symbols)}`}
+          </span>
         </span>
         <span
           className={cx(classes.chip, {

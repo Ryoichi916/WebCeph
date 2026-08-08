@@ -749,8 +749,14 @@ export const buildChangeTable = (
 
 /**
  * The interval between two capture dates, in whole years and months (e.g.
- * "1 y 4 m", "7 m", "0 m"), or null when either date is unknown. Growth is read
- * per unit time, so the interval belongs beside every change figure.
+ * "1 y 4 mo", "7 mo", "12 days"), or null when either date is unknown. Growth is
+ * read per unit time, so the interval belongs beside every change figure.
+ *
+ * Months are `mo`, never the bare `m` the age chips use: this string is printed
+ * inside a view whose every other number is a millimetre — "+1.7 mm", a 10 mm
+ * scale bar, 0.104 mm/px — and "5 m apart" beside them read as five metres.
+ * The age chips keep `y / m` (see `utils/patient`), where nothing is measured in
+ * millimetres and the ambiguity cannot arise.
  */
 export const formatInterval = (from: Date | null, to: Date | null): string | null => {
   if (from === null || to === null) {
@@ -776,7 +782,7 @@ export const formatInterval = (from: Date | null, to: Date | null): string | nul
   const years = Math.floor(months / 12);
   const rest = months % 12;
   if (years === 0) {
-    return `${rest} m`;
+    return `${rest} mo`;
   }
-  return rest > 0 ? `${years} y ${rest} m` : `${years} y`;
+  return rest > 0 ? `${years} y ${rest} mo` : `${years} y`;
 };

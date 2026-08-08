@@ -347,29 +347,30 @@
 // its norm, instead of a second row whose whole content was "see above".
 // Shared, to the pixel-level intent, with the printed report's copy of this
 // block (see ClinicalReport/style.scss).
+// A borrowed finding: a **sub-card**, indented and tinted, with its own left
+// rule. Set as a plain block with a 26px hairline over it, it was a heading and
+// a chip floating in the finding cell at the exact height of the *next*
+// measurement's row — so "Chin prominence · Normal" read as the conclusion for
+// NAPog −5.8°*, which is amber, asterisked and outside 1 SD. Indentation, a
+// tint, a rule down the side and 14px of air are what say "this belongs to the
+// group above, and it was graded from its own measurement".
 .also_finding {
   display: block;
-  margin-top: 8px;
-
-  // A short rule, not a full-width one: a full-width border inside the finding
-  // cell landed within a pixel or two of the row divider in the columns beside
-  // it, so the second finding read as belonging to the *next* measurement's row
-  // rather than as a second conclusion inside this cell.
-  &::before {
-    content: '';
-    display: block;
-    width: 26px;
-    margin-bottom: 5px;
-    border-top: 1px solid $border-strong;
-  }
+  margin-top: 14px;
+  padding: 6px 0 2px 9px;
+  border-left: 2px solid $border-strong;
+  background: $bg-sunken;
+  border-radius: 0 4px 4px 0;
 }
 
+// Inline in the heading, not a caption above it: at 10px, one pixel above an
+// 11px bold heading, it read as a stray fragment of the row above.
 .also_label {
-  display: block;
-  margin-bottom: 1px;
-  font-size: 10px;
-  font-weight: 500;
-  color: $text-disabled;
+  font-size: .84em;
+  font-weight: 400;
+  color: $text-tertiary;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 // ---- Dialog actions --------------------------------------------------------

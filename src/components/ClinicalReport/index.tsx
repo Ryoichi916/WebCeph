@@ -3,6 +3,8 @@ import * as ReactDOM from 'react-dom';
 
 import * as cx from 'classnames';
 
+import { Helmet } from 'react-helmet';
+
 import map from 'lodash/map';
 import filter from 'lodash/filter';
 
@@ -34,6 +36,9 @@ import {
   formatAgeFull, formatSexFull, getAnalysisContext,
 } from 'utils/patient';
 import { parseCaptureDate, formatCaptureDate } from 'utils/records';
+// A saved PDF is named after the document title, so every printable view titles
+// itself from the patient rather than from the image's file name.
+import { printDocumentTitle } from 'utils/printTitle';
 
 import Wigglegram, { WigglegramKey } from './Wigglegram';
 import ResultsTable, { DeviationKey } from './ResultsTable';
@@ -66,6 +71,26 @@ const classes = require('./style.scss');
  * of them 31 % full and the fourth twenty blank lines.
  */
 const NOTE_RULES: number[] = [0, 1, 2, 3, 4, 5];
+
+/**
+ * Ruled lines when the closing block gets a **sheet of its own**.
+ *
+ * The combined report always ends on one — nine analyses never leave room for
+ * the tail under the last table — and that sheet used to carry four short rules,
+ * a signature row and 80 % white: the code above called it "a proper signature
+ * page" and it read as a printer fault. Given a whole side of A4, the writing
+ * area is what should fill it: twenty-four full-width rules at a real writing
+ * pitch (see `.tail__own_sheet`), with the certification and the footer settled
+ * at the foot of the sheet where a signature belongs.
+ *
+ * The single-analysis report keeps the six two-column rules above: its tail
+ * lands *under* the last table, and growing it there would buy a whole extra
+ * side of paper for nothing — which is exactly what this report used to do.
+ */
+const NOTE_RULES_SHEET: number[] = [
+  0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11,
+  12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
+];
 
 /**
  * Global (unhashed) body class toggled while the report is open; the print
@@ -406,6 +431,20 @@ export default class ClinicalReport extends React.PureComponent<Props, State> {
         aria-modal="true"
         aria-label="Clinical report"
       >
+        {/* Chrome's "Save as PDF" names the file after `document.title`, which
+            the app sets from the workspace — the image's file name. Every report
+            saved itself as `test-ceph.jpg - WebCeph.pdf`. Declared here, this
+            title holds only while the report is mounted (react-helmet restores
+            the app's on unmount). */}
+        <Helmet
+          title={printDocumentTitle(
+            patient,
+            isCombined
+              ? 'Cephalometric report — all analyses'
+              : 'Cephalometric report',
+            [timepoint, filmDateLabel],
+          )}
+        />
         <div className={classes.chrome}>
           <span className={classes.chrome_title}>
             Clinical report
@@ -728,7 +767,13 @@ export default class ClinicalReport extends React.PureComponent<Props, State> {
             {/* Clinician certification: ruled signature lines, as on any
                 clinical letterhead. Name and license persist per device;
                 the signature and date rules are signed by hand. */}
-            <div className={classes.tail}>
+            <div
+              className={cx(classes.tail, {
+                // The combined report's tail always starts a sheet, so it is
+                // laid out as the signature page it is (see NOTE_RULES_SHEET).
+                [classes.tail__own_sheet]: isCombined,
+              })}
+            >
               {/* Ruled space for the clinician's own reading of the numbers.
                   A referral sheet needs somewhere to write it, and it gives
                   the closing block height instead of leaving the foot of the
@@ -741,7 +786,7 @@ export default class ClinicalReport extends React.PureComponent<Props, State> {
                   </span>
                 </div>
                 <div className={classes.notes_rules}>
-                  {NOTE_RULES.map((i) => (
+                  {(isCombined ? NOTE_RULES_SHEET : NOTE_RULES).map((i) => (
                     <span key={i} className={classes.notes_rule} />
                   ))}
                 </div>
@@ -781,7 +826,14 @@ export default class ClinicalReport extends React.PureComponent<Props, State> {
                       <span className={classes.sig_caption}>License no.</span>
                     </div>
                     <div className={classes.sig_field}>
-                      <div className={classes.sig_line} />
+                      <div className={classes.sig_line}>
+                        {/* Screen-only. The two fields beside this one show a
+                            grey prompt while they are empty, so a bare rule
+                            here read as a field somebody had failed to fill in
+                            rather than as space for a hand-written date. It is
+                            already correctly blank on paper. */}
+                        <span className={classes.sig_hint}>signed by hand</span>
+                      </div>
                       <span className={classes.sig_caption}>Date</span>
                     </div>
                   </div>
@@ -866,7 +918,7 @@ export default class ClinicalReport extends React.PureComponent<Props, State> {
 
         {divergences.length > 0 ? (
           <div className={classes.diverge}>
-            <span className={classes.diverge_head}>
+            <span className={cx(classes.diverge_head, classes.diverge_head_keep)}>
               Where the analyses differ
             </span>
             {map(divergences, ({ category, sources }) => (
@@ -894,8 +946,8 @@ export default class ClinicalReport extends React.PureComponent<Props, State> {
             <span className={classes.diverge_note}>
               Each of these analyses grades the category from a different
               measurement against its own author’s norm, so the readings are
-              not in conflict and none of them supersedes the others. Marked
-              ≠ in the summary above.
+              not in conflict and none of them supersedes the others. Tagged
+              “differs” in the summary of findings above.
             </span>
           </div>
         ) : null}

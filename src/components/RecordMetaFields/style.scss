@@ -122,7 +122,7 @@
 }
 
 // Helper line under a field: the timepoint convention, and the capture date
-// re-stated as YYYY/MM/DD so a locale-formatted 08/06/2026 can't be misread.
+// re-stated as ISO YYYY-MM-DD so a locale-formatted 08/06/2026 can't be misread.
 .record_help {
   font-size: 11.5px;
   line-height: 1.2;

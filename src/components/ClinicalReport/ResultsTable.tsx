@@ -158,11 +158,18 @@ const AlsoFindings = ({ also }: { also: AlsoFinding[] }) => (
   <span>
     {map(also, (f, i) => (
       <span key={i} className={classes.also_finding}>
-        <span className={classes.also_label}>
-          {alsoFindingLabel(f.symbols)}
-        </span>
         <span className={classes.finding_category}>
           {mapCategoryToString(f.category) || '—'}
+          {/* Attribution in the heading itself: on paper this block sat level
+              with the next measurement's row, and a 9px caption above an 11px
+              bold heading was the only thing saying it was not that row's
+              conclusion. */}
+          <span className={classes.also_label}>
+            {/* The break opportunity is before the dash, not after it: in a
+                120px FINDING column the attribution wraps, and a dash left
+                hanging at the end of the heading reads as an unfinished line. */}
+            {` \u2014\u00A0${alsoFindingLabel(f.symbols)}`}
+          </span>
         </span>
         <span className={chipClassFor(f.indication)}>
           {mapIndicationToString(f.indication) || '—'}

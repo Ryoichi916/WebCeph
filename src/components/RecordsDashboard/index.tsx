@@ -28,6 +28,7 @@ import {
 import {
   getImageTypeLabel,
   formatCaptureDate,
+  formatDisplayDate,
   parseCaptureDate,
 } from 'utils/records';
 
@@ -170,9 +171,9 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
       : '—';
     const age = patient !== null ? formatAgeFull(patient.dateOfBirth) : null;
     const sex = patient !== null ? formatSexFull(patient.sex) : null;
-    const dob = patient !== null && patient.dateOfBirth
-      ? patient.dateOfBirth.replace(/-/g, '/')
-      : null;
+    // ISO, from the app's one date formatter: this panel showed `1998/04/12`
+    // while the printed report showed `1998-04-12` for the same patient.
+    const dob = patient !== null ? formatDisplayDate(patient.dateOfBirth) : null;
     return (
       <Dialog
         open={open}

@@ -106,10 +106,20 @@ export const groupFindings = (
 };
 
 /**
- * The label over a borrowed finding, naming the measurement it was graded
- * from: "also, from Or-Po,N-Pog". Shared so the dialog and the paper word it
+ * The attribution of a borrowed finding, naming the measurement it was graded
+ * from: "from Or-Po,N-Pog". Shared so the dialog and the paper word it
  * identically.
+ *
+ * It is set **inline, in the finding's own heading**, not as a caption above it:
+ * a 9px grey caption 1px above an 11px bold heading read as a stray fragment,
+ * and the finding under it — "Chin prominence · Normal" — sat level with the
+ * *next* measurement's row (NAPog, amber and asterisked), so the one thing
+ * standing between the reader and a misattribution was the smallest type in the
+ * table.
  */
 export const alsoFindingLabel = (symbols: string[]): string => (
-  `also, from ${symbols.join(', ')}`
+  // Non-breaking after "from": the attribution is set in a narrow finding
+  // column, and "from" alone on a line above the measurement it introduces is
+  // not an attribution anybody reads as one.
+  `from\u00A0${symbols.join(', ')}`
 );
