@@ -294,6 +294,9 @@ const categoryMap: Record<Category, string> = {
   growthPattern: 'Growth pattern',
   lowerIncisorInclination: 'Lower incisor inclination',
   upperIncisorInclination: 'Upper incisor inclination',
+  lowerIncisorPosition: 'Lower incisor position',
+  upperIncisorPosition: 'Upper incisor position',
+  measurement: 'Measured values',
   mandible: 'Mandible',
   maxilla: 'Maxilla',
   mandibularRotation: 'Mandibular rotation',
@@ -332,6 +335,11 @@ const indicationMap: Record<Indication<Category>, string> = {
   increased: 'Increased',
   negative: 'Negative',
   resessive: 'Recessive',
+  protrusive: 'Protrusive',
+  retrusive: 'Retrusive',
+  within_norm: 'Within norm',
+  outside_norm: 'Outside norm',
+  not_graded: 'No published norm',
 };
 
 const severityMap: Record<Severity, string> = {
@@ -359,44 +367,275 @@ export function isStepAutomatic(step: CephLandmark): boolean {
   return typeof step.map === 'function';
 };
 
-/** Determines whether a step in a cephalometric analysis needs to be performed by the user  */
-export const isStepManual = (step: CephLandmark) => !isStepAutomatic(step);
+/**
+ * Determines whether a step in a cephalometric analysis needs to be performed
+ * by the user. Only *points* can be placed by hand (or by the auto-plot
+ * predictor); computed-only measurements without a `map` (angular sums,
+ * ratios, value-only distances such as Björk's sum or S-Go/N-Me) are derived
+ * from their components and must never be treated as clickable/plottable
+ * landmarks — doing so used to scatter bogus dots labeled with measurement
+ * names across the tracing.
+ */
+export const isStepManual = (step: CephLandmark) =>
+  step.type === 'point' && !isStepAutomatic(step);
 
-/** Determines whether a step in a cephalometric analysis can be represented a geometrical object  */
-export const isStepMappable = (_: CephLandmark) => true;
+/**
+ * Determines whether a step in a cephalometric analysis can be represented as
+ * a geometrical object on the image: points always can (they are placed), and
+ * anything with a `map` method can. Computed-only measurements (sums, ratios,
+ * mapless distances) have a numeric value but no geometry of their own.
+ */
+export const isStepMappable = (step: CephLandmark) =>
+  step.type === 'point' || typeof step.map === 'function';
 
 /** Determines whether a step in a cephalometric analysis can be computed as a numerical value */
 export function isStepComputable(step: CephLandmark) {
   return typeof step.calculate === 'function';
 };
 
-/** 
+/**
+ * The norm of a measurement this app reports **without** a published figure to
+ * compare it against — Jarabak's absolute facial heights, whose normal values
+ * are age- and sex-specific, or Tweed's occlusal-plane and Y-axis readings,
+ * which his triangle states descriptively. Spread over the three fields of an
+ * `AnalysisComponent` so such a measurement still reaches the Summary and the
+ * report as a measured value, while the norm and deviation columns print an
+ * em dash instead of a number nobody published.
+ *
+ * Making up a plausible-looking mean would have been the easy way to fill the
+ * column; a clinician reading "N-Me 121 ± 5" cannot tell an invented norm from
+ * a real one, so the app says it has none.
+ */
+export const NO_NORM = { mean: NaN, min: NaN, max: NaN };
+
+/** Whether an analysis component states a norm at all (see `NO_NORM`). */
+export const hasNorm = (mean: number, min: number, max: number): boolean => (
+  isFinite(mean) && isFinite(min) && isFinite(max)
+);
+
+/**
+ * Spread into an `AnalysisComponent` whose `min`/`max` are a published normal
+ * **range** rather than a mean ± 1 SD band (see `NormBand`). Björk's gonial
+ * halves, Jarabak's facial-height ratio and Holdaway's incisor:chin ratio are
+ * all quoted this way, and none of their authors published a standard
+ * deviation to divide by.
+ */
+export const RANGE = { band: 'range' as NormBand };
+
+/** Whether a component's min/max are a real ± 1 SD band (see `NormBand`). */
+export const isSdBand = (band?: NormBand): boolean => band !== 'range';
+
+/**
+ * Standard deviation of a component, or `NaN` when it has none to give: no
+ * norm at all, or a norm stated as a range. Every SD-derived reading in the app
+ * (the star scale, the wigglegram's z axis, the report's divergence ranking)
+ * goes through this so none of them can resurrect `(max - min) / 2` on a range.
+ */
+export const normSd = (
+  mean: number, min: number, max: number, band?: NormBand,
+): number => {
+  if (!hasNorm(mean, min, max) || !isSdBand(band)) {
+    return NaN;
+  }
+  return (max - min) / 2;
+};
+
+/**
+ * How far a value falls outside a published range, signed: positive above the
+ * upper bound, negative below the lower one, exactly 0 while inside. This is
+ * the only "deviation" a range component can honestly report — there is no
+ * mean to subtract.
+ */
+export const rangeExcess = (
+  value: number, min: number, max: number,
+): number => {
+  if (value > max) {
+    return value - max;
+  }
+  if (value < min) {
+    return value - min;
+  }
+  return 0;
+};
+
+/**
+ * The category that carries measurements without a named clinical label.
+ * Exported so the report's cross-analysis machinery can tell a *finding* from
+ * a plain measured value.
+ */
+export const NEUTRAL_CATEGORY: Category = 'measurement';
+
+/**
+ * Applies the author's own corrections of a norm to the patient in front of the
+ * clinician: a growth correction of the mean (`perYearFrom`) and a sex split
+ * (`sexMeans`). The band moves with the mean — the standard deviation is the
+ * sample's and the author does not restate it per year — so only the centre
+ * shifts and the width is preserved exactly.
+ *
+ * **Nothing is corrected without a record to correct from.** With no date of
+ * birth (or no recorded sex) the published figure is returned untouched, and
+ * the analysis' provenance says which of the two documents the reader is
+ * holding (see `NormsProvenance.patientNote`). Guessing an age would be worse
+ * than printing the uncorrected mean, because the reader cannot tell a guessed
+ * norm from a published one.
+ */
+export const adjustComponentForPatient = (
+  component: AnalysisComponent,
+  context?: AnalysisContext,
+): AnalysisComponent => {
+  if (context === undefined) {
+    return component;
+  }
+  const { mean, min, max, perYearFrom, sexMeans } = component;
+  if (!isFinite(mean)) {
+    return component;
+  }
+  let corrected = mean;
+  if (
+    sexMeans !== undefined &&
+    (context.sex === 'male' || context.sex === 'female')
+  ) {
+    corrected = sexMeans[context.sex];
+  }
+  if (perYearFrom !== undefined && typeof context.ageInYears === 'number') {
+    // Clamped at both ends: below the published age the author's own figure
+    // stands, and above the end of growth the correction stops (see
+    // `NormAgeCorrection.until` — a growth coefficient run into middle age
+    // produces norms nobody published).
+    const age = Math.min(
+      Math.max(context.ageInYears, perYearFrom.age), perYearFrom.until,
+    );
+    corrected += (age - perYearFrom.age) * perYearFrom.delta;
+  }
+  if (corrected === mean) {
+    return component;
+  }
+  const shift = corrected - mean;
+  return {
+    ...component,
+    mean: corrected,
+    min: min + shift,
+    max: max + shift,
+  };
+};
+
+/** `adjustComponentForPatient` over a whole analysis' component list. */
+export const adjustComponentsForPatient = (
+  components: AnalysisComponent[],
+  context?: AnalysisContext,
+): AnalysisComponent[] => (
+  context === undefined
+    ? components
+    : map(components, c => adjustComponentForPatient(c, context))
+);
+
+/**
+ * Grades a value against its norm range without claiming a diagnosis.
+ */
+export const gradeAgainstNorm = (
+  value: number, min: number, max: number, mean: number,
+): Indication<'measurement'> => {
+  if (!hasNorm(mean, min, max)) {
+    return 'not_graded';
+  }
+  return (value < min || value > max) ? 'outside_norm' : 'within_norm';
+};
+
+/**
+ * The order the neutral rows are read in — what left its norm first, then what
+ * stayed inside it, then what this app states no norm for at all — and the
+ * sub-heading each run of them prints inside the single "Measured values"
+ * group. Exported so the Summary table and the printed report label the runs
+ * identically.
+ */
+export const NEUTRAL_GRADE_ORDER: Array<Indication<'measurement'>> = [
+  'outside_norm', 'within_norm', 'not_graded',
+];
+
+/**
+ * The sub-heading over each run of neutral rows. Worded as a statement about
+ * the rows under it, not as a chip: "Reported without a published norm" says
+ * what the em dashes in the norm and deviation columns mean, which
+ * "No published norm" as a group chip never did.
+ */
+export const NEUTRAL_GRADE_LABELS: {
+  [indication: string]: string | undefined;
+} = {
+  outside_norm: 'Outside the norm',
+  within_norm: 'Within the norm',
+  not_graded: 'Reported without a published norm',
+};
+
+/**
  * Default implementation of Analysis.interpret.
  * Returns the falttened interpretation of each of this analysis components
  * grouped by category and resolves indication and severity with the default
  * resolving strategy.
+ *
+ * **Every computed component is reported.** A component whose landmark defines
+ * an `interpret` function is grouped under the clinical category that function
+ * names. A component *without* one used to vanish silently between the stepper
+ * and the Summary — Jarabak's saddle, articular and gonial angles were plotted,
+ * computed and shown as completed steps, then appeared in no table with a norm.
+ * They are now emitted under the neutral `measurement` category: a measured
+ * value with a norm is a finding even when it carries no named clinical label,
+ * and the alternative (fabricating an interpretation so the row survives) would
+ * be dishonest.
+ *
+ * The neutral rows are emitted as **one group**, ordered by what is actually
+ * true of them — what left its norm, what stayed inside it, what this app
+ * states no norm for at all — and the tables print a sub-heading over each run
+ * (see `NEUTRAL_GRADE_ORDER`). Two things had to be avoided at once. A single
+ * chip spanning the whole bucket says things that are plainly untrue of most of
+ * its rows: Jarabak printed "Measured values / Outside norm" across N-Me and
+ * S-Go, whose norm and deviation cells both read "—" (a row with no norm cannot
+ * be outside it). But *one group per indication* printed the same category
+ * heading two and three times in one table — "Measured values / Outside norm"
+ * then "Measured values / Within norm" — which reads as a bucketing artifact
+ * rather than a designed grouping, and buried two of Downs' ten named factors
+ * under it. One heading, one group, a sub-rule per grading: the row-level truth
+ * survives and the heading is stated once.
+ *
+ * `context`, when given, corrects each component's mean by the author's own
+ * age and sex indexing before anything is graded (see
+ * `adjustComponentsForPatient`) — the whole point of the exercise being that
+ * Ricketts' age-9 facial depth is not the norm for a 28-year-old.
  */
 export const defaultInterpretAnalysis =
-  (components: AnalysisComponent[]): InterpretAnalysis<Category> => {
-    return (values, _) => {
+  (declaredComponents: AnalysisComponent[]): InterpretAnalysis<Category> => {
+    return (values, _objects, context) => {
+      const components = adjustComponentsForPatient(declaredComponents, context);
+      const measured: Array<LandmarkInterpretation<'measurement'> & {
+        symbol: string;
+      }> = [];
       const results = flatten(
-        map(components, ({ landmark: { symbol, interpret }, max, min, mean }) => {
+        map(components, ({
+          landmark: { symbol, interpret }, max, min, mean, band, normSource,
+        }) => {
           const value = values[symbol];
-          if (
-            typeof interpret === 'function' &&
-            typeof value === 'number'
-          ) {
-            return map(
-              interpret(value, min, max, mean),
-              r => ({ ...r, symbol }),
-            );
-          } else {
+          if (typeof value !== 'number' || !isFinite(value)) {
+            // Not computed (a landmark is still unplaced, or the image carries
+            // no scale for a millimetre value). Accounted for by the report's
+            // footnotes rather than printed as a blank row.
             return [];
           }
+          if (typeof interpret === 'function' && hasNorm(mean, min, max)) {
+            return map(
+              interpret(value, min, max, mean),
+              r => ({ ...r, symbol, band, normSource }),
+            );
+          }
+          measured.push({
+            symbol,
+            category: NEUTRAL_CATEGORY as 'measurement',
+            indication: gradeAgainstNorm(value, min, max, mean),
+            value, mean, max, min, band, normSource,
+          });
+          return [];
         }),
       );
 
-      return map(
+      const interpreted = map(
         groupBy(results, r => r.category),
         (group, category: Category) => ({
           category,
@@ -404,16 +643,46 @@ export const defaultInterpretAnalysis =
           severity: resolveSeverity(group),
           relevantComponents: map(
             group,
-            (({ symbol, value, mean, max, min }) => ({
+            (({ symbol, value, mean, max, min, band, normSource }) => ({
               symbol,
               value,
               mean,
               max,
               min,
+              band,
+              normSource,
             })),
           ),
         }),
       );
+
+      if (measured.length === 0) {
+        return interpreted;
+      }
+
+      // One neutral group, its rows ordered by what is actually true of them:
+      // what left its norm, what stayed inside it, and what this app states no
+      // norm for at all. The tables rule and label each run; the group's own
+      // indication is the first run present, so a bucket that is entirely
+      // ungraded never advertises itself as graded.
+      const ordered = flatten(
+        NEUTRAL_GRADE_ORDER.map(
+          (indication) => measured.filter(m => m.indication === indication),
+        ),
+      );
+      const neutralGroup = {
+        category: NEUTRAL_CATEGORY,
+        indication: ordered[0].indication as Indication<Category>,
+        severity: 'none' as Severity,
+        relevantComponents: map(
+          ordered,
+          ({ symbol, value, mean, max, min, band, normSource }) => ({
+            symbol, value, mean, max, min, band, normSource,
+          }),
+        ),
+      };
+
+      return [...interpreted, neutralGroup];
     };
   };
 
@@ -500,7 +769,11 @@ export function resolveSeverity<C extends Category>(
   });
   const pairs = map(counts, (value, severity: Severity) => ({ value, severity }));
   const max = maxBy(pairs, ({ value }) => value);
-  return max!.severity;
+  // A finding whose landmarks all interpret themselves without stating a
+  // severity (ANB does) has nothing to resolve. That is 'none', not a crash:
+  // it happens whenever such a landmark is the only one in its category, as
+  // ANB is in Steiner's analysis.
+  return max === undefined ? 'none' : max.severity;
 };
 
 export const indexAnalysisResults = <C extends Category>(

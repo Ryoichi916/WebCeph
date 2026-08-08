@@ -13,6 +13,10 @@ import IconArrow from 'material-ui/svg-icons/hardware/keyboard-arrow-right';
 import Props from './props';
 
 import { formatAgeShort, formatSexShort } from 'utils/patient';
+// The app's one date formatter (ISO `YYYY-MM-DD`), so the date the user typed is
+// echoed in exactly the form every other screen — and the printed report —
+// states it in.
+import { formatCaptureDate, formatDisplayDate } from 'utils/records';
 
 const classes = require('./style.scss');
 
@@ -122,7 +126,7 @@ const pad2 = (n: number): string => (n < 10 ? `0${n}` : String(n));
 /**
  * Registration date derived from the generated patient id
  * (`patient_<epoch ms>_<n>`); null when the id has another shape.
- * Formatted as a stable, locale-independent `YYYY/MM/DD`.
+ * Formatted as a stable, locale-independent ISO `YYYY-MM-DD`.
  */
 const getRegisteredDate = (id: string): string | null => {
   const match = /_(\d{13})_/.exec(id);
@@ -134,20 +138,18 @@ const getRegisteredDate = (id: string): string | null => {
     return null;
   }
   const date = new Date(timestamp);
-  return `${date.getFullYear()}/${pad2(date.getMonth() + 1)}/${pad2(date.getDate())}`;
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
 };
 
 const patientDisplayName = (patient: Patient): string =>
   patient.name || patient.chartId || '(unnamed patient)';
 
 /**
- * Compact demographics for the list row, e.g. `1998/04/12 · F · 28 y`;
+ * Compact demographics for the list row, e.g. `1998-04-12 · F · 28 y`;
  * null when the record carries neither a date of birth nor a sex.
  */
 const getDemographicsLine = (patient: Patient): string | null => {
-  const dob = patient.dateOfBirth !== undefined && patient.dateOfBirth !== ''
-    ? patient.dateOfBirth.replace(/-/g, '/')
-    : null;
+  const dob = formatDisplayDate(patient.dateOfBirth);
   const parts = [
     dob,
     formatSexShort(patient.sex),
@@ -445,6 +447,8 @@ export default class PatientPicker extends React.PureComponent<Props, State> {
     const now = new Date();
     const todayISO =
       `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}`;
+    // The typed date restated locale-independently (see the echo below).
+    const dobEcho = formatCaptureDate(dateOfBirth);
 
     const trimmedQuery = query.trim().toLowerCase();
     const visiblePatients = trimmedQuery === ''
@@ -573,6 +577,18 @@ export default class PatientPicker extends React.PureComponent<Props, State> {
                     onChange={this.handleDateOfBirthChange}
                     onKeyDown={this.handleKeyDown}
                   />
+                  {/* `input[type=date]` paints in the browser's locale, so US
+                      Chrome shows 08/06/2026 — ambiguous on a clinical record.
+                      Every display surface in this app writes ISO
+                      YYYY-MM-DD, so the parsed value is echoed here in that
+                      form. */}
+                  <span
+                    className={dobEcho !== null
+                      ? `${classes.field_echo} ${classes.field_echo_set}`
+                      : classes.field_echo}
+                  >
+                    {dobEcho !== null ? dobEcho : 'YYYY-MM-DD'}
+                  </span>
                 </label>
                 {/* Not a <label>: clicking the caption of a label containing
                     buttons would forward the click to the first button and

@@ -4,11 +4,19 @@ export interface StateProps {
   isDemoImageLoading?: boolean;
   /** Whether the analysis results summary dialog is open. */
   isSummaryShown: boolean;
+  /**
+   * Whether the open image can be traced and analysed here — false for the
+   * record's non-cephalometric images (frontal ceph, panoramic, photographs),
+   * which open in a read-only record view instead of a stepper.
+   */
+  isImageTraceable: boolean;
+  /** Timepoint label the upload form should start on (`T1`, `T2`, …). */
+  defaultTimepoint: string;
 };
 
 export interface DispatchProps {
-  onFilesDrop: (files: File[]) => any;
-  onDemoButtonClick: () => any;
+  onFilesDrop: (files: File[], meta: ImageRecordMeta) => any;
+  onDemoButtonClick: (meta: ImageRecordMeta) => any;
 };
 
 export type ConnectableProps = StateProps & DispatchProps;

@@ -1,0 +1,1206 @@
+@import 'src/_variables.scss';
+
+// ---- Full-screen shell ------------------------------------------------------
+
+// Above the toolbar and its popovers, like the clinical report (2200).
+.root {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 2200;
+  display: flex;
+  flex-direction: column;
+  background: $canvas-bg;
+  font-family: $font-stack;
+}
+
+:global(body.superimposition-open) {
+  overflow: hidden;
+}
+
+// ---- Top chrome -------------------------------------------------------------
+
+.chrome {
+  flex: 0 0 auto;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  background: rgba(0, 0, 0, .35);
+  border-bottom: 1px solid rgba(255, 255, 255, .08);
+}
+
+.chrome_title {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  color: $text-on-dark;
+}
+
+.chrome_hint {
+  font-size: 12px;
+  font-weight: 400;
+  color: rgba(242, 245, 248, .55);
+}
+
+.chrome_actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.chrome_error {
+  font-size: 12.5px;
+  color: #FFAB91;
+}
+
+.chrome_button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 36px;
+  padding: 0 14px;
+  border: 1px solid rgba(255, 255, 255, .25);
+  border-radius: 6px;
+  background: transparent;
+  color: $text-on-dark;
+  font-family: $font-stack;
+  font-size: 13.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease;
+
+  svg {
+    flex-shrink: 0;
+    // mui SvgIcon writes an inline `color` from the theme onto the <svg>
+    // itself, so `fill: currentColor` resolves against the theme's dark ink
+    // rather than against this button's light text — a near-black glyph on a
+    // dark chrome. Force the icon to follow the button's own colour instead.
+    // (Same fix as TracingToolbar's `.button svg`.)
+    color: inherit !important;
+    fill: currentColor !important;
+  }
+
+  &:hover {
+    background: rgba(255, 255, 255, .10);
+  }
+
+  &:focus {
+    outline: none;
+  }
+
+  &:focus-visible {
+    box-shadow: $focus-ring;
+  }
+
+  &[disabled] {
+    opacity: .45;
+    cursor: default;
+  }
+}
+
+.chrome_button__primary {
+  background: $primary-600;
+  border-color: $primary-600;
+  font-weight: 600;
+
+  &:hover {
+    background: $primary-500;
+    border-color: $primary-500;
+  }
+}
+
+// ---- Timepoint / registration controls --------------------------------------
+
+.controls {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 8px 20px;
+  background: $canvas-panel;
+  border-bottom: 1px solid $canvas-border;
+}
+
+.pickers {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.picker_tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 26px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  color: $canvas-bg;
+}
+
+.picker_tag__t1 { background: #40C4FF; }
+.picker_tag__t2 { background: #FF8A65; }
+
+.picker_arrow {
+  color: rgba(199, 208, 217, .6);
+  font-size: 15px;
+}
+
+.select {
+  max-width: 340px;
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid rgba(255, 255, 255, .22);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, .06);
+  color: $canvas-text;
+  font-family: $font-stack;
+  font-size: 12.5px;
+  cursor: pointer;
+
+  // Native options are drawn by the OS on a light menu; keep them readable.
+  option {
+    color: $text-primary;
+    background: $bg-surface;
+  }
+
+  &:focus {
+    outline: none;
+    box-shadow: $focus-ring;
+  }
+}
+
+.interval {
+  margin-left: 4px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .07);
+  color: $canvas-text;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.seg_group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.seg_label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: rgba(199, 208, 217, .7);
+}
+
+.seg {
+  display: inline-flex;
+  padding: 2px;
+  border: 1px solid rgba(255, 255, 255, .18);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, .06);
+}
+
+// The tooltip lives on this wrapper, never on the button: browsers suppress
+// hover (and therefore the title) on a `disabled` form control, which would
+// leave an unavailable registration unable to explain itself.
+.seg_slot {
+  display: inline-flex;
+}
+
+.seg_button {
+  height: 26px;
+  padding: 0 13px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: rgba(242, 245, 248, .74);
+  font-family: $font-stack;
+  font-size: 12.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease;
+
+  &:hover {
+    color: $text-on-dark;
+    background: rgba(255, 255, 255, .08);
+  }
+
+  &:focus {
+    outline: none;
+  }
+
+  &:focus-visible {
+    box-shadow: $focus-ring;
+  }
+
+  &[disabled] {
+    color: rgba(242, 245, 248, .32);
+    cursor: default;
+    background: transparent;
+  }
+}
+
+.seg_button__on {
+  background: $bg-surface;
+  color: $primary-700;
+  font-weight: 600;
+
+  &:hover {
+    background: $bg-surface;
+    color: $primary-700;
+  }
+}
+
+// Unavailable registration: dimmed and inert, but still focusable and still
+// hoverable, so its requirement is reachable (and repeated in .seg_hint).
+.seg_button__off {
+  color: rgba(242, 245, 248, .34);
+  cursor: default;
+
+  &:hover {
+    color: rgba(242, 245, 248, .34);
+    background: transparent;
+  }
+}
+
+.seg_hint {
+  flex: 1 0 100%;
+  margin: 2px 0 0;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: rgba(199, 208, 217, .62);
+}
+
+// ---- Body -------------------------------------------------------------------
+
+.body {
+  flex: 1 1 auto;
+  display: flex;
+  min-height: 0;
+}
+
+.figure_column {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  min-height: 0;
+  padding: 16px;
+}
+
+// The box carries the *frame's* aspect ratio (set inline from the viewBox), so
+// the registered anatomy fills it edge to edge instead of being letterboxed
+// into the middle third by `preserveAspectRatio`. The width that used to be
+// wasted beside the figure now carries the legend (see the wide breakpoint).
+.figure {
+  flex: 1 1 auto;
+  min-height: 0;
+  align-self: center;
+  max-width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid $canvas-border;
+  border-radius: 8px;
+  background: #0E1216;
+  overflow: hidden;
+}
+
+// Nothing to frame: no aspect ratio to honour, so the box just fills its space.
+.figure__empty {
+  align-self: stretch;
+}
+
+.svg {
+  width: 100%;
+  height: 100%;
+}
+
+// ---- Tracing hues -----------------------------------------------------------
+
+// The film is context only, but a lateral ceph is already a dark image: dimming
+// it much below this leaves an unreadable smudge under the tracings.
+.film {
+  opacity: .62;
+}
+
+.casing {
+  fill: none;
+  stroke: rgba(20, 24, 29, .62);
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.outline {
+  fill: none;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.dot {
+  stroke: $canvas-bg;
+  stroke-width: 1.2;
+  vector-effect: non-scaling-stroke;
+}
+
+.t1 {
+  .outline { stroke: #40C4FF; }
+  .dot { fill: #40C4FF; }
+}
+
+// T2 is dashed — the later tracing is painted last, and on every segment where
+// the two coincide a solid T2 would hide T1 entirely, leaving "identical here"
+// and "not traced here" indistinguishable. The dash is the profilogram
+// overlay's convention.
+.t2 {
+  .outline {
+    stroke: #FF8A65;
+    stroke-dasharray: 7 4.5;
+  }
+
+  .dot { fill: #FF8A65; }
+}
+
+// The reference line whose direction the registration matched, at each
+// timepoint: two coincident lines are the visible proof that the fit is right.
+.basis_line {
+  stroke-width: 1.3;
+  opacity: .9;
+  vector-effect: non-scaling-stroke;
+}
+
+.basis_line__t1 { stroke: #40C4FF; }
+
+.basis_line__t2 {
+  stroke: #FF8A65;
+  stroke-dasharray: 7 4.5;
+}
+
+.reg_ring {
+  fill: none;
+  stroke: #FFFFFF;
+  stroke-width: 1.4;
+  stroke-dasharray: 3 3;
+  opacity: .85;
+  vector-effect: non-scaling-stroke;
+}
+
+.scale_bar line {
+  stroke: #FFFFFF;
+  stroke-width: 1.8;
+  opacity: .9;
+  vector-effect: non-scaling-stroke;
+}
+
+// Figure type is sized in viewBox units, which mean nothing on their own: the
+// component measures the rendered box and hands the true units-per-pixel down
+// as custom properties, so a label is 12.5 CSS px on screen and 10 px on paper
+// however hard the crop is scaled.
+.anno_text {
+  fill: #FFFFFF;
+  stroke: rgba(20, 24, 29, .85);
+  paint-order: stroke;
+  stroke-linejoin: round;
+  font-family: $font-stack;
+  font-weight: 600;
+  font-size: var(--anno-size);
+  stroke-width: var(--anno-halo);
+}
+
+// ---- Legend -----------------------------------------------------------------
+
+.legend {
+  flex: 0 0 auto;
+  padding: 12px 4px 14px;
+}
+
+.legend_keys {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.key {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.key_swatch {
+  width: 26px;
+  height: 0;
+  border-top-width: 3px;
+  border-top-style: solid;
+  border-radius: 2px;
+}
+
+.key__t1 .key_swatch { border-top-color: #40C4FF; }
+
+// Dashed, exactly as T2's outline is drawn — a key that did not match the
+// stroke it names would be worse than no key.
+.key__t2 .key_swatch {
+  border-top-color: #FF8A65;
+  border-top-style: dashed;
+}
+
+.key_text {
+  font-size: 13px;
+  font-weight: 600;
+  color: $text-on-dark;
+  font-variant-numeric: tabular-nums;
+}
+
+// The interval is stated once on screen — in the controls row, which is the
+// place it can be changed. It reappears in the legend only on paper, where
+// that row is not printed.
+.legend_interval {
+  display: none;
+  font-size: 12.5px;
+  color: rgba(199, 208, 217, .8);
+  font-variant-numeric: tabular-nums;
+}
+
+// Copy that exists for the printed sheet alone (the controls row is hidden
+// there, so a couple of facts have to be restated).
+.print_only {
+  display: none;
+}
+
+.legend_registration {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.legend_basis {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: $canvas-text;
+}
+
+.legend_numbers {
+  font-size: 12px;
+  color: rgba(199, 208, 217, .62);
+  font-variant-numeric: tabular-nums;
+}
+
+.legend_note {
+  margin: 6px 0 0;
+  max-width: 92ch;
+  font-size: 12px;
+  line-height: 1.5;
+  color: rgba(199, 208, 217, .72);
+}
+
+.legend_note__warn {
+  color: #FFCC80;
+}
+
+// The disclosure inherits `currentColor`, so it is given the legend's own ink
+// rather than the panel's dark text.
+.legend_about {
+  color: rgba(199, 208, 217, .82);
+  max-width: 92ch;
+}
+
+// Wide enough for the legend to sit beside the figure rather than under it:
+// the figure is height-bound (it keeps the frame's tall aspect), so the width
+// left over is spent on the reading column instead of on empty canvas — and
+// the figure gains the ~120px of height the legend used to take from it.
+@media screen and (min-width: 1280px) {
+  .figure_column {
+    flex-direction: row;
+    align-items: stretch;
+    justify-content: center;
+    gap: 16px;
+  }
+
+  .figure {
+    flex: 0 0 auto;
+    align-self: stretch;
+    height: 100%;
+  }
+
+  // Pinned to the top of the figure, not centred. Centring was right while the
+  // legend was six paragraphs deep and nearly the height of the film; now that
+  // it is four lines and a disclosure, a centred block floated in the middle of
+  // a 700px column with nothing above or below it, and opening the disclosure
+  // re-centred the whole block under the reader's eye. Level with the top edge
+  // of the film it reads as the figure's caption, and it grows downwards.
+  // 300px, not 380: the film is height-bound (it keeps the frame's aspect, and
+  // at this viewport it is already as large as that aspect allows), so every
+  // pixel this column does not need is a pixel the change table can have — and
+  // this column needs four lines and a disclosure. At 380 the rail beside it was
+  // wrapping "Mandibular plane to S-N" onto three lines while this column
+  // carried a 380px band of nothing under its last line.
+  //
+  // Stretched to the film's height with a hairline down its left edge: it is the
+  // figure's caption column, and the whole account of how the comparison is to
+  // be read opens into it (see `renderTableNotes`) — 250 words that used to be
+  // set as 8pt footnotes at the bottom of the 400px data rail. Bounded and
+  // scrollable, so opening it can never push the film out of the frame.
+  .legend {
+    flex: 0 1 300px;
+    align-self: stretch;
+    min-width: 0;
+    max-height: 100%;
+    overflow-y: auto;
+    padding: 2px 0 8px 16px;
+    border-left: 1px solid $canvas-border;
+  }
+}
+
+// ---- Change panel -----------------------------------------------------------
+
+.panel {
+  flex: 0 0 420px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: $bg-surface;
+  border-left: 1px solid $border;
+}
+
+// Wide enough for the measurement names not to wrap: the table is what this
+// view is read from, and the width comes out of the legend column beside the
+// figure (see the breakpoint there), never out of the film.
+@media screen and (min-width: 1360px) {
+  .panel {
+    flex: 0 0 500px;
+  }
+}
+
+.panel_head {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 14px 16px 12px;
+  border-bottom: 1px solid $border;
+}
+
+.panel_title {
+  font-size: 16px;
+  font-weight: 600;
+  color: $text-primary;
+}
+
+.panel_sub {
+  font-size: 12.5px;
+  color: $text-tertiary;
+  font-variant-numeric: tabular-nums;
+}
+
+.panel_scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 16px 16px;
+}
+
+.panel_empty {
+  margin: 20px 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: $text-secondary;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+
+  th, td {
+    padding: 7px 6px;
+    text-align: left;
+    vertical-align: baseline;
+  }
+
+  // Numeric columns right-align, as everywhere else in the app (the Summary
+  // dialog and the printed report both do). Written at this specificity so the
+  // rule above cannot win and leave the flagship numeric table ragged.
+  th.col_num, td.cell_num, th.col_bar {
+    text-align: right;
+  }
+
+  thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: $bg-surface;
+    border-bottom: 1px solid $border-strong;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: $text-tertiary;
+  }
+
+  tbody tr + tr td {
+    border-top: 1px solid $border;
+  }
+}
+
+.col_name { width: auto; }
+.col_num { text-align: right; }
+
+.col_bar {
+  width: 62px;
+  // The bar column is a scale, so it says which scale it is.
+  white-space: nowrap;
+}
+
+.group_row td, .group_row th {
+  padding-top: 14px;
+}
+
+.group_head {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: $primary-700;
+  background: $primary-050;
+  border-radius: 4px;
+  padding: 5px 8px !important;
+}
+
+.cell_name {
+  min-width: 0;
+}
+
+.symbol {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: $text-primary;
+}
+
+.name {
+  display: block;
+  margin-top: 1px;
+  font-size: 11.5px;
+  color: $text-tertiary;
+}
+
+.cell_num {
+  text-align: right;
+  font-size: 13px;
+  color: $text-secondary;
+  white-space: nowrap;
+}
+
+.cell_change {
+  font-weight: 600;
+  color: $text-primary;
+}
+
+// A change below the hand-plotting reproducibility floor is the same
+// measurement taken twice, not a finding: the row stays readable but stops
+// competing for attention with the changes that are real.
+.row__within {
+  .symbol,
+  .cell_num,
+  .cell_change {
+    color: $text-tertiary;
+  }
+
+  .cell_change {
+    font-weight: 500;
+  }
+}
+
+.cell_bar {
+  padding-left: 8px !important;
+}
+
+// Bidirectional magnitude bar: centred axis, fill to the right for an
+// increase and to the left for a decrease. Relative to the largest change of
+// the same kind in this table — a reading aid, not a clinical threshold.
+.bar {
+  position: relative;
+  display: block;
+  width: 46px;
+  height: 12px;
+}
+
+.bar_axis {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  background: $border-strong;
+}
+
+.bar_fill {
+  position: absolute;
+  top: 3px;
+  height: 6px;
+  border-radius: 2px;
+}
+
+.bar_fill__pos {
+  left: 50%;
+  background: $primary-600;
+}
+
+.bar_fill__neg {
+  right: 50%;
+  background: $accent-600;
+}
+
+.footnotes {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid $border;
+}
+
+.footnote {
+  margin: 0 0 8px;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: $text-tertiary;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+}
+
+// ---- Empty states -----------------------------------------------------------
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin: auto;
+  padding: 40px;
+  max-width: 520px;
+  text-align: center;
+}
+
+.empty_title {
+  font-size: 20px;
+  font-weight: 400;
+  color: $canvas-text;
+}
+
+.empty_hint {
+  font-size: 13px;
+  line-height: 1.6;
+  color: rgba(199, 208, 217, .6);
+}
+
+// ---- Print ------------------------------------------------------------------
+
+// Print-only letterhead, patient band and certification block. The screen
+// already carries the identity in the app's top bar; paper has to carry all of
+// it, to the same standard as the clinical report.
+.print_head,
+.print_tail {
+  display: none;
+}
+
+@page {
+  size: A4 portrait;
+  margin: 14mm;
+}
+
+@media print {
+  // Hide the app and every other portal; print the superimposition alone.
+  :global(body.superimposition-open) > * {
+    display: none !important;
+  }
+
+  :global(body.superimposition-open) {
+    overflow: visible;
+    background: #FFFFFF !important;
+  }
+
+  :global(html) {
+    background: #FFFFFF !important;
+  }
+
+  :global(body.superimposition-open) > .root {
+    display: block !important;
+    position: static;
+    background: #FFFFFF;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .chrome,
+  .controls {
+    display: none !important;
+  }
+
+  .print_only {
+    display: inline;
+  }
+
+  // ---- Letterhead ------------------------------------------------------------
+
+  .print_head {
+    display: block;
+  }
+
+  .print_masthead {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    padding-bottom: 6px;
+    border-bottom: 2px solid $primary-700;
+  }
+
+  .print_masthead_left {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .print_clinic {
+    font-size: 15px;
+    font-weight: 600;
+    color: $primary-900;
+  }
+
+  .print_clinic_line {
+    font-size: 11px;
+    color: $text-secondary;
+  }
+
+  .print_masthead_right {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
+    white-space: nowrap;
+  }
+
+  .print_kicker {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: $primary-700;
+  }
+
+  .print_date {
+    font-size: 11px;
+    color: $text-secondary;
+  }
+
+  .print_title {
+    margin: 8px 0 0;
+    font-size: 18px;
+    font-weight: 600;
+    color: $text-primary;
+  }
+
+  .print_band {
+    margin-top: 6px;
+    padding: 6px 0;
+    border-top: 1px solid $border;
+    border-bottom: 1px solid $border;
+  }
+
+  .band_row {
+    display: flex;
+    gap: 12px;
+
+    + .band_row {
+      margin-top: 4px;
+    }
+  }
+
+  .band_cell {
+    flex: 1 1 0;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  .band_label {
+    font-size: 8.5px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: $text-tertiary;
+  }
+
+  .band_value {
+    font-size: 11px;
+    color: $text-primary;
+  }
+
+  // ---- Figure ----------------------------------------------------------------
+
+  // Figure and legend side by side, then the table: the figure keeps the
+  // frame's aspect ratio, so at this height it is the full height of a third of
+  // the sheet rather than a letterboxed strip.
+  .body {
+    display: block;
+  }
+
+  .figure_column {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 6mm;
+    padding: 6mm 0 0;
+  }
+
+  .figure {
+    flex: 0 0 auto;
+    align-self: flex-start;
+    // Keep in step with PRINT_FIGURE_HEIGHT_MM in index.tsx, which sizes the
+    // figure's annotation type from it. 142mm, not 112: the change table now
+    // starts its own sheet (see `.panel` below), so the first sheet is the
+    // figure's — and a printed radiograph is worth every millimetre of it. The
+    // ceiling is the legend beside it: the frame is taller than it is wide, so
+    // every millimetre of figure height costs ~0.74 mm of legend width, and the
+    // explanation has to stay a readable measure (~50 characters). At 142mm the
+    // film is a third larger than it was and the two columns end together, near
+    // the foot of the sheet, instead of two thirds up it.
+    height: 142mm;
+    border: 1px solid $border;
+    background: #FFFFFF;
+    page-break-inside: avoid;
+  }
+
+  .anno_text {
+    fill: $text-primary;
+    stroke: #FFFFFF;
+    font-size: var(--anno-size-print);
+    stroke-width: var(--anno-halo-print);
+  }
+
+  .basis_line__t1 { stroke: #10538F; }
+  .basis_line__t2 { stroke: #C0431A; }
+
+  .scale_bar line {
+    stroke: $text-primary;
+  }
+
+  .legend_interval {
+    display: inline;
+  }
+
+  // On paper the tracings must be dark ink on white, and the radiograph only a
+  // faint underlay — a dark film would print as a black rectangle.
+  .film {
+    opacity: .25;
+  }
+
+  .casing {
+    stroke: rgba(255, 255, 255, .9);
+    stroke-width: 3.4;
+  }
+
+  .t1 {
+    .outline { stroke: #10538F; }
+    .dot { fill: #10538F; }
+  }
+
+  .t2 {
+    .outline { stroke: #C0431A; }
+    .dot { fill: #C0431A; }
+  }
+
+  .dot {
+    stroke: #FFFFFF;
+  }
+
+  .reg_ring {
+    stroke: $text-primary;
+  }
+
+  .key__t1 .key_swatch { border-top-color: #10538F; }
+  .key__t2 .key_swatch { border-top-color: #C0431A; }
+
+  .legend {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 0;
+    page-break-inside: avoid;
+  }
+
+  .key_text { color: $text-primary; }
+  .legend_interval,
+  .legend_basis { color: $text-secondary; }
+  .legend_numbers,
+  .legend_note { color: $text-secondary; }
+  .legend_note__warn { color: $warn; }
+
+  // The change table starts a sheet of its own.
+  //
+  // Not decoration: `break-after: avoid` on the section header is not honoured
+  // by Chrome in this position, and left to flow, sheet 1 ended with the words
+  // "Change · T2 − T1 · 32 comparable measurements over 5 mo" and nothing under
+  // them — the table began on sheet 2 regardless. A section header on one sheet
+  // and its numbers on the next is worse than a sheet break, and sheet 1 is a
+  // complete document in itself: the registered figure, what was held fixed, and
+  // how the comparison is to be read.
+  .panel {
+    flex: none;
+    display: block;
+    border-left: none;
+    background: #FFFFFF;
+    page-break-before: always;
+    break-before: page;
+  }
+
+  // The section header travels with the first rows it heads. Left breakable, it
+  // printed "Change · T2 − T1 · 32 comparable measurements over 5 mo" at the
+  // foot of sheet 1 with nothing under it — the table began on sheet 2 and 45 %
+  // of the first sheet was white.
+  .panel_head {
+    padding: 14px 0 6px;
+    page-break-after: avoid;
+    break-after: avoid;
+  }
+
+  // …and the column heads never print without at least the first group under
+  // them, for the same reason.
+  .table thead {
+    page-break-after: avoid;
+    break-after: avoid;
+  }
+
+  .panel_scroll {
+    overflow: visible;
+    padding: 0;
+  }
+
+  .table thead th {
+    position: static;
+  }
+
+  // Tighter rows on paper: the whole comparison should reach one sheet.
+  .table th,
+  .table td {
+    padding: 4px 6px;
+  }
+
+  .footnotes {
+    margin-top: 8px;
+    padding-top: 7px;
+    page-break-inside: avoid;
+  }
+
+  .footnote {
+    margin-bottom: 4px;
+    font-size: 10px;
+    line-height: 1.4;
+  }
+
+  .legend_note {
+    margin-top: 4px;
+  }
+
+  // The disclosure prints open (see AboutDisclosure's own print block); here it
+  // only has to take the sheet's ink and the printed note's size.
+  .legend_about {
+    margin-top: 4px;
+    color: $text-secondary;
+  }
+
+  .table tbody {
+    page-break-inside: avoid;
+  }
+
+  .bar_fill__pos { background: $primary-700; }
+  .bar_fill__neg { background: $accent-600; }
+
+  // ---- Certification ---------------------------------------------------------
+
+  // The same ruled block the clinical report closes with: a superimposition
+  // handed to a colleague is a signed document, not a screenshot.
+  .print_tail {
+    display: block;
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px solid $border;
+    page-break-inside: avoid;
+  }
+
+  .sig_label {
+    font-size: 9px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .07em;
+    color: $text-tertiary;
+  }
+
+  .sig_row {
+    display: flex;
+    gap: 10mm;
+    margin-top: 10px;
+  }
+
+  .sig_field {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  .sig_field__wide {
+    flex: 1.6 1 0;
+  }
+
+  .sig_line {
+    min-height: 16px;
+    padding-bottom: 2px;
+    border-bottom: 1px solid $border-strong;
+    font-size: 11px;
+    color: $text-primary;
+  }
+
+  .sig_caption {
+    display: block;
+    margin-top: 3px;
+    font-size: 9px;
+    color: $text-tertiary;
+  }
+
+  .print_colophon {
+    margin: 8px 0 0;
+    font-size: 9px;
+    line-height: 1.45;
+    color: $text-tertiary;
+  }
+}

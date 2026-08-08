@@ -15,7 +15,13 @@ import {
   getSkippedSteps,
   getAnalysisId,
   getScaleFactor,
+  hasScaleFactor,
+  getImageCaptureDate,
 } from './image';
+
+import { getActivePatient } from 'store/reducers/patients';
+import { getAnalysisContext } from 'utils/patient';
+import { parseCaptureDate } from 'utils/records';
 
 import {
   getStepsForAnalysis,
@@ -27,6 +33,8 @@ import {
   tryCalculate,
   tryMap,
 } from 'analyses/helpers';
+
+import { isGeoPoint } from 'utils/math';
 
 const KEY_ANALYSIS_LOAD_STATUS: StoreKey = 'analyses.status';
 const KEY_LAST_USED_ID: StoreKey = 'analyses.lastUsedId';
@@ -259,26 +267,68 @@ export const isStepEligibleForComputation = createSelector(
   },
 );
 
-export const getCalculatedValue = createSelector(
+/**
+ * The step's value straight out of the geometry — linear measurements are
+ * still in image pixels here. Not exported: nothing outside this module should
+ * mistake a pixel distance for a millimeter one.
+ */
+const getRawCalculatedValue = createSelector(
   isStepEligibleForComputation,
   getManualLandmarks,
-  getScaleFactor,
-  (isEligible, getManual, getScale) =>
-    (imageId: string): ((step: CephLandmark) => number | undefined) => (step: CephLandmark) => {
-    if (isEligible(imageId)(step)) {
-      const value = tryCalculate(step, getManual(imageId), {});
-      // Linear measurements come out of the geometry in image pixels; when a
-      // mm/px calibration is set for the image, convert them to millimeters.
-      // Angular values are scale-independent and pass through unchanged.
-      if (typeof value === 'number' && step.unit === 'mm') {
-        const scaleFactor = getScale(imageId);
-        if (scaleFactor !== null && scaleFactor > 0) {
-          return value * scaleFactor;
-        }
+  (isEligible, getManual) =>
+    (imageId: string) => (step: CephLandmark): number | undefined => {
+      if (!isEligible(imageId)(step)) {
+        return undefined;
       }
-      return value;
+      return tryCalculate(step, getManual(imageId), {});
+    },
+);
+
+export const getCalculatedValue = createSelector(
+  getRawCalculatedValue,
+  getScaleFactor,
+  hasScaleFactor,
+  (getRaw, getScale, isScaled) =>
+    (imageId: string): ((step: CephLandmark) => number | undefined) => (step: CephLandmark) => {
+    const value = getRaw(imageId)(step);
+    // Linear measurements come out of the geometry in image pixels; when a
+    // mm/px calibration is set for the image, convert them to millimeters.
+    // Angular values are scale-independent and pass through unchanged.
+    //
+    // Without a calibration there is no honest millimeter value to report:
+    // the raw pixel distance compared against a mm norm would read as a
+    // gross deviation (a lip 1 mm behind the E-line showed as "-10.1 mm
+    // ***"). Report it as uncalculated instead — `interpret` skips
+    // non-numeric values, so the measurement drops out of the summary,
+    // report and wigglegram until the image is calibrated.
+    if (typeof value === 'number' && step.unit === 'mm') {
+      if (!isScaled(imageId)) {
+        return undefined;
+      }
+      return value * getScale(imageId)!;
     }
-    return undefined;
+    return value;
+  },
+);
+
+/**
+ * Whether a step's value is being withheld only for want of an image scale:
+ * the geometry already yields a number, but it is a linear measurement and
+ * there is no mm/px calibration to express it in millimeters.
+ *
+ * Deliberately narrower than "is an unscaled mm step" — several `line`
+ * landmarks are declared with `unit: 'mm'` yet never produce a value at all
+ * (e.g. the pterygoid vertical), and promising those a number once the image
+ * is calibrated would be its own small lie.
+ */
+export const isStepValuePendingScale = createSelector(
+  getRawCalculatedValue,
+  hasScaleFactor,
+  (getRaw, isScaled) => (imageId: string) => (step: CephLandmark): boolean => {
+    if (step.unit !== 'mm' || isScaled(imageId)) {
+      return false;
+    }
+    return typeof getRaw(imageId)(step) === 'number';
   },
 );
 
@@ -348,13 +398,31 @@ export const getAllGeoObjects = createSelector(
   getMappedValue,
   getManualLandmarks,
   (getSteps, getMapped, getManual) => (imageId: string) => {
-    const fromAnalysis = mapValues(keyBy(getSteps(imageId), s => s.symbol), getMapped(imageId));
+    const steps = getSteps(imageId);
+    const fromAnalysis = mapValues(keyBy(steps, s => s.symbol), (s: CephLandmark) => {
+      const mapped = getMapped(imageId)(s);
+      // A stored *point* under a computed measurement's symbol ('Björk',
+      // 'S-Go/N-Me', …) can never be that measurement's honest geometry — it
+      // is a stray from an older session that treated computed-only steps as
+      // clickable landmarks. Drop it instead of rendering a bogus labeled dot.
+      if (s.type !== 'point' && isGeoPoint(mapped)) {
+        return undefined;
+      }
+      return mapped;
+    });
     // Also surface manually placed landmarks that the active analysis does not
     // define (e.g. the soft-tissue profile points used by the profilogram), so
     // they render as draggable points instead of being invisible.
     const manual = getManual(imageId);
+    const stepsBySymbol = keyBy(steps, s => s.symbol);
     const result: { [symbol: string]: GeoObject | undefined } = { ...fromAnalysis };
     Object.keys(manual).forEach((symbol) => {
+      const step = stepsBySymbol[symbol];
+      // Same stray-point guard as above: never resurrect a point stored under
+      // a computed measurement's symbol.
+      if (step !== undefined && step.type !== 'point') {
+        return;
+      }
       if (result[symbol] === undefined) {
         result[symbol] = manual[symbol];
       }
@@ -391,22 +459,75 @@ export const getAllCalculatedValues = createSelector(
   },
 );
 
+/**
+ * The patient these norms are being read against — their age on the day of the
+ * film and their recorded sex — so an analysis that carries its author's own
+ * age indexing (Ricketts) or sex split (Jacobson's Wits) grades this patient
+ * rather than the author's reference child. Empty when nothing is on record,
+ * in which case every analysis prints its published figure and says so.
+ */
+export const getPatientAnalysisContext = createSelector(
+  getActivePatient,
+  getImageCaptureDate,
+  (patient, getCaptureDate) => (imageId: string): AnalysisContext => (
+    getAnalysisContext(patient, parseCaptureDate(getCaptureDate(imageId)))
+  ),
+);
+
 export const getCategorizedAnalysisResults = createSelector(
   getActiveAnalysis,
   getAllCalculatedValues,
   getAllGeoObjects,
-  (getAnalysis, getValues, getObjects) => (imageId: string): Array<CategorizedAnalysisResult<Category>> => {
+  getPatientAnalysisContext,
+  (getAnalysis, getValues, getObjects, getContext) =>
+    (imageId: string): Array<CategorizedAnalysisResult<Category>> => {
+      const analysis = getAnalysis(imageId);
+      const objects = getObjects(imageId);
+      const values = getValues(imageId);
+      if (analysis !== null) {
+        return analysis.interpret(values, objects, getContext(imageId));
+      }
+      return [];
+    },
+);
+
+/**
+ * Warnings the active analysis draws from its own values (see
+ * `AnalysisCaveat`) — a misplaced landmark its numbers expose, printed with the
+ * rows it affects rather than left for the clinician to infer.
+ */
+export const getAnalysisCaveats = createSelector(
+  getActiveAnalysis,
+  getAllCalculatedValues,
+  (getAnalysis, getValues) => (imageId: string): AnalysisCaveat[] => {
     const analysis = getAnalysis(imageId);
-    const objects = getObjects(imageId);
-    const values = getValues(imageId);
-    if (analysis !== null) {
-      return analysis.interpret(values, objects);
+    if (analysis === null || typeof analysis.caveats !== 'function') {
+      return [];
     }
-    return [];
+    return analysis.caveats(getValues(imageId));
   },
 );
 
 export const canShowSummary = createSelector(
   getCategorizedAnalysisResults,
   (getResults) => (imageId: string) => !isEmpty(getResults(imageId)),
+);
+
+/**
+ * Whether the active analysis interprets linear (mm) measurements that cannot
+ * be reported because the image has no mm/px scale. `getCalculatedValue`
+ * suppresses those values, which silently removes their rows from the summary,
+ * the printed report and the wigglegram — this drives the footnote that tells
+ * the clinician why they are missing and how to get them back.
+ */
+export const hasUnreportableLinearMeasurements = createSelector(
+  getActiveAnalysis,
+  isStepValuePendingScale,
+  (getAnalysis, isPendingScale) => (imageId: string): boolean => {
+    const analysis = getAnalysis(imageId);
+    return analysis !== null && some(
+      analysis.components,
+      (c) => isPendingScale(imageId)(c.landmark),
+    );
+  },
 );

@@ -23,6 +23,15 @@ import { isGeoPoint } from 'utils/math';
 
 /** Shared visual identity — imported by both the SVG overlay and the canvas. */
 export const OUTLINE_COLOR = '#7EC8FF';
+/**
+ * The same identity taken to full contrast for a rasterised film (image export,
+ * printed report). There the anatomical tracing is the primary graphic — it is
+ * what a cephalometric report is *about* — so it is drawn at full weight in
+ * near-white while the analysis planes recede behind it. On screen the planes
+ * are interactive and keep their own weight, which is why this is a second
+ * constant rather than a change to the one above.
+ */
+export const OUTLINE_PRINT_COLOR = '#EAF6FF';
 /** On-screen stroke weight (px). Thinner than the 1.5px measurement segments
  *  and much thinner than the 2.5px reference planes, for a fine hand-traced look. */
 export const OUTLINE_WIDTH = 1.15;
@@ -50,6 +59,33 @@ const point = (map: LandmarkMap, symbol: string): Pt | null => {
   const l = map[symbol];
   return isGeoPoint(l) ? { x: l.x, y: l.y } : null;
 };
+
+/**
+ * The soft-tissue landmarks the profile curve is drawn *through* when the
+ * tracing carries them. Short of the full set the silhouette is synthesised
+ * from the skeletal profile instead (see `buildOutlines`), which matters to any
+ * caller that needs to know whether the curve on screen is measured or inferred
+ * — the treatment simulation does, because a synthesised silhouette follows the
+ * bone 1:1 and therefore cannot honestly show a soft-tissue response ratio.
+ */
+export const SOFT_TISSUE_PROFILE_LANDMARKS: string[] = [
+  'N\'', 'Pn', 'Sn', 'Ls', 'Li', 'Pog\'',
+];
+
+/**
+ * Whether the soft-tissue profile would be drawn through real plotted
+ * soft-tissue landmarks (`true`) or synthesised from the skeletal profile
+ * (`false`). Mirrors the branch `buildOutlines` takes, and is the single place
+ * that condition is named.
+ */
+export const hasSoftTissueProfile = (map: LandmarkMap): boolean =>
+  SOFT_TISSUE_PROFILE_LANDMARKS.every((symbol) => point(map, symbol) !== null);
+
+/** The soft-tissue profile landmarks this tracing is still missing. */
+export const missingSoftTissueProfileLandmarks = (
+  map: LandmarkMap,
+): string[] =>
+  SOFT_TISSUE_PROFILE_LANDMARKS.filter((symbol) => point(map, symbol) === null);
 
 /**
  * The facial reference frame used to place synthesised soft-tissue points.
@@ -80,11 +116,29 @@ const place = (f: Frame, anchor: Pt, ant: number, lon: number): Point2 => [
   anchor.y + f.h * (ant * f.ant.y + lon * f.down.y),
 ];
 
+export interface OutlineOptions {
+  /**
+   * Take the N–Me facial frame — the unit system the synthesised soft-tissue
+   * offsets are expressed in — from this map instead of from `map` itself.
+   *
+   * Only the treatment simulation passes it. There, `map` holds landmarks
+   * displaced by a hypothetical plan, and letting the frame follow them would
+   * rescale every inferred offset: advancing the mandible lengthens N–Me, which
+   * would slide the inferred forehead and nose forward even though nothing in
+   * the plan touches the cranium or the nasal bones. The offsets were derived
+   * against the patient's actual facial height, so that height is what they
+   * stay expressed in.
+   */
+  frameFrom?: LandmarkMap;
+}
+
 /**
  * Builds every outline whose required landmarks are present. Missing outlines
  * are simply omitted, so the tracing fills in as more points are placed.
  */
-export const buildOutlines = (map: LandmarkMap): Outline[] => {
+export const buildOutlines = (
+  map: LandmarkMap, options?: OutlineOptions,
+): Outline[] => {
   const outlines: Outline[] = [];
 
   const N = point(map, 'N');
@@ -113,9 +167,19 @@ export const buildOutlines = (map: LandmarkMap): Outline[] => {
   const Pogsoft = point(map, "Pog'");
   const Mesoft = point(map, "Me'");
 
-  const hasSoftTissue = Nsoft && Pn && Sn && Ls && Li && Pogsoft;
+  // The frame the synthesised offsets are scaled in; `frameFrom` lets a caller
+  // hold it steady while the landmarks it draws move (see `OutlineOptions`).
+  const frameSource = options !== undefined && options.frameFrom !== undefined
+    ? options.frameFrom
+    : map;
+  const frameN = point(frameSource, 'N');
+  const frameMe = point(frameSource, 'Me');
+  const facialFrame = (n: Pt, me: Pt): Frame =>
+    makeFrame(frameN !== null ? frameN : n, frameMe !== null ? frameMe : me);
+
+  const hasSoftTissue = hasSoftTissueProfile(map);
   if (hasSoftTissue && N && Me) {
-    const f = makeFrame(N, Me);
+    const f = facialFrame(N, Me);
     const pts: Point2[] = [];
     // Forehead/glabella above soft nasion, derived from the skeletal frame so
     // the curve starts above the brow even when G is not a placed landmark.
@@ -143,7 +207,7 @@ export const buildOutlines = (map: LandmarkMap): Outline[] => {
     // Offsets calibrated against the demo film's soft-tissue silhouette,
     // expressed in the facial frame. ANS anchors the subnasale when present;
     // otherwise it is derived from A (subnasale sits above and anterior to A).
-    const f = makeFrame(N, Me);
+    const f = facialFrame(N, Me);
     const subnasale: Point2 = ANS
       ? place(f, ANS, 0.088, 0.055)
       : place(f, A, 0.110, -0.030);
@@ -167,7 +231,7 @@ export const buildOutlines = (map: LandmarkMap): Outline[] => {
   // Condyle/articulare -> gonial angle -> inferior border (bulged down) -> Me
   // -> chin -> up the anterior symphysis to B.
   if (Go && Me && Pog && B && N) {
-    const f = makeFrame(N, Me);
+    const f = facialFrame(N, Me);
     const pts: Point2[] = [];
     if (Ar) {
       pts.push([Ar.x, Ar.y]); // condyle / articulare (top of ramus)
@@ -190,7 +254,7 @@ export const buildOutlines = (map: LandmarkMap): Outline[] => {
   // Palatal plane (PNS -> ANS) into the anterior maxilla (ANS -> A) and down to
   // the alveolar crest.
   if (ANS && A && N && Me) {
-    const f = makeFrame(N, Me);
+    const f = facialFrame(N, Me);
     const pts: Point2[] = [];
     if (PNS) {
       pts.push([PNS.x, PNS.y]);
@@ -204,7 +268,7 @@ export const buildOutlines = (map: LandmarkMap): Outline[] => {
   // ---- 4. Sella turcica --------------------------------------------------
   // Small U-shaped fossa opening upward around S.
   if (S && N && Me) {
-    const f = makeFrame(N, Me);
+    const f = facialFrame(N, Me);
     const k = f.h / 388; // demo-calibrated pixel offsets, scaled to face size
     const off = (dx: number, dy: number): Point2 => [S.x + dx * k, S.y + dy * k];
     outlines.push({
@@ -216,7 +280,7 @@ export const buildOutlines = (map: LandmarkMap): Outline[] => {
 
   // ---- 5. Infraorbital rim arc ------------------------------------------
   if (Or && N && Me) {
-    const f = makeFrame(N, Me);
+    const f = facialFrame(N, Me);
     const k = f.h / 388;
     const off = (dx: number, dy: number): Point2 => [Or.x + dx * k, Or.y + dy * k];
     outlines.push({
@@ -228,7 +292,7 @@ export const buildOutlines = (map: LandmarkMap): Outline[] => {
 
   // ---- 6. Porion / ear-rod marker ---------------------------------------
   if (Po && N && Me) {
-    const f = makeFrame(N, Me);
+    const f = facialFrame(N, Me);
     const r = Math.max(4, (f.h / 388) * 8);
     const ring: Point2[] = [];
     for (let i = 0; i < 10; i += 1) {
@@ -236,6 +300,47 @@ export const buildOutlines = (map: LandmarkMap): Outline[] => {
       ring.push([Po.x + r * Math.cos(a), Po.y + r * Math.sin(a)]);
     }
     outlines.push({ id: 'porion', points: ring, closed: true });
+  }
+
+  // ---- 7. Central incisor lozenges --------------------------------------
+  // Classic tracing silhouette of each central incisor: a slender closed
+  // lozenge running along the incisor's long axis, from the incisal edge
+  // (tip) up to the root apex, widest at the crown and tapering to the root.
+  // Drawn only when both the edge and apex landmarks of that incisor are
+  // present (so it appears for the dental analysis but not for skeletal-only
+  // ones). Geometry is derived from the two points, so it tracks them when
+  // dragged, and the width scales with the axis length.
+  const buildIncisor = (edge: Pt, apex: Pt): Point2[] => {
+    const ax = { x: apex.x - edge.x, y: apex.y - edge.y }; // edge -> apex
+    const L = Math.max(1, Math.hypot(ax.x, ax.y));
+    const u = { x: ax.x / L, y: ax.y / L };      // along axis, toward root
+    const p = { x: -u.y, y: u.x };               // perpendicular (labio-lingual)
+    const crownHalf = L * 0.17;
+    const rootHalf = L * 0.085;
+    const at = (t: number, w: number): Point2 => [
+      edge.x + u.x * L * t + p.x * w,
+      edge.y + u.y * L * t + p.y * w,
+    ];
+    return [
+      at(0, 0),               // incisal tip
+      at(0.30, crownHalf),    // labial crown
+      at(0.60, rootHalf),     // labial root surface
+      at(1, 0),               // root apex
+      at(0.60, -rootHalf),    // lingual root surface
+      at(0.30, -crownHalf),   // lingual crown / cingulum
+    ];
+  };
+
+  const U1apex = point(map, 'U1 Apex');
+  const U1edge = point(map, 'U1 Incisal Edge');
+  if (U1apex && U1edge) {
+    outlines.push({ id: 'incisor-upper', points: buildIncisor(U1edge, U1apex), closed: true });
+  }
+
+  const L1apex = point(map, 'L1 Apex');
+  const L1edge = point(map, 'L1 Incisal Edge');
+  if (L1apex && L1edge) {
+    outlines.push({ id: 'incisor-lower', points: buildIncisor(L1edge, L1apex), closed: true });
   }
 
   return outlines;

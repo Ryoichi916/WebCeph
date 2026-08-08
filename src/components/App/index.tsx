@@ -5,6 +5,7 @@ import PatientBar from 'components/PatientBar/connected';
 import Workspace from 'components/Workspace/connected';
 import Settings from 'components/Settings/connected';
 import PatientPicker from 'components/PatientPicker/connected';
+import RecordsDashboard from 'components/RecordsDashboard/connected';
 
 import { Route } from 'react-router-dom';
 
@@ -126,6 +127,7 @@ const App = enhance(({
                       ) : null}
                       <Workspace className={classes.workspace} workspaceId={activeWorkspaceId} />
                     </div>
+                    <RecordsDashboard />
                   </div>
                 ) : (
                   <PatientPicker />

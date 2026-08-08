@@ -58,6 +58,57 @@
   gap: 10px;
 }
 
+// ---- Scope switch (segmented control, screen chrome only) -------------------
+
+// Lives inside .chrome, which @media print hides outright — the switch is a
+// preview control and must never reach the paper.
+.seg {
+  display: inline-flex;
+  padding: 2px;
+  border: 1px solid rgba(255, 255, 255, .18);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, .06);
+}
+
+.seg_button {
+  height: 28px;
+  padding: 0 14px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: rgba(242, 245, 248, .72);
+  font-family: $font-stack;
+  font-size: 12.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease;
+
+  &:hover {
+    color: $text-on-dark;
+    background: rgba(255, 255, 255, .08);
+  }
+
+  &:focus {
+    outline: none;
+  }
+
+  &:focus-visible {
+    box-shadow: $focus-ring;
+  }
+}
+
+.seg_button__on {
+  background: $bg-surface;
+  color: $primary-700;
+  font-weight: 600;
+
+  &:hover {
+    background: $bg-surface;
+    color: $primary-700;
+  }
+}
+
 .chrome_button {
   display: inline-flex;
   align-items: center;
@@ -73,6 +124,17 @@
   font-weight: 500;
   cursor: pointer;
   transition: background-color 120ms ease, border-color 120ms ease;
+
+  svg {
+    flex-shrink: 0;
+    // mui SvgIcon writes an inline `color` from the theme onto the <svg>
+    // itself, so `fill: currentColor` resolves against the theme's dark ink
+    // rather than against this button's light text — a near-black glyph on a
+    // dark chrome. Force the icon to follow the button's own colour instead.
+    // (Same fix as TracingToolbar's `.button svg`.)
+    color: inherit !important;
+    fill: currentColor !important;
+  }
 
   &:hover {
     background: rgba(255, 255, 255, .1);
@@ -132,42 +194,74 @@
 
 .masthead {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: space-between;
-  gap: 16px;
-  padding-bottom: 16px;
+  // Wide enough that a two-line practice name can never touch the kicker: the
+  // clinic name now wraps, and 16px of air read as a collision at 24px type.
+  gap: 32px;
+  padding-bottom: 14px;
   border-bottom: 2px solid $primary-700;
 }
 
-.brand {
-  display: flex;
-  align-items: center;
-  gap: 12px;
+// No practice name stored (the default state). Printing the kicker and date
+// hard right left the left two-thirds of the masthead empty above a full-width
+// 2px rule — a letterhead rule under nothing. The document block comes left
+// instead, so the masthead is a balanced block whether or not a practice has
+// named itself. On screen the placeholder fills the space, so this is print
+// only.
+@media print {
+  .masthead__anon {
+    justify-content: flex-start;
+    // The (empty, print-hidden) left block collapses to nothing, so the
+    // masthead's own gap would still indent the kicker 32px past the rule and
+    // the document title beneath it.
+    gap: 0;
+  }
+
+  .masthead__anon .masthead_right {
+    align-items: flex-start;
+  }
 }
 
-.brand_text {
+// The practice owns the letterhead. The software is credited in the footer.
+.masthead_left {
   display: flex;
   flex-direction: column;
+  min-width: 0;
 }
 
-.brand_word {
-  font-size: 20px;
+.clinic_name {
+  font-size: 24px;
   font-weight: 700;
-  letter-spacing: .01em;
+  letter-spacing: -.01em;
+  line-height: 1.15;
   color: $primary-900;
-  line-height: 1.2;
 }
 
-.brand_sub {
-  margin-top: 1px;
+.clinic_line {
+  margin-top: 4px;
+  font-size: 12.5px;
+  color: $text-secondary;
+}
+
+// Screen-only wayfinding for the two fields that are typed further down.
+.clinic_hint {
+  margin-top: 4px;
   font-size: 11.5px;
-  color: $text-tertiary;
+  color: $text-disabled;
+}
+
+@media print {
+  .clinic_hint {
+    display: none;
+  }
 }
 
 .masthead_right {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
+  flex: 0 0 auto;
 }
 
 .doc_kicker {
@@ -183,6 +277,130 @@
   font-size: 12px;
   color: $text-secondary;
   font-variant-numeric: tabular-nums;
+}
+
+// ---- Letterhead editable fields --------------------------------------------
+
+// Device-persistent contentEditable fields (clinic, clinician, license).
+// On screen they behave like quiet inline inputs; in print an empty field
+// disappears entirely, leaving only the ruled line beneath it (if any).
+.editable {
+  display: inline-block;
+  min-width: 90px;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  border-radius: 3px;
+}
+
+@media screen {
+  .editable {
+    cursor: text;
+    padding: 0 2px;
+    border-bottom: 1px dashed $border-strong;
+    transition: background-color 120ms ease, border-color 120ms ease;
+
+    &:hover {
+      background: $primary-050;
+    }
+
+    &:focus {
+      outline: none;
+      background: $primary-050;
+      border-bottom: 1px solid $primary-600;
+    }
+
+    // Screen-only affordance while empty; never printed.
+    &:empty::before {
+      content: attr(data-placeholder);
+      color: $text-disabled;
+      font-weight: 400;
+    }
+  }
+}
+
+@media print {
+  .editable {
+    border-bottom: none;
+
+    &:empty {
+      display: none;
+    }
+  }
+}
+
+// The clinic name is the one letterhead field that may run long — a Japanese
+// practice name plus its romanisation is routinely 35+ characters — so it is
+// the one that wraps. Written at two-class specificity because `.editable`'s
+// single-line `white-space: nowrap; overflow: hidden` is defined after it and
+// would otherwise win: that pairing clipped the name with no ellipsis, and
+// because a contentEditable stays scrolled to the caret, the printed letterhead
+// lost the *beginning* of the practice's own name. A two-line letterhead is
+// normal on clinical stationery; a beheaded one is not.
+.editable.clinic_name {
+  white-space: normal;
+  // Japanese has no spaces to break at, so the break must be allowed anywhere
+  // rather than only between words.
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  overflow: visible;
+  text-overflow: clip;
+}
+
+// Masthead type steps down as the practice name grows. 24px holds about 26
+// characters on the two-thirds of the sheet the masthead's left block gets; past
+// that a name wraps, and past ~46 characters it wrapped to three lines and
+// pushed the 2px rule down the page. Two lines is normal on clinical
+// stationery, so the size steps to keep the name inside two.
+.clinic_name__long {
+  font-size: 20px;
+  line-height: 1.2;
+}
+
+.clinic_name__longest {
+  font-size: 17px;
+  line-height: 1.25;
+}
+
+// ---- The unnamed letterhead ------------------------------------------------
+//
+// A fresh install has no practice name, and the empty field used to be set at
+// masthead size (24px) in grey with a dashed rule the full width of the
+// masthead: the first thing anyone saw of the report was a large piece of
+// unfinished-looking chrome. Empty, the field is now a small dashed pill — the
+// shape of an "add" control everywhere else in this app — so it reads as
+// something to fill in rather than as something broken. It grows into the
+// letterhead the moment it has text, and prints as nothing at all.
+@media screen {
+  .editable.clinic_name:empty {
+    min-width: 0;
+    padding: 3px 11px;
+    border: 1px dashed $border-strong;
+    border-radius: 999px;
+    // Aligned with the hint line under it rather than with 24px type.
+    align-self: flex-start;
+    font-size: 12.5px;
+    font-weight: 500;
+    letter-spacing: 0;
+    line-height: 1.4;
+    color: $text-tertiary;
+
+    &::before {
+      color: inherit;
+    }
+
+    &:hover {
+      border-color: $primary-600;
+      background: $primary-050;
+      color: $primary-700;
+    }
+
+    &:focus {
+      border: 1px dashed $primary-600;
+      background: $primary-050;
+      color: $primary-700;
+    }
+  }
 }
 
 .doc_title {
@@ -278,33 +496,430 @@
   padding: 2px 9px;
 }
 
+// ---- Summary of findings (combined report contents page) --------------------
+
+.ov {
+  border: 1px solid $border;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+// The contents table may break across pages — a *row* may not. Kept whole, the
+// block was too tall for the space left under the radiograph on page 1, so it
+// moved to page 2 and left the cover two-thirds empty; broken between rows it
+// starts under the figure and the cover carries a finding instead of only
+// metadata.
+.ov_row {
+  page-break-inside: avoid;
+  break-inside: avoid;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 7px 12px;
+  background: $bg-surface;
+
+  &:nth-child(even) {
+    background: #FAFBFC;
+  }
+
+  + .ov_row {
+    border-top: 1px solid $border;
+  }
+}
+
+// Column heads: the right-hand fraction ("8/8") is unreadable without one.
+.ov_row__head {
+  padding-top: 5px;
+  padding-bottom: 5px;
+  background: $bg-sunken !important;
+
+  .ov_name,
+  .ov_findings,
+  .ov_count {
+    font-size: 9.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    color: $text-tertiary;
+  }
+}
+
+.ov_name {
+  flex: 0 0 96px;
+  font-size: 12px;
+  font-weight: 700;
+  color: $primary-900;
+}
+
+.ov_findings {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+}
+
+.ov_pair {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.ov_cat {
+  font-size: 10.5px;
+  color: $text-secondary;
+  white-space: nowrap;
+}
+
+.ov_none {
+  font-size: 11px;
+  color: $text-tertiary;
+}
+
+.ov_more {
+  font-size: 10.5px;
+  color: $text-tertiary;
+  white-space: nowrap;
+}
+
+.ov_count {
+  flex: 0 0 auto;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: $text-tertiary;
+  font-variant-numeric: tabular-nums;
+}
+
+.ov_caption {
+  margin: 8px 0 0;
+  font-size: 10.5px;
+  line-height: 1.45;
+  color: $text-tertiary;
+}
+
+// Marks a finding the analyses disagree on, decoded by `.ov_key` directly under
+// the column heads. A word in a bordered tag, never the bare "≠" this used to
+// be: between a finding's name and its verdict the sign read as negation
+// ("Skeletal profile ≠ Normal" = not normal), which is the inverse of what it
+// says, and nothing near it explained the mark.
+.ov_differs {
+  display: inline-block;
+  margin: 0 4px 0 5px;
+  font-size: 7.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .1em;
+  color: $warn;
+  vertical-align: 1.5px;
+}
+
+// The key to that tag, immediately under the column heads: it used to be one
+// clause at the end of the paragraph closing the "Where the analyses differ"
+// table, ~700px below the first mark it explained.
+.ov_key {
+  padding: 5px 12px 6px;
+  border-top: 1px solid $border;
+  border-bottom: 1px solid $border;
+  background: $warn-bg;
+  font-size: 9.5px;
+  line-height: 1.5;
+  color: #7A4A00;
+
+  .ov_differs {
+    margin: 0 4px 0 0;
+    font-size: 8px;
+  }
+}
+
+// ---- Caveats that change how the numbers must be read -----------------------
+
+// Reserved for a fact that qualifies every measurement on the paper (no image
+// scale, for instance). Amber attention treatment — never the quietest text on
+// the page.
+.caveat {
+  margin: 12px 0 0;
+  padding: 9px 13px;
+  border: 1px solid #F0DFBC;
+  border-left: 4px solid $warn;
+  border-radius: 6px;
+  background: $warn-bg;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: #7A4A00;
+  page-break-inside: avoid;
+}
+
+// The one line of it a reader who skims must not be able to miss.
+.caveat_head {
+  display: block;
+  margin-bottom: 2px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #6B4100;
+}
+
+// ---- Where the analyses differ (cross-analysis disagreement) ----------------
+
+// Breakable **between rows**, exactly as the summary table above it is (see
+// `.ov_row`). Kept whole, this block is ~90 mm tall and could not share the
+// sheet the summary of findings ends on: it took a sheet of its own, left 60 % of
+// it white and pushed the whole report one side longer.
+.diverge {
+  margin-top: 10px;
+  padding: 9px 12px 10px;
+  border: 1px solid $border;
+  border-radius: 6px;
+  background: #FAFBFC;
+}
+
+// The heading travels with its first row.
+.diverge_head_keep {
+  page-break-after: avoid;
+  break-after: avoid;
+}
+
+.diverge_head {
+  display: block;
+  margin-bottom: 5px;
+  font-size: 9.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .1em;
+  color: $text-secondary;
+}
+
+.diverge_row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 3px 0;
+  // A row may not be cut in half, even though the block may break between rows.
+  page-break-inside: avoid;
+  break-inside: avoid;
+
+  + .diverge_row {
+    border-top: 1px dotted $border;
+  }
+}
+
+.diverge_cat {
+  flex: 0 0 108px;
+  font-size: 11px;
+  font-weight: 600;
+  color: $text-primary;
+}
+
+.diverge_sources {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px 14px;
+}
+
+.diverge_src {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  font-size: 10.5px;
+  color: $text-tertiary;
+}
+
+.diverge_src_analysis {
+  font-weight: 600;
+  color: $text-secondary;
+}
+
+.diverge_src_ind {
+  font-weight: 600;
+  color: $text-primary;
+}
+
+.diverge_src_num {
+  font-variant-numeric: tabular-nums;
+}
+
+.diverge_note {
+  display: block;
+  margin-top: 6px;
+  font-size: 10.5px;
+  line-height: 1.45;
+  color: $text-tertiary;
+}
+
+// ---- Document keys (printed once, in the front matter) ----------------------
+
+.keys {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid $border;
+}
+
+.keys_line {
+  font-size: 10.5px;
+  color: $text-tertiary;
+}
+
+// On paper the same key is in the running foot of every page — which is the
+// whole point of putting it there — so the front-matter copy would be a second
+// statement of it three centimetres above the first. The screen preview has no
+// running foot, so it keeps this one.
+@media print {
+  .keys {
+    display: none;
+  }
+}
+
+// ---- One analysis section inside the combined report ------------------------
+
+.sec {
+  margin-top: 26px;
+}
+
+// The heading and its wigglegram travel together across a page break, so a
+// section heading can never be orphaned at the foot of a page and the chart
+// is never cut in half.
+.sec_keep {
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+
+// `break-after: avoid` keeps a heading with the table that follows it. Applied
+// unconditionally it also glued the *next* section's heading to a section that
+// ends here, pushing both onto a fresh page and leaving a dead band behind.
+.sec_keep__leading {
+  page-break-after: avoid;
+  break-after: avoid;
+}
+
+.sec_head {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  padding-bottom: 6px;
+  border-bottom: 1.5px solid $primary-700;
+}
+
+.sec_index {
+  flex: 0 0 auto;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: $primary-700;
+  color: #FFFFFF;
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 17px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.sec_name {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -.005em;
+  color: $primary-900;
+}
+
+.sec_active {
+  padding: 1px 7px;
+  border: 1px solid $primary-100;
+  border-radius: 999px;
+  background: $primary-050;
+  color: $primary-700;
+  font-size: 9.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+}
+
+.sec_focus {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 11px;
+  color: $text-tertiary;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sec_count {
+  flex: 0 0 auto;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  color: $text-tertiary;
+  font-variant-numeric: tabular-nums;
+}
+
+// Honest placeholder for an analysis nothing computes for yet.
+.sec_pending {
+  margin: 10px 0 0;
+  padding: 9px 12px;
+  border: 1px dashed $border-strong;
+  border-radius: 6px;
+  background: #FAFBFC;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: $text-secondary;
+}
+
 // ---- Radiograph figure -----------------------------------------------------
 
 .figure {
   margin: 0;
 }
 
+// The mount hugs the film. A dark rounded panel around the radiograph put a
+// piece of application UI on a clinical page — a printed cephalometric figure
+// sits on white paper inside a hairline rule, and the film supplies its own
+// black. The frame is sized by the image, which is driven off the *width* of
+// the page (see `.figure_image`) rather than a pixel height: a 340 px-tall
+// screenshot in the middle of a 186 mm column left 40 % of the sheet empty.
+// The film is 150 mm across — the width of the page, less its margins and a
+// little air — in both the preview and the print, so what the clinician
+// approves on screen is the sheet that comes out of the printer.
+// The rule hugs the film. Sized by its content — `width: fit-content` — rather
+// than fixed at 150 mm: a portrait crop constrained by `max-height` is narrower
+// than 150 mm, and a fixed-width frame then drew the hairline rule out in the
+// white paper with a 4 mm band of nothing on each side of the radiograph. A
+// clinical figure's rule is the film's edge.
 .figure_frame {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 10px;
-  background: $canvas-bg;
-  border: 1px solid $border-strong;
-  border-radius: 6px;
+  display: table;
+  box-sizing: border-box;
+  width: fit-content;
+  max-width: 100%;
+  margin: 0 auto;
+  padding: 0;
+  background: #FFFFFF;
+  border: 1px solid $text-disabled;
+  border-radius: 0;
 }
 
+// Width-driven, with the height as a backstop only: an unusually tall crop is
+// letterboxed rather than squashed. A radiograph reproduced at a different
+// scale horizontally and vertically is not a radiograph any more — every angle
+// on it would be wrong — so `object-fit: contain` is load-bearing here, not
+// decoration.
 .figure_image {
   display: block;
-  max-width: 100%;
-  max-height: 300px;
-  border-radius: 2px;
+  width: auto;
+  height: auto;
+  max-width: 150mm;
+  max-height: 168mm;
 }
 
 .figure_missing {
   padding: 48px 0;
   font-size: 13px;
-  color: $canvas-text;
+  color: $text-tertiary;
 }
 
 .figure_caption {
@@ -317,6 +932,179 @@
 .caption_dot {
   margin: 0 7px;
   color: $text-disabled;
+}
+
+// ---- Figure key -------------------------------------------------------------
+//
+// Four kinds of ink are drawn on the film and none of them is self-evident on
+// paper. Printed under the caption, at caption weight.
+//
+// A **2 × 2 grid**, not a wrapping row: as a flex row the four items broke
+// 3 + 1 and left "Scale bar, labelled in millimetres" alone and centred on a
+// second line under three left-aligned ones. Two fixed columns wrap 4 → 2 + 2
+// and 3 → 2 + 1, and every row is left-aligned, so the key can never produce a
+// centred orphan.
+.figure_key {
+  display: grid;
+  // Unequal columns on purpose: the second holds the reference-planes item,
+  // which on a single-analysis film names the analysis its landmarks come from
+  // and is three times the length of anything else in the key. Equal halves
+  // wrapped it to two lines and left the row ragged.
+  grid-template-columns: minmax(0, 0.78fr) minmax(0, 1.22fr);
+  align-items: center;
+  gap: 5px 24px;
+  // Narrower than the column so the pair reads as a key block under the film
+  // rather than as two columns of body text.
+  max-width: 680px;
+  margin: 6px auto 0;
+  font-size: 10px;
+  color: $text-tertiary;
+}
+
+.figkey_item {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+// Swatches drawn on a dark strip, because that is the ground they appear on.
+//
+// Sized 36 × 13, not 22 × 9. At 22px on A4 the chip is a ~2 mm pill, and a
+// 2.2px white rule and a 1px pale-blue rule inside a 2 mm pill rasterise to the
+// same dark smudge: "Anatomical tracing", "Reference planes" and "Scale bar"
+// all read as one swatch on the printed page. The chip is now ~3.5 mm and the
+// difference between the three is exaggerated well past the difference on the
+// film — 3px pure white against 1px desaturated blue — because a key's job is
+// to be told apart at reading distance, not to be a faithful crop.
+.figkey_outline,
+.figkey_plane {
+  display: inline-block;
+  flex: 0 0 auto;
+  width: 36px;
+  height: 13px;
+  border-radius: 2px;
+  background: #26303A;
+  position: relative;
+
+  &::after {
+    content: '';
+    position: absolute;
+    left: 3px;
+    right: 3px;
+    top: 50%;
+  }
+}
+
+.figkey_outline::after {
+  border-top: 3px solid #FFFFFF;
+}
+
+.figkey_plane::after {
+  border-top: 1px solid #7E97AE;
+}
+
+.figkey_point {
+  display: inline-block;
+  flex: 0 0 auto;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: #FFC400;
+  border: 1px solid #14181D;
+}
+
+// The calibrated film's ruler: a white bar with end ticks, on the dark ground
+// it is drawn on. Unmistakable against the two rules above because it is the
+// only swatch with vertical ends.
+.figkey_bar {
+  display: inline-block;
+  flex: 0 0 auto;
+  position: relative;
+  width: 36px;
+  height: 13px;
+  border-radius: 2px;
+  background: #26303A;
+
+  &::after {
+    content: '';
+    position: absolute;
+    left: 5px;
+    right: 5px;
+    top: 50%;
+    border-top: 2px solid #FFFFFF;
+  }
+
+  &::before {
+    content: '';
+    position: absolute;
+    left: 5px;
+    right: 5px;
+    top: 2px;
+    bottom: 2px;
+    border-left: 2px solid #FFFFFF;
+    border-right: 2px solid #FFFFFF;
+  }
+}
+
+// ---- Norm deviation profile (wigglegram) -----------------------------------
+
+// `overflow: hidden` is not decoration: at 100 % width the chart's SVG is
+// rescaled by a fraction of a percent to the print column, and on the shortest
+// chart (Tweed, four rows) the bottom rule rasterised a ~3px stub in the left
+// margin beside the table. The rules are also inset and drawn with
+// `shapeRendering="crispEdges"` — see Wigglegram.tsx.
+.wiggle_section {
+  page-break-inside: avoid;
+  overflow: hidden;
+}
+
+// Inside a combined-report section the chart carries no label of its own, so
+// it needs the breathing room the label used to provide.
+.sec_keep .wiggle_section {
+  margin-top: 12px;
+}
+
+.wiggle_svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  font-family: $font-stack;
+}
+
+.wiggle_tick_label {
+  font-size: 8.5px;
+  font-weight: 500;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.wiggle_symbol {
+  font-size: 11.5px;
+  font-weight: 600;
+  fill: $text-primary;
+}
+
+.wiggle_name {
+  font-size: 9.5px;
+  fill: $text-tertiary;
+}
+
+.wiggle_value {
+  font-size: 11.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.wiggle_norm {
+  font-size: 9.5px;
+  fill: $text-tertiary;
+  font-variant-numeric: tabular-nums;
+}
+
+.wiggle_legend {
+  margin-top: 7px;
+  font-size: 10.5px;
+  color: $text-tertiary;
 }
 
 // ---- Results table (print variant of the Summary table) --------------------
@@ -360,6 +1148,58 @@
 
 .col_finding {
   width: 168px;
+}
+
+// ---- "…, continued" header line --------------------------------------------
+//
+// A print-only first row of the repeating header. Screen has no pages, so it
+// has nothing to say there and is not rendered. In print its height is fixed
+// (padding and borders removed) so the patch that blanks it on the opening page
+// can be exactly as tall — see `.cont_mask` and `ContinuationMask`.
+$cont-line-height: 13px;
+
+.table_wrap {
+  position: relative;
+}
+
+.cont_row {
+  display: none;
+}
+
+.cont_mask {
+  display: none;
+}
+
+.table .cont_cell {
+  height: $cont-line-height;
+  padding: 0;
+  border-bottom: none;
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: .1em;
+  line-height: $cont-line-height;
+  text-transform: uppercase;
+  color: $primary-700;
+}
+
+@media print {
+  .cont_row {
+    display: table-row;
+  }
+
+  // White patch over the line above, painted only on the page the table starts
+  // on (an out-of-flow box belongs to the fragment its containing block begins
+  // in). 1 px of slack top and bottom; the column heads below start a further
+  // 6 px down, so the patch can never touch them.
+  .cont_mask {
+    display: block;
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: -1px;
+    height: $cont-line-height + 2px;
+    background: #FFFFFF;
+  }
 }
 
 .cell_finding {
@@ -424,20 +1264,15 @@
   white-space: nowrap;
 }
 
-.measurement_symbol__muted {
-  color: $text-secondary;
-  font-weight: 400;
-}
-
+// Wraps rather than truncates: there is 300pt of unused width in this column,
+// and a printed record must not carry "…facial height ratio (S-Go /".
 .measurement_name {
   display: block;
-  max-width: 220px;
+  max-width: 320px;
   font-size: 10.5px;
   line-height: 1.3;
   color: $text-tertiary;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
 }
 
 .cell_numeric {
@@ -466,6 +1301,19 @@
   color: $text-tertiary;
 }
 
+// Marks a norm that is the author's published *range* rather than a mean ± SD,
+// so "62.0–65.0" can never be read on paper as a band with a standard
+// deviation behind it. The document key explains the word once.
+.norm_kind {
+  display: block;
+  margin-top: 1px;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: $text-tertiary;
+}
+
 .cell_deviation {
   color: $text-tertiary;
 }
@@ -489,13 +1337,46 @@
   font-weight: 700;
 }
 
-.cell_crossref {
-  text-align: right;
-  font-size: 11.5px;
-  color: $text-tertiary;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
+// The pointer to where this measurement is tabulated in full. Left-aligned in
+// the span it occupies, so it cannot be mistaken for a number in the NORM
+// column — the value itself stays in the VALUE cell.
+// A second finding graded from a measurement that is tabulated in this same
+// group (Downs' facial angle reads both the skeletal profile and the chin). It
+// sits under the group's own conclusion in the FINDING cell, labelled with the
+// measurement it came from — the measurement is typeset once, with its norm,
+// instead of a second row whose whole printed content was "norm and deviation
+// under “Skeletal profile”". Matches the Summary dialog's copy of this block
+// (see AnalysisResultsViewer/style.scss) so screen and paper agree.
+// A borrowed finding: a **sub-card**, indented and tinted, with its own left
+// rule — the same treatment the Summary dialog gives it. Printed as a plain
+// block under a 26px hairline, it sat level with the *next* measurement's row
+// (page 3 and page 6 of the combined report: "Chin prominence · Normal" level
+// with NAPog −5.8°*, amber and asterisked), and the only thing saying otherwise
+// was a 9px caption. A clinician cross-checking it against the summary page —
+// which cites Or-Po,N-Pog correctly — would read the two sheets as disagreeing.
+.also_finding {
+  display: block;
+  margin-top: 12px;
+  padding: 5px 0 2px 8px;
+  border-left: 2px solid $border-strong;
+  background: $bg-sunken;
+  border-radius: 0 3px 3px 0;
 }
+
+// Inline in the heading: the measurement is read with the finding's name, not as
+// a 9px line floating above it.
+.also_label {
+  font-size: .82em;
+  font-weight: 400;
+  color: $text-secondary;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+// (A single-measurement analysis is printed as a table like every other one:
+// its "highlight card" made one section of the report present its value, norm
+// and deviation in a layout no other section used. The wigglegram is what gets
+// suppressed below two measurements — see Wigglegram.tsx.)
 
 .legend {
   margin-top: 8px;
@@ -514,56 +1395,253 @@
   color: $text-disabled;
 }
 
+// Accounts, on the printed record, for measurements the table could not
+// report. Sits under the SD legend as a footnote; prints in the warning tint,
+// which stays legible in grayscale.
+.legend_note {
+  display: block;
+  margin-top: 5px;
+  color: $warn;
+}
+
+// A caveat the analysis draws from its own numbers (a landmark its values say
+// is misplaced). Set apart from the housekeeping footnotes: it can invalidate
+// the rows it names, so it may not read as small print about the software.
+.legend_caveat {
+  display: block;
+  margin-top: 6px;
+  padding: 5px 8px;
+  border-left: 2px solid $warn;
+  background: #FFF9F0;
+  font-size: 10.5px;
+  line-height: 1.5;
+  color: $text-secondary;
+  page-break-inside: avoid;
+}
+
+.legend_caveat_mark {
+  margin-right: 5px;
+  font-weight: 700;
+  color: $warn;
+}
+
+// The same mark on the rows the caveat is about, so a reader who never reaches
+// the footnote still sees that these numbers are being questioned.
+.cell_caveat_mark {
+  display: inline-block;
+  margin-left: 3px;
+  font-weight: 700;
+  color: $warn;
+  vertical-align: super;
+  font-size: 9px;
+}
+
+// Sub-heading inside the single "Measured values" group: what is true of the
+// run of rows under it (outside the norm, within it, reported without one).
+// One category heading with rules beneath beats the same heading printed three
+// times with a different chip each — which is what it used to be.
+.subrule_row td {
+  padding-top: 7px;
+  padding-bottom: 2px;
+}
+
+.subrule {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: $text-tertiary;
+  border-bottom: 1px solid $border;
+}
+
 .empty_note {
   margin: 4px 0 0;
   font-size: 12.5px;
   color: $text-secondary;
 }
 
-// ---- Clinical interpretation -----------------------------------------------
+// ---- Closing block: notes, certification, footer ----------------------------
 
-.interp_section {
+// Notes, certification and footer close the document. The block used to be
+// unbreakable *and* a page tall, which meant it could never share a sheet with
+// the rows above it and claimed a whole extra side of paper every time — the
+// two-content-page report printed on four sides, the third 31 % full and the
+// fourth twenty blank rules. It flows now; its three parts are each
+// individually unbreakable, so nothing lands split even when the tail does
+// straddle a break.
+.tail {
+  display: flex;
+  flex-direction: column;
+  margin-top: 20px;
+}
+
+// On screen there are no pages, so the preview keeps its footer at the bottom
+// of the paper card (see `.foot { margin-top: auto }`, which needs a flex
+// column to push against — in print `.tail_close` stays a plain block, because
+// that is what `page-break-inside: avoid` works on).
+@media screen {
+  .tail {
+    flex: 1 1 auto;
+  }
+
+  .tail_close {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+  }
+}
+
+.notes {
+  page-break-inside: avoid;
+  break-inside: avoid;
+  display: flex;
+  flex-direction: column;
+}
+
+// The closing block when it has a **whole side of A4 to itself** — which the
+// combined report's always does (see `NOTE_RULES_SHEET`). One sheet, one job:
+// the writing area fills it, and the certification and footer sit at the foot of
+// the page where a signature belongs, instead of four short rules and a
+// signature row at the top of an 80 %-white sheet.
+//
+// 250mm, not 273: the page area is 273mm and a flex box that measured the whole
+// of it would spill onto a fourteenth side on the first rounding error.
+.tail__own_sheet {
+  min-height: 250mm;
+  justify-content: space-between;
+
+  // Full-width rules at a writing pitch, not the two-column shorthand the
+  // flowing tail uses: there is room here for lines somebody can actually write
+  // a plan on.
+  .notes_rules {
+    column-count: 1;
+    padding-top: 10px;
+  }
+
+  .notes_rule {
+    height: 7.5mm;
+  }
+}
+
+.notes_hint {
+  font-size: 9.5px;
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+  color: $text-tertiary;
+}
+
+// The ruled writing area: six lines in **two columns** (see `NOTE_RULES`),
+// which is the whole trick — six writing lines in the height of three.
+//
+// It used to stretch to fill whatever the last page had left over, which sounds
+// generous and was in fact why the closing block never fitted anywhere: twenty
+// full-width rules were taller than any page's leftover, so the block always
+// took a sheet of its own and the sheet before it was left holding a footnote.
+// Halving the height is what lets the notes, the certification *and* the footer
+// land under the last table instead of on a sheet of their own — 4 sides instead
+// of 4 for the single-analysis report, and the certification off a sheet of its
+// own on the combined one.
+.notes_rules {
+  column-count: 2;
+  column-gap: 30px;
+  padding: 8px 0 0;
+}
+
+.notes_rule {
+  display: block;
+  // Line pitch, not zero-height + flex gap: a multi-column block cannot use a
+  // flex gap, and the pitch has to be the same in both columns.
+  height: 18px;
+  border-bottom: 1px solid $border;
+  break-inside: avoid;
   page-break-inside: avoid;
 }
 
-.interp_grid {
+.sig_section {
+  page-break-inside: avoid;
+  margin-top: 18px;
+}
+
+.sig_row {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px 10px;
+  align-items: flex-end;
+  gap: 28px;
+  margin-top: 14px;
 }
 
-.interp_item {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 10px 6px 12px;
-  border: 1px solid $border;
-  border-radius: 6px;
-  background: #FAFBFC;
+.sig_field {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
 }
 
-.interp_category {
-  font-size: 12px;
+.sig_field__wide {
+  flex: 1.7 1 0;
+}
+
+// The ruled line a clinician signs on. Ink-colored, prints exactly.
+.sig_line {
+  display: flex;
+  align-items: flex-end;
+  min-height: 30px;
+  padding: 0 2px 4px;
+  border-bottom: 1px solid $text-secondary;
+  font-size: 13px;
   font-weight: 600;
   color: $text-primary;
-  white-space: nowrap;
+
+  // The rule itself is the affordance here — the editable's own dashed
+  // underline would double up with it on screen.
+  .editable {
+    border-bottom: none;
+  }
+}
+
+// The grey prompt on the Date rule — the same treatment `.editable`'s
+// placeholder gets, because the field beside it has one and this one is filled
+// in with a pen. Screen only (see the print block).
+.sig_hint {
+  font-size: 12px;
+  font-weight: 400;
+  font-style: italic;
+  color: $text-disabled;
+}
+
+.sig_caption {
+  margin-top: 5px;
+  font-size: 9.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .09em;
+  color: $text-tertiary;
 }
 
 // ---- Footer ----------------------------------------------------------------
 
+// The closing rule answers the masthead's opening one, so the document reads
+// as finished rather than cut off wherever on the page it happens to end.
 .foot {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 16px;
+  flex-direction: column;
+  gap: 4px;
   margin-top: auto;
-  padding-top: 12px;
-  border-top: 1px solid $border;
+  padding-top: 10px;
+  border-top: 2px solid $primary-700;
   font-size: 10.5px;
   color: $text-tertiary;
 }
 
-.foot > * {
+// Brand and end-of-report: two single-line items on one baseline.
+.foot_row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.foot_row > * {
   white-space: nowrap;
 }
 
@@ -572,10 +1650,13 @@
   color: $text-secondary;
 }
 
+// The caveat is a sentence, and at 10.5px it does not fit between the two items
+// above on a 794px sheet — squeezed between them it wrapped to two centred
+// lines and the three-up row lost its common baseline. It owns a full-width
+// line beneath them instead, set flush left like the statement it is.
 .foot_note {
-  flex: 1;
-  min-width: 0;
-  text-align: center;
+  display: block;
+  text-align: left;
   white-space: normal;
 }
 
@@ -607,6 +1688,13 @@
 
   :global(body.clinical-report-open) {
     overflow: visible;
+    // The app's gray page background must not print through on the last
+    // page (below where the paper's content ends).
+    background: #FFFFFF !important;
+  }
+
+  :global(html) {
+    background: #FFFFFF !important;
   }
 
   :global(body.clinical-report-open) > .root {
@@ -643,13 +1731,10 @@
     page-break-inside: avoid;
   }
 
-  // Compact the layout under print margins so a typical analysis
-  // (Downs/Steiner) fits on a single A4 page. The zoom acts as a gentle
-  // shrink-to-fit in Chromium's print pipeline; browsers that ignore it
-  // simply paginate onto a second page.
-  .paper {
-    zoom: 0.88;
-  }
+  // No shrink-to-fit zoom. It set the two scopes at two different type scales
+  // (0.88 against 1), so a practice printing both got two visibly different
+  // letterheads and 6.6pt column heads on one of them — and a rich analysis
+  // spilled onto a second page anyway. One scale, both scopes.
 
   .doc_title {
     margin-top: 14px;
@@ -662,28 +1747,210 @@
 
   .section_label {
     margin: 16px 0 8px;
+    // A section heading never prints alone at the foot of a page. The
+    // single-analysis report used to leave "ANALYSIS RESULTS · JARABAK
+    // ANALYSIS" stranded at the bottom of page 1 with its table starting on
+    // page 2.
+    page-break-after: avoid;
+    break-after: avoid;
   }
 
+  // ...and the column headers never print without at least the first group of
+  // rows under them.
+  .table thead {
+    page-break-after: avoid;
+    break-after: avoid;
+  }
+
+  // Tighter air between the three parts of the closing block. Nothing here is a
+  // finding; 20px before each of notes, certification and footer is what used
+  // to tip the whole block onto a sheet of its own.
+  .tail {
+    margin-top: 12px;
+  }
+
+  .sig_section {
+    margin-top: 12px;
+  }
+
+  // Certification and footer are one unbreakable unit in print — see
+  // `tail_close` in index.tsx.
+  .tail_close {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  // The signature sheet starts a sheet, deliberately. It costs no paper: the
+  // combined report's tail already landed alone on the last side — this only
+  // stops it landing alone *and* empty.
+  .tail__own_sheet {
+    page-break-before: always;
+    break-before: page;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  // A signature is written on the rule, not in it: 30px of clearance above it
+  // is screen affordance, and 4px of it per field is 12px of the paper.
+  .sig_line {
+    min-height: 26px;
+  }
+
+  // The screen prompt on the Date rule is an affordance, not content.
+  .sig_hint {
+    display: none;
+  }
+
+  // The borrowed-finding sub-card, tightened for paper: the tint and the left
+  // rule do the separating here, so it needs less air than it does on screen —
+  // and nine sections of it must not cost a sheet.
+  .also_finding {
+    margin-top: 8px;
+    padding: 3px 0 1px 7px;
+  }
+
+  .ov_key {
+    padding: 4px 12px 5px;
+    font-size: 9px;
+  }
+
+  .sig_caption {
+    margin-top: 3px;
+  }
+
+  // ---- Closing block --------------------------------------------------------
+  //
+  // No forced page break and no fixed height. The block used to be given a page
+  // of its own on the argument that a signature block belongs at the foot of a
+  // sheet — but the price was a whole extra side of paper on every report, and
+  // the sheet before it left holding a single footnote. Eight ruled lines, the
+  // certification and the footer come to about 80 mm and simply follow the last
+  // table; each of the three is individually unbreakable, so none of them is
+  // ever cut in half.
+
+  // On paper the film is driven off the width of the column, not off a pixel
+  // height, and it sits on white behind a hairline rule — no panel, no radius.
   .figure_frame {
-    padding: 8px;
+    padding: 0;
+    background: #FFFFFF;
+    border-radius: 0;
   }
 
+  // The cover has to hold the front matter, the film, its caption and the
+  // norms statement. A lateral crop is taller than it is wide, so it is the
+  // height that binds: 160 mm of film comes to ~144 mm across, which is what
+  // page 1 has room for. When the calibration banner is also on the cover the
+  // film gives back the 16 mm the banner took. The rule follows the film
+  // (`width: fit-content`), so neither limit leaves a band of empty mount.
   .figure_image {
-    max-height: 230px;
+    max-width: 150mm;
+    max-height: 160mm;
+  }
+
+  .figure__tight .figure_image {
+    max-width: 130mm;
+    max-height: 140mm;
   }
 
   .table td {
     padding: 6px 10px;
   }
 
-  .foot {
-    padding-top: 10px;
-  }
-
   // In block flow `margin-top: auto` collapses to 0 — give the footer a
   // fixed offset from the content instead.
   .foot {
-    margin-top: 20px;
+    margin-top: 12px;
+    padding-top: 8px;
+    gap: 3px;
     page-break-inside: avoid;
   }
+
+  // ---- Combined (multi-analysis) printout -----------------------------------
+
+  // Every analysis' table repeats its column headers on each page it spills
+  // onto, and a finding group (the rowSpan'd "Finding" cell plus its
+  // measurements) is never cut across a page.
+  .table thead {
+    display: table-header-group;
+  }
+
+  .table tbody {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  .sec {
+    margin-top: 20px;
+  }
+
+  .paper__combined .sec_keep {
+    // Chromium honours break-after: avoid on a block, but a section whose
+    // wigglegram is suppressed (fewer than two comparable measurements) has
+    // little height to keep — the extra top margin gives the break a cheaper
+    // place to land just above the heading.
+    margin-top: 4px;
+  }
+}
+
+// ---- Norms provenance -------------------------------------------------------
+//
+// Under every results table: whose norms this section's deviation column is
+// measured against, and on whom they were measured. Set small and quiet — it
+// is reference matter, not a finding — but it prints on the paper, because a
+// deviation filed in a chart or posted to a colleague is unreadable without
+// the sample it deviates from.
+.norms {
+  margin: 6px 0 0;
+  padding: 6px 8px;
+  border-left: 2px solid $border;
+  font-size: 9.5px;
+  line-height: 1.5;
+  color: $text-tertiary;
+  page-break-inside: avoid;
+}
+
+.norms_label {
+  margin-right: 6px;
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: $text-disabled;
+}
+
+.norms_source {
+  font-weight: 600;
+  color: $text-secondary;
+}
+
+.norms_also,
+.norms_note {
+  display: block;
+  margin-top: 2px;
+}
+
+// What this reading did with this patient's record (an age correction applied,
+// or the reason none was). It is a statement about *these* numbers rather than
+// about the publication, so it carries a little more weight than the citation
+// above it.
+.norms_applied {
+  display: block;
+  margin-top: 3px;
+  font-weight: 600;
+  color: $text-secondary;
+}
+
+// The document-level statement, printed once above the results. Deliberately
+// stronger than the per-section citations: it is the caveat that decides how
+// every number below may be read.
+.norms_caveat {
+  margin: 12px 0 0;
+  padding: 7px 10px;
+  border: 1px solid $border;
+  border-left: 3px solid $text-tertiary;
+  border-radius: 5px;
+  background: #FAFBFC;
+  font-size: 10.5px;
+  line-height: 1.45;
+  color: $text-secondary;
 }

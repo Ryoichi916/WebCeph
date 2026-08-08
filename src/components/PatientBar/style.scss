@@ -33,11 +33,30 @@
   flex-shrink: 0;
 }
 
+// The identity block is a button (it opens the patient's records), styled to
+// stay as quiet as the plain text it replaced until hovered.
 .patient {
   display: flex;
   align-items: center;
   gap: 8px;
   min-width: 0;
+  margin: 0;
+  padding: 4px 8px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background-color 120ms ease;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.12);
+  }
+
+  &:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.6);
+  }
 }
 
 .patient_avatar {

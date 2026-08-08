@@ -47,6 +47,41 @@ export const Pog = point('Pog', 'Pogonion');
 export const Gn = point('Gn', 'Gnathion');
 
 /**
+ * D point — the centre of the bony symphysis of the mandible.
+ *
+ * Steiner measures the mandible against the cranial base twice: SNB, from
+ * supramentale, and SND, from this point. Because D sits in the middle of the
+ * symphysis rather than on its alveolar surface, SND is unaffected by the
+ * remodelling of point B that follows lower-incisor movement, which is why
+ * Steiner reported both.
+ */
+export const D = point(
+  'D',
+  'D point',
+  'Centre of the bony symphysis of the mandible',
+);
+
+/**
+ * Dc — the centre of the condylar neck where the Ba-N plane crosses it.
+ *
+ * Ricketts measures the mandibular corpus against the *condylar axis* Dc-Xi,
+ * not against articulare: Ar is the point at which the posterior border of the
+ * neck crosses the cranial base outline, so it lies on an edge of the condyle
+ * rather than on its axis, and a mandibular arc built on it would be reading
+ * the outline instead of the bone's long axis.
+ *
+ * Distinct from Condylion (the most superior-posterior point of the condylar
+ * head, which McNamara's effective lengths need and this app still does not
+ * have): Dc sits lower, on the neck, and is defined by its intersection with a
+ * plane rather than by an extremity.
+ */
+export const Dc = point(
+  'Dc',
+  'Condylar centre',
+  'Centre of the condylar neck where the Ba-N plane crosses it',
+);
+
+/**
  * Junction between inferior surface of the cranial base and the posterior border of the ascending rami of the mandible
  */
 export const Ar = point(

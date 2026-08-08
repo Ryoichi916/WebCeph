@@ -27,11 +27,27 @@ import { isProfilogramShown, getScale } from 'store/reducers/workspace/canvas';
 import {
   hasImage, getManualLandmarks, getAnalysisId, getScaleFactor,
 } from 'store/reducers/workspace/image';
+// Whether the patient has two registrable tracings — one source of truth,
+// shared with the superimposition view itself.
+import {
+  getSuperimpositionAvailability,
+} from 'components/Superimposition/selectors';
+// Whether this tracing can carry a treatment simulation — the same pure
+// readiness rule the simulation view itself uses to enable its controls.
+import { getSimulationReadiness } from 'analyses/simulation';
 
 const mapStateToProps =
   (state: StoreState, { imageId }: OwnProps): StateProps => {
     const manual = imageId !== null ? getManualLandmarks(state)(imageId) : {};
+    const superimposition = getSuperimpositionAvailability(state);
+    const scaleFactor = imageId !== null ? getScaleFactor(state)(imageId) : null;
+    const simulation = getSimulationReadiness(manual, scaleFactor);
+    const missingLandmarkCount = imageId !== null
+      ? getManualSteps(state)(imageId)
+          .filter(({ symbol }) => manual[symbol] === undefined).length
+      : 0;
     return {
+      missingLandmarkCount,
       // Auto-plot needs an image and an analysis whose manual steps define which
       // landmarks to place. The active predictor (see predictors/index.ts) does
       // the plotting; results are injected as a single undoable batch that can
@@ -56,7 +72,11 @@ const mapStateToProps =
       zoom: getScale(state),
       canUndo: canUndo(state),
       canRedo: canRedo(state),
-      scaleFactor: imageId !== null ? getScaleFactor(state)(imageId) : null,
+      scaleFactor,
+      canSuperimpose: superimposition.canSuperimpose,
+      superimposeReason: superimposition.reason,
+      canSimulate: imageId !== null && simulation.canSimulate,
+      simulateReason: simulation.reason,
     };
   };
 

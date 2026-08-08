@@ -1,0 +1,41 @@
+import { PatientRecord } from 'store/reducers/workspace';
+
+export interface StateProps {
+  /** Whether the dashboard is open. */
+  open: boolean;
+  /** The patient whose record is on screen. */
+  patient: Patient | null;
+  /** Every loaded image of the record, sorted by capture date. */
+  records: PatientRecord[];
+  /**
+   * A rail tile that holds no image yet, if there is one. "Add image" lands on
+   * it instead of creating a second empty tile beside it.
+   */
+  emptyWorkspaceId: string | null;
+}
+
+export interface DispatchProps {
+  onRequestClose(): any;
+  /** Open a record's image in the editor (switches to its rail tile). */
+  onOpenRecord(record: PatientRecord): any;
+  /** Go to the upload screen: reuses the rail's ghost-tile path. */
+  onAddImage(emptyWorkspaceId: string | null): any;
+  /** Correct a record's type / timepoint / capture date. */
+  onSaveRecordMeta(record: PatientRecord, meta: ImageRecordMeta): any;
+  /**
+   * Drop an image from the record. `fallbackWorkspaceId` is another record's
+   * rail tile to land on when the removed image's tile goes away with it; null
+   * keeps the (now empty) tile as the upload surface.
+   */
+  onRemoveRecord(record: PatientRecord, fallbackWorkspaceId: string | null): any;
+}
+
+export interface OwnProps {
+  className?: string;
+}
+
+export type ConnectableProps = StateProps & DispatchProps;
+
+export type Props = ConnectableProps & OwnProps;
+
+export default Props;

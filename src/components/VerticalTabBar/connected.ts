@@ -36,13 +36,26 @@ import {
 
 import {
   getImageProps,
+  getImageType,
+  getImageTimepoint,
+  getImageCaptureDate,
 } from 'store/reducers/workspace/image';
+
+import {
+  getImageTypeShortLabel,
+  getImageTypeLabel,
+  formatCaptureDate,
+} from 'utils/records';
+
+import { TabCaption } from './props';
 
 const mapStateToProps: MapStateToProps<StateProps, OwnProps, StoreState> =
   (state: StoreState) => {
     const tabs = getWorkspacesIdsInOrder(state);
-    // A miniature of the workspace's radiograph, rendered inside its page tile.
+    // A miniature of the workspace's radiograph, rendered inside its page tile,
+    // plus the record caption (timepoint + image type) shown beneath it.
     const thumbnails: { [workspaceId: string]: string | undefined } = {};
+    const captions: { [workspaceId: string]: TabCaption | undefined } = {};
     for (const workspaceId of tabs) {
       const imageIds = getWorkspaceImageIds(state)(workspaceId) || [];
       const firstImageId = imageIds.length > 0 ? imageIds[0] : null;
@@ -50,11 +63,26 @@ const mapStateToProps: MapStateToProps<StateProps, OwnProps, StoreState> =
         ? getImageProps(state)(firstImageId)
         : undefined;
       thumbnails[workspaceId] = (props && props.data) || undefined;
+      if (firstImageId !== null && props !== undefined) {
+        const timepoint = getImageTimepoint(state)(firstImageId);
+        const type = getImageType(state)(firstImageId);
+        const date = formatCaptureDate(getImageCaptureDate(state)(firstImageId));
+        captions[workspaceId] = {
+          timepoint,
+          typeLabel: getImageTypeShortLabel(type),
+          fullLabel: [
+            timepoint,
+            getImageTypeLabel(type),
+            date,
+          ].filter((part) => part !== null).join(' · '),
+        };
+      }
     }
     return {
       activeTabId: getActiveWorkspaceId(state),
       tabs,
       thumbnails,
+      captions,
       canAddWorkspace: isLastWorkspaceUsed(state),
     };
   };

@@ -9,6 +9,11 @@ export interface StateProps {
   analysisName: string | null;
   getStepState(step: CephLandmark): StepState;
   getStepValue(step: CephLandmark): number | undefined;
+  /**
+   * Whether the step's value is withheld only because the image has no mm/px
+   * scale. Such rows explain that instead of rendering an empty value column.
+   */
+  isStepValuePendingScale(step: CephLandmark): boolean;
   isStepRemovable(step: CephLandmark): boolean;
   isStepSkippable(step: CephLandmark): boolean;
 }

@@ -6,6 +6,10 @@ import * as cx from 'classnames';
 import CalibrationDialog, { formatMmPx } from './CalibrationDialog';
 
 import ClinicalReport from 'components/ClinicalReport/connected';
+import Superimposition from 'components/Superimposition/connected';
+import TreatmentSimulation from 'components/TreatmentSimulation/connected';
+
+import { LATERAL_ANALYSES } from 'analyses/lateral';
 
 import Popover from 'material-ui/Popover';
 import Menu from 'material-ui/Menu';
@@ -18,6 +22,8 @@ import IconPlotFromRefs from 'material-ui/svg-icons/action/timeline';
 import IconProfilogram from 'material-ui/svg-icons/image/blur-on';
 import IconSummary from 'material-ui/svg-icons/action/list';
 import IconReport from 'material-ui/svg-icons/action/description';
+import IconSuperimpose from 'material-ui/svg-icons/maps/layers';
+import IconSimulate from 'material-ui/svg-icons/image/tune';
 import IconExport from 'material-ui/svg-icons/file/file-download';
 import IconArrowUp from 'material-ui/svg-icons/navigation/arrow-drop-up';
 import IconZoomIn from 'material-ui/svg-icons/action/zoom-in';
@@ -29,22 +35,19 @@ import IconRedo from 'material-ui/svg-icons/content/redo';
 
 const classes = require('./style.scss');
 
-// Lateral-cephalometric analyses the user can switch between. The id is the
+// Lateral-cephalometric analyses the user can switch between — shared with the
+// combined clinical report, which prints one section per entry. The id is the
 // analysis module name (see src/analyses/<id>.ts); `focus` is the one-line
 // clinical scope shown as the menu item's secondary text.
-const ANALYSES: Array<{ id: string; name: string; focus: string }> = [
-  { id: 'downs', name: 'Downs', focus: 'Facial pattern & skeletal profile' },
-  { id: 'steiner', name: 'Steiner', focus: 'SNA · SNB · ANB skeletal relations' },
-  { id: 'tweed', name: 'Tweed', focus: 'FMA · FMIA · IMPA diagnostic triangle' },
-  { id: 'ricketts', name: 'Ricketts', focus: 'Comprehensive skeletal & dental' },
-  { id: 'bjork', name: 'Björk', focus: 'Growth direction & jaw rotation' },
-];
+const ANALYSES = LATERAL_ANALYSES;
 
 interface State {
   openMenu: 'analysis' | 'export' | null;
   anchorEl: Element | null;
   isCalibrationOpen: boolean;
   isReportOpen: boolean;
+  isSuperimpositionOpen: boolean;
+  isSimulationOpen: boolean;
 }
 
 const ICON_COLOR = 'currentColor';
@@ -89,6 +92,8 @@ export default class TracingToolbar extends React.PureComponent<Props, State> {
     anchorEl: null,
     isCalibrationOpen: false,
     isReportOpen: false,
+    isSuperimpositionOpen: false,
+    isSimulationOpen: false,
   };
 
   render() {
@@ -98,12 +103,17 @@ export default class TracingToolbar extends React.PureComponent<Props, State> {
       canPlotFromReferences, onPlotFromReferencesClick,
       isProfilogramShown, onToggleProfilogramClick,
       activeAnalysisId,
-      canShowSummary,
+      canShowSummary, missingLandmarkCount,
       canUndo, onUndoClick,
       canRedo, onRedoClick,
       scaleFactor,
+      canSuperimpose, superimposeReason,
+      canSimulate, simulateReason,
     } = this.props;
-    const { openMenu, anchorEl, isCalibrationOpen, isReportOpen } = this.state;
+    const {
+      openMenu, anchorEl, isCalibrationOpen, isReportOpen,
+      isSuperimpositionOpen, isSimulationOpen,
+    } = this.state;
     const isCalibrated = scaleFactor !== null;
     const hasImage = imageId !== null;
     // Before an image exists none of these actions apply — hide the strip
@@ -121,12 +131,25 @@ export default class TracingToolbar extends React.PureComponent<Props, State> {
           })}
           disabled={!hasImage}
           title="Switch the active cephalometric analysis"
+          // Stated explicitly so the accessible name never depends on whether
+          // the strip is wide enough to render the "Analysis: " qualifier.
+          aria-label={
+            activeAnalysis ? `Analysis: ${activeAnalysis.name}` : 'Analysis'
+          }
           aria-haspopup="true"
           onClick={this.openAnalysisMenu}
         >
           <IconAnalysis color={ICON_COLOR} style={iconStyle} />
-          <span className={classes.button_label}>
-            {activeAnalysis ? `Analysis: ${activeAnalysis.name}` : 'Analysis'}
+          {/* The "Analysis: " qualifier is CSS-generated (see
+              `.label_analysis`) and is dropped on a narrow strip so the two
+              clinical actions at the far end keep their names. The analysis
+              name, the icon, the tooltip and the aria-label all stay. */}
+          <span
+            className={cx(classes.button_label, {
+              [classes.label_analysis]: !!activeAnalysis,
+            })}
+          >
+            {activeAnalysis ? activeAnalysis.name : 'Analysis'}
           </span>
           <IconArrowUp color={ICON_COLOR} style={caretStyle} />
         </button>
@@ -178,10 +201,13 @@ export default class TracingToolbar extends React.PureComponent<Props, State> {
           className={classes.button}
           disabled={!canPlotFromReferences}
           title="Place the remaining landmarks at standard positions from Sella and Nasion"
+          aria-label="Plot from S & N"
           onClick={onPlotFromReferencesClick}
         >
           <IconPlotFromRefs color={ICON_COLOR} style={iconStyle} />
-          <span className={classes.button_label}>Plot from S & N</span>
+          <span className={cx(classes.button_label, classes.label_refs)}>
+            S &amp; N
+          </span>
         </button>
 
         <button
@@ -214,13 +240,24 @@ export default class TracingToolbar extends React.PureComponent<Props, State> {
                 'Angular measurements are scale-independent and unaffected; ' +
                 'linear (mm) measurements require calibration. Click to calibrate.'
           }
+          aria-label={
+            isCalibrated
+              ? `Calibrated · ${formatMmPx(scaleFactor!, 3)} mm/px`
+              : 'Not calibrated'
+          }
           aria-haspopup="dialog"
           onClick={this.openCalibrationDialog}
         >
           <IconRuler color="currentColor" style={{ width: 14, height: 14 }} />
-          {isCalibrated
-            ? `Calibrated · ${formatMmPx(scaleFactor!, 3)} mm/px`
-            : 'Not calibrated'}
+          {/* The number *is* the calibration; the CSS-generated word before it
+              (see `.chip_value`) is the first thing to go when the strip has to
+              make room for a named clinical action. The chip's tint, tooltip
+              and aria-label keep saying the film is calibrated either way. */}
+          {isCalibrated ? (
+            <span className={classes.chip_value}>
+              {`${formatMmPx(scaleFactor!, 3)} mm/px`}
+            </span>
+          ) : 'Not calibrated'}
         </button>
 
         <span className={classes.separator} />
@@ -274,7 +311,13 @@ export default class TracingToolbar extends React.PureComponent<Props, State> {
           type="button"
           className={classes.button}
           disabled={!canShowSummary}
-          title="Show the analysis results summary"
+          title={
+            !canShowSummary && missingLandmarkCount > 0
+              ? `${missingLandmarkCount} landmark` +
+                `${missingLandmarkCount === 1 ? '' : 's'} remaining — ` +
+                'run Auto-plot to complete the analysis'
+              : 'Show the analysis results summary'
+          }
           onClick={this.handleSummaryClick}
         >
           <IconSummary color={ICON_COLOR} style={iconStyle} />
@@ -290,6 +333,36 @@ export default class TracingToolbar extends React.PureComponent<Props, State> {
         >
           <IconReport color={ICON_COLOR} style={iconStyle} />
           <span className={classes.button_label}>Report</span>
+        </button>
+
+        {/* Superimposition of two timepoints. Disabled until the patient has
+            two registrable tracings; the tooltip then names what is missing
+            rather than graying out silently. */}
+        <button
+          type="button"
+          className={cx(classes.button, classes.button__superimpose)}
+          disabled={!canSuperimpose}
+          title={superimposeReason}
+          aria-label="Superimpose two timepoints"
+          onClick={this.openSuperimposition}
+        >
+          <IconSuperimpose color={ICON_COLOR} style={iconStyle} />
+          <span className={classes.button_label}>Superimpose</span>
+        </button>
+
+        {/* Treatment simulation (VTO-lite). Needs enough of a tracing for at
+            least one movement to have a meaning; the tooltip names what is
+            missing rather than graying out silently. */}
+        <button
+          type="button"
+          className={cx(classes.button, classes.button__simulate)}
+          disabled={!canSimulate}
+          title={simulateReason}
+          aria-label="Simulate a treatment plan"
+          onClick={this.openSimulation}
+        >
+          <IconSimulate color={ICON_COLOR} style={iconStyle} />
+          <span className={classes.button_label}>Simulate</span>
         </button>
 
         <button
@@ -380,6 +453,17 @@ export default class TracingToolbar extends React.PureComponent<Props, State> {
           />
         )}
 
+        {isSuperimpositionOpen && (
+          <Superimposition onRequestClose={this.closeSuperimposition} />
+        )}
+
+        {isSimulationOpen && (
+          <TreatmentSimulation
+            imageId={imageId}
+            onRequestClose={this.closeSimulation}
+          />
+        )}
+
         {isCalibrationOpen && (
           <CalibrationDialog
             scaleFactor={scaleFactor}
@@ -411,6 +495,24 @@ export default class TracingToolbar extends React.PureComponent<Props, State> {
 
   private closeReport = () => {
     this.setState({ isReportOpen: false });
+  };
+
+  private openSuperimposition = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.currentTarget.blur();
+    this.setState({ isSuperimpositionOpen: true });
+  };
+
+  private closeSuperimposition = () => {
+    this.setState({ isSuperimpositionOpen: false });
+  };
+
+  private openSimulation = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.currentTarget.blur();
+    this.setState({ isSimulationOpen: true });
+  };
+
+  private closeSimulation = () => {
+    this.setState({ isSimulationOpen: false });
   };
 
   private openCalibrationDialog = (e: React.MouseEvent<HTMLButtonElement>) => {

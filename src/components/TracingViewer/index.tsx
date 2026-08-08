@@ -21,6 +21,17 @@ import {
   OUTLINE_OPACITY,
   LandmarkMap,
 } from './outlines';
+// The label layer is shared with the rasterised tracing (image export and the
+// printed clinical report) so the film on paper carries the same, identically
+// laid out, landmark tags the editor draws. See ./labels.
+import {
+  computeLabelPlacements,
+  getShortLabel,
+  LabelPlacement,
+  LineSegment,
+  LABEL_FONT_FAMILY,
+  LABEL_FONT_SIZE,
+} from './labels';
 
 const classes = require('./style.scss');
 
@@ -28,135 +39,6 @@ const classes = require('./style.scss');
 // scale when rendered so they stay constant regardless of zoom.
 const POINT_RADIUS = 4.5;
 const POINT_HIT_RADIUS = 13;
-const LABEL_FONT_SIZE = 11;
-
-/**
- * Candidate label positions around a landmark dot, tried in order until one
- * does not collide with an already-placed label or another dot. Offsets are
- * on-screen pixels relative to the dot; `anchor` is the SVG text-anchor. The
- * `far` candidates sit further out and get a small leader line back to the dot.
- */
-interface LabelCandidate {
-  dx: number;
-  dy: number;
-  anchor: 'start' | 'end' | 'middle';
-  far: boolean;
-}
-
-const LABEL_CANDIDATES: LabelCandidate[] = [
-  { dx: 9, dy: -7, anchor: 'start', far: false },   // right-above (default)
-  { dx: 9, dy: 15, anchor: 'start', far: false },   // right-below
-  { dx: -9, dy: -7, anchor: 'end', far: false },    // left-above
-  { dx: -9, dy: 15, anchor: 'end', far: false },    // left-below
-  { dx: 0, dy: -10, anchor: 'middle', far: false }, // centered above
-  { dx: 0, dy: 18, anchor: 'middle', far: false },  // centered below
-  { dx: 18, dy: -16, anchor: 'start', far: true },  // far right-above + leader
-  { dx: 18, dy: 24, anchor: 'start', far: true },   // far right-below + leader
-  { dx: -18, dy: -16, anchor: 'end', far: true },   // far left-above + leader
-  { dx: -18, dy: 24, anchor: 'end', far: true },    // far left-below + leader
-];
-
-/**
- * Anatomically informed first choices: for landmarks that sit directly on the
- * traced bony outline (the chin cluster especially), place the label on the
- * side that is typically clear film so it never sits across the outline. The
- * generic candidates above remain as fallbacks.
- */
-const PREFERRED_CANDIDATES: { [symbol: string]: LabelCandidate[] } = {
-  // Menton is the lowest point of the chin — below it is clear film.
-  Me: [{ dx: 0, dy: 19, anchor: 'middle', far: false }],
-  // Gnathion sits on the chin curve between Pog and Me — label inward (up-left
-  // into the symphysis body) keeps it off the outline.
-  Gn: [{ dx: -10, dy: 4, anchor: 'end', far: false },
-       { dx: -10, dy: -8, anchor: 'end', far: false }],
-  // Pogonion / B point sit on the anterior symphysis outline — label inward.
-  Pog: [{ dx: -10, dy: 4, anchor: 'end', far: false }],
-  B: [{ dx: -10, dy: 4, anchor: 'end', far: false }],
-  // Gonion sits on the posterior jaw angle — label outward (down-left).
-  Go: [{ dx: -9, dy: 15, anchor: 'end', far: false }],
-};
-
-interface LabelPlacement extends LabelCandidate {
-  symbol: string;
-}
-
-interface ScreenRect {
-  left: number;
-  top: number;
-  right: number;
-  bottom: number;
-}
-
-const rectsIntersect = (a: ScreenRect, b: ScreenRect): boolean =>
-  a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
-
-/** The same rect grown by a margin on every side (for soft-proximity tests). */
-const inflateRect = (r: ScreenRect, m: number): ScreenRect => ({
-  left: r.left - m,
-  right: r.right + m,
-  top: r.top - m,
-  bottom: r.bottom + m,
-});
-
-/** Approximate on-screen bounding box of a label drawn with a candidate. */
-const getLabelRect = (
-  sx: number, sy: number, textWidth: number, c: LabelCandidate,
-): ScreenRect => {
-  const left = c.anchor === 'start' ? sx + c.dx
-    : c.anchor === 'end' ? sx + c.dx - textWidth
-    : sx + c.dx - textWidth / 2;
-  const baseline = sy + c.dy;
-  return {
-    left: left - 1,
-    right: left + textWidth + 1,
-    top: baseline - LABEL_FONT_SIZE - 1,
-    bottom: baseline + 2,
-  };
-};
-
-interface ScreenSegment {
-  x1: number;
-  y1: number;
-  x2: number;
-  y2: number;
-}
-
-/** Liang-Barsky: does the segment pass through the (slightly padded) rect? */
-const segmentIntersectsRect = (s: ScreenSegment, r: ScreenRect, pad: number): boolean => {
-  const left = r.left - pad;
-  const right = r.right + pad;
-  const top = r.top - pad;
-  const bottom = r.bottom + pad;
-  const dx = s.x2 - s.x1;
-  const dy = s.y2 - s.y1;
-  const p = [-dx, dx, -dy, dy];
-  const q = [s.x1 - left, right - s.x1, s.y1 - top, bottom - s.y1];
-  let t0 = 0;
-  let t1 = 1;
-  for (let i = 0; i < 4; i += 1) {
-    if (p[i] === 0) {
-      if (q[i] < 0) {
-        return false;
-      }
-    } else {
-      const t = q[i] / p[i];
-      if (p[i] < 0) {
-        if (t > t1) { return false; }
-        if (t > t0) { t0 = t; }
-      } else {
-        if (t < t0) { return false; }
-        if (t < t1) { t1 = t; }
-      }
-    }
-  }
-  return true;
-};
-
-const LABEL_FONT_FAMILY = [
-  '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto',
-  '"Hiragino Sans"', '"Hiragino Kaku Gothic ProN"', '"Noto Sans JP"',
-  'Meiryo', 'sans-serif',
-].join(', ');
 
 function isMouseEvent<T>(e: any): e is React.MouseEvent<T> {
   return e.touches === undefined;
@@ -410,25 +292,17 @@ export class TracingViewer extends React.PureComponent<Props, State> {
   };
 
   /**
-   * Greedy collision-aware label layout: labels are placed in reading order
-   * (top-to-bottom), each taking the first candidate position that overlaps
-   * neither an already-placed label nor another landmark dot, so adjacent
-   * labels (e.g. A and Po near the ear region) never stack.
+   * Label layout for the points currently on the canvas, in screen space (the
+   * shared layer's offsets then divide by the zoom, so a tag keeps its size).
+   * The layout itself lives in ./labels, shared with the printed film.
    */
   private computeLabelPlacements = (
     points: Array<{ symbol: string; x: number; y: number }>,
   ): { [symbol: string]: LabelPlacement } => {
     const { scale } = this.props;
-    const placements: { [symbol: string]: LabelPlacement } = {};
-    const occupied: ScreenRect[] = points.map(({ x, y }) => ({
-      left: x * scale - 7,
-      right: x * scale + 7,
-      top: y * scale - 7,
-      bottom: y * scale + 7,
-    }));
     // Visible tracing lines (S-N, Go-Me, …) in screen space: labels must not
     // sit across them.
-    const lines: ScreenSegment[] = this.getRenderedLandmarks()
+    const lines: LineSegment[] = this.getRenderedLandmarks()
       .filter(({ value }) => isGeoVector(value))
       .map(({ value }) => ({
         x1: (value as GeoVector).x1 * scale,
@@ -436,58 +310,10 @@ export class TracingViewer extends React.PureComponent<Props, State> {
         x2: (value as GeoVector).x2 * scale,
         y2: (value as GeoVector).y2 * scale,
       }));
-    const sorted = points
-      .slice()
-      .sort((a, b) => (a.y - b.y) || (a.x - b.x) || (a.symbol < b.symbol ? -1 : 1));
-    for (const point of sorted) {
-      const sx = point.x * scale;
-      const sy = point.y * scale;
-      // ~0.62em average glyph advance for an 11px 600-weight system font.
-      const textWidth = point.symbol.length * LABEL_FONT_SIZE * 0.62 + 2;
-      const candidates = [
-        ...(PREFERRED_CANDIDATES[point.symbol] || []),
-        ...LABEL_CANDIDATES,
-      ];
-      // First candidate that collides with nothing wins; otherwise the least
-      // objectionable one. Hard overlaps (label on label/dot, line through the
-      // text) weigh most; mere proximity (within a few px of a dot, label or
-      // line) gets a soft penalty so labels are nudged clear of crowded areas
-      // — the N fan and the Pog/Gn/Me chin cluster especially — instead of
-      // parking flush against them. Far candidates carry a small cost so the
-      // leader-line treatment only appears when the near ring is truly full.
-      let chosen = candidates[0];
-      let bestPenalty = Infinity;
-      for (const candidate of candidates) {
-        const rect = getLabelRect(sx, sy, textWidth, candidate);
-        const softRect = inflateRect(rect, 3);
-        let penalty = candidate.far ? 0.75 : 0;
-        for (const other of occupied) {
-          if (rectsIntersect(rect, other)) {
-            penalty += 3;
-          } else if (rectsIntersect(softRect, other)) {
-            penalty += 1;
-          }
-        }
-        for (const line of lines) {
-          if (segmentIntersectsRect(line, rect, 1.5)) {
-            penalty += 1.5;
-          } else if (segmentIntersectsRect(line, rect, 4.5)) {
-            penalty += 0.5;
-          }
-        }
-        if (penalty === 0) {
-          chosen = candidate;
-          break;
-        }
-        if (penalty < bestPenalty) {
-          bestPenalty = penalty;
-          chosen = candidate;
-        }
-      }
-      occupied.push(getLabelRect(sx, sy, textWidth, chosen));
-      placements[point.symbol] = { symbol: point.symbol, ...chosen };
-    }
-    return placements;
+    return computeLabelPlacements(
+      points.map(({ symbol, x, y }) => ({ symbol, x: x * scale, y: y * scale })),
+      lines,
+    );
   };
 
   /**
@@ -542,7 +368,7 @@ export class TracingViewer extends React.PureComponent<Props, State> {
                 strokeLinejoin="round"
                 pointerEvents="none"
               >
-                {symbol}
+                {getShortLabel(symbol)}
               </text>
               {isDraggableLandmark(symbol) && !dimmed ? (
                 <circle
@@ -655,27 +481,51 @@ export class TracingViewer extends React.PureComponent<Props, State> {
     );
   };
 
+  /**
+   * The profilogram overlay: a stylised skeletal/soft-tissue schematic drawn
+   * through the placed landmarks. Most of its segments coincide with lines the
+   * analysis already draws, so it must NOT reuse the tracing's cyan solid
+   * strokes (that made the toggle look dead). Instead it reads as its own
+   * layer: heavier dashed amber strokes over a dark casing — unmistakably
+   * different from both the cyan measurement lines and the fine outline
+   * tracings, so toggling it produces an obvious change.
+   */
   private renderProfilogram = () => {
-    const { profilogram } = this.props;
+    const { profilogram, isHighlightMode } = this.props;
     if (profilogram.length === 0) {
       return null;
     }
     return (
-      <g>
+      <g opacity={isHighlightMode ? 0.35 : 1} pointerEvents="none">
         {profilogram.map((seg, i) => (
-          <line
-            key={i}
-            x1={seg.x1}
-            y1={seg.y1}
-            x2={seg.x2}
-            y2={seg.y2}
-            stroke="#0091EA"
-            strokeWidth={1.5}
-            opacity={0.85}
-            strokeLinecap="round"
-            vectorEffect="non-scaling-stroke"
-            pointerEvents="none"
-          />
+          <g key={i}>
+            {/* Dark casing so the dashes read on bright bone regions. */}
+            <line
+              x1={seg.x1}
+              y1={seg.y1}
+              x2={seg.x2}
+              y2={seg.y2}
+              stroke="rgba(20, 24, 29, 0.75)"
+              strokeWidth={4}
+              strokeDasharray="7 5"
+              strokeLinecap="round"
+              vectorEffect="non-scaling-stroke"
+              pointerEvents="none"
+            />
+            <line
+              x1={seg.x1}
+              y1={seg.y1}
+              x2={seg.x2}
+              y2={seg.y2}
+              stroke="#FFC400"
+              strokeWidth={2.25}
+              strokeDasharray="7 5"
+              strokeLinecap="round"
+              opacity={0.95}
+              vectorEffect="non-scaling-stroke"
+              pointerEvents="none"
+            />
+          </g>
         ))}
       </g>
     );

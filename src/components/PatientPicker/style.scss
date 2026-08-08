@@ -216,6 +216,20 @@
   color: $text-disabled;
 }
 
+// Locale-independent echo of a date input's value, so 08/06/2026 can't be
+// misread as June 8th on a patient record.
+.field_echo {
+  font-size: 11.5px;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+  color: $text-disabled;
+}
+
+.field_echo_set {
+  font-weight: 600;
+  color: $text-secondary;
+}
+
 .field_input {
   box-sizing: border-box;
   width: 100%;

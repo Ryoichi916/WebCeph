@@ -5,6 +5,7 @@ import IconPerson from 'material-ui/svg-icons/social/person';
 import IconSave from 'material-ui/svg-icons/content/save';
 import IconSwap from 'material-ui/svg-icons/action/swap-horiz';
 import IconSettings from 'material-ui/svg-icons/action/settings';
+import IconRecords from 'material-ui/svg-icons/action/view-list';
 
 import { Link } from 'react-router-dom';
 
@@ -60,7 +61,10 @@ const getInitials = (text: string): string => {
 
 export default class PatientBar extends React.PureComponent<Props, { }> {
   render() {
-    const { className, activePatient, onSave, onChangePatient } = this.props;
+    const {
+      className, activePatient, recordCount,
+      onSave, onChangePatient, onOpenRecords,
+    } = this.props;
     const name = activePatient !== null ?
       (activePatient.name || activePatient.chartId || '(unnamed)') : '—';
     const chartId = activePatient !== null && activePatient.name ?
@@ -78,7 +82,15 @@ export default class PatientBar extends React.PureComponent<Props, { }> {
       <div className={cx(classes.root, className)}>
         <span className={classes.wordmark}>WebCeph</span>
         <span className={classes.divider} />
-        <div className={classes.patient}>
+        {/* The patient identity is the entry point to their records: clicking
+            it opens the dashboard listing every image on file. */}
+        <button
+          type="button"
+          className={classes.patient}
+          onClick={onOpenRecords}
+          title={`Open ${name}'s records`}
+          aria-label={`Open patient records for ${name}`}
+        >
           {initials !== '' ? (
             <span className={classes.patient_avatar} aria-hidden="true">
               {initials}
@@ -95,9 +107,18 @@ export default class PatientBar extends React.PureComponent<Props, { }> {
           {demographics !== '' ? (
             <span className={classes.demographics}>{demographics}</span>
           ) : null}
-        </div>
+        </button>
         <span className={classes.spacer} />
         <div className={classes.actions}>
+          <FlatButton
+            label={recordCount > 0 ? `Records (${recordCount})` : 'Records'}
+            style={actionButtonStyle}
+            labelStyle={actionLabelStyle}
+            hoverColor="rgba(255, 255, 255, 0.12)"
+            rippleColor="#FFFFFF"
+            icon={<IconRecords color={iconWhite} style={actionIconStyle} />}
+            onClick={onOpenRecords}
+          />
           <FlatButton
             label="Save project"
             style={actionButtonStyle}

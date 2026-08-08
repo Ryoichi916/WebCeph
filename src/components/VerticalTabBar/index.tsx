@@ -5,6 +5,8 @@ import map from 'lodash/map';
 
 import * as cx from 'classnames';
 
+import { getTimepointToken } from 'utils/records';
+
 const classes = require('./style.scss');
 
 class VerticalTabBar extends React.PureComponent<Props, { }> {
@@ -22,6 +24,18 @@ class VerticalTabBar extends React.PureComponent<Props, { }> {
         {map(this.props.tabs, (id, i) => {
           const isActiveTab = this.props.activeTabId === id;
           const thumbnail = this.props.thumbnails[id];
+          const caption = this.props.captions[id];
+          // The tile's primary caption is its timepoint when one is recorded;
+          // an unfiled image falls back to its position in the rail rather
+          // than being labelled with a timepoint it does not have.
+          // Only the timepoint's first token is shown — a free-text label such
+          // as "T3 pre-treatment" reads as "T3" here rather than ellipsizing to
+          // "T3 pr…"; the full label stays in the tile's tooltip below.
+          const primaryCaption =
+            (caption && getTimepointToken(caption.timepoint)) || `${i + 1}`;
+          const label = caption !== undefined
+            ? caption.fullLabel
+            : `Image ${i + 1}`;
           return (
             <button
               tabIndex={0}
@@ -31,8 +45,8 @@ class VerticalTabBar extends React.PureComponent<Props, { }> {
                 [classes.tab_item__thumbnail]: thumbnail !== undefined,
               })}
               onClick={!isActiveTab ? this.handleTabClick(id) : undefined}
-              title={`Image ${i + 1}`}
-              aria-label={`Image ${i + 1}`}
+              title={label}
+              aria-label={label}
               aria-pressed={isActiveTab}
             >
               {thumbnail !== undefined ? (
@@ -49,7 +63,14 @@ class VerticalTabBar extends React.PureComponent<Props, { }> {
                   <span className={classes.tab_number}>{i + 1}</span>
                 </span>
               )}
-              <span className={classes.tab_index}>{i + 1}</span>
+              {/* An image-less tile already shows its number inside the tile,
+                  so it gets no caption underneath. */}
+              {thumbnail !== undefined ? (
+                <span className={classes.tab_index}>{primaryCaption}</span>
+              ) : null}
+              {caption !== undefined ? (
+                <span className={classes.tab_type}>{caption.typeLabel}</span>
+              ) : null}
             </button>
           );
         })}

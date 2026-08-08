@@ -33,10 +33,18 @@ const middleware = ({ getState, dispatch }: Store<StoreState>) =>
     next(action);
 
     const state = getState();
-    const { imageId, overwrite = false } = action.payload;
+    const {
+      imageId, overwrite = false, symbols: requested,
+    } = action.payload;
 
-    const steps = getManualSteps(state)(imageId);
+    // Normally the active analysis' own manual steps. A caller may name the
+    // symbols instead — the clinical report does, because it prints every
+    // lateral analysis from one tracing and needs the union of all their
+    // landmarks rather than the ones the open analysis happens to require.
     const placed = getManualLandmarks(state)(imageId);
+    const steps = requested !== undefined
+      ? requested.map((symbol) => ({ symbol }))
+      : getManualSteps(state)(imageId);
     const props = getImageProps(state)(imageId);
 
     if (steps.length === 0) {

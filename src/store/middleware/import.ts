@@ -41,23 +41,23 @@ const middleware = ({ dispatch }: Store<StoreState>) =>
   (next: GenericDispatch) => async (action: GenericAction) => {
     if (isActionOfType(action, 'LOAD_IMAGE_FROM_URL_REQUESTED')) {
       next(action);
-      const { url, workspaceId } = action.payload;
+      const { url, workspaceId, meta } = action.payload;
       try {
         const blob = await (await fetch(url)).blob();
         const file = new File([blob], 'demo_image');
-        return dispatch(importFileRequested({ file, workspaceId }));
+        return dispatch(importFileRequested({ file, workspaceId, meta }));
       } catch (error) {
         return dispatch(fail(error, workspaceId));
       }
     } else if (isActionOfType(action, 'IMPORT_FILE_REQUESTED')) {
       next(action);
-      const { file, workspaceId } = action.payload;
+      const { file, workspaceId, meta } = action.payload;
       console.info('Importing file...', file.name);
       const importer = find(importers, ({ doesMatch }) => doesMatch(file));
       if (importer) {
         try {
           const actions = [
-            ...(await importer.importFn(file, { workspaceId })),
+            ...(await importer.importFn(file, { workspaceId, meta })),
             importFileSucceeded({ workspaceId }),
           ];
           each(actions, dispatch);

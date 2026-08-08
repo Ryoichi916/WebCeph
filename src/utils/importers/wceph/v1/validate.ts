@@ -57,6 +57,7 @@ enum ValidationErrorType {
   INVALID_MANUAL_LANDMARKS,
   INVALID_SKIPPED_STEPS,
   INVALID_IMAGE_NAME,
+  INVALID_RECORD_METADATA,
 }
 
 const getMessageForError = (type: ValidationErrorType, _data?: any) => {
@@ -143,6 +144,26 @@ const rules: Array<[
       });
     },
     createErrorMaker(ValidationErrorType.INVALID_IMAGE_NAME),
+    undefined,
+  ],
+  [
+    // Records metadata (timepoint + capture date). Both are optional so files
+    // written before the records layer keep importing; when present, a
+    // timepoint must be text and a capture date must be an ISO `YYYY-MM-DD`.
+    ({ data }) => {
+      return every(values(data), ({ timepoint, captureDate }) => {
+        const isValidTimepoint = (
+          isUndefined(timepoint) || timepoint === null || isString(timepoint)
+        );
+        const isValidCaptureDate = (
+          isUndefined(captureDate) || captureDate === null || (
+            isString(captureDate) && /^\d{4}-\d{2}-\d{2}$/.test(captureDate)
+          )
+        );
+        return isValidTimepoint && isValidCaptureDate;
+      });
+    },
+    createErrorMaker(ValidationErrorType.INVALID_RECORD_METADATA),
     undefined,
   ],
   [

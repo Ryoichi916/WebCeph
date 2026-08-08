@@ -5,11 +5,42 @@ import {
 } from 'analyses/landmarks/points/soft';
 
 import {
-  ELine,
+  ELine, SLine,
 } from 'analyses/landmarks/lines/soft';
 
+import { getSegmentLength } from 'utils/math';
+
+/**
+ * Signed perpendicular distance from a lip point to Ricketts' E-line.
+ *
+ * The E-line runs from Pronasale (Pn) to soft-tissue Pogonion (Pog'). A lip
+ * lying *anterior* to (in front of) the line is reported as **positive**, a lip
+ * *behind* the line as **negative** — the clinical convention, with a normal
+ * value around −2 ± 2 mm (lips slightly behind the line).
+ *
+ * `defaultCalculateLine` only ever returns a positive magnitude, so these two
+ * landmarks get their own `calculate` that keeps the magnitude but restores the
+ * sign from which side of the E-line the lip falls on. The sign is taken from
+ * the 2-D cross product of the E-line direction with the (lip − Pn) vector:
+ * for a patient facing right, a point in front of the line yields a negative
+ * cross product, which we map to a positive (anterior) distance.
+ */
+const signedDistanceToELine: CalculateLandmark<number, GeoObject, GeoObject> =
+  () => (lip: GeoObject | undefined, eline: GeoObject | undefined) =>
+    (perpendicular: GeoObject | undefined) => {
+      const p = lip as GeoPoint;
+      const l = eline as GeoVector;
+      const magnitude = getSegmentLength(perpendicular as GeoVector);
+      const dx = l.x2 - l.x1;
+      const dy = l.y2 - l.y1;
+      const cross = dx * (p.y - l.y1) - dy * (p.x - l.x1);
+      // cross < 0 ⇒ lip is anterior to the E-line ⇒ positive distance.
+      return cross < 0 ? magnitude : -magnitude;
+    };
+
 export const lowerLipToELine: CephDistance = {
-  ...distance(Li, ELine),
+  ...distance(Li, ELine, 'Lower lip to E-line', 'Li-E-line'),
+  calculate: signedDistanceToELine,
   interpret: defaultInterpetLandmark(
     'lowerLipProminence',
     ['resessive', 'normal', 'prominent'],
@@ -17,9 +48,42 @@ export const lowerLipToELine: CephDistance = {
 };
 
 export const upperLipToELine: CephDistance = {
-  ...distance(Ls, ELine),
+  ...distance(Ls, ELine, 'Upper lip to E-line', 'Ls-E-line'),
+  calculate: signedDistanceToELine,
   interpret: defaultInterpetLandmark(
     'upperLipProminence',
     ['resessive', 'normal', 'prominent'],
-  )
-}
+  ),
+};
+
+/**
+ * Steiner's S-line readings, the soft-tissue half of his analysis: the upper
+ * and lower lip measured against the line from soft-tissue pogonion to the
+ * middle of the columella (see `SLine`). Same sign convention as the E-line —
+ * a lip in front of the line is positive.
+ *
+ * Steiner's statement is that the lips *touch* the line, i.e. a norm of zero;
+ * he published no standard deviation for it, so the components that use these
+ * landmarks declare a ± 1 mm tolerance as a `RANGE` and carry no star scale.
+ *
+ * These two are the reason Steiner's analysis could be completed at all without
+ * new landmarks: Ls, Li, Sn, Pn and Pog' are already plotted for the
+ * soft-tissue analysis, so nothing extra is asked of the clinician.
+ */
+export const lowerLipToSLine: CephDistance = {
+  ...distance(Li, SLine, 'Lower lip to S-line', 'Li-Sline'),
+  calculate: signedDistanceToELine,
+  interpret: defaultInterpetLandmark(
+    'lowerLipProminence',
+    ['resessive', 'normal', 'prominent'],
+  ),
+};
+
+export const upperLipToSLine: CephDistance = {
+  ...distance(Ls, SLine, 'Upper lip to S-line', 'Ls-Sline'),
+  calculate: signedDistanceToELine,
+  interpret: defaultInterpetLandmark(
+    'upperLipProminence',
+    ['resessive', 'normal', 'prominent'],
+  ),
+};

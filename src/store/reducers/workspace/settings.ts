@@ -75,11 +75,24 @@ const reducers: Partial<ReducerMap> = {
       };
     },
     CLOSE_IMAGE_REQUESTED: (state, { payload: { workspaceId, imageId } }) => {
+      const settings = state[workspaceId];
+      const remaining = without(settings.images, imageId);
+      // The removed image must also stop being the workspace's tracing/active
+      // image, otherwise the editor keeps pointing at props that no longer
+      // exist. Fall back to another image of the same workspace when there is
+      // one, else to the empty (upload) state.
+      const tracingImageId = settings.tracing.imageId === imageId
+        ? (remaining.length > 0 ? remaining[0] : null)
+        : settings.tracing.imageId;
       return {
         ...state,
         [workspaceId]: {
-          ...state[workspaceId],
-          images: without(state[workspaceId].images, imageId),
+          ...settings,
+          images: remaining,
+          tracing: {
+            ...settings.tracing,
+            imageId: tracingImageId,
+          },
         },
       } as typeof state;
     },

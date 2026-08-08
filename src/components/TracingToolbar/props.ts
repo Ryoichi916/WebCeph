@@ -9,6 +9,11 @@ export interface StateProps {
   activeAnalysisId: string | null;
   /** Whether the analysis summary dialog can be shown for the current image. */
   canShowSummary: boolean;
+  /**
+   * How many of the active analysis' manual landmarks are still unplaced.
+   * Used to explain a disabled Summary button instead of graying out silently.
+   */
+  missingLandmarkCount: number;
   /** The user zoom factor (1 = fit to screen). */
   zoom: number;
   /** Whether there is a landmark edit that can be undone. */
@@ -20,6 +25,26 @@ export interface StateProps {
    * has not been calibrated yet.
    */
   scaleFactor: number | null;
+  /**
+   * Whether two of the patient's images carry tracings that can be registered
+   * against each other (see components/Superimposition/selectors).
+   */
+  canSuperimpose: boolean;
+  /**
+   * The Superimpose button's tooltip: the invitation when it is available, and
+   * precisely what is missing when it is not.
+   */
+  superimposeReason: string;
+  /**
+   * Whether this image's tracing carries enough geometry for at least one
+   * treatment movement to be simulated (see analyses/simulation).
+   */
+  canSimulate: boolean;
+  /**
+   * The Simulate button's tooltip: the invitation when it is available, and
+   * precisely what is missing when it is not.
+   */
+  simulateReason: string;
 };
 
 export interface DispatchProps {

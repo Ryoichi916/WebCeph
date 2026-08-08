@@ -13,6 +13,9 @@ import map from 'lodash/map';
 import Props from './props';
 import { getDescriptionForLandmark, getCommandForStep } from './strings';
 
+// One signed-number typography for the whole app (see `displayMinus`).
+import { displayMinus } from 'components/AnalysisResultsViewer';
+
 const classes = require('./style.scss');
 
 const SUCCESS = '#2E7D32';
@@ -41,14 +44,22 @@ const icons: { [id: string]: JSX.Element } = {
   pending: ICON_PENDING,
 };
 
-/** Formats a calculated value per the design brief: 1 decimal, tabular, unit-aware. */
+/**
+ * Formats a calculated value per the design brief: 1 decimal, tabular,
+ * unit-aware — and with the typographic minus every other surface uses
+ * (`displayMinus`), so the −3.6° in the stepper is character-for-character the
+ * −3.6° in the Summary dialog and in the printed report.
+ */
 const formatStepValue = (step: CephLandmark, value: number): string => {
-  const rounded = value.toFixed(1);
+  const rounded = displayMinus(value.toFixed(1));
   if (step.type === 'angle' || step.unit === 'degree') {
     return `${rounded}°`;
   }
   if (step.unit === 'mm' || step.unit === 'cm' || step.unit === 'in') {
     return `${rounded} ${step.unit}`;
+  }
+  if (step.unit === 'percent') {
+    return `${rounded} %`;
   }
   return rounded;
 };
@@ -81,6 +92,7 @@ export class AnalysisStepper extends React.PureComponent<Props, State> {
       analysisName,
       getStepState,
       getStepValue,
+      isStepValuePendingScale,
       isStepRemovable,
       onRemoveLandmarkClick,
       onStepMouseEnter, onStepMouseLeave,
@@ -117,7 +129,12 @@ export class AnalysisStepper extends React.PureComponent<Props, State> {
             {isComplete
               ? <IconDone color="currentColor" style={{ width: 13, height: 13 }} />
               : null}
-            {doneCount}/{total}
+            {/* The unit is spelled out: this counts every step of the analysis
+                (landmarks plus the lines and angles computed from them), while
+                the records dashboard counts landmarks only. Unlabelled, the
+                stepper's "32/32" and the card's "10 of 10" read as a
+                contradiction about the same tracing. */}
+            {doneCount}/{total} steps
           </span>
         </header>
         <div className={classes.progress_track} aria-hidden="true">
@@ -183,6 +200,18 @@ export class AnalysisStepper extends React.PureComponent<Props, State> {
                 {typeof value === 'number' ? (
                   <span className={classes.step_value}>
                     {formatStepValue(step, value)}
+                  </span>
+                ) : isStepValuePendingScale(step) ? (
+                  // A linear measurement has no honest value until the image
+                  // scale is known — say so instead of leaving the row blank.
+                  <span
+                    className={classes.step_value__pending}
+                    title={
+                      'Set the image scale (the calibration chip in the ' +
+                      'toolbar) to report this measurement in millimeters.'
+                    }
+                  >
+                    needs scale
                   </span>
                 ) : null}
                 {isDone && isStepRemovable(step) ? (

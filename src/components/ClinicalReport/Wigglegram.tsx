@@ -1,0 +1,407 @@
+import * as React from 'react';
+
+import map from 'lodash/map';
+
+// Same formatting/severity conventions as the results table (see index.tsx).
+import {
+  getUnitSuffix,
+  getSeverityStars,
+} from 'components/AnalysisResultsViewer';
+import { normSd } from 'analyses/helpers';
+
+import { printNumber } from './copy';
+
+const classes = require('./style.scss');
+
+interface Props {
+  /** Categorized results of the active analysis, as passed to the report. */
+  results: Array<CategorizedAnalysisResult<Category>>;
+  /** Landmark definitions keyed by symbol, for names and units. */
+  landmarksBySymbol: { [symbol: string]: CephLandmark | undefined };
+  /**
+   * Whether to print the "Norm deviation profile" section label above the
+   * chart. The combined report suppresses it: each of its sections is already
+   * headed by the analysis' name, and the caption under the chart says what
+   * the chart is — seven repetitions of the label would only add noise.
+   */
+  showLabel?: boolean;
+  /**
+   * Whether to print the key that explains the shaded bands. The combined
+   * report prints it once in its front matter rather than under all of its
+   * charts.
+   */
+  showKey?: boolean;
+}
+
+interface Row {
+  symbol: string;
+  /** Measurement name, wrapped over at most two lines; empty when unnamed. */
+  nameLines: string[];
+  valueLabel: string;
+  normLabel: string;
+  /** Standardized deviation (value − mean) / SD, clamped to ±3. */
+  z: number;
+  /** True when the raw z-score fell outside the ±3 SD chart range. */
+  clamped: boolean;
+  stars: 0 | 1 | 2 | 3;
+}
+
+// ---- Geometry (px, SVG user units at 1:1 on the A4 paper) -------------------
+
+/** Content width of the paper (794px A4 − 2 × 52px padding). */
+const WIDTH = 690;
+/** Left column for measurement symbol + name. */
+const LABEL_W = 168;
+/** Right column for the patient's value. */
+const VALUE_W = 64;
+const AXIS_L = LABEL_W + 12;
+const AXIS_R = WIDTH - VALUE_W - 16;
+const HEADER_H = 24;
+/** Row height with a one-line name; two-line names need a taller row. */
+const ROW_H_1 = 30;
+const ROW_H_2 = 36;
+const FOOT_H = 6;
+
+/**
+ * Characters of a measurement name that fit the label column on one line at
+ * 9.5px. Longer names wrap onto a second line rather than being cut off — a
+ * printed clinical record must not carry `"…ratio (S-Go /"`.
+ */
+const NAME_CHARS_PER_LINE = 34;
+/** Lines a name may occupy before it is (finally) elided. */
+const NAME_MAX_LINES = 2;
+
+// Severity ink indexed by star count. Index 0 is the body ink, not a colour:
+// a value within its norm must look the same here as in the results table,
+// where an unstarred value carries no colour override.
+const SEVERITY_INK = ['#1F2933', '#B26A00', '#C62828', '#C62828'];
+
+/** Chart x-coordinate of a standardized deviation z ∈ [−3, +3]. */
+const xOf = (z: number) => AXIS_L + ((z + 3) / 6) * (AXIS_R - AXIS_L);
+
+const AXIS_TICKS: Array<{ z: number; label: string }> = [
+  { z: -3, label: '−3 SD' },
+  { z: -2, label: '−2' },
+  { z: -1, label: '−1' },
+  { z: 0, label: 'Mean' },
+  { z: 1, label: '+1' },
+  { z: 2, label: '+2' },
+  { z: 3, label: '+3 SD' },
+];
+
+/**
+ * Greedy word wrap for a measurement name inside the label column. SVG has no
+ * text flow, so the break is computed here and drawn as separate lines. A name
+ * that will not fit even in two lines is elided at the end of the last line —
+ * but at that point the results table below carries it in full.
+ */
+const wrapName = (name: string): string[] => {
+  const words = name.split(' ');
+  const lines: string[] = [];
+  let line = '';
+  words.forEach((word) => {
+    const candidate = line === '' ? word : `${line} ${word}`;
+    if (candidate.length <= NAME_CHARS_PER_LINE || line === '') {
+      line = candidate;
+    } else {
+      lines.push(line);
+      line = word;
+    }
+  });
+  if (line !== '') {
+    lines.push(line);
+  }
+  if (lines.length <= NAME_MAX_LINES) {
+    return lines;
+  }
+  const kept = lines.slice(0, NAME_MAX_LINES);
+  const last = kept[NAME_MAX_LINES - 1];
+  kept[NAME_MAX_LINES - 1] = `${last.slice(0, NAME_CHARS_PER_LINE - 1)}…`;
+  return kept;
+};
+
+/**
+ * Flattens the categorized results into one wigglegram row per measurement.
+ * A measurement shared by several findings appears once (first occurrence),
+ * mirroring the cross-reference convention of the results table. Measurements
+ * without a usable norm (SD ≤ 0) cannot be standardized and are skipped.
+ */
+const buildRows = (
+  results: Props['results'],
+  landmarksBySymbol: Props['landmarksBySymbol'],
+): Row[] => {
+  const rows: Row[] = [];
+  const seen: { [symbol: string]: true | undefined } = {};
+  results.forEach(({ relevantComponents }) => {
+    relevantComponents.forEach(({ symbol, value, mean, min, max, band }) => {
+      if (seen[symbol] === true) {
+        return;
+      }
+      seen[symbol] = true;
+      // `normSd` is NaN for a measurement with no norm at all *and* for one
+      // whose norm is a published range rather than a mean ± SD — a range has
+      // no standard deviation, so it has no place on an axis measured in them.
+      // (Halving the range to make one is what printed Jarabak's ratio at six
+      // "standard deviations" from a norm nobody stated as one.)
+      const sd = normSd(mean, min, max, band);
+      if (!isFinite(sd) || sd <= 0) {
+        return;
+      }
+      const landmark = landmarksBySymbol[symbol];
+      const unit = getUnitSuffix(landmark);
+      const rawZ = (value - mean) / sd;
+      const rawName =
+        landmark !== undefined &&
+        landmark.name !== undefined &&
+        landmark.name !== symbol
+          ? landmark.name
+          : null;
+      rows.push({
+        symbol,
+        nameLines: rawName !== null ? wrapName(rawName) : [],
+        valueLabel: `${printNumber(value)}${unit}`,
+        normLabel: `${printNumber(mean)} ± ${printNumber(sd)}`,
+        z: Math.max(-3, Math.min(3, rawZ)),
+        clamped: Math.abs(rawZ) > 3,
+        stars: getSeverityStars(value, mean, min, max, band),
+      });
+    });
+  });
+  return rows;
+};
+
+/**
+ * How to read the chart. Printed under the chart in the single-analysis report
+ * and once in the combined report's front matter — exported so the two can
+ * never drift apart.
+ */
+export const WigglegramKey = () => (
+  <span>
+    Wigglegram: each measurement scaled to its own standard deviation
+    <span className={classes.legend_dot}>·</span>
+    shaded band: norm mean ± 1 SD, lighter ± 2 SD
+    <span className={classes.legend_dot}>·</span>
+    {/* The chart's own marks, which nothing else on the paper explained: the
+        dot carries the same severity colour as the value beside it, and the
+        marker is drawn outward-pointing, so a value below −3 SD is ◂ and one
+        above +3 SD is ▸. Keying only "▸" left the commoner of the two — the
+        left-pointing one — unexplained on the page it appears on. */}
+    dot: amber over 1 SD, red over 2 SD
+    <span className={classes.legend_dot}>·</span>
+    ◂ ▸ beyond ± 3 SD
+  </span>
+);
+
+/**
+ * The classic cephalometric "wigglegram" (norm-deviation polygon): one row per
+ * measurement, each scaled to its own standard deviation, with the norm band
+ * shaded (±1 SD dark, ±2 SD light) and the patient's standardized values
+ * joined dot-to-dot down the rows. Pure inline SVG — prints exactly.
+ */
+const Wigglegram = ({
+  results, landmarksBySymbol, showLabel = true, showKey = true,
+}: Props) => {
+  const rows = buildRows(results, landmarksBySymbol);
+  if (rows.length < 2) {
+    // A one-point polygon carries no profile information; the table suffices.
+    return null;
+  }
+
+  // One row height for the whole chart (an even grid is what makes the polygon
+  // readable), sized for the tallest label in it.
+  const rowHeight = rows.some((r) => r.nameLines.length > 1)
+    ? ROW_H_2
+    : ROW_H_1;
+  const chartTop = HEADER_H;
+  const chartBottom = HEADER_H + rows.length * rowHeight;
+  const height = chartBottom + FOOT_H;
+
+  const centerY = (i: number) => chartTop + i * rowHeight + rowHeight / 2;
+  const polyPoints = map(rows, (r, i) => `${xOf(r.z)},${centerY(i)}`).join(' ');
+
+  return (
+    <div className={classes.wiggle_section}>
+      {showLabel ? (
+        <div className={classes.section_label}>Norm deviation profile</div>
+      ) : null}
+      <svg
+        className={classes.wiggle_svg}
+        width={WIDTH}
+        height={height}
+        viewBox={`0 0 ${WIDTH} ${height}`}
+        role="img"
+        aria-label={
+          'Wigglegram: each measurement plotted as standard deviations ' +
+          'from its norm mean'
+        }
+      >
+        {/* Norm bands: ±2 SD light, ±1 SD dark — the polygon's spine. */}
+        <rect
+          x={xOf(-2)}
+          y={chartTop}
+          width={xOf(2) - xOf(-2)}
+          height={chartBottom - chartTop}
+          fill="#EBF3FB"
+        />
+        <rect
+          x={xOf(-1)}
+          y={chartTop}
+          width={xOf(1) - xOf(-1)}
+          height={chartBottom - chartTop}
+          fill="#D6E7F7"
+        />
+
+        {/* Row separators (hairlines) and frame.
+            Inset half a unit from each end and drawn with `crispEdges`: at
+            100 % width the SVG is scaled by a fraction of a percent to the
+            print column, and a rule that ended exactly on x = 0 rasterised a
+            ~3 px stub in the left margin of the Tweed section (its 4-row chart
+            is the shortest, so its scale factor is the least forgiving) while
+            the rest of the same rule fell inside the box. `crispEdges` snaps
+            the stroke to a device pixel row instead of anti-aliasing across
+            two, and `.wiggle_section` clips anything still outside. */}
+        {map(rows, (r, i) => i > 0 ? (
+          <line
+            key={`sep-${r.symbol}`}
+            x1={0.5}
+            y1={chartTop + i * rowHeight}
+            x2={WIDTH - 0.5}
+            y2={chartTop + i * rowHeight}
+            stroke="#EDF1F5"
+            strokeWidth={1}
+            shapeRendering="crispEdges"
+          />
+        ) : null)}
+        <line
+          x1={0.5} y1={chartTop} x2={WIDTH - 0.5} y2={chartTop}
+          stroke="#C3CCD6" strokeWidth={1} shapeRendering="crispEdges"
+        />
+        <line
+          x1={0.5} y1={chartBottom} x2={WIDTH - 0.5} y2={chartBottom}
+          stroke="#C3CCD6" strokeWidth={1} shapeRendering="crispEdges"
+        />
+
+        {/* SD ticks and header labels; the mean axis is emphasized. */}
+        {map(AXIS_TICKS, ({ z, label }) => (
+          <g key={`tick-${z}`}>
+            <line
+              x1={xOf(z)}
+              y1={chartTop}
+              x2={xOf(z)}
+              y2={chartBottom}
+              stroke={z === 0 ? '#10538F' : '#C3CCD6'}
+              strokeWidth={z === 0 ? 1.25 : 1}
+              strokeDasharray={z === 0 || Math.abs(z) === 3 ? undefined : '1 3'}
+            />
+            <text
+              className={classes.wiggle_tick_label}
+              x={xOf(z)}
+              y={chartTop - 8}
+              textAnchor="middle"
+              fill={z === 0 ? '#10538F' : '#7B8794'}
+              fontWeight={z === 0 ? 700 : 500}
+            >
+              {label}
+            </text>
+          </g>
+        ))}
+
+        {/* Row labels (left) and patient values (right). */}
+        {map(rows, (r, i) => {
+          const y = centerY(i);
+          const ink = SEVERITY_INK[r.stars];
+          // Symbol sits on the row's optical centre when it stands alone, and
+          // rises just enough to seat one or two name lines beneath it.
+          const nameCount = r.nameLines.length;
+          const symbolY = nameCount === 0
+            ? y + 3.5
+            : (nameCount === 1 ? y - 2 : y - 6);
+          return (
+            <g key={`row-${r.symbol}`}>
+              <text
+                className={classes.wiggle_symbol}
+                x={2}
+                y={symbolY}
+              >
+                {r.symbol}
+              </text>
+              {map(r.nameLines, (lineText, lineIndex) => (
+                <text
+                  key={`name-${lineIndex}`}
+                  className={classes.wiggle_name}
+                  x={2}
+                  y={symbolY + 12 + lineIndex * 10}
+                >
+                  {lineText}
+                </text>
+              ))}
+              <text
+                className={classes.wiggle_value}
+                x={WIDTH - 2}
+                y={y - 2}
+                textAnchor="end"
+                fill={ink}
+              >
+                {r.valueLabel}
+              </text>
+              <text
+                className={classes.wiggle_norm}
+                x={WIDTH - 2}
+                y={y + 10}
+                textAnchor="end"
+              >
+                {r.normLabel}
+              </text>
+            </g>
+          );
+        })}
+
+        {/* The wiggle line, then the severity-colored dots on top. */}
+        <polyline
+          points={polyPoints}
+          fill="none"
+          stroke="#52616F"
+          strokeWidth={1.4}
+          strokeLinejoin="round"
+        />
+        {map(rows, (r, i) => {
+          const y = centerY(i);
+          const ink = SEVERITY_INK[r.stars];
+          if (r.clamped) {
+            // Off-chart value: an outward-pointing marker at the ±3 SD edge.
+            const dir = r.z > 0 ? 1 : -1;
+            const tip = xOf(r.z) + dir * 4.5;
+            const base = xOf(r.z) - dir * 3.5;
+            return (
+              <path
+                key={`dot-${r.symbol}`}
+                d={`M ${base} ${y - 4.5} L ${tip} ${y} L ${base} ${y + 4.5} Z`}
+                fill={ink}
+                stroke="#FFFFFF"
+                strokeWidth={1}
+              />
+            );
+          }
+          return (
+            <circle
+              key={`dot-${r.symbol}`}
+              cx={xOf(r.z)}
+              cy={y}
+              r={3.6}
+              fill={ink}
+              stroke="#FFFFFF"
+              strokeWidth={1.2}
+            />
+          );
+        })}
+      </svg>
+      {showKey ? (
+        <div className={classes.wiggle_legend}>
+          <WigglegramKey />
+        </div>
+      ) : null}
+    </div>
+  );
+};
+
+export default Wigglegram;

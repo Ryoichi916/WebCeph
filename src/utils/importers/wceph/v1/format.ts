@@ -35,6 +35,14 @@ export type WCephJSON = {
         'photo_lateral' | 'photo_frontal' |
         'panoramic' | null
       );
+      /**
+       * Treatment timepoint label of this image, e.g. `T1`. Optional: files
+       * written before the records layer existed carry no timepoint, and they
+       * must keep importing.
+       */
+      timepoint?: string | null;
+      /** ISO `YYYY-MM-DD` capture date of this image. Optional, as above. */
+      captureDate?: string | null;
       flipX: boolean;
       flipY: boolean;
       /** Wether the image colors should be inverted */
@@ -60,7 +68,9 @@ export type WCephJSON = {
           'common' | 'downs' | 'basic' |
           'bjork' | 'tweed' |
           'steiner' | 'ricketts_lateral' |
-          'soft_tissues_lateral' | 'ricketts_frontal' |
+          'soft_tissues_lateral' | 'softTissues' | 'dental' |
+          'jarabak' | 'wits' |
+          'ricketts_frontal' |
           'soft_tissues_photo_frontal' |
           'soft_tissues_photo_lateral' |
           'frontal_face_proportions' |

@@ -1,0 +1,153 @@
+@import 'src/_variables.scss';
+
+// A sunken well holding the record's three fields (type / timepoint / capture
+// date). Shared by the upload screen and the "Edit details" dialog.
+
+.record_form {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 16px;
+  border: 1px solid $border;
+  border-radius: 8px;
+  background: $bg-sunken;
+  text-align: left;
+  font-family: $font-stack;
+}
+
+.record_form_head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 12px;
+}
+
+.record_form_title {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: $text-secondary;
+}
+
+.record_form_hint {
+  font-size: 12.5px;
+  color: $text-tertiary;
+}
+
+.record_form_row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.record_field {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+
+  &__timepoint {
+    flex: 0 0 104px;
+  }
+
+  &__date {
+    flex: 0 0 164px;
+  }
+}
+
+.record_label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: $text-tertiary;
+}
+
+.record_input {
+  box-sizing: border-box;
+  width: 100%;
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid $border-strong;
+  border-radius: 6px;
+  background: $bg-surface;
+  font-family: $font-stack;
+  font-size: 14px;
+  color: $text-primary;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+
+  &::placeholder {
+    color: $text-disabled;
+    opacity: 1;
+  }
+
+  &:hover {
+    border-color: darken($border-strong, 8%);
+  }
+
+  &:focus {
+    outline: none;
+    border-color: $primary-600;
+    box-shadow: $focus-ring;
+  }
+}
+
+.record_select {
+  appearance: none;
+  // Room for the caret drawn as a background chevron (no external asset).
+  padding-right: 30px;
+  background-image:
+    linear-gradient(45deg, transparent 50%, $text-secondary 50%),
+    linear-gradient(135deg, $text-secondary 50%, transparent 50%);
+  background-position:
+    calc(100% - 16px) calc(50% + 1px),
+    calc(100% - 11px) calc(50% + 1px);
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  cursor: pointer;
+}
+
+.record_input_date {
+  font-variant-numeric: tabular-nums;
+
+  &::-webkit-calendar-picker-indicator {
+    opacity: .55;
+    cursor: pointer;
+
+    &:hover {
+      opacity: .85;
+    }
+  }
+}
+
+// Helper line under a field: the timepoint convention, and the capture date
+// re-stated as ISO YYYY-MM-DD so a locale-formatted 08/06/2026 can't be misread.
+.record_help {
+  font-size: 11.5px;
+  line-height: 1.2;
+  color: $text-tertiary;
+
+  &__num {
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    color: $text-secondary;
+  }
+
+  &__unset {
+    font-weight: 400;
+    color: $text-disabled;
+  }
+}
+
+// Honest note shown the moment a non-traceable type is chosen — the user
+// learns what the app will and will not do before the file is even picked.
+.record_note {
+  margin: 12px 0 0;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: $warn-bg;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: $warn;
+}

@@ -1,0 +1,1390 @@
+@import 'src/_variables.scss';
+
+// The simulated tracing's hue. Deliberately not cyan (the tracing), not amber
+// (landmarks / profilogram) and not the superimposition's orange: a violet
+// reads as "hypothetical" and cannot be mistaken for measured geometry.
+$sim-hue: #C08BFF;
+$current-hue: #40C4FF;
+
+// ---- Full-screen shell ------------------------------------------------------
+
+// Above the toolbar and its popovers, like the clinical report (2200).
+.root {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 2200;
+  display: flex;
+  flex-direction: column;
+  background: $canvas-bg;
+  font-family: $font-stack;
+}
+
+:global(body.treatment-simulation-open) {
+  overflow: hidden;
+}
+
+// ---- Top chrome -------------------------------------------------------------
+
+.chrome {
+  flex: 0 0 auto;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 0 20px;
+  background: rgba(0, 0, 0, .35);
+  border-bottom: 1px solid rgba(255, 255, 255, .08);
+}
+
+.chrome_title {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  color: $text-on-dark;
+}
+
+// The same statement heads the panel and the printed sheet, so on a narrow
+// strip it gives way rather than wrapping the view's own name onto two lines.
+.chrome_hint {
+  font-size: 12px;
+  font-weight: 400;
+  color: rgba(242, 245, 248, .55);
+
+  @media (max-width: 1400px) {
+    display: none;
+  }
+}
+
+.chrome_actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.chrome_identity {
+  font-size: 12.5px;
+  color: rgba(199, 208, 217, .78);
+  white-space: nowrap;
+}
+
+.chrome_error {
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(198, 40, 40, .22);
+  color: #FFD8D8;
+  font-size: 12.5px;
+}
+
+.chrome_button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 36px;
+  padding: 0 14px;
+  border: 1px solid rgba(255, 255, 255, .25);
+  border-radius: 6px;
+  background: transparent;
+  color: $text-on-dark;
+  font-family: $font-stack;
+  font-size: 13.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease;
+
+  svg {
+    flex-shrink: 0;
+    // mui SvgIcon writes an inline `color` from the theme onto the <svg>
+    // itself, so `fill: currentColor` resolves against the theme's dark ink
+    // rather than against this button's light text — a near-black glyph on a
+    // dark chrome. Force the icon to follow the button's own colour instead.
+    // (Same fix as TracingToolbar's `.button svg`.)
+    color: inherit !important;
+    fill: currentColor !important;
+  }
+
+  &:hover {
+    background: rgba(255, 255, 255, .10);
+  }
+
+  &:focus {
+    outline: none;
+  }
+
+  &:focus-visible {
+    box-shadow: $focus-ring;
+  }
+
+  &[disabled] {
+    opacity: .45;
+    cursor: default;
+  }
+}
+
+.chrome_button__primary {
+  background: $primary-600;
+  border-color: $primary-600;
+  font-weight: 600;
+
+  &:hover {
+    background: $primary-500;
+    border-color: $primary-500;
+  }
+}
+
+// ---- Body -------------------------------------------------------------------
+
+.body {
+  flex: 1 1 auto;
+  display: flex;
+  min-height: 0;
+}
+
+.figure_column {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  padding: 16px 16px 0;
+}
+
+.figure {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid $canvas-border;
+  border-radius: 8px;
+  background: #0E1216;
+  overflow: hidden;
+}
+
+.svg {
+  width: 100%;
+  height: 100%;
+}
+
+// ---- Tracing hues -----------------------------------------------------------
+
+.film {
+  opacity: .58;
+}
+
+.casing {
+  fill: none;
+  stroke: rgba(20, 24, 29, .62);
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.outline {
+  fill: none;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.dot {
+  stroke: $canvas-bg;
+  stroke-width: 1.2;
+  vector-effect: non-scaling-stroke;
+}
+
+.current {
+  .outline { stroke: $current-hue; }
+  .dot { fill: $current-hue; }
+}
+
+// Dashed, so the simulated tracing is legible as a proposal even in a
+// black-and-white print or to a red-green colour-blind reader.
+.simulated {
+  .outline {
+    stroke: $sim-hue;
+    stroke-width: 2.1;
+    stroke-dasharray: 7 4.5;
+  }
+
+  .dot {
+    fill: $sim-hue;
+  }
+}
+
+.vector {
+  stroke: rgba(255, 255, 255, .8);
+  stroke-width: 1.2;
+  vector-effect: non-scaling-stroke;
+}
+
+.vector_head {
+  fill: rgba(255, 255, 255, .85);
+}
+
+// ---- Scale bar --------------------------------------------------------------
+
+// The same millimetre bar the superimposition draws, from the same
+// `chooseScaleBar`. Drawn only on a calibrated film.
+.scale_bar line {
+  stroke: #FFFFFF;
+  stroke-width: 1.8;
+  opacity: .9;
+  vector-effect: non-scaling-stroke;
+}
+
+// Figure type is sized in viewBox units, which mean nothing on their own: the
+// component measures the rendered box and hands the true units-per-pixel down
+// as custom properties, so the label is 12.5 CSS px on screen and ~9.5 px on
+// paper however hard the crop is scaled.
+.anno_text {
+  fill: #FFFFFF;
+  stroke: rgba(20, 24, 29, .85);
+  paint-order: stroke;
+  stroke-linejoin: round;
+  font-family: $font-stack;
+  font-weight: 600;
+  font-size: var(--anno-size);
+  stroke-width: var(--anno-halo);
+}
+
+// ---- Legend -----------------------------------------------------------------
+
+.legend {
+  flex: 0 0 auto;
+  padding: 12px 4px 14px;
+}
+
+.legend_keys {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.key {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.key_swatch {
+  width: 26px;
+  height: 0;
+  border-top-width: 3px;
+  border-top-style: solid;
+  border-radius: 2px;
+}
+
+.key__current .key_swatch { border-top-color: $current-hue; }
+
+.key__simulated .key_swatch {
+  border-top-style: dashed;
+  border-top-color: $sim-hue;
+}
+
+// The displacement arrows carry as much of the figure's meaning as the two
+// hues, so they get a swatch of their own rather than a sentence of prose.
+.key_arrow {
+  width: 26px;
+  height: 8px;
+  overflow: visible;
+
+  line {
+    stroke: rgba(255, 255, 255, .85);
+    stroke-width: 1.4;
+  }
+
+  polygon {
+    fill: rgba(255, 255, 255, .9);
+  }
+}
+
+.key_text {
+  font-size: 13px;
+  font-weight: 600;
+  color: $text-on-dark;
+}
+
+.legend_plan {
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(192, 139, 255, .16);
+  color: #E6D2FF;
+  font-size: 12.5px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+// One short line and an info affordance, not a two-column footer of prose: the
+// three paragraphs that used to be set here in ~46ch columns took the bottom
+// fifth of the screen and were the loudest thing under the figure. The full
+// text is one click away and prints in full (see AboutDisclosure).
+.legend_notes {
+  margin-top: 8px;
+  max-width: 96ch;
+}
+
+.legend_note {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: rgba(199, 208, 217, .72);
+  break-inside: avoid;
+}
+
+// The disclosure takes `currentColor`, so it is given the legend's ink rather
+// than the panel's dark text.
+.legend_about {
+  margin-top: 6px;
+  color: rgba(199, 208, 217, .82);
+}
+
+// ---- Panel ------------------------------------------------------------------
+
+// Two panes, not one scroller. The controls sit in the upper pane and the
+// measurements table — the reason this view exists — has a labelled pane of its
+// own that is on screen before anything is touched, rather than 700px below a
+// disclaimer, five sliders and four paragraphs.
+.panel {
+  flex: 0 0 452px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: $bg-surface;
+  border-left: 1px solid $border;
+
+  @media (min-width: 1600px) {
+    flex-basis: 500px;
+  }
+}
+
+.panel_head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 14px 16px 12px;
+  border-bottom: 1px solid $border;
+}
+
+.panel_title {
+  font-size: 16px;
+  font-weight: 600;
+  color: $text-primary;
+}
+
+.panel_sub {
+  font-size: 12.5px;
+  color: $text-tertiary;
+  font-variant-numeric: tabular-nums;
+}
+
+.panel_scroll {
+  flex: 1 1 48%;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 14px 16px 20px;
+}
+
+.disclaimer {
+  margin: 0 0 16px;
+  padding: 10px 12px;
+  border: 1px solid #FFE0B2;
+  border-left: 3px solid $warn;
+  border-radius: 6px;
+  background: $warn-bg;
+  font-size: 12px;
+  line-height: 1.55;
+  color: #6B4200;
+
+  strong { font-weight: 600; }
+}
+
+.disclaimer_line {
+  margin: 0;
+}
+
+// One statement of the film's missing calibration, above the movements it
+// blocks — not the same three lines repeated under each of them.
+.group_banner {
+  margin: 0 0 4px;
+  padding: 9px 11px;
+  border: 1px solid #FFE0B2;
+  border-left: 3px solid $warn;
+  border-radius: 6px;
+  background: $warn-bg;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: #6B4200;
+}
+
+// ---- Sliders ----------------------------------------------------------------
+
+.control {
+  padding: 10px 0 12px;
+  border-bottom: 1px solid $border;
+}
+
+.control__off {
+  opacity: .62;
+}
+
+.control_head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.control_label {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: $text-primary;
+}
+
+.control_value {
+  font-size: 13px;
+  font-weight: 600;
+  color: $text-tertiary;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.control__on {
+  .control_value {
+    color: $primary-700;
+  }
+}
+
+// Every one of these controls is centre-neutral, so the track says so: a notch
+// marks zero and the coloured segment runs *from zero to the thumb*, not from
+// the left end. The thumb's centre travels inset by half its own width, so the
+// gradient stops are expressed against that same travel (`--pa` / `--pb` are
+// the two ends of the filled span, 0–1, set inline by the component).
+$thumb-size: 16px;
+$zero-notch: rgba(31, 41, 51, .5);
+
+@mixin slider-track {
+  height: 5px;
+  border: none;
+  border-radius: 3px;
+  background-color: $bg-sunken;
+  box-shadow: inset 0 0 0 1px $border;
+  background-repeat: no-repeat;
+  background-image:
+    linear-gradient(
+      to right,
+      transparent calc(50% - .5px),
+      #{$zero-notch} calc(50% - .5px),
+      #{$zero-notch} calc(50% + .5px),
+      transparent calc(50% + .5px)
+    ),
+    linear-gradient(
+      to right,
+      transparent calc(#{$thumb-size} / 2 + var(--pa, .5) * (100% - #{$thumb-size})),
+      #{$primary-600} calc(#{$thumb-size} / 2 + var(--pa, .5) * (100% - #{$thumb-size})),
+      #{$primary-600} calc(#{$thumb-size} / 2 + var(--pb, .5) * (100% - #{$thumb-size})),
+      transparent calc(#{$thumb-size} / 2 + var(--pb, .5) * (100% - #{$thumb-size}))
+    );
+}
+
+.slider {
+  display: block;
+  width: 100%;
+  height: 20px;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  -webkit-appearance: none;
+  appearance: none;
+  cursor: pointer;
+
+  &:focus {
+    outline: none;
+  }
+
+  &::-webkit-slider-runnable-track {
+    @include slider-track;
+  }
+
+  &::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: $thumb-size;
+    height: $thumb-size;
+    margin-top: -6px;
+    border: 2px solid $bg-surface;
+    border-radius: 999px;
+    background: $primary-600;
+    box-shadow: $shadow-1;
+  }
+
+  &::-moz-range-track {
+    @include slider-track;
+  }
+
+  &::-moz-range-thumb {
+    width: $thumb-size;
+    height: $thumb-size;
+    border: 2px solid $bg-surface;
+    border-radius: 999px;
+    background: $primary-600;
+  }
+
+  &:focus-visible::-webkit-slider-thumb {
+    box-shadow: $focus-ring;
+  }
+
+  &[disabled] {
+    cursor: default;
+
+    &::-webkit-slider-runnable-track { background-image: none; }
+    &::-moz-range-track { background-image: none; }
+    &::-webkit-slider-thumb { background: $text-disabled; }
+    &::-moz-range-thumb { background: $text-disabled; }
+  }
+}
+
+// The three labels are positioned against the *track*, not distributed by
+// `space-between`: with labels of unequal width that put the "0" 14px away from
+// the slider's own zero, which is the one tick a centre-neutral control has to
+// get right.
+.control_scale {
+  position: relative;
+  height: 14px;
+  margin-top: 1px;
+  font-size: 10.5px;
+  color: $text-tertiary;
+  font-variant-numeric: tabular-nums;
+}
+
+.control_min,
+.control_max,
+.control_zero {
+  position: absolute;
+  top: 0;
+  white-space: nowrap;
+}
+
+.control_min { left: 0; }
+.control_max { right: 0; }
+
+.control_zero {
+  left: 50%;
+  transform: translateX(-50%);
+  color: $text-secondary;
+  font-weight: 600;
+
+  // A tick between the track and the label, so zero is marked on the control
+  // itself and not only by the end of the coloured fill (which the thumb sits
+  // on when the movement is zero).
+  &::before {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: -5px;
+    width: 1px;
+    height: 4px;
+    transform: translateX(-50%);
+    background: $border-strong;
+  }
+}
+
+// Rendered under *every* control, at rest as well as engaged: a panel of five
+// unexplained sliders whose only documentation appears once you have already
+// moved one is not a panel a clinician can read before acting. The reserved
+// height also keeps the stack from jumping when the plane name is added.
+.control_help {
+  margin: 6px 0 0;
+  min-height: 34px;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: $text-secondary;
+}
+
+.control_reason {
+  margin: 7px 0 0;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: $warn;
+}
+
+// ---- Soft tissue ------------------------------------------------------------
+
+.soft {
+  padding: 14px 0 4px;
+  border-bottom: 1px solid $border;
+}
+
+.soft_head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.soft_title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: $text-primary;
+}
+
+.seg {
+  display: inline-flex;
+  padding: 2px;
+  border: 1px solid $border-strong;
+  border-radius: 8px;
+  background: $bg-sunken;
+}
+
+.seg_button {
+  height: 24px;
+  padding: 0 11px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: $text-secondary;
+  font-family: $font-stack;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+
+  &:hover {
+    color: $text-primary;
+  }
+
+  &:focus {
+    outline: none;
+  }
+
+  &:focus-visible {
+    box-shadow: $focus-ring;
+  }
+}
+
+.seg_button__on {
+  background: $bg-surface;
+  color: $primary-700;
+  font-weight: 600;
+  box-shadow: $shadow-1;
+}
+
+.soft_note {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: $text-secondary;
+
+  strong { font-weight: 600; }
+}
+
+// Follows the ratio list, which is a ruled table: without this the sentence
+// about the curve sat on the last row's rule.
+.soft_note__spaced {
+  margin-top: 10px;
+}
+
+// The one caveat in this panel that is about *this* tracing's shortcoming
+// rather than about the method: an inferred silhouette must read as a warning,
+// not as more grey small print.
+.soft_note__caution {
+  color: $warn;
+}
+
+.soft_empty {
+  margin: 8px 0 0;
+  font-size: 11.5px;
+  color: $text-tertiary;
+}
+
+.soft_list {
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.soft_row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 0;
+  border-top: 1px solid $border;
+  font-size: 11.5px;
+}
+
+.soft_symbol {
+  flex: 0 0 42px;
+  font-weight: 600;
+  color: $text-primary;
+}
+
+.soft_name {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: $text-tertiary;
+}
+
+.soft_ratio {
+  flex: 0 0 auto;
+  color: $text-secondary;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+// ---- Value table ------------------------------------------------------------
+
+// The table's own pane: a labelled header and an independent scroller, so the
+// numbers are on screen at rest instead of below four paragraphs of prose.
+.values {
+  flex: 1 1 52%;
+  min-height: 250px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-top: 1px solid $border-strong;
+  background: $bg-surface;
+}
+
+.values_head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 11px 16px 9px;
+  border-bottom: 1px solid $border;
+  background: $bg-sunken;
+}
+
+.values_scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 10px 16px 18px;
+}
+
+.values_title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: $text-primary;
+}
+
+.values_sub {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: $text-tertiary;
+  font-variant-numeric: tabular-nums;
+}
+
+.values_empty {
+  margin: 10px 0 0;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: $text-secondary;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+
+  th, td {
+    padding: 6px 4px;
+    text-align: left;
+    vertical-align: baseline;
+  }
+
+  thead th {
+    position: sticky;
+    top: -10px;
+    z-index: 1;
+    border-bottom: 1px solid $border-strong;
+    background: $bg-surface;
+    font-size: 10.5px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    color: $text-tertiary;
+  }
+
+  tbody tr + tr td {
+    border-top: 1px solid $border;
+  }
+}
+
+// The caption belongs to the column it describes. Right-aligned in the pane
+// header it landed over NORM, which is not what "simulated − current" means.
+.th_sub {
+  display: block;
+  margin-top: 1px;
+  font-size: 9.5px;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  color: $text-disabled;
+  white-space: nowrap;
+}
+
+.col_name { width: auto; }
+.col_num { text-align: right; }
+.col_norm { text-align: right; width: 68px; }
+
+.cell_name {
+  min-width: 0;
+}
+
+.symbol {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: $text-primary;
+}
+
+.name {
+  display: block;
+  margin-top: 1px;
+  font-size: 11px;
+  color: $text-tertiary;
+}
+
+.cell_num {
+  text-align: right;
+  font-size: 12.5px;
+  color: $text-secondary;
+  white-space: nowrap;
+}
+
+.cell_sim {
+  font-weight: 600;
+  color: $text-primary;
+}
+
+// Green means one thing only: the plan took this value from outside its norm
+// band to inside it. A value that was already in its band is not something the
+// plan corrected, and colouring it green would say it was.
+.cell_in {
+  color: $success;
+}
+
+.cell_out {
+  color: $warn;
+}
+
+// Out of norm *because of this plan* — the opposite finding, and it must not
+// look identical to a value that was already out before it.
+.cell_worse {
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-decoration-color: $warn;
+  text-underline-offset: 2px;
+}
+
+// Beyond the plausibility band: on a real film this means the plan or the
+// tracing is wrong, so it is not styled like an ordinary out-of-norm value.
+.cell_bad {
+  color: $error;
+  font-weight: 700;
+}
+
+.flag {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: $error-bg;
+  color: $error;
+  font-size: 10px;
+  font-weight: 700;
+  vertical-align: 1px;
+}
+
+// One line naming what the colours mean, immediately under the table they
+// colour. A clinical table that colour-codes without a key is a table that
+// invites the reader to guess.
+.legend_key {
+  margin: 9px 0 0;
+  font-size: 11px;
+  line-height: 1.6;
+  color: $text-tertiary;
+}
+
+.chip {
+  display: inline-block;
+  margin-right: 5px;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+
+  + span {
+    margin-left: 0;
+  }
+}
+
+.chip__in { background: $success-bg; color: $success; }
+.chip__out { background: $warn-bg; color: $warn; }
+.chip__bad { background: $error-bg; color: $error; }
+
+.cell_change {
+  font-weight: 600;
+  color: $primary-700;
+}
+
+.cell_norm {
+  text-align: right;
+  font-size: 11.5px;
+  color: $text-tertiary;
+  white-space: nowrap;
+}
+
+.footnotes {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid $border;
+}
+
+.footnote {
+  margin: 0 0 8px;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: $text-tertiary;
+
+  em { font-style: italic; }
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+}
+
+.footnote__warn {
+  color: $warn;
+}
+
+// ---- Empty state ------------------------------------------------------------
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin: auto;
+  padding: 40px;
+  max-width: 520px;
+  text-align: center;
+}
+
+.empty_title {
+  font-size: 20px;
+  font-weight: 400;
+  color: $canvas-text;
+}
+
+.empty_hint {
+  font-size: 13px;
+  line-height: 1.6;
+  color: rgba(199, 208, 217, .6);
+}
+
+// ---- Print ------------------------------------------------------------------
+
+// Print-only letterhead, patient band and certification block. The screen
+// carries the identity in the chrome; paper has to carry all of it, to the same
+// standard as the clinical report and the superimposition.
+.print_head,
+.print_tail {
+  display: none;
+}
+
+@page {
+  size: A4 portrait;
+  margin: 14mm;
+}
+
+@media print {
+  // Hide the app and every other portal; print the simulation alone.
+  :global(body.treatment-simulation-open) > * {
+    display: none !important;
+  }
+
+  :global(body.treatment-simulation-open) {
+    overflow: visible;
+    background: #FFFFFF !important;
+  }
+
+  :global(html) {
+    background: #FFFFFF !important;
+  }
+
+  :global(body.treatment-simulation-open) > .root {
+    display: block !important;
+    position: static;
+    background: #FFFFFF;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .chrome {
+    display: none !important;
+  }
+
+  // ---- Letterhead -----------------------------------------------------------
+
+  .print_head {
+    display: block;
+  }
+
+  .print_masthead {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    padding-bottom: 6px;
+    border-bottom: 2px solid $primary-700;
+  }
+
+  .print_masthead_left {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .print_clinic {
+    font-size: 15px;
+    font-weight: 600;
+    color: $primary-900;
+  }
+
+  .print_clinic_line {
+    font-size: 11px;
+    color: $text-secondary;
+  }
+
+  .print_masthead_right {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
+    white-space: nowrap;
+  }
+
+  .print_kicker {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: $primary-700;
+  }
+
+  .print_date {
+    font-size: 11px;
+    color: $text-secondary;
+  }
+
+  .print_title {
+    margin: 8px 0 0;
+    font-size: 18px;
+    font-weight: 600;
+    color: $text-primary;
+  }
+
+  .print_band {
+    margin-top: 6px;
+    padding: 6px 0;
+    border-top: 1px solid $border;
+    border-bottom: 1px solid $border;
+  }
+
+  .band_row {
+    display: flex;
+    gap: 12px;
+
+    + .band_row {
+      margin-top: 4px;
+    }
+  }
+
+  .band_cell {
+    flex: 1 1 0;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  .band_label {
+    font-size: 8.5px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: $text-tertiary;
+  }
+
+  .band_value {
+    font-size: 11px;
+    color: $text-primary;
+  }
+
+  // The one sentence a detached sheet must not be read without.
+  .print_banner {
+    margin: 6px 0 0;
+    padding: 5px 8px;
+    border-left: 3px solid $warn;
+    background: $warn-bg;
+    font-size: 10px;
+    line-height: 1.45;
+    color: #6B4200;
+  }
+
+  // ---- Figure ---------------------------------------------------------------
+
+  .body {
+    display: block;
+  }
+
+  .figure_column {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 6mm;
+    padding: 6mm 0 0;
+  }
+
+  .figure {
+    flex: 0 0 96mm;
+    align-self: flex-start;
+    // Keep in step with PRINT_FIGURE_HEIGHT_MM in index.tsx, which sizes the
+    // figure's annotation type from it.
+    height: 104mm;
+    border: 1px solid $border;
+    background: #FFFFFF;
+    page-break-inside: avoid;
+  }
+
+  // On paper the tracings must be dark ink on white, and the radiograph only a
+  // faint underlay — a dark film would print as a black rectangle.
+  .film {
+    opacity: .25;
+  }
+
+  .casing {
+    stroke: rgba(255, 255, 255, .9);
+    stroke-width: 3.4;
+  }
+
+  .current {
+    .outline { stroke: #10538F; }
+    .dot { fill: #10538F; }
+  }
+
+  .simulated {
+    .outline { stroke: #6A2FB5; }
+    .dot { fill: #6A2FB5; }
+  }
+
+  .dot {
+    stroke: #FFFFFF;
+  }
+
+  .vector { stroke: $text-secondary; }
+  .vector_head { fill: $text-secondary; }
+
+  .scale_bar line {
+    stroke: $text-primary;
+  }
+
+  .anno_text {
+    fill: $text-primary;
+    stroke: #FFFFFF;
+    font-size: var(--anno-size-print);
+    stroke-width: var(--anno-halo-print);
+  }
+
+  .legend {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 0;
+    page-break-inside: avoid;
+  }
+
+  .legend_notes {
+    column-width: auto;
+    column-count: 1;
+  }
+
+  .key_text { color: $text-primary; }
+  .key__current .key_swatch { border-top-color: #10538F; }
+  .key__simulated .key_swatch { border-top-color: #6A2FB5; }
+
+  .key_arrow {
+    line { stroke: $text-secondary; }
+    polygon { fill: $text-secondary; }
+  }
+
+  .legend_plan {
+    background: $primary-050;
+    color: $primary-900;
+  }
+
+  .legend_note {
+    color: $text-secondary;
+    font-size: 9.5px;
+  }
+
+  // ---- Panel ----------------------------------------------------------------
+
+  .panel {
+    flex: none;
+    display: block;
+    border-left: none;
+    background: #FFFFFF;
+  }
+
+  .panel_head {
+    padding: 12px 0 5px;
+  }
+
+  .panel_scroll,
+  .values_scroll {
+    flex: none;
+    overflow: visible;
+    padding: 0;
+  }
+
+  .values {
+    display: block;
+    margin-top: 10px;
+    border-top: none;
+  }
+
+  .values_head {
+    padding: 0 0 5px;
+    background: transparent;
+  }
+
+  .table thead th {
+    position: static;
+  }
+
+  .table th,
+  .table td {
+    padding: 4px 6px;
+  }
+
+  .table tbody {
+    page-break-inside: avoid;
+  }
+
+  .disclaimer,
+  .group_banner {
+    page-break-inside: avoid;
+  }
+
+  // Sliders are an input, not a finding: paper shows what was set, in the
+  // readout and the plan chip, not a control nobody can move.
+  .slider,
+  .control_scale {
+    display: none;
+  }
+
+  .control {
+    padding: 5px 0;
+    page-break-inside: avoid;
+  }
+
+  .control__off {
+    display: none;
+  }
+
+  .control_help {
+    min-height: 0;
+    margin-top: 2px;
+    font-size: 9.5px;
+  }
+
+  .footnotes {
+    margin-top: 8px;
+    padding-top: 7px;
+    page-break-inside: avoid;
+  }
+
+  .footnote,
+  .legend_key {
+    margin-bottom: 4px;
+    font-size: 9px;
+    line-height: 1.4;
+  }
+
+  // ---- Certification --------------------------------------------------------
+
+  .print_tail {
+    display: block;
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px solid $border;
+    page-break-inside: avoid;
+  }
+
+  .sig_label {
+    font-size: 9px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .07em;
+    color: $text-tertiary;
+  }
+
+  .sig_row {
+    display: flex;
+    gap: 10mm;
+    margin-top: 10px;
+  }
+
+  .sig_field {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  .sig_field__wide {
+    flex: 1.6 1 0;
+  }
+
+  .sig_line {
+    min-height: 16px;
+    padding-bottom: 2px;
+    border-bottom: 1px solid $border-strong;
+    font-size: 11px;
+    color: $text-primary;
+  }
+
+  .sig_caption {
+    display: block;
+    margin-top: 3px;
+    font-size: 9px;
+    color: $text-tertiary;
+  }
+
+  .print_colophon {
+    margin: 8px 0 0;
+    font-size: 9px;
+    line-height: 1.45;
+    color: $text-tertiary;
+  }
+}

@@ -4,12 +4,22 @@ import analyses, {
   getMappedValue,
   getAllGeoObjects,
   findStepBySymbol,
+  getManualSteps,
 } from './analyses';
 import treatment from './treatment';
+import records from './records';
 import image, {
   hasImage, getManualLandmarks,
   isAnyImageLoading,
   getImageName,
+  getAllImages,
+  getAllImagesStatus,
+  getImageProps,
+  getImageType,
+  getImageTimepoint,
+  getImageCaptureDate,
+  isImageTraceable,
+  getAnalysisId,
 } from './image';
 import settings, {
   getWorkspaceImageIds, getWorkspaceMode, getTracingImageId,
@@ -27,12 +37,15 @@ import mapValues from 'lodash/mapValues';
 import every from 'lodash/every';
 import last from 'lodash/last';
 
+import { getCaptureDateSortKey } from 'utils/records';
+
 export default {
   ...analyses,
   ...image,
   ...canvas,
   ...workers,
   ...treatment,
+  ...records,
   ...settings,
   ...order,
   ...activeId,
@@ -209,4 +222,130 @@ export const getActiveWorkspaceTitle = createSelector(
   getActiveWorkspaceId,
   getWorkspaceTitle,
   (id, getTitle) => id !== null ? getTitle(id) : null,
+);
+
+// ---- Patient records -------------------------------------------------------
+
+/**
+ * One image of the open patient's record, as the dashboard and the image rail
+ * need it. Every field is read off existing state — nothing here is inferred
+ * or fabricated: a missing timepoint stays null rather than becoming "T1".
+ */
+export interface PatientRecord {
+  imageId: string;
+  /** The workspace (rail tile) this image lives in — where to open it. */
+  workspaceId: string;
+  /** Original file name, if known. */
+  name: string | null;
+  /** Data URI of the image, used as the card/tile thumbnail. */
+  thumbnail: string | null;
+  type: ImageType | null;
+  timepoint: string | null;
+  /** ISO `YYYY-MM-DD`, or null when the capture date was not recorded. */
+  captureDate: string | null;
+  /** Whether this image type supports cephalometric tracing. */
+  isTraceable: boolean;
+  /** Active analysis id for this image (null for non-traceable types). */
+  analysisId: string | null;
+  /** Manual landmarks already placed for the active analysis. */
+  landmarksPlaced: number;
+  /** Manual landmarks the active analysis requires in total. */
+  landmarksRequired: number;
+  /** Whether the image carries a mm/px calibration. */
+  isCalibrated: boolean;
+  /** mm per pixel, or null when the image has never been calibrated. */
+  scaleFactor: number | null;
+  /** Natural pixel dimensions of the file, or null when not yet known. */
+  width: number | null;
+  height: number | null;
+  /** Whether this is the image currently open in the editor. */
+  isActive: boolean;
+}
+
+/**
+ * Every loaded image of the open patient, newest-dated last, as records.
+ * Images with no capture date sort after the dated ones (see
+ * utils/records#getCaptureDateSortKey) instead of masquerading as the oldest.
+ */
+export const getPatientRecords = createSelector(
+  getAllImages,
+  getAllImagesStatus,
+  getImageProps,
+  getWorkspacesIdsInOrder,
+  getWorkspaceImageIds,
+  getTracingImageId,
+  getImageType,
+  getImageTimepoint,
+  getImageCaptureDate,
+  isImageTraceable,
+  getAnalysisId,
+  getManualSteps,
+  getManualLandmarks,
+  getActiveTracingImageId,
+  (
+    allImages, allStatus, getProps, workspaceIds, getImagesOf, getTracingImage,
+    getType, getTimepoint, getCaptureDate, isTraceable, getActiveAnalysisId,
+    getSteps, getPlaced, activeImageId,
+  ): PatientRecord[] => {
+    // Only images that actually finished loading are records. Read the status
+    // map directly rather than through isImageLoaded, which assumes an entry
+    // exists for every image id.
+    const isLoaded = (imageId: string): boolean => {
+      const status = allStatus[imageId];
+      return status !== undefined &&
+        status.isLoading === false && status.error === null;
+    };
+    // Which rail tile (workspace) each image belongs to. The tracing image of
+    // a workspace wins, so opening a record lands on the tab that shows it.
+    const workspaceOfImage: { [imageId: string]: string } = {};
+    workspaceIds.forEach((workspaceId) => {
+      (getImagesOf(workspaceId) || []).forEach((imageId: string) => {
+        if (workspaceOfImage[imageId] === undefined) {
+          workspaceOfImage[imageId] = workspaceId;
+        }
+      });
+      const tracingImageId = getTracingImage(workspaceId);
+      if (tracingImageId !== null) {
+        workspaceOfImage[tracingImageId] = workspaceId;
+      }
+    });
+
+    const records = map(
+      Object.keys(allImages).filter((imageId) => isLoaded(imageId)),
+      (imageId): PatientRecord => {
+        const props = getProps(imageId);
+        const analysisId = getActiveAnalysisId(imageId);
+        const placed = getPlaced(imageId);
+        const steps = analysisId !== null ? getSteps(imageId) : [];
+        return {
+          imageId,
+          workspaceId: workspaceOfImage[imageId] || workspaceIds[0],
+          name: (props && props.name) || null,
+          thumbnail: (props && props.data) || null,
+          type: getType(imageId),
+          timepoint: getTimepoint(imageId),
+          captureDate: getCaptureDate(imageId),
+          isTraceable: isTraceable(imageId),
+          analysisId,
+          landmarksPlaced: steps.filter(
+            ({ symbol }) => placed[symbol] !== undefined,
+          ).length,
+          landmarksRequired: steps.length,
+          isCalibrated: props !== undefined && typeof props.scaleFactor === 'number',
+          scaleFactor: (props && typeof props.scaleFactor === 'number')
+            ? props.scaleFactor
+            : null,
+          width: (props && props.width) || null,
+          height: (props && props.height) || null,
+          isActive: imageId === activeImageId,
+        };
+      },
+    );
+
+    return sortBy(
+      records,
+      ({ captureDate }) => getCaptureDateSortKey(captureDate),
+      ({ timepoint }) => timepoint || '',
+    );
+  },
 );
