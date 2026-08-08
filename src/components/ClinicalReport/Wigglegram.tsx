@@ -181,7 +181,14 @@ export const WigglegramKey = () => (
     <span className={classes.legend_dot}>·</span>
     shaded band: norm mean ± 1 SD, lighter ± 2 SD
     <span className={classes.legend_dot}>·</span>
-    ▸ beyond ± 3 SD
+    {/* The chart's own marks, which nothing else on the paper explained: the
+        dot carries the same severity colour as the value beside it, and the
+        marker is drawn outward-pointing, so a value below −3 SD is ◂ and one
+        above +3 SD is ▸. Keying only "▸" left the commoner of the two — the
+        left-pointing one — unexplained on the page it appears on. */}
+    dot: amber over 1 SD, red over 2 SD
+    <span className={classes.legend_dot}>·</span>
+    ◂ ▸ beyond ± 3 SD
   </span>
 );
 
@@ -244,25 +251,34 @@ const Wigglegram = ({
           fill="#D6E7F7"
         />
 
-        {/* Row separators (hairlines) and frame. */}
+        {/* Row separators (hairlines) and frame.
+            Inset half a unit from each end and drawn with `crispEdges`: at
+            100 % width the SVG is scaled by a fraction of a percent to the
+            print column, and a rule that ended exactly on x = 0 rasterised a
+            ~3 px stub in the left margin of the Tweed section (its 4-row chart
+            is the shortest, so its scale factor is the least forgiving) while
+            the rest of the same rule fell inside the box. `crispEdges` snaps
+            the stroke to a device pixel row instead of anti-aliasing across
+            two, and `.wiggle_section` clips anything still outside. */}
         {map(rows, (r, i) => i > 0 ? (
           <line
             key={`sep-${r.symbol}`}
-            x1={0}
+            x1={0.5}
             y1={chartTop + i * rowHeight}
-            x2={WIDTH}
+            x2={WIDTH - 0.5}
             y2={chartTop + i * rowHeight}
             stroke="#EDF1F5"
             strokeWidth={1}
+            shapeRendering="crispEdges"
           />
         ) : null)}
         <line
-          x1={0} y1={chartTop} x2={WIDTH} y2={chartTop}
-          stroke="#C3CCD6" strokeWidth={1}
+          x1={0.5} y1={chartTop} x2={WIDTH - 0.5} y2={chartTop}
+          stroke="#C3CCD6" strokeWidth={1} shapeRendering="crispEdges"
         />
         <line
-          x1={0} y1={chartBottom} x2={WIDTH} y2={chartBottom}
-          stroke="#C3CCD6" strokeWidth={1}
+          x1={0.5} y1={chartBottom} x2={WIDTH - 0.5} y2={chartBottom}
+          stroke="#C3CCD6" strokeWidth={1} shapeRendering="crispEdges"
         />
 
         {/* SD ticks and header labels; the mean axis is emphasized. */}

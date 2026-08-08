@@ -20,6 +20,10 @@ import {
   mapIndicationToString,
 } from './strings';
 
+// One measurement, one row — shared with the printed report so the same
+// tracing is typeset the same way on screen and on paper.
+import { groupFindings, alsoFindingLabel, AlsoFinding } from './grouping';
+
 import { formatCaptureDate } from 'utils/records';
 
 import {
@@ -186,6 +190,41 @@ export const formatDeviation = (
   }
   return `${formatSigned(value - mean)}${unit}`;
 };
+
+/**
+ * Replaces the ASCII hyphen-minus with the typographic minus sign (U+2212),
+ * which is drawn at the same width as "+" and on the same optical axis, so
+ * signed columns line up in a `tabular-nums` table.
+ *
+ * **Every surface that shows a number to a person goes through this**: the
+ * Summary dialog used to print "-5.8°" while the printed report printed
+ * "−5.8°", so a value read off the screen did not match the character in the
+ * document filed in the chart. The machine-readable formatters above keep the
+ * ASCII hyphen, because the CSV/clipboard export is parsed by a spreadsheet.
+ *
+ * Only ever applied to an already-formatted number — never to prose or
+ * measurement names, which use hyphens as hyphens (`Or-Po,N-Pog`).
+ */
+export const displayMinus = (formatted: string): string => (
+  formatted.replace(/-/g, '−')
+);
+
+/** A value/norm as shown to a clinician: 1 decimal, typographic minus. */
+export const displayNumber = (n: number): string => displayMinus(formatNumber(n));
+
+/** A signed deviation as shown: "+2.6" / "−8.3", aligned widths. */
+export const displaySigned = (n: number): string => displayMinus(formatSigned(n));
+
+/** `formatNorm` with the display minus (see `displayMinus`). */
+export const displayNorm = (
+  mean: number, min: number, max: number, band?: NormBand,
+): string => displayMinus(formatNorm(mean, min, max, band));
+
+/** `formatDeviation` with the display minus (see `displayMinus`). */
+export const displayDeviation = (
+  value: number, mean: number, min: number, max: number,
+  unit: string, band?: NormBand,
+): string => displayMinus(formatDeviation(value, mean, min, max, unit, band));
 
 /**
  * Whether a finding's conclusion is a clinically *normal* one. Drives the chip
@@ -409,6 +448,38 @@ const caveatMarkers = (
   return markers;
 };
 
+/**
+ * A finding graded from a measurement that is tabulated in this same group —
+ * printed in the finding cell, under the group's own conclusion, and labelled
+ * with the measurement it was read from so nothing is attributed to a row it
+ * did not come from. Identical markup and wording to the printed report's
+ * (see `ClinicalReport/ResultsTable`): this replaced the "see above" row that
+ * the two surfaces used to lay out two different ways.
+ */
+const AlsoFindings = ({ also }: { also: AlsoFinding[] }) => (
+  <span>
+    {map(also, (f, i) => (
+      <span key={i} className={classes.also_finding}>
+        <span className={classes.also_label}>
+          {alsoFindingLabel(f.symbols)}
+        </span>
+        <span className={classes.finding_category}>
+          {mapCategoryToString(f.category) || '—'}
+        </span>
+        <span
+          className={cx(classes.chip, {
+            [classes.chip__success]: chipToneFor(f.indication) === 'success',
+            [classes.chip__neutral]: chipToneFor(f.indication) === 'neutral',
+            [classes.chip__warn]: chipToneFor(f.indication) === 'warn',
+          })}
+        >
+          {mapIndicationToString(f.indication) || '—'}
+        </span>
+      </span>
+    ))}
+  </span>
+);
+
 const csvEscape = (cell: string): string => (
   /[",\n]/.test(cell) ? `"${cell.replace(/"/g, '""')}"` : cell
 );
@@ -524,16 +595,14 @@ export class AnalysisResultsViewer extends React.PureComponent<Props, ViewerStat
     const hasResults = results.length > 0;
 
     // A measurement can support more than one clinical finding (e.g. the
-    // facial angle backs both "Skeletal profile" and "Chin prominence").
-    // The first finding shows the full row; later findings reference it
-    // instead of repeating identical numbers.
-    const firstCategoryOf: { [symbol: string]: Category | undefined } = {};
+    // facial angle backs both "Skeletal profile" and "Chin prominence"). It is
+    // tabulated once, in full, and the other findings drawn from it are named
+    // in that group's finding cell — the same layout the printed report uses
+    // (see `grouping.ts`).
+    const groups = groupFindings(results);
     let hasRangeRow = false;
-    results.forEach(({ category, relevantComponents }) => {
-      relevantComponents.forEach(({ symbol, mean, min, max, band }) => {
-        if (firstCategoryOf[symbol] === undefined) {
-          firstCategoryOf[symbol] = category;
-        }
+    results.forEach(({ relevantComponents }) => {
+      relevantComponents.forEach(({ mean, min, max, band }) => {
         if (hasNorm(mean, min, max) && !isSdBand(band)) {
           hasRangeRow = true;
         }
@@ -631,14 +700,14 @@ export class AnalysisResultsViewer extends React.PureComponent<Props, ViewerStat
                     </th>
                   </tr>
                 </thead>
-                {map(results, ({ category, indication, relevantComponents }) => {
+                {map(groups, ({ category, indication, components, also }) => {
                   const chipClass = cx(classes.chip, {
                     [classes.chip__success]: chipToneFor(indication) === 'success',
                     [classes.chip__neutral]: chipToneFor(indication) === 'neutral',
                     [classes.chip__warn]: chipToneFor(indication) === 'warn',
                   });
                   const isNeutral = category === NEUTRAL_CATEGORY;
-                  const entries = neutralEntries(category, relevantComponents);
+                  const entries = neutralEntries(category, components);
                   return (
                     <tbody key={`${category}/${indication}`} className={classes.group}>
                       {map(entries, (entry, i) => {
@@ -659,6 +728,9 @@ export class AnalysisResultsViewer extends React.PureComponent<Props, ViewerStat
                                 {mapIndicationToString(indication) || '—'}
                               </span>
                             )}
+                            {also.length > 0 ? (
+                              <AlsoFindings also={also} />
+                            ) : null}
                           </td>
                         ) : null;
                         if (entry.kind === 'rule') {
@@ -681,13 +753,9 @@ export class AnalysisResultsViewer extends React.PureComponent<Props, ViewerStat
                           graded && !isSdBand(band) && rangeExcess(value, min, max) !== 0;
                         const name = landmark !== undefined ? landmark.name : undefined;
                         const marker = markers[symbol];
-                        const symbolCell = (muted: boolean) => (
+                        const symbolCell = (
                           <td className={classes.cell_measurement}>
-                            <span
-                              className={cx(classes.measurement_symbol, {
-                                [classes.measurement_symbol__muted]: muted,
-                              })}
-                            >
+                            <span className={classes.measurement_symbol}>
                               {symbol}
                               {marker !== undefined ? (
                                 <span
@@ -705,44 +773,27 @@ export class AnalysisResultsViewer extends React.PureComponent<Props, ViewerStat
                             ) : null}
                           </td>
                         );
-                        const firstCategory = firstCategoryOf[symbol];
-                        if (firstCategory !== undefined && firstCategory !== category) {
-                          // Shared measurement, already listed in full under an
-                          // earlier finding — cross-reference it instead of
-                          // repeating the identical row.
-                          return (
-                            <tr key={entry.key}>
-                              {findingCell}
-                              {symbolCell(true)}
-                              <td colSpan={3} className={classes.cell_crossref}>
-                                {formatNumber(value)}{unit}
-                                {' — see '}
-                                “{mapCategoryToString(firstCategory)}”
-                              </td>
-                            </tr>
-                          );
-                        }
                         return (
                           <tr key={entry.key}>
                             {findingCell}
-                            {symbolCell(false)}
+                            {symbolCell}
                             <td
                               className={cx(classes.cell_numeric, classes.cell_value, {
                                 [classes.cell_value__warn]: stars === 1 || outOfRange,
                                 [classes.cell_value__error]: stars >= 2,
                               })}
                             >
-                              {formatNumber(value)}{unit}
+                              {displayNumber(value)}{unit}
                             </td>
                             <td
                               className={cx(classes.cell_numeric, classes.cell_norm)}
                               title={!graded
                                 ? 'Measured value — this app states no published norm for it'
                                 : isSdBand(band)
-                                  ? `Mean ± 1 SD (${formatNumber(min)} to ${formatNumber(max)}${unit})`
+                                  ? `Mean ± 1 SD (${displayNumber(min)} to ${displayNumber(max)}${unit})`
                                   : `Published normal range, no standard deviation stated`}
                             >
-                              {formatNorm(mean, min, max, band)}
+                              {displayNorm(mean, min, max, band)}
                               {graded && !isSdBand(band) ? (
                                 <span className={classes.norm_kind}>range</span>
                               ) : null}
@@ -755,7 +806,7 @@ export class AnalysisResultsViewer extends React.PureComponent<Props, ViewerStat
                                   graded && !isSdBand(band) && !outOfRange,
                               })}
                             >
-                              {formatDeviation(value, mean, min, max, unit, band)}
+                              {displayDeviation(value, mean, min, max, unit, band)}
                               {/* The slot is always rendered so the numbers stay
                                   aligned whether or not a row carries markers. */}
                               <span className={classes.deviation_stars}>

@@ -1,0 +1,109 @@
+@import 'src/_variables.scss';
+
+// The disclosure inherits its host's ink: `currentColor` and `opacity` only, no
+// palette of its own, so the same component reads correctly on the light Plan
+// panel and on the dark superimposition legend.
+
+.about {
+  margin-top: 8px;
+}
+
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  padding: 3px 8px 3px 5px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font-family: $font-stack;
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 1.2;
+  cursor: pointer;
+  opacity: .68;
+  transition: opacity 120ms ease, border-color 120ms ease;
+
+  &:hover {
+    opacity: 1;
+    border-color: currentColor;
+  }
+
+  &:focus {
+    outline: none;
+  }
+
+  &:focus-visible {
+    box-shadow: $focus-ring;
+  }
+}
+
+.toggle__on {
+  opacity: 1;
+  border-color: currentColor;
+}
+
+// A circled "i", drawn from the button's own ink so it needs no asset and no
+// second colour.
+.glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  font-size: 9.5px;
+  font-weight: 700;
+  font-style: italic;
+  line-height: 1;
+}
+
+.label {
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 2px;
+}
+
+// The revealed copy: the same size and colour the host's inline notes use, so
+// opening the disclosure does not look like entering a different document.
+.body {
+  margin-top: 6px;
+  font-size: 11.5px;
+  line-height: 1.55;
+  opacity: .78;
+
+  p {
+    margin: 0 0 6px;
+
+    &:last-child {
+      margin-bottom: 0;
+    }
+  }
+
+  strong {
+    font-weight: 600;
+  }
+}
+
+.body__closed {
+  display: none;
+}
+
+// On paper nothing is behind a click: every disclosure prints open, and the
+// button that opened it prints not at all. A filed sheet must carry the whole
+// caveat regardless of what the operator had expanded on screen.
+@media print {
+  .toggle {
+    display: none;
+  }
+
+  .body,
+  .body__closed {
+    display: block;
+    margin-top: 0;
+    opacity: 1;
+  }
+}

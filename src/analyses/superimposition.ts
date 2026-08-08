@@ -89,7 +89,17 @@ export interface RegistrationBasis {
   label: string;
   /** Full clinical name, for the legend and the printout. */
   name: string;
-  /** What the registration holds still, and what the change then reads as. */
+  /**
+   * What the registration holds still and what the change then reads as, in one
+   * line — the sentence the legend states inline, because a reader who does not
+   * know what was held cannot read the table at all.
+   */
+  summary: string;
+  /**
+   * The same fact in full, with the caveats that qualify it. Kept behind the
+   * legend's "About this view" disclosure on screen and printed in full on
+   * paper: condensed, never dropped.
+   */
   description: string;
   /**
    * The landmark held fixed: T2's copy of it is moved onto T1's copy, so this
@@ -116,6 +126,9 @@ export const REGISTRATION_BASES: RegistrationBasis[] = [
     id: 'cranialBase',
     label: 'Cranial base',
     name: 'Anterior cranial base — S–N at Sella',
+    summary:
+      'Sella held fixed, S–N direction matched: the change is growth plus ' +
+      'treatment.',
     description:
       'Sella is held fixed and the S–N line direction is matched, so the ' +
       'displayed change is the total change of the face relative to the ' +
@@ -128,6 +141,9 @@ export const REGISTRATION_BASES: RegistrationBasis[] = [
     id: 'maxillary',
     label: 'Maxilla',
     name: 'Maxillary — palatal plane (PNS–ANS) at ANS',
+    summary:
+      'ANS held fixed, palatal plane direction matched: the change reads ' +
+      'against the maxilla, chiefly of the upper dentition.',
     description:
       'ANS is held fixed and the palatal plane direction is matched, so the ' +
       'change reads as movement relative to the maxilla — chiefly of the ' +
@@ -141,6 +157,9 @@ export const REGISTRATION_BASES: RegistrationBasis[] = [
     id: 'mandibular',
     label: 'Mandible',
     name: 'Mandibular — Go–Me plane at Menton',
+    summary:
+      'Menton held fixed, Go–Me direction matched: the change reads against ' +
+      'the mandible. A landmark fit, not a Björk superimposition.',
     description:
       'Menton is held fixed and the mandibular plane (Go–Me) direction is ' +
       'matched, so the change reads as movement relative to the mandible. ' +

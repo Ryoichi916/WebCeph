@@ -259,13 +259,6 @@
   white-space: nowrap;
 }
 
-// A measurement that is shared with an earlier finding: quieter symbol so the
-// eye lands on the full row above.
-.measurement_symbol__muted {
-  color: $text-secondary;
-  font-weight: 400;
-}
-
 // Wraps to as many lines as the name needs, exactly as the printed report
 // renders the same string. Nothing here clips.
 .measurement_name {
@@ -347,15 +340,36 @@
   font-weight: 700;
 }
 
-// Cross-reference cell for a measurement already listed in full under an
-// earlier finding — value kept for context, but muted and unstarred so the
-// table never repeats an identical row.
-.cell_crossref {
-  text-align: right;
-  font-size: 12.5px;
-  color: $text-tertiary;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
+// A second finding graded from a measurement that is tabulated in this same
+// group (Downs' facial angle reads both the skeletal profile and the chin).
+// It sits under the group's own conclusion in the FINDING cell, labelled with
+// the measurement it came from — the measurement itself is typeset once, with
+// its norm, instead of a second row whose whole content was "see above".
+// Shared, to the pixel-level intent, with the printed report's copy of this
+// block (see ClinicalReport/style.scss).
+.also_finding {
+  display: block;
+  margin-top: 8px;
+
+  // A short rule, not a full-width one: a full-width border inside the finding
+  // cell landed within a pixel or two of the row divider in the columns beside
+  // it, so the second finding read as belonging to the *next* measurement's row
+  // rather than as a second conclusion inside this cell.
+  &::before {
+    content: '';
+    display: block;
+    width: 26px;
+    margin-bottom: 5px;
+    border-top: 1px solid $border-strong;
+  }
+}
+
+.also_label {
+  display: block;
+  margin-bottom: 1px;
+  font-size: 10px;
+  font-weight: 500;
+  color: $text-disabled;
 }
 
 // ---- Dialog actions --------------------------------------------------------

@@ -326,25 +326,28 @@ $current-hue: #40C4FF;
   font-variant-numeric: tabular-nums;
 }
 
-// The figure column is wider than a comfortable measure, so the notes run in
-// as many ~44ch columns as the width affords instead of leaving 200–370px of
-// the column empty beside a single ragged paragraph.
+// One short line and an info affordance, not a two-column footer of prose: the
+// three paragraphs that used to be set here in ~46ch columns took the bottom
+// fifth of the screen and were the loudest thing under the figure. The full
+// text is one click away and prints in full (see AboutDisclosure).
 .legend_notes {
   margin-top: 8px;
-  column-width: 46ch;
-  column-gap: 28px;
+  max-width: 96ch;
 }
 
 .legend_note {
-  margin: 0 0 8px;
+  margin: 0;
   font-size: 12px;
   line-height: 1.5;
   color: rgba(199, 208, 217, .72);
   break-inside: avoid;
+}
 
-  &:last-child {
-    margin-bottom: 0;
-  }
+// The disclosure takes `currentColor`, so it is given the legend's ink rather
+// than the panel's dark text.
+.legend_about {
+  margin-top: 6px;
+  color: rgba(199, 208, 217, .82);
 }
 
 // ---- Panel ------------------------------------------------------------------
@@ -407,6 +410,10 @@ $current-hue: #40C4FF;
   color: #6B4200;
 
   strong { font-weight: 600; }
+}
+
+.disclaimer_line {
+  margin: 0;
 }
 
 // One statement of the film's missing calibration, above the movements it
@@ -683,6 +690,19 @@ $zero-notch: rgba(31, 41, 51, .5);
   color: $text-secondary;
 
   strong { font-weight: 600; }
+}
+
+// Follows the ratio list, which is a ruled table: without this the sentence
+// about the curve sat on the last row's rule.
+.soft_note__spaced {
+  margin-top: 10px;
+}
+
+// The one caveat in this panel that is about *this* tracing's shortcoming
+// rather than about the method: an inferred silhouette must read as a warning,
+// not as more grey small print.
+.soft_note__caution {
+  color: $warn;
 }
 
 .soft_empty {

@@ -527,6 +527,13 @@
   color: #FFCC80;
 }
 
+// The disclosure inherits `currentColor`, so it is given the legend's own ink
+// rather than the panel's dark text.
+.legend_about {
+  color: rgba(199, 208, 217, .82);
+  max-width: 92ch;
+}
+
 // Wide enough for the legend to sit beside the figure rather than under it:
 // the figure is height-bound (it keeps the frame's tall aspect), so the width
 // left over is spent on the reading column instead of on empty canvas — and
@@ -545,12 +552,15 @@
     height: 100%;
   }
 
-  // Centred against the figure rather than pinned to its top: the column of
-  // notes is shorter than the figure, and splitting the leftover height above
-  // and below it reads as margin instead of as a hole.
+  // Pinned to the top of the figure, not centred. Centring was right while the
+  // legend was six paragraphs deep and nearly the height of the film; now that
+  // it is four lines and a disclosure, a centred block floated in the middle of
+  // a 700px column with nothing above or below it, and opening the disclosure
+  // re-centred the whole block under the reader's eye. Level with the top edge
+  // of the film it reads as the figure's caption, and it grows downwards.
   .legend {
     flex: 0 1 380px;
-    align-self: center;
+    align-self: flex-start;
     min-width: 0;
     max-height: 100%;
     overflow-y: auto;
@@ -1068,6 +1078,13 @@
 
   .legend_note {
     margin-top: 4px;
+  }
+
+  // The disclosure prints open (see AboutDisclosure's own print block); here it
+  // only has to take the sheet's ink and the printed note's size.
+  .legend_about {
+    margin-top: 4px;
+    color: $text-secondary;
   }
 
   .table tbody {

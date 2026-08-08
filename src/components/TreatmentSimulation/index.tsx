@@ -54,6 +54,9 @@ import {
   missingSoftTissueProfileLandmarks,
   Outline,
 } from 'components/TracingViewer/outlines';
+// Honest caveats, condensed on screen and printed in full — the same affordance
+// the superimposition legend uses.
+import AboutDisclosure from 'components/AboutDisclosure';
 
 // Number formatting and unit suffixes are the app's, not this view's.
 import { getUnitSuffix } from 'components/AnalysisResultsViewer';
@@ -755,10 +758,30 @@ export default class TreatmentSimulation extends React.PureComponent<Props, Stat
     );
   }
 
+  /**
+   * The single sentence the figure states inline: what a millimetre in it is —
+   * or, on an uncalibrated film, that no distance in it can be read in
+   * millimetres at all. That second case is the one a clinician must not miss,
+   * so it is never the thing behind the disclosure.
+   */
+  private inlineScaleNote(hasPlanes: boolean): string | null {
+    const { scaleFactor } = this.props;
+    if (scaleFactor === null) {
+      return 'This film carries no mm/px calibration: no scale bar is drawn ' +
+        'and no distance in the figure can be read in millimetres.';
+    }
+    if (!hasPlanes) {
+      return null;
+    }
+    return 'Millimetre movements are measured along the plane named under ' +
+      `each control · this film is calibrated at ${formatMmPx(scaleFactor, 3)} mm/px.`;
+  }
+
   private renderLegend() {
     const { plan } = this.state;
     const parts = describePlan(plan);
     const planeSentence = this.planeSentence();
+    const inlineNote = this.inlineScaleNote(planeSentence !== null);
     return (
       <div className={classes.legend}>
         <div className={classes.legend_keys}>
@@ -792,27 +815,36 @@ export default class TreatmentSimulation extends React.PureComponent<Props, Stat
           )}
         </div>
         <div className={classes.legend_notes}>
-          {planeSentence !== null ? (
-            <p className={classes.legend_note}>{planeSentence}</p>
+          {/* One line inline. Which plane each movement runs along is already
+              stated under the control that makes it, so the figure states only
+              the fact the figure itself owns — what a millimetre here is — and
+              keeps the rest behind the disclosure. */}
+          {inlineNote !== null ? (
+            <p className={classes.legend_note}>{inlineNote}</p>
           ) : null}
-          <p className={classes.legend_note}>
-            Both tracings are the same anatomical curves the editor draws, built
-            from landmark positions — the simulated one from the moved
-            landmarks. A structure no control moves (the cranial base,
-            Articulare, the nasal bones) is drawn once, in cyan: a violet dashed
-            curve appears only where this plan actually moves something.
-          </p>
-          <p className={classes.legend_note}>
-            The frame is fixed on the plotted tracing and padded for the largest
-            movement these controls can express, so the figure never rescales or
-            pans while you drag a slider — only the violet layer moves.
-            {this.props.scaleFactor !== null
-              ? ' The bar at the foot of the figure is a true millimetre scale' +
-                ' at this film’s calibration.'
-              : ' This film carries no mm/px calibration, so no scale bar is' +
-                ' drawn and no distance in the figure can be read in' +
-                ' millimetres.'}
-          </p>
+          <AboutDisclosure
+            className={classes.legend_about}
+            label="About this figure"
+          >
+            {planeSentence !== null ? <p>{planeSentence}</p> : null}
+            <p>
+              Both tracings are the same anatomical curves the editor draws,
+              built from landmark positions — the simulated one from the moved
+              landmarks. A structure no control moves (the cranial base,
+              Articulare, the nasal bones) is drawn once, in cyan: a violet
+              dashed curve appears only where this plan actually moves something.
+            </p>
+            <p>
+              The frame is fixed on the plotted tracing and padded for the
+              largest movement these controls can express, so the figure never
+              rescales or pans while you drag a slider — only the violet layer
+              moves.
+              {this.props.scaleFactor !== null
+                ? ' The bar at the foot of the figure is a true millimetre' +
+                  ' scale at this film’s calibration.'
+                : ''}
+            </p>
+          </AboutDisclosure>
         </div>
       </div>
     );
@@ -847,14 +879,24 @@ export default class TreatmentSimulation extends React.PureComponent<Props, Stat
           </span>
         </div>
         <div className={classes.panel_scroll}>
-          <p className={classes.disclaimer}>
-            <strong>This is a geometric simulation.</strong> It moves the plotted
-            landmarks — and the tracing derived from them — by the amounts you
-            set, and recomputes the analysis from the moved points. It is a tool
-            for treatment-planning discussion. It is <em>not</em> a growth
-            prediction, not a surgical outcome prediction, and it models no bone
-            remodelling, no dental compensation, no autorotation and no relapse.
-          </p>
+          {/* The sentence that must not be missed, and the list of what is not
+              modelled one click behind it — condensed, not dropped, and printed
+              in full on every sheet (see AboutDisclosure). */}
+          <div className={classes.disclaimer}>
+            <p className={classes.disclaimer_line}>
+              <strong>Geometric simulation, not a prediction.</strong> It moves
+              the plotted landmarks by the amounts you set and recomputes the
+              analysis from the moved points — a tool for planning discussion.
+            </p>
+            <AboutDisclosure label="What this does not model">
+              <p>
+                It is <em>not</em> a growth prediction and not a surgical
+                outcome prediction. It models no bone remodelling, no dental
+                compensation, no condylar or mandibular autorotation and no
+                relapse. Nothing here is fitted to this patient’s own response.
+              </p>
+            </AboutDisclosure>
+          </div>
 
           {controls.map((control) => (
             <React.Fragment key={control.spec.id}>
@@ -1016,15 +1058,20 @@ export default class TreatmentSimulation extends React.PureComponent<Props, Stat
         {plan.isSoftTissueFollowing ? (
           <React.Fragment>
             <p className={classes.soft_note}>
-              Soft-tissue landmarks move by a stated fraction of the hard-tissue
-              movement underneath them. These are <strong>mean ratios</strong>{' '}
-              from the orthognathic and incisor-retraction literature; individual
-              response varies by roughly ±0.3, so read the simulated profile as a
-              direction, not a measurement. Lip thickness change, lip strain,
-              muscle adaptation and relapse are not modelled. Glabella and
-              soft-tissue nasion are held — nothing here moves the cranium or the
-              nasal bones.
+              Each soft-tissue landmark moves by a{' '}
+              <strong>mean literature ratio</strong> of the hard-tissue movement
+              under it; individual response varies by roughly ±0.3, so read the
+              simulated profile as a direction, not a measurement.
             </p>
+            <AboutDisclosure label="About these ratios">
+              <p>
+                The ratios are means from the orthognathic and
+                incisor-retraction literature, not values fitted to this
+                patient. Lip thickness change, lip strain, muscle adaptation and
+                relapse are not modelled. Glabella and soft-tissue nasion are
+                held — nothing here moves the cranium or the nasal bones.
+              </p>
+            </AboutDisclosure>
             {rows.length > 0 ? (
               <ul className={classes.soft_list}>
                 {rows.map(({ ratio, drivers }) => (
@@ -1052,13 +1099,20 @@ export default class TreatmentSimulation extends React.PureComponent<Props, Stat
             {this.renderProfileProvenance()}
           </React.Fragment>
         ) : (
-          <p className={classes.soft_note}>
-            Every soft-tissue landmark stays exactly where it was plotted, so the
-            simulated profile is the patient’s current profile and only the
-            skeletal and dental geometry changes. The profile curve in the figure
-            is held with it, and the lip-to-E-line measurements below — built
-            entirely from soft-tissue landmarks — cannot change at all.
-          </p>
+          <React.Fragment>
+            <p className={classes.soft_note}>
+              Every soft-tissue landmark stays where it was plotted: only the
+              skeletal and dental geometry changes.
+            </p>
+            <AboutDisclosure label="What this means for the profile">
+              <p>
+                The simulated profile is the patient’s current profile — the
+                profile curve in the figure is held with the landmarks it is
+                built from, and the lip-to-E-line measurements below, which come
+                entirely from soft-tissue landmarks, cannot change at all.
+              </p>
+            </AboutDisclosure>
+          </React.Fragment>
         )}
       </div>
     );
@@ -1075,7 +1129,7 @@ export default class TreatmentSimulation extends React.PureComponent<Props, Stat
     const { landmarks } = this.props;
     if (hasSoftTissueProfile(landmarks)) {
       return (
-        <p className={classes.soft_note}>
+        <p className={cx(classes.soft_note, classes.soft_note__spaced)}>
           The profile curve in the figure runs through this tracing’s own
           plotted soft-tissue landmarks, moved by the ratios above.
         </p>
@@ -1083,18 +1137,31 @@ export default class TreatmentSimulation extends React.PureComponent<Props, Stat
     }
     const missing = missingSoftTissueProfileLandmarks(landmarks);
     return (
-      <p className={classes.soft_note}>
-        This tracing does not carry a full soft-tissue landmark set
-        ({missing.join(', ')} {missing.length === 1 ? 'is' : 'are'} not
-        plotted), so the profile curve in the figure is a{' '}
-        <strong>silhouette inferred from the skeletal profile</strong>, not a
-        traced outline — in the simulation as in the editor. It is displaced by
-        the same ratios listed above rather than by the full skeletal movement,
-        so it does not overstate the response; but it is an inference about this
-        patient’s soft tissue drawn from their bone, and a lip position must not
-        be measured off it. The lip-to-E-line values in the table are computed
-        from the plotted soft-tissue landmarks themselves, not from this curve.
-      </p>
+      <React.Fragment>
+        <p
+          className={cx(
+            classes.soft_note,
+            classes.soft_note__spaced,
+            classes.soft_note__caution,
+          )}
+        >
+          The profile curve in the figure is a{' '}
+          <strong>silhouette inferred from the skeletal profile</strong>, not a
+          traced outline — a lip position must not be measured off it.
+        </p>
+        <AboutDisclosure label="Why, and what is safe to read">
+          <p>
+            {missing.join(', ')} {missing.length === 1 ? 'is' : 'are'} not
+            plotted on this tracing, so the outline module infers the silhouette
+            from the skeletal profile — in the simulation exactly as in the
+            editor. It is displaced by the ratios listed above rather than by the
+            full skeletal movement, so it does not overstate the response; but it
+            is an inference about this patient’s soft tissue drawn from their
+            bone. The lip-to-E-line values in the table are computed from the
+            plotted soft-tissue landmarks themselves, not from this curve.
+          </p>
+        </AboutDisclosure>
+      </React.Fragment>
     );
   }
 

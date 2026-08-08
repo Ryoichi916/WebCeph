@@ -5,41 +5,33 @@
  * section and the findings overview read identically.
  */
 
+// The typographic conventions are the *app's*, not the paper's: the Summary
+// dialog and the printed report show the same number to the same clinician, so
+// both go through the display formatters in AnalysisResultsViewer and neither
+// can drift. These aliases are kept only because "print…" reads better at the
+// call sites in this folder.
 import {
-  formatNumber, formatSigned, formatNorm, formatDeviation,
+  displayMinus, displayNumber, displaySigned, displayNorm, displayDeviation,
 } from 'components/AnalysisResultsViewer';
 
-/**
- * Replaces the ASCII hyphen-minus with the typographic minus sign (U+2212),
- * which is drawn at the same width as "+" and on the same optical axis, so
- * signed columns line up in a `tabular-nums` table. Only ever applied to an
- * already-formatted number — never to prose or measurement names, which use
- * hyphens as hyphens (`Or-Po,N-Pog`).
- */
-export const minusSign = (formatted: string): string => (
-  formatted.replace(/-/g, '−')
-);
+/** @see displayMinus — the typographic minus (U+2212) used on every surface. */
+export const minusSign = displayMinus;
 
 /** A measurement value/norm as printed on paper: 1 decimal, typographic minus. */
-export const printNumber = (n: number): string => minusSign(formatNumber(n));
+export const printNumber = displayNumber;
 
 /** A signed deviation as printed on paper: "+2.6" / "−8.3", aligned widths. */
-export const printSigned = (n: number): string => minusSign(formatSigned(n));
+export const printSigned = displaySigned;
 
 /**
  * A component's norm as printed on paper — "32.0 ± 5.0" for a mean ± 1 SD
  * band, "62.0–65.0" for a published range, an em dash when the app states no
- * norm. Same source of truth as the Summary dialog, with the paper's minus.
+ * norm. Same source of truth as the Summary dialog, with the same minus.
  */
-export const printNorm = (
-  mean: number, min: number, max: number, band?: NormBand,
-): string => minusSign(formatNorm(mean, min, max, band));
+export const printNorm = displayNorm;
 
 /** A component's deviation as printed on paper (see `formatDeviation`). */
-export const printDeviation = (
-  value: number, mean: number, min: number, max: number,
-  unit: string, band?: NormBand,
-): string => minusSign(formatDeviation(value, mean, min, max, unit, band));
+export const printDeviation = displayDeviation;
 
 /** Landmark symbols listed inline before the list is abbreviated. */
 const MAX_SYMBOLS = 6;

@@ -13,6 +13,9 @@ import map from 'lodash/map';
 import Props from './props';
 import { getDescriptionForLandmark, getCommandForStep } from './strings';
 
+// One signed-number typography for the whole app (see `displayMinus`).
+import { displayMinus } from 'components/AnalysisResultsViewer';
+
 const classes = require('./style.scss');
 
 const SUCCESS = '#2E7D32';
@@ -41,9 +44,14 @@ const icons: { [id: string]: JSX.Element } = {
   pending: ICON_PENDING,
 };
 
-/** Formats a calculated value per the design brief: 1 decimal, tabular, unit-aware. */
+/**
+ * Formats a calculated value per the design brief: 1 decimal, tabular,
+ * unit-aware — and with the typographic minus every other surface uses
+ * (`displayMinus`), so the −3.6° in the stepper is character-for-character the
+ * −3.6° in the Summary dialog and in the printed report.
+ */
 const formatStepValue = (step: CephLandmark, value: number): string => {
-  const rounded = value.toFixed(1);
+  const rounded = displayMinus(value.toFixed(1));
   if (step.type === 'angle' || step.unit === 'degree') {
     return `${rounded}°`;
   }

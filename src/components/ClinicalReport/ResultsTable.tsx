@@ -20,6 +20,11 @@ import {
   mapCategoryToString,
   mapIndicationToString,
 } from 'components/AnalysisResultsViewer/strings';
+// One measurement, one row — shared with the Summary dialog so the same
+// tracing is typeset the same way on screen and on paper.
+import {
+  groupFindings, alsoFindingLabel, AlsoFinding,
+} from 'components/AnalysisResultsViewer/grouping';
 
 import {
   missingLandmarksNote, printNumber, printNorm, printDeviation,
@@ -34,8 +39,9 @@ export interface ResultsTableProps {
   landmarksBySymbol: { [symbol: string]: CephLandmark | undefined };
   /**
    * Display name of the analysis these rows belong to. Printed in the table's
-   * repeated header row, so a page that carries nothing but a continuation of
-   * this table still says which analysis it continues.
+   * repeated header as "<name> analysis, continued", so a page that starts in
+   * the middle of this table says which analysis' findings it is continuing.
+   * See `ContinuationMask` for how the first page is kept from claiming it.
    */
   analysisName?: string;
   /**
@@ -103,6 +109,26 @@ export const DeviationKey = () => (
 );
 
 /**
+ * Blanks the table's "…, continued" line on the page the table *starts* on.
+ *
+ * `thead { display: table-header-group }` is the only thing that repeats a
+ * header across the pages a long table spills onto, and it repeats it
+ * identically — CSS cannot word the first occurrence differently. But an
+ * absolutely positioned box whose containing block is the fragmented table
+ * wrapper is painted only on the fragment the wrapper *begins* on (verified in
+ * Chromium's print pipeline), so a white patch of the continuation line's exact
+ * height covers it on the opening page and on no other. The line is print-only,
+ * and the height is fixed in CSS on both this patch and the row it hides
+ * (see `.cont_row`, `.cont_mask`) so the two can never drift apart.
+ *
+ * Nothing clinical is hidden this way: the patch covers one word of running
+ * furniture, never a measurement.
+ */
+const ContinuationMask = () => (
+  <span className={classes.cont_mask} aria-hidden="true" />
+);
+
+/**
  * Chip classes for a finding, by **indication**.
  *
  * Deliberately not by the worst severity in the group: that put "Growth
@@ -120,6 +146,31 @@ const chipClassFor = (indication: Indication<Category>): string => {
     [classes.chip__warn]: tone === 'warn',
   });
 };
+
+/**
+ * A finding graded from a measurement that is tabulated in this same group —
+ * printed in the finding cell, under the group's own conclusion, and labelled
+ * with the measurement it was read from so nothing is attributed to a row it
+ * did not come from. See `grouping.ts`: this is what replaced the "see above"
+ * row that used to print a value with no norm.
+ */
+const AlsoFindings = ({ also }: { also: AlsoFinding[] }) => (
+  <span>
+    {map(also, (f, i) => (
+      <span key={i} className={classes.also_finding}>
+        <span className={classes.also_label}>
+          {alsoFindingLabel(f.symbols)}
+        </span>
+        <span className={classes.finding_category}>
+          {mapCategoryToString(f.category) || '—'}
+        </span>
+        <span className={chipClassFor(f.indication)}>
+          {mapIndicationToString(f.indication) || '—'}
+        </span>
+      </span>
+    ))}
+  </span>
+);
 
 /**
  * The printed results table: one row per measurement, grouped by clinical
@@ -172,16 +223,10 @@ const ResultsTable = (props: ResultsTableProps) => {
     showKey = true, caveats = NO_CAVEATS,
   } = props;
 
-  // Same cross-reference logic as the Summary dialog: a measurement shared
-  // by several findings is listed in full once and referenced afterwards.
-  const firstCategoryOf: { [symbol: string]: Category | undefined } = {};
-  results.forEach(({ category, relevantComponents }) => {
-    relevantComponents.forEach(({ symbol }) => {
-      if (firstCategoryOf[symbol] === undefined) {
-        firstCategoryOf[symbol] = category;
-      }
-    });
-  });
+  // Same de-duplication as the Summary dialog (see `grouping.ts`): a
+  // measurement shared by several findings is tabulated once, in full, and the
+  // other findings drawn from it are named in that group's finding cell.
+  const groups = groupFindings(results);
   const markers = caveatMarkers(caveats);
 
   const notes = (
@@ -226,19 +271,25 @@ const ResultsTable = (props: ResultsTableProps) => {
   // (The wigglegram is suppressed below two measurements on its own: a
   // one-point profile is not a profile.)
   return (
-    <div>
+    <div className={classes.table_wrap}>
+      {analysisName !== undefined ? <ContinuationMask /> : null}
       <table className={classes.table}>
         <thead>
+          {/* Repeated by `display: table-header-group` on every page this table
+              spills onto: a finding group orphaned at the top of page 5 is
+              otherwise unattributable to any analysis. Blanked on the page the
+              table starts on, where the section heading above already names the
+              analysis — see `ContinuationMask`. */}
+          {analysisName !== undefined ? (
+            <tr className={classes.cont_row}>
+              <th colSpan={5} className={classes.cont_cell}>
+                {analysisName} analysis, continued
+              </th>
+            </tr>
+          ) : null}
           <tr>
             <th className={classes.col_finding}>
               Finding
-              {/* Repeated by `display: table-header-group` on every page this
-                  table spills onto, which is the only continuation label CSS
-                  can carry: a finding group orphaned at the top of page 5 is
-                  otherwise unattributable to any analysis. */}
-              {analysisName !== undefined ? (
-                <span className={classes.th_scope}>{analysisName}</span>
-              ) : null}
             </th>
             <th>Measurement</th>
             <th className={classes.col_numeric}>Value</th>
@@ -246,10 +297,10 @@ const ResultsTable = (props: ResultsTableProps) => {
             <th className={classes.col_numeric}>Deviation</th>
           </tr>
         </thead>
-        {map(results, ({ category, indication, relevantComponents }) => {
+        {map(groups, ({ category, indication, components, also }) => {
           const chipClass = chipClassFor(indication);
           const isNeutral = category === NEUTRAL_CATEGORY;
-          const entries = entriesFor(category, relevantComponents);
+          const entries = entriesFor(category, components);
           return (
             <tbody key={`${category}/${indication}`} className={classes.group}>
               {map(entries, (entry, i) => {
@@ -267,6 +318,7 @@ const ResultsTable = (props: ResultsTableProps) => {
                         {mapIndicationToString(indication) || '—'}
                       </span>
                     )}
+                    {also.length > 0 ? <AlsoFindings also={also} /> : null}
                   </td>
                 ) : null;
                 if (entry.kind === 'rule') {
@@ -288,13 +340,9 @@ const ResultsTable = (props: ResultsTableProps) => {
                   graded && !isSdBand(band) && rangeExcess(value, min, max) !== 0;
                 const name = landmark !== undefined ? landmark.name : undefined;
                 const marker = markers[symbol];
-                const symbolCell = (muted: boolean) => (
+                const symbolCell = (
                   <td className={classes.cell_measurement}>
-                    <span
-                      className={cx(classes.measurement_symbol, {
-                        [classes.measurement_symbol__muted]: muted,
-                      })}
-                    >
+                    <span className={classes.measurement_symbol}>
                       {symbol}
                       {marker !== undefined ? (
                         <span
@@ -322,28 +370,10 @@ const ResultsTable = (props: ResultsTableProps) => {
                     {printNumber(value)}{unit}
                   </td>
                 );
-                const firstCategory = firstCategoryOf[symbol];
-                if (firstCategory !== undefined && firstCategory !== category) {
-                  // Already tabulated under another finding. The value still
-                  // prints in the VALUE column — putting it in a cell that
-                  // spans the norm column would read as a norm — and the
-                  // pointer sits in the remaining span as a note.
-                  return (
-                    <tr key={entry.key}>
-                      {findingCell}
-                      {symbolCell(true)}
-                      {valueCell}
-                      <td colSpan={2} className={classes.cell_crossref}>
-                        norm and deviation under “
-                        {mapCategoryToString(firstCategory)}”
-                      </td>
-                    </tr>
-                  );
-                }
                 return (
                   <tr key={entry.key}>
                     {findingCell}
-                    {symbolCell(false)}
+                    {symbolCell}
                     {valueCell}
                     <td className={cx(classes.cell_numeric, classes.cell_norm)}>
                       {printNorm(mean, min, max, band)}

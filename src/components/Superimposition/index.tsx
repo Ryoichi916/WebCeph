@@ -36,6 +36,9 @@ import {
   Box,
 } from 'analyses/superimposition';
 import { buildOutlines, outlineToSvgPath } from 'components/TracingViewer/outlines';
+// The honest account of what the registration means, condensed on screen and
+// printed in full — the same affordance the treatment simulation uses.
+import AboutDisclosure from 'components/AboutDisclosure';
 
 // Number formatting, unit suffixes and the printed sheet's wording are the
 // app's, not this view's: the same helpers the Summary dialog and the clinical
@@ -912,7 +915,9 @@ export default class Superimposition extends React.PureComponent<Props, State> {
               : ''}
           </span>
         </div>
-        <p className={classes.legend_note}>{basis.description}</p>
+        {/* One line inline — what was held still, which is what makes the table
+            readable — and the fuller account behind the disclosure. */}
+        <p className={classes.legend_note}>{basis.summary}</p>
         {registration.isMagnificationAssumed ? (
           <p className={cx(classes.legend_note, classes.legend_note__warn)}>
             The two films are assumed to be at the same magnification:{' '}
@@ -926,14 +931,21 @@ export default class Superimposition extends React.PureComponent<Props, State> {
             film magnification.
           </p>
         ) : null}
-        <p className={classes.legend_note}>
-          The film shown is T1’s, dimmed for context and clipped to the framed
-          region; T2 contributes its tracing only, drawn dashed so a coincident
-          T1 stays visible beneath it. The straight cyan and orange line is the{' '}
-          {basis.from}–{basis.to} reference whose direction was matched: where
-          the two coincide, the registration is exact. Both tracings are the
-          plotted landmarks — nothing here is predicted or simulated.
-        </p>
+        <AboutDisclosure
+          className={classes.legend_about}
+          label="About this view"
+        >
+          <p>{basis.description}</p>
+          <p>
+            The film shown is T1’s, dimmed for context and clipped to the framed
+            region; T2 contributes its tracing only, drawn dashed so a
+            coincident T1 stays visible beneath it. The straight cyan and orange
+            line is the {basis.from}–{basis.to} reference whose direction was
+            matched: where the two coincide, the registration is exact. Both
+            tracings are the plotted landmarks — nothing here is predicted or
+            simulated.
+          </p>
+        </AboutDisclosure>
       </div>
     );
   }

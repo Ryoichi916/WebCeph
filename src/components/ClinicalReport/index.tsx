@@ -55,16 +55,17 @@ import {
 const classes = require('./style.scss');
 
 /**
- * Ruled lines in the "Clinical notes & plan" area. Sized so that when the
- * closing block lands on a page of its own — which it does whenever the tables
- * above it fill the previous page — the writing area occupies most of it,
- * instead of leaving the bottom half of the last sheet blank. See
- * `.notes_rules` in style.scss.
+ * Ruled lines in the "Clinical notes & plan" area.
+ *
+ * Six, set in two columns (see `.notes_rules`) — six writing lines in the
+ * height of three, which is what lets the whole closing block (notes,
+ * certification, footer) land under the last table on the sheet that table ends
+ * on. Twenty full-width rules made the block taller than any page could ever
+ * have left over, so it claimed a sheet of its own every time: the
+ * single-analysis report printed four sides for two pages of content, the third
+ * of them 31 % full and the fourth twenty blank lines.
  */
-const NOTE_RULES: number[] = [
-  0, 1, 2, 3, 4, 5, 6, 7, 8, 9,
-  10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
-];
+const NOTE_RULES: number[] = [0, 1, 2, 3, 4, 5];
 
 /**
  * Global (unhashed) body class toggled while the report is open; the print
@@ -118,7 +119,7 @@ class StoredEditable extends React.PureComponent<StoredEditableProps> {
         aria-label={ariaLabel}
         data-placeholder={placeholder}
         onInput={this.handleInput}
-        onBlur={this.handleInput}
+        onBlur={this.handleBlur}
         onKeyDown={this.handleKeyDown}
         onPaste={this.handlePaste}
       >
@@ -133,6 +134,28 @@ class StoredEditable extends React.PureComponent<StoredEditableProps> {
     if (this.props.onChange !== undefined) {
       this.props.onChange(text);
     }
+  };
+
+  /**
+   * A contentEditable keeps the caret — and therefore the scroll position — at
+   * the end of the text while it is typed. In a field with `overflow: hidden`
+   * that leaves the box scrolled right, and the browser prints what is
+   * *scrolled into view*: the letterhead came out of the printer missing the
+   * beginning of the practice's own name. Rewound whenever the field is left,
+   * and again from `resetEditableScroll` immediately before printing.
+   */
+  private handleBlur = (e: React.FocusEvent<HTMLSpanElement>) => {
+    e.currentTarget.scrollLeft = 0;
+    // Emptied by hand, a contentEditable is left holding a stray <br> or a
+    // whitespace node, and `:empty` — which drives both the placeholder and the
+    // print-time "an unfilled field prints nothing" rule — stops matching. The
+    // letterhead then showed a blank 24px box with an edit rule under it, which
+    // reads as a defect, and printed one too. Cleared on the way out, when the
+    // caret is no longer in the field.
+    if ((e.currentTarget.textContent || '').trim() === '') {
+      e.currentTarget.innerHTML = '';
+    }
+    this.handleInput(e);
   };
 
   // Single-line field: Enter confirms (blurs) instead of inserting <div>s.
@@ -157,14 +180,23 @@ const PRINT_FONT =
   '"Hiragino Kaku Gothic ProN", "Noto Sans JP", Meiryo, sans-serif';
 
 /**
- * The key to the two conventions that recur on every printed page: the
- * severity stars in the DEVIATION column and the wigglegram's shaded bands.
- * Set in the running foot so it is on the page the marks are on, whichever
- * page that is.
+ * The key to every convention that recurs on the printed pages: the severity
+ * stars in the DEVIATION column, the wigglegram's shaded bands, **the colour
+ * of its dots and the off-chart marker**. Set in the running foot so it is on
+ * the page the marks are on, whichever page that is — which matters here,
+ * because the combined printout's front-matter key is print-hidden (the
+ * running foot is its replacement) and red ◂ ▸ markers appear as early as the
+ * Downs section.
+ *
+ * The marker is keyed as the glyph *pair*: the chart draws it outward-pointing,
+ * so a value below −3 SD is marked ◂ and one above +3 SD is marked ▸, and the
+ * two real occurrences on the sample report (OP(Downs)-FH at −3.4 SD, L1-OP at
+ * +4.5 SD) are one of each. A key that named only ▸ left the commoner of the
+ * two unexplained.
  */
 const RUNNING_KEY =
-  'Deviation: * over 1 SD · ** over 2 SD · *** over 3 SD  |  ' +
-  'Wigglegram: shaded band ±1 SD, lighter ±2 SD';
+  'Deviation: * ** *** = over 1 · 2 · 3 SD  |  Wigglegram: band ±1 SD, ' +
+  'lighter ±2 SD; dot amber over 1 SD, red over 2 SD; ◂ ▸ beyond ±3 SD';
 
 /** A CSS string literal, safe to interpolate into a generated stylesheet. */
 const cssString = (text: string): string => (
@@ -241,8 +273,13 @@ export default class ClinicalReport extends React.PureComponent<Props, State> {
     evaluation: AnalysisEvaluation | null;
   } | null = null;
 
+  /** The paper element, for the pre-print housekeeping in `resetEditableScroll`. */
+  private paperRef: HTMLDivElement | null = null;
+
   componentDidMount() {
     document.addEventListener('keydown', this.handleKeyDown);
+    // Covers the browser's own Ctrl+P as well as this dialog's Print button.
+    window.addEventListener('beforeprint', this.resetEditableScroll);
     document.body.classList.add(BODY_OPEN_CLASS);
     this.renderSnapshot();
     this.ensureLandmarksForAllAnalyses();
@@ -260,6 +297,9 @@ export default class ClinicalReport extends React.PureComponent<Props, State> {
     if (
       prevProps.manualLandmarks !== this.props.manualLandmarks ||
       prevProps.analysisId !== this.props.analysisId ||
+      // The film carries a scale bar drawn from the calibration, so calibrating
+      // (or re-calibrating) while the preview is open redraws it.
+      prevProps.scaleFactor !== this.props.scaleFactor ||
       prevState.scope !== this.state.scope
     ) {
       this.renderSnapshot();
@@ -268,6 +308,7 @@ export default class ClinicalReport extends React.PureComponent<Props, State> {
 
   componentWillUnmount() {
     document.removeEventListener('keydown', this.handleKeyDown);
+    window.removeEventListener('beforeprint', this.resetEditableScroll);
     document.body.classList.remove(BODY_OPEN_CLASS);
   }
 
@@ -425,6 +466,7 @@ export default class ClinicalReport extends React.PureComponent<Props, State> {
 
         <div className={classes.scroll} onMouseDown={this.handleBackdropMouseDown}>
           <div
+            ref={this.setPaperRef}
             className={cx(classes.paper, {
               [classes.paper__combined]: isCombined,
             })}
@@ -437,12 +479,26 @@ export default class ClinicalReport extends React.PureComponent<Props, State> {
             {/* The letterhead belongs to the practice, not to the software:
                 the clinic name is the masthead, the clinician and license read
                 back beneath it, and WebCeph is credited in the footer. */}
-            <header className={classes.masthead}>
+            <header
+              className={cx(classes.masthead, {
+                // No practice name stored — the default state of a fresh
+                // install. The kicker and date come left rather than printing a
+                // full-width rule under an empty left two-thirds of the sheet.
+                [classes.masthead__anon]: clinic === '',
+              })}
+            >
               <div className={classes.masthead_left}>
                 <StoredEditable
                   storageKey={STORAGE_KEY_CLINIC}
-                  className={classes.clinic_name}
-                  placeholder="+ Clinic or practice name"
+                  // Masthead type steps down as the practice name grows, so a
+                  // long name wraps to two readable lines instead of three
+                  // cramped ones (see `.clinic_name__long`). Measured in
+                  // characters because that is what the line box is spent on.
+                  className={cx(classes.clinic_name, {
+                    [classes.clinic_name__long]: clinic.length > 26,
+                    [classes.clinic_name__longest]: clinic.length > 46,
+                  })}
+                  placeholder="+ Add clinic name"
                   ariaLabel="Clinic name (click to edit)"
                   onChange={this.handleClinicChange}
                 />
@@ -452,8 +508,8 @@ export default class ClinicalReport extends React.PureComponent<Props, State> {
                   </span>
                 ) : (
                   <span className={classes.clinic_hint}>
-                    Clinician name and license are typed in the Certification
-                    block below and appear here.
+                    Clinician and license appear here from the Certification
+                    block below.
                   </span>
                 )}
               </div>
@@ -580,7 +636,16 @@ export default class ClinicalReport extends React.PureComponent<Props, State> {
                   ? (film.scopeName !== null
                     ? `${film.placed} of ${film.required} landmarks traced ` +
                       `for ${film.scopeName}`
-                    : `${film.placed} landmarks traced`)
+                    // The combined film's denominator is the union of every
+                    // lateral analysis' required landmarks, which this app
+                    // knows exactly (it is the set it just plotted — see
+                    // `ensureLandmarksForAllAnalyses`). Printing a bare
+                    // "37 landmarks traced" withheld it, so a referrer could
+                    // not tell whether 37 was the whole tracing or part of one
+                    // — two pages away from "9 ANALYSES · 89 OF 89
+                    // MEASUREMENTS".
+                    : `${film.placed} of ${film.required} landmarks traced ` +
+                      `across ${LATERAL_ANALYSES.length} analyses`)
                   : 'No landmarks traced'}
                 <span className={classes.caption_dot}>·</span>
                 {scaleFactor !== null
@@ -597,14 +662,29 @@ export default class ClinicalReport extends React.PureComponent<Props, State> {
                 </span>
                 <span className={classes.figkey_item}>
                   <span className={classes.figkey_plane} />
+                  {/* Precisely what these lines are: profilogram construction
+                      lines and reference planes (see analyses/profilogram),
+                      drawn between placed landmarks — and on a single-analysis
+                      film, only between that analysis' own landmarks. They are
+                      not that author's published plane set, and the key may not
+                      imply that they are. */}
                   {film.scopeName !== null
-                    ? `${film.scopeName} reference planes`
-                    : 'Reference planes'}
+                    ? `Reference planes and construction lines ` +
+                      `(${film.scopeName} landmarks only)`
+                    : 'Reference planes and construction lines'}
                 </span>
                 <span className={classes.figkey_item}>
                   <span className={classes.figkey_point} />
                   Landmark, labelled with its symbol
                 </span>
+                {scaleFactor !== null ? (
+                  <span className={classes.figkey_item}>
+                    <span className={classes.figkey_bar} />
+                    {/* The bar's length is chosen to suit the film and is
+                        written on it, so this key must not restate a figure. */}
+                    Scale bar, labelled in millimetres
+                  </span>
+                ) : null}
               </figcaption>
             </figure>
 
@@ -667,54 +747,68 @@ export default class ClinicalReport extends React.PureComponent<Props, State> {
                 </div>
               </div>
 
-              <div className={classes.sig_section}>
-                <div className={classes.section_label}>Certification</div>
-                <div className={classes.sig_row}>
-                  <div className={cx(classes.sig_field, classes.sig_field__wide)}>
-                    <div className={classes.sig_line}>
-                      <StoredEditable
-                        storageKey={STORAGE_KEY_CLINICIAN}
-                        placeholder="Clinician name"
-                        ariaLabel="Clinician name (click to edit)"
-                        onChange={this.handleClinicianChange}
-                      />
+              {/* Certification and footer travel together. The two are the
+                  document's signature, and a sheet carrying nothing but
+                  "Generated with WebCeph · End of report" reads as a printer
+                  fault; if the block does not fit under the notes it moves
+                  whole, and the last sheet is a proper signature page. */}
+              <div className={classes.tail_close}>
+                <div className={classes.sig_section}>
+                  <div className={classes.section_label}>Certification</div>
+                  <div className={classes.sig_row}>
+                    <div className={cx(classes.sig_field, classes.sig_field__wide)}>
+                      <div className={classes.sig_line}>
+                        <StoredEditable
+                          storageKey={STORAGE_KEY_CLINICIAN}
+                          placeholder="Clinician name"
+                          ariaLabel="Clinician name (click to edit)"
+                          onChange={this.handleClinicianChange}
+                        />
+                      </div>
+                      <span className={classes.sig_caption}>
+                        Examined by — name &amp; signature
+                      </span>
                     </div>
-                    <span className={classes.sig_caption}>
-                      Examined by — name &amp; signature
-                    </span>
-                  </div>
-                  <div className={classes.sig_field}>
-                    <div className={classes.sig_line}>
-                      <StoredEditable
-                        storageKey={STORAGE_KEY_LICENSE}
-                        placeholder="License no."
-                        ariaLabel="License number (click to edit)"
-                        onChange={this.handleLicenseChange}
-                      />
+                    <div className={classes.sig_field}>
+                      <div className={classes.sig_line}>
+                        <StoredEditable
+                          storageKey={STORAGE_KEY_LICENSE}
+                          placeholder="License no."
+                          ariaLabel="License number (click to edit)"
+                          onChange={this.handleLicenseChange}
+                        />
+                      </div>
+                      <span className={classes.sig_caption}>License no.</span>
                     </div>
-                    <span className={classes.sig_caption}>License no.</span>
-                  </div>
-                  <div className={classes.sig_field}>
-                    <div className={classes.sig_line} />
-                    <span className={classes.sig_caption}>Date</span>
+                    <div className={classes.sig_field}>
+                      <div className={classes.sig_line} />
+                      <span className={classes.sig_caption}>Date</span>
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              <footer className={classes.foot}>
-                <span className={classes.foot_brand}>
-                  Generated with WebCeph · {date}
-                </span>
-                <span className={classes.foot_note}>
-                  Computed values depend on landmark placement and calibration —
-                  review before clinical use.
-                </span>
-                <span className={classes.foot_page}>
-                  {isCombined
-                    ? `End of report · ${sectionCount} analyses`
-                    : 'End of report'}
-                </span>
-              </footer>
+                {/* Two lines, not a three-up row. The caveat is a sentence and
+                    it wrapped to two centred lines between two single-line
+                    items, so the three had no common baseline; it now owns a
+                    full-width line of its own beneath them and reads as the
+                    statement it is. */}
+                <footer className={classes.foot}>
+                  <div className={classes.foot_row}>
+                    <span className={classes.foot_brand}>
+                      Generated with WebCeph · {date}
+                    </span>
+                    <span className={classes.foot_page}>
+                      {isCombined
+                        ? `End of report · ${sectionCount} analyses`
+                        : 'End of report'}
+                    </span>
+                  </div>
+                  <span className={classes.foot_note}>
+                    Computed values depend on landmark placement and calibration —
+                    review before clinical use.
+                  </span>
+                </footer>
+              </div>
             </div>
           </div>
         </div>
@@ -1097,10 +1191,25 @@ export default class ClinicalReport extends React.PureComponent<Props, State> {
         (e) => e.id === analysisId || e.analysis.id === analysisId,
       )[0];
     if (entry === undefined) {
+      // The film carries every placed landmark, so its denominator is the union
+      // of what all the lateral analyses need — the set this report completes
+      // before it prints (see `ensureLandmarksForAllAnalyses`). It is known, so
+      // it is stated: "37 landmarks traced" left the reader unable to tell a
+      // complete tracing from a partial one.
+      const union: string[] = [];
+      LATERAL_ANALYSES.forEach(({ analysis }) => {
+        getStepsForAnalysis(analysis, false).forEach((step) => {
+          if (isStepManual(step) && union.indexOf(step.symbol) === -1) {
+            union.push(step.symbol);
+          }
+        });
+      });
       return {
         landmarks: manualLandmarks,
         placed: placedAll.length,
-        required: placedAll.length,
+        // A tracing may legitimately carry a point no lateral analysis asks
+        // for; the denominator must never read as smaller than the numerator.
+        required: Math.max(union.length, placedAll.length),
         scopeName: null,
       };
     }
@@ -1125,7 +1234,9 @@ export default class ClinicalReport extends React.PureComponent<Props, State> {
   }
 
   private renderSnapshot() {
-    const { imageSrc, imageWidth, imageHeight, manualLandmarks } = this.props;
+    const {
+      imageSrc, imageWidth, imageHeight, manualLandmarks, scaleFactor,
+    } = this.props;
     if (imageSrc === null || !imageWidth || !imageHeight) {
       return;
     }
@@ -1142,6 +1253,11 @@ export default class ClinicalReport extends React.PureComponent<Props, State> {
         crop: true,
         pointLandmarks: film.landmarks,
         labels: true,
+        // A ruler on the film, from the image calibration only — the figure is
+        // reproduced at whatever scale the page allows, so without it no
+        // distance on the printed film can be judged by eye. An uncalibrated
+        // film gets no bar (see `drawScaleBar`).
+        scaleMmPerPx: scaleFactor !== null ? scaleFactor : undefined,
       },
     ).then((url) => {
       if (url !== null) {
@@ -1150,7 +1266,32 @@ export default class ClinicalReport extends React.PureComponent<Props, State> {
     });
   }
 
+  /**
+   * Rewinds every letterhead field to the start of its text before the page is
+   * rasterised. A contentEditable that has just been typed into is scrolled to
+   * the caret, and the print output shows the *scrolled* content — which is how
+   * a practice's own name came out of the printer with its first characters
+   * missing. The clinic name now wraps instead of scrolling (see `.clinic_name`),
+   * so this is the belt to that brace, and it still matters for the clinician
+   * and license fields, which are single-line by design.
+   */
+  private resetEditableScroll = () => {
+    const paper = this.paperRef;
+    if (paper === null) {
+      return;
+    }
+    const fields = paper.querySelectorAll('[contenteditable]');
+    for (let i = 0; i < fields.length; i++) {
+      (fields[i] as HTMLElement).scrollLeft = 0;
+    }
+  };
+
+  private setPaperRef = (el: HTMLDivElement | null) => {
+    this.paperRef = el;
+  };
+
   private handlePrint = () => {
+    this.resetEditableScroll();
     window.print();
   };
 
