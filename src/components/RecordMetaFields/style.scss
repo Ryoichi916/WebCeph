@@ -37,18 +37,26 @@
 .record_form_row {
   display: flex;
   align-items: flex-start;
+  // In a narrow container (the Edit details dialog) the capture date drops to a
+  // line of its own rather than squeezing the timepoint until its own value
+  // scrolls out of sight.
+  flex-wrap: wrap;
   gap: 12px;
 }
 
 .record_field {
-  flex: 1 1 auto;
+  // The type select is sized to its longest option name ("Lateral cephalogram")
+  // and the date to its native control; the timepoint takes what is left, which
+  // is wide enough to read a spelled-out label ("T2 post-treatment") back — the
+  // field accepts one, so the field has to show one.
+  flex: 0 0 186px;
   min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 6px;
 
   &__timepoint {
-    flex: 0 0 104px;
+    flex: 1 1 132px;
   }
 
   &__date {

@@ -615,11 +615,20 @@ $zero-notch: rgba(31, 41, 51, .5);
   color: $text-secondary;
 }
 
+// Why a control is not available yet. Given its own bounded amber block rather
+// than left as a loose amber line: as running text its last line slid under the
+// "Key measurements" pane header below and read as a sentence cut in half.
 .control_reason {
-  margin: 7px 0 0;
+  box-sizing: border-box;
+  margin: 8px 0 2px;
+  padding: 7px 9px;
+  border: 1px solid #F0DDB8;
+  border-radius: 6px;
+  background: $warn-bg;
   font-size: 11.5px;
-  line-height: 1.5;
+  line-height: 1.45;
   color: $warn;
+  overflow-wrap: anywhere;
 }
 
 // ---- Soft tissue ------------------------------------------------------------

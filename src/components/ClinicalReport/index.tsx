@@ -20,7 +20,7 @@ import {
 } from 'components/AnalysisResultsViewer';
 import { mapCategoryToString } from 'components/AnalysisResultsViewer/strings';
 
-import { formatMmPx } from 'components/TracingToolbar/CalibrationDialog';
+import { formatScale } from 'components/TracingToolbar/CalibrationDialog';
 
 import { buildProfilogram } from 'analyses/profilogram';
 import {
@@ -632,7 +632,7 @@ export default class ClinicalReport extends React.PureComponent<Props, State> {
                   <span className={classes.patient_label}>Image scale</span>
                   <span className={classes.patient_value}>
                     {scaleFactor !== null
-                      ? `1 px = ${formatMmPx(scaleFactor)} mm`
+                      ? formatScale(scaleFactor)
                       : 'Not calibrated'}
                   </span>
                 </div>
@@ -688,7 +688,7 @@ export default class ClinicalReport extends React.PureComponent<Props, State> {
                   : 'No landmarks traced'}
                 <span className={classes.caption_dot}>·</span>
                 {scaleFactor !== null
-                  ? `Calibrated: 1 px = ${formatMmPx(scaleFactor)} mm`
+                  ? `Calibrated · ${formatScale(scaleFactor)}`
                   : 'Not calibrated — angular values unaffected'}
               </figcaption>
               {/* What the reader is looking at. Without a key the tags, the

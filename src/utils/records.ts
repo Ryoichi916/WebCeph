@@ -215,3 +215,210 @@ export const getCaptureDateSortKey = (
   captureDate: string | null | undefined,
 ): string =>
   formatCaptureDate(captureDate) !== null ? captureDate!.trim() : '9999-99-99';
+
+// ---- Timepoint grouping ----------------------------------------------------
+
+/**
+ * The minimum a record has to state to be grouped into a timepoint: its label
+ * and the day it was captured. Declared structurally rather than importing
+ * `PatientRecord` — that type lives in the workspace reducer, which imports
+ * *this* module, so a nominal dependency here would be a cycle.
+ */
+export interface TimepointGroupable {
+  timepoint: string | null;
+  captureDate: string | null;
+}
+
+/**
+ * One timepoint of a patient's imaging record: the films and photographs taken
+ * at the same visit, with the span they actually cover.
+ *
+ * Every field is counted off the records themselves. A group whose members
+ * carry no capture date has `firstDate === null` — it does not borrow a date
+ * from its neighbours, and `undatedCount` says how many images in the group are
+ * undated so a surface can state that instead of implying a date it does not
+ * have.
+ */
+export interface TimepointGroup<T extends TimepointGroupable> {
+  /** Stable key: the trimmed label, or `''` for the untimepointed group. */
+  key: string;
+  /** The timepoint as recorded, or null when these images carry no label. */
+  label: string | null;
+  /** The group's records, in the order they were handed in (date order). */
+  records: T[];
+  /** Earliest recorded capture date in the group (ISO), or null when none is. */
+  firstDate: string | null;
+  /** Latest recorded capture date in the group (ISO), or null when none is. */
+  lastDate: string | null;
+  /** How many of the group's images carry no capture date at all. */
+  undatedCount: number;
+}
+
+/**
+ * Groups a patient's records by timepoint label and orders the groups the way a
+ * chart reads: chronologically by the earliest capture date in each group,
+ * groups with no date at all after the dated ones, and the images that carry no
+ * timepoint label last of all — never folded into T1 and never sorted among the
+ * labelled visits, because "unlabelled" is not a point in time.
+ *
+ * Records inside a group keep the order they arrive in (the store hands them
+ * over sorted by capture date, see `getPatientRecords`).
+ */
+export const groupRecordsByTimepoint = <T extends TimepointGroupable>(
+  records: T[],
+): TimepointGroup<T>[] => {
+  const order: string[] = [];
+  const byKey: { [key: string]: T[] } = {};
+  records.forEach((record) => {
+    const key = record.timepoint === null ? '' : record.timepoint.trim();
+    if (byKey[key] === undefined) {
+      byKey[key] = [];
+      order.push(key);
+    }
+    byKey[key].push(record);
+  });
+  const groups = order.map((key): TimepointGroup<T> => {
+    const members = byKey[key];
+    const dates = members
+      .map(({ captureDate }) => formatCaptureDate(captureDate))
+      .filter((d): d is string => d !== null)
+      .sort();
+    return {
+      key,
+      label: key === '' ? null : key,
+      records: members,
+      firstDate: dates.length > 0 ? dates[0] : null,
+      lastDate: dates.length > 0 ? dates[dates.length - 1] : null,
+      undatedCount: members.length - dates.length,
+    };
+  });
+  return groups.sort((a, b) => {
+    // The untimepointed group is last whatever it is dated.
+    if ((a.key === '') !== (b.key === '')) {
+      return a.key === '' ? 1 : -1;
+    }
+    const aDate = a.firstDate !== null ? a.firstDate : '9999-99-99';
+    const bDate = b.firstDate !== null ? b.firstDate : '9999-99-99';
+    if (aDate !== bDate) {
+      return aDate < bDate ? -1 : 1;
+    }
+    // Same day (or both undated): fall back to the label, so T1/T2 taken on one
+    // day keep their stated order instead of an accidental one.
+    return a.key === b.key ? 0 : (a.key < b.key ? -1 : 1);
+  });
+};
+
+// ---- Elapsed interval -------------------------------------------------------
+
+/**
+ * The interval between two dates, in whole years and months (e.g. `"1 y 4 mo"`,
+ * `"7 mo"`, `"12 days"`), or null when either date is unknown.
+ *
+ * **The app's one duration formatter.** The records dashboard's record span and
+ * the superimposition's "… apart" are the same fact — elapsed time between two
+ * films — and they printed it two ways ("1 y 4 m" here, "5 mo apart" there) for
+ * the same pair of dates. It lives beside the capture-date helpers because that
+ * is what it measures; `analyses/superimposition` re-exports it so its own
+ * importers keep working.
+ *
+ * Months are `mo`, never the bare `m` the age chips use: this string is printed
+ * on surfaces whose every other number is a millimetre — "+1.7 mm", a 10 mm
+ * scale bar, 0.104 mm/px — and "5 m apart" beside them read as five metres. The
+ * age chips keep `y / m` (see `utils/patient`), where nothing is measured in
+ * millimetres and the ambiguity cannot arise.
+ */
+export const formatInterval = (
+  from: Date | null, to: Date | null,
+): string | null => {
+  if (from === null || to === null) {
+    return null;
+  }
+  const earlier = from.getTime() <= to.getTime() ? from : to;
+  const later = from.getTime() <= to.getTime() ? to : from;
+  let months =
+    (later.getFullYear() - earlier.getFullYear()) * 12 +
+    (later.getMonth() - earlier.getMonth());
+  if (later.getDate() < earlier.getDate()) {
+    months -= 1;
+  }
+  if (months < 0) {
+    months = 0;
+  }
+  if (months === 0) {
+    const days = Math.round(
+      (later.getTime() - earlier.getTime()) / (24 * 60 * 60 * 1000),
+    );
+    return days === 1 ? '1 day' : `${days} days`;
+  }
+  const years = Math.floor(months / 12);
+  const rest = months % 12;
+  if (years === 0) {
+    return `${rest} mo`;
+  }
+  return rest > 0 ? `${years} y ${rest} mo` : `${years} y`;
+};
+
+// ---- Implied film size ------------------------------------------------------
+
+/**
+ * The physical size a calibration claims the image is, and whether that claim is
+ * plausible for a radiograph.
+ */
+export interface ImpliedFilmSize {
+  widthMm: number;
+  heightMm: number;
+  /** `"83 × 100 mm"` — the size, as it is shown beside the scale. */
+  label: string;
+  /**
+   * False when the implied film falls outside `FILM_SIZE_BAND` — the calibration
+   * is almost certainly wrong (a 10 mm ruler marked over 96 px instead of 9.6,
+   * say), and every millimetre measured from it is wrong by the same factor.
+   */
+  isPlausible: boolean;
+}
+
+/**
+ * The band a real cephalogram's shorter and longer sides fall in.
+ *
+ * A lateral ceph is exposed on an 8 × 10 in cassette (203 × 254 mm) or a digital
+ * sensor of much the same size; a tightly cropped export can be smaller, and a
+ * large-format or padded export bigger. 100–500 mm per side is generous on both
+ * ends: it passes every plate a clinic actually produces and still catches a
+ * calibration out by a factor of two or more, which is the error this band
+ * exists for.
+ */
+export const FILM_SIZE_BAND = { minMm: 100, maxMm: 500 };
+
+/**
+ * What a mm/px scale says the image measures in life, or null when the pixel
+ * size or the scale is not recorded.
+ *
+ * This is the one reading of a calibration a clinician can sanity-check without
+ * the ruler in front of them: `0.104 mm/px` means nothing on its own, while
+ * "this 800 × 960 film is 83 × 100 mm" is immediately either right or absurd.
+ */
+export const getImpliedFilmSize = (
+  width: number | null,
+  height: number | null,
+  scaleFactor: number | null,
+): ImpliedFilmSize | null => {
+  if (
+    width === null || height === null || scaleFactor === null ||
+    !isFinite(width) || !isFinite(height) || !isFinite(scaleFactor) ||
+    width <= 0 || height <= 0 || scaleFactor <= 0
+  ) {
+    return null;
+  }
+  const widthMm = width * scaleFactor;
+  const heightMm = height * scaleFactor;
+  const { minMm, maxMm } = FILM_SIZE_BAND;
+  const isPlausible =
+    widthMm >= minMm && widthMm <= maxMm &&
+    heightMm >= minMm && heightMm <= maxMm;
+  return {
+    widthMm,
+    heightMm,
+    label: `${Math.round(widthMm)} × ${Math.round(heightMm)} mm`,
+    isPlausible,
+  };
+};

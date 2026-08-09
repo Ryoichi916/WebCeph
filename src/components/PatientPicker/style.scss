@@ -1,4 +1,5 @@
 @import 'src/_variables.scss';
+@import 'src/_fields.scss';
 
 // Patient picker — the product entry point. Split card: brand panel on the
 // left, patient registration + list on the right.
@@ -163,25 +164,10 @@
   }
 }
 
-.field {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
 // Demographics row: fixed-width date field, natural-width segmented control,
 // Register anchored to the right by the flexible spacer.
 .field_dob {
   flex: 0 0 170px;
-}
-
-.field_sex {
-  flex: 0 0 auto;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
 }
 
 .form_spacer {
@@ -197,175 +183,10 @@
   gap: 6px;
 }
 
-.field_label {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: .06em;
-  text-transform: uppercase;
-  color: $text-tertiary;
-}
-
-// Quiet "optional" tag inside a field label; lowercase against the
-// uppercase label so it reads as an aside, not part of the field name.
-.field_optional {
-  margin-left: 5px;
-  font-size: 10px;
-  font-weight: 500;
-  letter-spacing: .03em;
-  text-transform: lowercase;
-  color: $text-disabled;
-}
-
-// Locale-independent echo of a date input's value, so 08/06/2026 can't be
-// misread as June 8th on a patient record.
-.field_echo {
-  font-size: 11.5px;
-  line-height: 1.2;
-  font-variant-numeric: tabular-nums;
-  color: $text-disabled;
-}
-
-.field_echo_set {
-  font-weight: 600;
-  color: $text-secondary;
-}
-
-.field_input {
-  box-sizing: border-box;
-  width: 100%;
-  height: 36px;
-  padding: 0 12px;
-  border: 1px solid $border-strong;
-  border-radius: 6px;
-  background: $bg-surface;
-  font-family: $font-stack;
-  font-size: 14px;
-  color: $text-primary;
-  transition: border-color 120ms ease, box-shadow 120ms ease;
-
-  &::placeholder {
-    color: $text-disabled;
-    opacity: 1;
-  }
-
-  &:hover {
-    border-color: darken($border-strong, 8%);
-  }
-
-  &:focus {
-    outline: none;
-    border-color: $primary-600;
-    box-shadow: $focus-ring;
-  }
-}
-
-// Native date input: match the text inputs exactly and keep the picker
-// affordance quiet until hovered.
-.field_input_date {
-  &::-webkit-calendar-picker-indicator {
-    opacity: .55;
-    cursor: pointer;
-
-    &:hover {
-      opacity: .85;
-    }
-  }
-}
-
-// While empty, the browser's yyyy/mm/dd scaffold is shown in placeholder
-// gray so it cannot be mistaken for an entered date.
-.field_input_date_empty {
-  color: $text-disabled;
-}
-
-// Sex: two-option segmented control (click the active segment to clear).
-.segmented {
-  display: inline-flex;
-  align-items: stretch;
-  box-sizing: border-box;
-  height: 36px;
-  border: 1px solid $border-strong;
-  border-radius: 6px;
-  background: $bg-surface;
-  overflow: hidden;
-}
-
-.segment {
-  appearance: none;
-  border: none;
-  margin: 0;
-  padding: 0 16px;
-  background: none;
-  font-family: $font-stack;
-  font-size: 13px;
-  font-weight: 500;
-  color: $text-secondary;
-  cursor: pointer;
-  transition: background-color 120ms ease, color 120ms ease;
-
-  & + & {
-    border-left: 1px solid $border-strong;
-  }
-
-  &:hover {
-    background: $bg-sunken;
-  }
-
-  &:focus {
-    outline: none;
-  }
-
-  &:focus-visible {
-    box-shadow: inset $focus-ring;
-  }
-}
-
-.segment_active {
-  background: $primary-050;
-  color: $primary-700;
-  font-weight: 600;
-
-  &:hover {
-    background: $primary-050;
-  }
-}
-
-// Error state on a specific input: red outline + faint tint.
-.field_input_error {
-  border: 1.5px solid $error;
-  padding: 0 11.5px;
-  background: #FEF6F6;
-
-  &:hover {
-    border-color: $error;
-  }
-
-  &:focus {
-    border-color: $error;
-    box-shadow: 0 0 0 3px rgba(198, 40, 40, .18);
-  }
-}
-
-// Reserved line under each field: the card never grows or shifts when a
-// validation message appears.
-.field_error {
-  display: block;
-  min-height: 16px;
-  font-size: 12px;
-  line-height: 16px;
-  color: $error;
-}
-
-.field_error_inner {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  white-space: nowrap;
-}
-
-.field_error_icon {
-  flex-shrink: 0;
-}
+// The demographics fields themselves (label, input, date echo, sex segments,
+// error line) live in components/PatientFields — registration and "Edit patient
+// details" on the records dashboard share one set. Only this screen's layout of
+// them stays here.
 
 // Search (appears once the list grows)
 .search_row {
@@ -383,7 +204,7 @@
 }
 
 .search_input {
-  composes: field_input;
+  @include field-input;
   padding-left: 36px;
 }
 

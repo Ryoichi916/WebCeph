@@ -38,6 +38,7 @@ import every from 'lodash/every';
 import last from 'lodash/last';
 
 import { getCaptureDateSortKey } from 'utils/records';
+import { isGeoPoint } from 'utils/math';
 
 export default {
   ...analyses,
@@ -251,6 +252,14 @@ export interface PatientRecord {
   landmarksPlaced: number;
   /** Manual landmarks the active analysis requires in total. */
   landmarksRequired: number;
+  /**
+   * Every manual landmark actually stored for this image, in the image's own
+   * pixel coordinates — the tracing as it exists, not a count of it. The
+   * records dashboard plots these over the card's thumbnail so a worked-up film
+   * is identifiable at a glance instead of reading as the same near-black
+   * rectangle as an untraced one. Empty for an image with nothing plotted.
+   */
+  landmarkPoints: GeoPoint[];
   /** Whether the image carries a mm/px calibration. */
   isCalibrated: boolean;
   /** mm per pixel, or null when the image has never been calibrated. */
@@ -331,6 +340,12 @@ export const getPatientRecords = createSelector(
             ({ symbol }) => placed[symbol] !== undefined,
           ).length,
           landmarksRequired: steps.length,
+          // The stored tracing itself. Only real `GeoPoint`s are taken — a
+          // vector or an angle under a landmark's symbol is geometry computed
+          // *from* points, and plotting it as one would be an invented dot.
+          landmarkPoints: Object.keys(placed)
+            .map((symbol) => placed[symbol])
+            .filter(isGeoPoint),
           isCalibrated: props !== undefined && typeof props.scaleFactor === 'number',
           scaleFactor: (props && typeof props.scaleFactor === 'number')
             ? props.scaleFactor

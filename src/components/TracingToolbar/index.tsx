@@ -3,7 +3,7 @@ import Props from './props';
 
 import * as cx from 'classnames';
 
-import CalibrationDialog, { formatMmPx } from './CalibrationDialog';
+import CalibrationDialog, { formatScale } from './CalibrationDialog';
 
 import ClinicalReport from 'components/ClinicalReport/connected';
 import Superimposition from 'components/Superimposition/connected';
@@ -233,7 +233,7 @@ export default class TracingToolbar extends React.PureComponent<Props, State> {
           })}
           title={
             isCalibrated
-              ? `Calibrated: 1 px = ${formatMmPx(scaleFactor!)} mm. ` +
+              ? `Calibrated · ${formatScale(scaleFactor!)}. ` +
                 'Linear (mm) measurements use this scale; ' +
                 'angular measurements are scale-independent. Click to adjust.'
               : 'No mm calibration is set for this image. ' +
@@ -242,7 +242,7 @@ export default class TracingToolbar extends React.PureComponent<Props, State> {
           }
           aria-label={
             isCalibrated
-              ? `Calibrated · ${formatMmPx(scaleFactor!, 3)} mm/px`
+              ? `Calibrated · ${formatScale(scaleFactor!)}`
               : 'Not calibrated'
           }
           aria-haspopup="dialog"
@@ -255,7 +255,7 @@ export default class TracingToolbar extends React.PureComponent<Props, State> {
               and aria-label keep saying the film is calibrated either way. */}
           {isCalibrated ? (
             <span className={classes.chip_value}>
-              {`${formatMmPx(scaleFactor!, 3)} mm/px`}
+              {formatScale(scaleFactor!)}
             </span>
           ) : 'Not calibrated'}
         </button>

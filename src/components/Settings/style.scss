@@ -1,0 +1,55 @@
+@import 'src/_variables.scss';
+
+// The settings dialog is dressed like the app's other dialogs (see
+// RecordsDashboard/editpatient.scss): a title band with a caption, a bordered
+// actions row, 8px corners. It used to be stock Material-UI — square corners, no
+// rule under the title, no way out at all.
+
+.title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-family: $font-stack;
+}
+
+.title_heading {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: $text-primary;
+}
+
+.title_caption {
+  font-size: 12.5px;
+  font-weight: 400;
+  color: $text-tertiary;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-family: $font-stack;
+}
+
+// The same micro label the patient fields use, so the two forms read as one app.
+.field_label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: $text-tertiary;
+}
+
+// What the setting actually does, and where it is kept. The locale preference is
+// stored per browser (see store/middleware/persistence) — it is not part of any
+// patient's record, and saying so is the difference between a preference and a
+// clinical field.
+.hint {
+  margin: 2px 0 0;
+  font-family: $font-stack;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: $text-tertiary;
+}

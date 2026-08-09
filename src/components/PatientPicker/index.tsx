@@ -12,20 +12,23 @@ import IconArrow from 'material-ui/svg-icons/hardware/keyboard-arrow-right';
 
 import Props from './props';
 
+// The registration fields live with the edit-patient form so both surfaces ask
+// for demographics in exactly one way — see components/PatientFields.
+import {
+  PatientTextField,
+  DateOfBirthField,
+  SexField,
+  validatePatientDetails,
+  PatientDetailsError,
+} from 'components/PatientFields';
+
 import { formatAgeShort, formatSexShort } from 'utils/patient';
 // The app's one date formatter (ISO `YYYY-MM-DD`), so the date the user typed is
 // echoed in exactly the form every other screen — and the printed report —
 // states it in.
-import { formatCaptureDate, formatDisplayDate } from 'utils/records';
+import { formatDisplayDate } from 'utils/records';
 
 const classes = require('./style.scss');
-
-type ErrorField = 'name' | 'chartId' | 'both';
-
-interface ValidationError {
-  field: ErrorField;
-  message: string;
-}
 
 interface State {
   name: string;
@@ -33,7 +36,7 @@ interface State {
   dateOfBirth: string;
   sex: PatientSex;
   query: string;
-  error: ValidationError | null;
+  error: PatientDetailsError | null;
   pendingRemoval: Patient | null;
 }
 
@@ -258,20 +261,6 @@ const BrandConstellation = () => (
   </svg>
 );
 
-const ErrorIcon = () => (
-  <svg
-    width="13"
-    height="13"
-    viewBox="0 0 16 16"
-    aria-hidden="true"
-    className={classes.field_error_icon}
-  >
-    <circle cx="8" cy="8" r="7" fill="#C62828" />
-    <rect x="7.2" y="3.8" width="1.6" height="5.4" rx=".8" fill="#FFFFFF" />
-    <circle cx="8" cy="11.6" r="1" fill="#FFFFFF" />
-  </svg>
-);
-
 export default class PatientPicker extends React.PureComponent<Props, State> {
   state: State = {
     name: '',
@@ -286,25 +275,15 @@ export default class PatientPicker extends React.PureComponent<Props, State> {
   private register = () => {
     const name = this.state.name.trim();
     const chartId = this.state.chartId.trim();
-    if (name === '' && chartId === '') {
-      this.setState({
-        error: {
-          field: 'both',
-          message: 'Enter a name or chart ID to register.',
-        },
-      });
-      return;
-    }
-    const duplicate = chartId !== '' && this.props.patients.some(
-      (p) => p.chartId.trim().toLowerCase() === chartId.toLowerCase(),
+    // One rule set, shared with "Edit patient details" on the records
+    // dashboard — see components/PatientFields.
+    const error = validatePatientDetails(
+      { name, chartId, dateOfBirth: '', sex: '' },
+      this.props.patients.map((p) => p.chartId),
+      'register',
     );
-    if (duplicate) {
-      this.setState({
-        error: {
-          field: 'chartId',
-          message: 'This chart ID is already in use.',
-        },
-      });
+    if (error !== null) {
+      this.setState({ error });
       return;
     }
     this.props.onRegister(name, chartId, this.state.dateOfBirth, this.state.sex);
@@ -324,25 +303,20 @@ export default class PatientPicker extends React.PureComponent<Props, State> {
     }
   };
 
-  private handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    this.setState({ name: e.currentTarget.value, error: null });
+  private handleNameChange = (name: string) => {
+    this.setState({ name, error: null });
   };
 
-  private handleChartIdChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    this.setState({ chartId: e.currentTarget.value, error: null });
+  private handleChartIdChange = (chartId: string) => {
+    this.setState({ chartId, error: null });
   };
 
-  private handleDateOfBirthChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    this.setState({ dateOfBirth: e.currentTarget.value });
+  private handleDateOfBirthChange = (dateOfBirth: string) => {
+    this.setState({ dateOfBirth });
   };
 
-  // Clicking the selected segment again clears the (optional) field.
-  private handleSexFemale = () => {
-    this.setState(({ sex }) => ({ sex: sex === 'female' ? '' : 'female' }));
-  };
-
-  private handleSexMale = () => {
-    this.setState(({ sex }) => ({ sex: sex === 'male' ? '' : 'male' }));
+  private handleSexChange = (sex: PatientSex) => {
+    this.setState({ sex });
   };
 
   private handleQueryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -432,24 +406,6 @@ export default class PatientPicker extends React.PureComponent<Props, State> {
     const chartIdMessage =
       error !== null && error.field === 'chartId' ? error.message : null;
 
-    const nameInputClass = nameHasError
-      ? `${classes.field_input} ${classes.field_input_error}`
-      : classes.field_input;
-    const chartIdInputClass = chartIdHasError
-      ? `${classes.field_input} ${classes.field_input_error}`
-      : classes.field_input;
-    // The empty date input shows the browser's yyyy/mm/dd scaffold — mute it
-    // to placeholder gray so it does not read as an entered value.
-    const dobInputClass = dateOfBirth === ''
-      ? `${classes.field_input} ${classes.field_input_date} ` +
-        classes.field_input_date_empty
-      : `${classes.field_input} ${classes.field_input_date}`;
-    const now = new Date();
-    const todayISO =
-      `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}`;
-    // The typed date restated locale-independently (see the echo below).
-    const dobEcho = formatCaptureDate(dateOfBirth);
-
     const trimmedQuery = query.trim().toLowerCase();
     const visiblePatients = trimmedQuery === ''
       ? patients
@@ -519,114 +475,33 @@ export default class PatientPicker extends React.PureComponent<Props, State> {
 
             <div className={classes.form}>
               <div className={classes.form_row}>
-                <label className={classes.field}>
-                  <span className={classes.field_label}>Patient name</span>
-                  <input
-                    type="text"
-                    className={nameInputClass}
-                    placeholder="e.g. 山田 太郎"
-                    aria-label="Patient name"
-                    aria-invalid={nameHasError}
-                    value={name}
-                    onChange={this.handleNameChange}
-                    onKeyDown={this.handleKeyDown}
-                  />
-                  <span className={classes.field_error} role="alert">
-                    {nameMessage !== null ? (
-                      <span className={classes.field_error_inner}>
-                        <ErrorIcon />
-                        {nameMessage}
-                      </span>
-                    ) : null}
-                  </span>
-                </label>
-                <label className={classes.field}>
-                  <span className={classes.field_label}>Chart ID</span>
-                  <input
-                    type="text"
-                    className={chartIdInputClass}
-                    placeholder="e.g. C-0001"
-                    aria-label="Chart ID"
-                    aria-invalid={chartIdHasError}
-                    value={chartId}
-                    onChange={this.handleChartIdChange}
-                    onKeyDown={this.handleKeyDown}
-                  />
-                  <span className={classes.field_error} role="alert">
-                    {chartIdMessage !== null ? (
-                      <span className={classes.field_error_inner}>
-                        <ErrorIcon />
-                        {chartIdMessage}
-                      </span>
-                    ) : null}
-                  </span>
-                </label>
+                <PatientTextField
+                  label="Patient name"
+                  placeholder="e.g. 山田 太郎"
+                  value={name}
+                  invalid={nameHasError}
+                  message={nameMessage}
+                  onChange={this.handleNameChange}
+                  onKeyDown={this.handleKeyDown}
+                />
+                <PatientTextField
+                  label="Chart ID"
+                  placeholder="e.g. C-0001"
+                  value={chartId}
+                  invalid={chartIdHasError}
+                  message={chartIdMessage}
+                  onChange={this.handleChartIdChange}
+                  onKeyDown={this.handleKeyDown}
+                />
               </div>
               <div className={classes.form_row}>
-                <label className={`${classes.field} ${classes.field_dob}`}>
-                  <span className={classes.field_label}>
-                    Date of birth
-                    <span className={classes.field_optional}>optional</span>
-                  </span>
-                  <input
-                    type="date"
-                    className={dobInputClass}
-                    aria-label="Date of birth"
-                    max={todayISO}
-                    value={dateOfBirth}
-                    onChange={this.handleDateOfBirthChange}
-                    onKeyDown={this.handleKeyDown}
-                  />
-                  {/* `input[type=date]` paints in the browser's locale, so US
-                      Chrome shows 08/06/2026 — ambiguous on a clinical record.
-                      Every display surface in this app writes ISO
-                      YYYY-MM-DD, so the parsed value is echoed here in that
-                      form. */}
-                  <span
-                    className={dobEcho !== null
-                      ? `${classes.field_echo} ${classes.field_echo_set}`
-                      : classes.field_echo}
-                  >
-                    {dobEcho !== null ? dobEcho : 'YYYY-MM-DD'}
-                  </span>
-                </label>
-                {/* Not a <label>: clicking the caption of a label containing
-                    buttons would forward the click to the first button and
-                    silently select “Female”. */}
-                <div className={classes.field_sex}>
-                  <span className={classes.field_label}>
-                    Sex
-                    <span className={classes.field_optional}>optional</span>
-                  </span>
-                  <div
-                    className={classes.segmented}
-                    role="group"
-                    aria-label="Sex"
-                  >
-                    <button
-                      type="button"
-                      className={sex === 'female'
-                        ? `${classes.segment} ${classes.segment_active}`
-                        : classes.segment}
-                      aria-pressed={sex === 'female'}
-                      title={sex === 'female' ? 'Click again to clear' : undefined}
-                      onClick={this.handleSexFemale}
-                    >
-                      Female
-                    </button>
-                    <button
-                      type="button"
-                      className={sex === 'male'
-                        ? `${classes.segment} ${classes.segment_active}`
-                        : classes.segment}
-                      aria-pressed={sex === 'male'}
-                      title={sex === 'male' ? 'Click again to clear' : undefined}
-                      onClick={this.handleSexMale}
-                    >
-                      Male
-                    </button>
-                  </div>
-                </div>
+                <DateOfBirthField
+                  className={classes.field_dob}
+                  value={dateOfBirth}
+                  onChange={this.handleDateOfBirthChange}
+                  onKeyDown={this.handleKeyDown}
+                />
+                <SexField value={sex} onChange={this.handleSexChange} />
                 <span className={classes.form_spacer} />
                 <div className={classes.form_action}>
                   <span className={classes.field_label} aria-hidden="true">

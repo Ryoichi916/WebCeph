@@ -39,7 +39,13 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  flex: 0 1 auto;
   min-width: 0;
+  // The chart-ID and demographics chips do not shrink, so on a narrow bar the
+  // identity block used to paint over the action labels beside it. It clips
+  // instead — and the two chips step aside entirely below (see the queries at
+  // the end of this file).
+  overflow: hidden;
   margin: 0;
   padding: 4px 8px;
   border: none;
@@ -56,6 +62,16 @@
   &:focus {
     outline: none;
     box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.6);
+  }
+
+  // While the records dashboard is the surface on screen, the identity pill is
+  // pressed — it is the control that got you there, and it takes you back.
+  &__active {
+    background: rgba(255, 255, 255, 0.20);
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.26);
+    }
   }
 }
 
@@ -152,5 +168,115 @@
     background: rgba(255, 255, 255, 0.12);
     color: #FFFFFF;
     outline: none;
+  }
+}
+
+// ----------------------------------------------------------------- responsive
+// The bar gives up its quiet metadata before it gives up a named action: age ·
+// sex first, then the chart-ID chip, then the name's width. The record count and
+// the three actions are what the bar is for and are the last to go.
+
+@media (max-width: 900px) {
+  .divider {
+    margin: 0 10px;
+  }
+
+  .demographics {
+    display: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .chart_id {
+    display: none;
+  }
+
+  .patient_name {
+    max-width: 180px;
+  }
+}
+
+@media (max-width: 620px) {
+  .root {
+    padding: 0 4px 0 10px;
+  }
+
+  .wordmark,
+  .divider {
+    display: none;
+  }
+
+  .patient_name {
+    max-width: 120px;
+  }
+}
+
+// --------------------------------------------------------------------- print
+// The bar is the page's letterhead on paper: who this sheet belongs to. Printers
+// strip backgrounds by default, so white-on-blue would have printed the patient's
+// name as nothing at all — the band inverts to dark type on white, keeps the
+// identity, and drops the controls, which mean nothing on paper. The name and the
+// chart ID are unclamped: the screen's 320px cap cut a long name mid-word and the
+// chart pill printed as "C-2026-000".
+@media print {
+  // …except on the records dashboard, which prints a running head of its own on
+  // every sheet (RecordsDashboard `.print_head`: "IMAGING RECORDS · name ·
+  // chart · DOB · sex"). With both on the sheet the patient was named twice in
+  // adjacent rows, 35px apart, and the duplicate cost the chart a band of the
+  // first page. The dashboard sets this class on <body> while it is the open
+  // surface.
+  :global(body.records-dashboard-open) & {
+    display: none !important;
+  }
+
+  .root {
+    height: auto;
+    min-height: 0;
+    padding: 0 0 6pt;
+    background: #FFFFFF;
+    color: $text-primary;
+    box-shadow: none;
+    border-bottom: 1px solid $border-strong;
+  }
+
+  .wordmark {
+    color: $text-primary;
+  }
+
+  .divider,
+  .actions {
+    display: none !important;
+  }
+
+  .patient {
+    padding: 0;
+    background: transparent !important;
+    overflow: visible;
+  }
+
+  .patient_avatar {
+    background: $bg-sunken;
+    color: $text-secondary;
+  }
+
+  .patient_name {
+    max-width: none;
+    overflow: visible;
+    white-space: normal;
+    color: $text-primary;
+  }
+
+  .chart_id {
+    display: inline-flex !important;
+    max-width: none;
+    background: $bg-sunken;
+    color: $text-secondary;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .demographics {
+    display: inline !important;
+    color: $text-secondary;
   }
 }

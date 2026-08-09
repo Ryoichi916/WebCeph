@@ -71,12 +71,19 @@ export default class RecordMetaFields
           </label>
           <label className={cx(classes.record_field, classes.record_field__timepoint)}>
             <span className={classes.record_label}>Timepoint</span>
+            {/* The cap is a guard against a pasted paragraph, not an editorial
+                decision: at 16 characters a typed "T2 post-treatment" was
+                *stored* as "T2 post-treatmen", and that stump then identified
+                the record on its card, in its tooltip, in the edit and remove
+                labels and in the remove confirmation. Long labels are truncated
+                for display where they are displayed (with the full text in the
+                tooltip) — never on the way into the record. */}
             <input
               type="text"
               className={classes.record_input}
               value={timepoint || ''}
               placeholder="T1"
-              maxLength={16}
+              maxLength={64}
               onChange={this.handleTimepointChange}
             />
             <span className={classes.record_help}>T1, T2, T3…</span>
@@ -90,12 +97,14 @@ export default class RecordMetaFields
               max={maxCaptureDate !== undefined ? maxCaptureDate : getTodayISO()}
               onChange={this.handleCaptureDateChange}
             />
+            {/* Labelled: this slot states what will be written to the record,
+                and must not be read as a hint about the field above it. */}
             <span
               className={cx(classes.record_help, classes.record_help__num, {
                 [classes.record_help__unset]: dateEcho === null,
               })}
             >
-              {dateEcho !== null ? dateEcho : 'YYYY-MM-DD'}
+              Stored as {dateEcho !== null ? dateEcho : 'YYYY-MM-DD'}
             </span>
           </label>
         </div>

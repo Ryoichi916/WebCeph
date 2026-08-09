@@ -13,10 +13,12 @@ import {
   getActivePatientId,
 } from 'store/reducers/patients';
 import { getPatientRecords } from 'store/reducers/workspace';
+import { isRecordsDashboardShown } from 'store/reducers/workspace/records';
 
 const mapStateToProps = (state: StoreState): StateProps & { activeId: string | null } => ({
   activePatient: getActivePatient(state),
   recordCount: getPatientRecords(state).length,
+  isRecordsShown: isRecordsDashboardShown(state),
   activeId: getActivePatientId(state),
 });
 
@@ -39,7 +41,9 @@ const mergeProps = (
     // Returning to the picker clears the active patient; the project stays in
     // memory until another patient is opened (which loads over it).
     onChangePatient: () => dispatch(setActivePatient({ id: null })),
-    onOpenRecords: () => dispatch(setRecordsDashboardShown({ isShown: true })),
+    onToggleRecords: () => dispatch(setRecordsDashboardShown({
+      isShown: !stateProps.isRecordsShown,
+    })),
   };
 };
 

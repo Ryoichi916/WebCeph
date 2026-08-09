@@ -24,7 +24,7 @@ import {
 // tracing is typeset the same way on screen and on paper.
 import { groupFindings, alsoFindingLabel, AlsoFinding } from './grouping';
 
-import { formatCaptureDate } from 'utils/records';
+import { formatCaptureDate, getTimepointToken } from 'utils/records';
 
 import {
   hasNorm, isSdBand, normSd, rangeExcess,
@@ -573,6 +573,33 @@ const secondaryIconStyle: React.CSSProperties = {
   marginLeft: 10,
 };
 
+/**
+ * The app's timepoint badge: a filled pill carrying the label's first token,
+ * with the rest of a free-text label written beside it in caption type.
+ *
+ * One construction for one fact. This is the badge the records dashboard's
+ * timeline stamp uses; the whole label set inside a single pill (what this title
+ * row used to do) is the version that breaks on the labels a clinician actually
+ * types — "T2 post-treatment, post-RME" filled the pill, pushed the film date
+ * off the row, and read as a different kind of thing from the same timepoint on
+ * the dashboard.
+ */
+const renderTimepointBadge = (timepoint: string) => {
+  const token = getTimepointToken(timepoint);
+  if (token === null) {
+    return null;
+  }
+  const rest = timepoint.trim().slice(token.length).trim();
+  return (
+    <span className={classes.title_timepoint_group} title={timepoint}>
+      <span className={classes.title_timepoint}>{token}</span>
+      {rest !== '' ? (
+        <span className={classes.title_timepoint_note}>{rest}</span>
+      ) : null}
+    </span>
+  );
+};
+
 interface ViewerState {
   copied: boolean;
 }
@@ -640,10 +667,14 @@ export class AnalysisResultsViewer extends React.PureComponent<Props, ViewerStat
                   <span className={classes.title_badge}>{analysisName}</span>
                 ) : null}
                 {/* Which film these numbers came from — read off the record, so
-                    it is absent rather than invented when unrecorded. */}
-                {timepoint !== null ? (
-                  <span className={classes.title_timepoint}>{timepoint}</span>
-                ) : null}
+                    it is absent rather than invented when unrecorded.
+                    One timepoint badge across the app: the pill carries the
+                    label's first token ("T2" out of "T2 post-treatment"), the
+                    rest of it is written beside the pill. Set whole in the pill,
+                    a free-text label pushed the film date off the title row and
+                    disagreed with the records dashboard's own stamp for the same
+                    timepoint. */}
+                {timepoint !== null ? renderTimepointBadge(timepoint) : null}
                 {formatCaptureDate(captureDate) !== null ? (
                   <span className={classes.title_filmdate}>
                     Film {formatCaptureDate(captureDate)}

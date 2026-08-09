@@ -53,7 +53,7 @@ import {
   measurementsAre,
   landmarkCount,
 } from 'components/ClinicalReport/copy';
-import { formatMmPx } from 'components/TracingToolbar/CalibrationDialog';
+import { formatScale } from 'components/TracingToolbar/CalibrationDialog';
 // The practice identity is the clinical report's, read back here so the two
 // printed sheets are signed to the same standard.
 import { readLetterhead, formatClinicianLine } from 'components/ClinicalReport/letterhead';
@@ -985,9 +985,9 @@ export default class Superimposition extends React.PureComponent<Props, State> {
             {t1.scaleFactor === null && t2.scaleFactor === null
               ? 'neither carries an mm/px calibration'
               : `only ${t1.scaleFactor === null ? 'T2' : 'T1'} is calibrated ` +
-                `(${formatMmPx((t1.scaleFactor !== null
+                `(${formatScale((t1.scaleFactor !== null
                   ? t1.scaleFactor
-                  : t2.scaleFactor) as number, 3)} mm/px)`}
+                  : t2.scaleFactor) as number)})`}
             . Calibrate both from the toolbar to have the overlay corrected for
             film magnification.
           </p>

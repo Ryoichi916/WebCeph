@@ -15,12 +15,15 @@ import {
   PatientRecord,
 } from 'store/reducers/workspace';
 
-import { isRecordsDashboardShown } from 'store/reducers/workspace/records';
-
 import { getWorkspacesIdsInOrder } from 'store/reducers/workspace/order';
 import { getWorkspaceImageIds } from 'store/reducers/workspace/settings';
 
-import { getActivePatient } from 'store/reducers/patients';
+import {
+  getActivePatient,
+  getPatientsList,
+} from 'store/reducers/patients';
+
+import { PatientDetails } from 'components/PatientFields';
 
 import {
   setRecordsDashboardShown,
@@ -29,6 +32,7 @@ import {
   addNewWorkspace,
   removeWorkspace,
   setImageProps,
+  updatePatient,
   closeImage,
 } from 'actions/workspace';
 
@@ -44,15 +48,20 @@ const findEmptyWorkspaceId = (state: StoreState): string | null => {
   return null;
 };
 
-const mapStateToProps = (state: StoreState): StateProps => ({
-  open: isRecordsDashboardShown(state),
-  patient: getActivePatient(state),
-  records: getPatientRecords(state),
-  emptyWorkspaceId: findEmptyWorkspaceId(state),
-});
+const mapStateToProps = (state: StoreState): StateProps => {
+  const patient = getActivePatient(state);
+  return {
+    patient,
+    records: getPatientRecords(state),
+    otherChartIds: getPatientsList(state)
+      .filter((p) => patient === null || p.id !== patient.id)
+      .map((p) => p.chartId || ''),
+    emptyWorkspaceId: findEmptyWorkspaceId(state),
+  };
+};
 
 const mapDispatchToProps = (dispatch: GenericDispatch): DispatchProps => ({
-  onRequestClose: () => dispatch(setRecordsDashboardShown({ isShown: false })),
+  onBackToEditor: () => dispatch(setRecordsDashboardShown({ isShown: false })),
   // Opening a record switches to the rail tile that holds it and makes it that
   // workspace's active image, then closes the dashboard so the editor is
   // immediately usable.
@@ -75,6 +84,18 @@ const mapDispatchToProps = (dispatch: GenericDispatch): DispatchProps => ({
       dispatch(setActiveWorkspace({ id }));
     }
     dispatch(setRecordsDashboardShown({ isShown: false }));
+  },
+  // A patient's own details are corrected with the same action registration
+  // uses, so the persistence middleware saves the corrected record exactly the
+  // way it saved the original.
+  onSavePatient: (id: string, details: PatientDetails) => {
+    dispatch(updatePatient({
+      id,
+      name: details.name,
+      chartId: details.chartId,
+      dateOfBirth: details.dateOfBirth,
+      sex: details.sex,
+    }));
   },
   // Record metadata is stored on the image props, so correcting it is the same
   // action the importer uses. The image reducer re-reconciles the active
