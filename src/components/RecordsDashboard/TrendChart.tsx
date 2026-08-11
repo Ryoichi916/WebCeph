@@ -433,42 +433,79 @@ interface CellScale {
 /**
  * Where the shared axis ends, and where a reading beyond it becomes a marker.
  *
- * It was ±3 SD with air to ±3.55, which put about 45% of every cell's height
- * into a reserve that is empty in most cells: measured on a three-film Downs
- * board, 1 SD was 12px and the whole data band 46px of an 83px plot, so 1° of
- * FMPA moved a dot 3.8px. The axis is shared — that is the point of the grid —
- * so it cannot be fitted per cell; it can be *tight*, and the readings that run
- * past it are exactly the ones the outward-pointing clamp marker was drawn for.
- * At ±2.4 SD the same 1° of FMPA is 5.6px and a 3.4-SD reading is a triangle
- * with its own figure printed beside it, which is how the report's wigglegram
- * has always shown one.
+ * ±3 SD, because that is the envelope the *other* printed surface of this app
+ * already draws the same data class on: the clinical report's wigglegram marks a
+ * reading past ±3 SD at its edge ("◂ ▸ beyond ±3 SD" — see `RUNNING_KEY`), and a
+ * chart filed beside that report cannot call the same L1-OP off-axis at one
+ * figure here and at another there. One convention, both sheets.
+ *
+ * (It was ±2.4 for a while, to buy resolution inside the band — 1° of FMPA is
+ * 5.6px at ±2.4 and 4.5px at ±3 — which is not worth two sheets in one chart
+ * disagreeing about what "off the axis" means. The resolution that actually
+ * mattered came from `sdScale`'s own fitting below, which is what a cell whose
+ * readings are *all* off the shared axis is drawn on.)
  */
-const SD_LIMIT = 2.4;
+const SD_LIMIT = 3;
 /** Air beyond the clamp, so a clamped marker is drawn inside the frame. */
 const SD_PAD = 0.3;
 
-const sdScale = (): CellScale => ({
-  mode: 'sd',
-  min: -(SD_LIMIT + SD_PAD),
-  max: SD_LIMIT + SD_PAD,
-  // The wigglegram's own ladder: a mark at every standard deviation, with the
-  // mean and the ±2 bound named — the two boundaries the dot colour steps at.
-  ticks: [
-    { at: 2, label: '+2 SD' },
-    { at: 1, label: null },
-    { at: 0, label: 'MEAN' },
-    { at: -1, label: null },
-    { at: -2, label: '−2 SD' },
-  ],
-  at: (point) => Math.max(
-    -SD_LIMIT, Math.min(SD_LIMIT, point.row.z as number),
-  ),
-  off: (point) => {
-    const z = point.row.z as number;
-    return z > SD_LIMIT ? 1 : (z < -SD_LIMIT ? -1 : 0);
-  },
-  band: { inner: [-1, 1], outer: [-2, 2] },
-});
+/**
+ * Where a ±n SD envelope sits across the shared axis, as a fraction of the
+ * axis' whole span — the geometry the cells draw their two bands at, read by the
+ * key's own sample strip so the two can never disagree.
+ */
+const sdBandBox = (edge: number): React.CSSProperties => {
+  const half = SD_LIMIT + SD_PAD;
+  return {
+    left: `${(((half - edge) / (half * 2)) * 100).toFixed(3)}%`,
+    width: `${((edge / half) * 100).toFixed(3)}%`,
+  };
+};
+
+const sdScale = (series: TrendSeries): CellScale => {
+  const zs = series.points.map(({ row }) => row.z as number);
+  // Whether *any* of this cell's readings is on the shared axis at all.
+  //
+  // Where none is, the shared axis has nothing to say about the cell: L1-OP at
+  // +4.5 SD on every film of the record printed as an empty norm band with four
+  // clipped markers along its top edge, two identical figures and no line — two
+  // of ten cells on a routine case carrying no trajectory, on the one figure in
+  // the chart that is supposed to say what the treatment did. So the cell's own
+  // domain opens out until its data is inside it: the norm band compresses (it is
+  // still drawn, still labelled, and the ±2 SD tick still says where the second
+  // deviation is), the readings are plotted where they actually are, and the line
+  // between them is the trajectory. Nothing is clamped, so nothing is marked.
+  //
+  // Only for a cell with *nothing* on the shared axis. A cell with one reading in
+  // the band and one past it stays on the shared axis, where its neighbours are:
+  // that reading is what the edge marker exists for.
+  const onAxis = zs.some((z) => Math.abs(z) <= SD_LIMIT);
+  const reach = zs.reduce((most, z) => Math.max(most, Math.abs(z)), 0);
+  // Symmetric, and in half standard deviations, so the mean stays at the cell's
+  // own centre and the ticks land on figures a reader can name.
+  const limit = onAxis ? SD_LIMIT : Math.ceil((reach + 0.25) * 2) / 2;
+  const pad = onAxis ? SD_PAD : Math.max(SD_PAD, limit * 0.06);
+  return {
+    mode: 'sd',
+    min: -(limit + pad),
+    max: limit + pad,
+    // The wigglegram's own ladder: a mark at every standard deviation, with the
+    // mean and the ±2 bound named — the two boundaries the dot colour steps at.
+    ticks: [
+      { at: 2, label: '+2 SD' },
+      { at: 1, label: null },
+      { at: 0, label: 'MEAN' },
+      { at: -1, label: null },
+      { at: -2, label: '−2 SD' },
+    ],
+    at: (point) => Math.max(-limit, Math.min(limit, point.row.z as number)),
+    off: (point) => {
+      const z = point.row.z as number;
+      return z > limit ? 1 : (z < -limit ? -1 : 0);
+    },
+    band: { inner: [-1, 1], outer: [-2, 2] },
+  };
+};
 
 /**
  * The tick a unit family opens on: four of them make the family's own span, so
@@ -570,7 +607,7 @@ const nativeScale = (series: TrendSeries): CellScale => {
  */
 const scaleOf = (series: TrendSeries): CellScale => (
   series.points.every(({ row }) => row.z !== null && isFinite(row.z))
-    ? sdScale() : nativeScale(series)
+    ? sdScale(series) : nativeScale(series)
 );
 
 /** A per cent, for the HTML type layer laid over the plot. */
@@ -586,23 +623,6 @@ const pc = (fraction: number): string => `${(fraction * 100).toFixed(3)}%`;
 // dot's slope: measured, then separated — flipped to the other side of the line,
 // nudged along x, and only as a last resort dropped (never the first or the last
 // film, which are the two the printed net change is measured between).
-
-/**
- * Where a two-film cell's step figure hangs off its anchor: clear of the segment
- * above it, tucked just above the segment, or under it. The three transforms are
- * `.tc_delta`'s own (see the stylesheet); these are the boxes they produce, in px
- * from the anchor, for a 10.5px/1.3 line.
- */
-type DeltaMode = 'above' | 'tight' | 'below';
-
-const DELTA_H = 13.65;
-/** How far past the foot of the plot the figure's line box may reach. */
-const DELTA_SLACK = 2;
-const DELTA_BOX: { [mode: string]: { lo: number; hi: number } } = {
-  above: { lo: -1.6 * DELTA_H, hi: -0.6 * DELTA_H },
-  tight: { lo: -1.15 * DELTA_H, hi: -0.15 * DELTA_H },
-  below: { lo: 0.6 * DELTA_H, hi: 1.6 * DELTA_H },
-};
 
 /** How a cell places one printed figure. */
 interface ValPlace {
@@ -873,9 +893,14 @@ class Sparkline extends React.PureComponent<SparklineProps, SparklineState> {
     // readings: all of them. More: the two the net change is measured between,
     // with the rest a hover or a focus away — twelve figures in a 190px cell is a
     // table, and the table is below.
+    // …and a reading drawn at the frame rather than at its own value always
+    // carries its figure, whatever the film count: the marker says only "past the
+    // axis", so a marker with no figure beside it is a reading the sheet does not
+    // state. The key promises exactly this ("its value is printed beside the
+    // marker").
     const labelled = series.points.map(
-      (_, i) => series.points.length <= 3 ||
-        i === 0 || i === series.points.length - 1,
+      (point, i) => series.points.length <= 3 ||
+        i === 0 || i === series.points.length - 1 || scale.off(point) !== 0,
     );
     // …and where each of them goes, laid out as a set (see `placeValues`). The box
     // is measured, so the pass works in the px the figures are actually set in
@@ -911,8 +936,20 @@ class Sparkline extends React.PureComponent<SparklineProps, SparklineState> {
       }),
       boxW, boxH,
     );
-    const delta = twoPoint && series.net !== null
-      ? this.placeDelta(scale, series, y, py, H, boxH) : null;
+    // Which readings are off the shared axis — drawn at the frame as the
+    // wigglegram's outward marker rather than at their own value — and therefore
+    // which segments of the trend line may honestly be drawn (see below).
+    const clamped = series.points.map((point) => scale.off(point) !== 0);
+    const lineRuns: string[][] = [];
+    series.points.forEach((_, i) => {
+      const at = `${px[i]},${py[i]}`;
+      const joined = i > 0 && !(clamped[i - 1] && clamped[i]);
+      if (joined && lineRuns.length > 0) {
+        lineRuns[lineRuns.length - 1].push(at);
+      } else {
+        lineRuns.push([at]);
+      }
+    });
     return (
       <div className={classes.tc_plotbox} ref={this.setBoxRef}>
         <svg
@@ -1029,10 +1066,21 @@ class Sparkline extends React.PureComponent<SparklineProps, SparklineState> {
             />
           ))}
 
-          <polyline
-            className={classes.tc_line}
-            points={series.points.map((_, i) => `${px[i]},${py[i]}`).join(' ')}
-          />
+          {/* The line, drawn only where both of its ends are readings *on* this
+              axis. A segment between two clamped markers has both endpoints
+              drawn at the frame rather than at the value, so the line it draws
+              is a slope the data does not have: L1-OP at 30.1° against
+              14.5 ± 3.5 is +4.5 SD at all three visits, and it printed as a flat
+              blue line at just past ±2 SD — a shape that is not the readings.
+              Where the segment is dropped the markers and their printed figures
+              remain, which is what the key's "read the figure" points at. */}
+          {lineRuns.filter((run) => run.length > 1).map((run, i) => (
+            <polyline
+              key={i}
+              className={classes.tc_line}
+              points={run.join(' ')}
+            />
+          ))}
         </svg>
 
         {/* ---- the type, outside the scaled drawing ---- */}
@@ -1061,25 +1109,12 @@ class Sparkline extends React.PureComponent<SparklineProps, SparklineState> {
           </span>
         ))}
 
-        {/* What the record most practices hold looks like: two films, one segment.
-            There is no shape to read at n = 2, so the cell is a dumbbell instead —
-            both readings printed at their dots and the step between them printed
-            on the segment, over the norm band both were graded against. */}
-        {delta !== null && series.net !== null ? (
-          <span
-            className={cx(classes.tc_delta, {
-              [classes.tc_delta__within]: series.net.isWithinError,
-              [classes.tc_delta__tight]: delta.mode === 'tight',
-              [classes.tc_delta__below]: delta.mode === 'below',
-            })}
-            style={{
-              left: pc(((px[0] + px[1]) / 2) / W),
-              top: pc(delta.top),
-            }}
-          >
-            {displaySigned(series.net.change)}{series.unit}
-          </span>
-        ) : null}
+        {/* The net change is *not* drawn here at any film count — it is in the
+            cell's head, at the same place in every cell of every board (see
+            `renderCell`). Printed on the segment at n = 2 and in the head from
+            n = 3 up, one figure had two homes: a clinician comparing this year's
+            sheet with last year's looked for the same number in two places
+            depending on how many films the record happened to hold. */}
 
         {series.points.map((point, i) => {
           const film = films[point.film];
@@ -1229,57 +1264,6 @@ class Sparkline extends React.PureComponent<SparklineProps, SparklineState> {
     if (changed) {
       this.setState({ box: { width, height }, widths });
     }
-  };
-
-  /**
-   * Where the two-film cell's step figure goes: on the segment it is the length
-   * of, inside the plot, and never on the norm's own hairline.
-   *
-   * It used to be placed at the midpoint of the segment with one flat upward
-   * offset, which put it in the cell's header row between the symbol and the
-   * span label when both readings were clamped to the top of the axis, and
-   * squarely on the dashed mean when the segment sat a hair under it — hiding the
-   * one line the figure is read against.
-   */
-  private placeDelta = (
-    scale: CellScale, series: TrendSeries,
-    y: (value: number) => number, py: number[], H: number, boxH: number,
-  ): { top: number; mode: DeltaMode } => {
-    const mid = ((py[0] + py[1]) / 2 / H) * boxH;
-    // The norm's own hairline, in the same px — the one line in the cell the
-    // figure must not be laid over, because it is the line the figure is read
-    // against.
-    const meanAt = scale.band !== null
-      ? (y(0) / H) * boxH
-      : (series.points[0].norm !== null && series.points[1].norm !== null
-        ? ((y(series.points[0].norm.mean) + y(series.points[1].norm.mean)) / 2 / H)
-          * boxH
-        : null);
-    // Away from the mean first, so a segment under the mean carries its figure
-    // under it and one over the mean carries it over: that is the direction with
-    // room in it, and it is also the direction that cannot cross the hairline.
-    const order: DeltaMode[] = meanAt === null || mid <= meanAt
-      ? ['above', 'tight', 'below']
-      : ['below', 'tight', 'above'];
-    // A figure may hang a hair past the foot of the plot — the x-tick row under it
-    // sits at the films' own positions, and this figure is between them.
-    const fits = (mode: DeltaMode) => mid + DELTA_BOX[mode].lo >= 0 &&
-      mid + DELTA_BOX[mode].hi <= boxH + DELTA_SLACK;
-    const clears = (mode: DeltaMode) => meanAt === null ||
-      meanAt < mid + DELTA_BOX[mode].lo - 2 ||
-      meanAt > mid + DELTA_BOX[mode].hi + 2;
-    let mode = order.filter((one) => fits(one) && clears(one))[0];
-    if (mode === undefined) {
-      mode = order.filter(fits)[0];
-    }
-    if (mode === undefined) {
-      mode = 'tight';
-    }
-    const low = Math.max(0, -DELTA_BOX[mode].lo);
-    const high = Math.max(
-      low, Math.min(boxH, boxH + DELTA_SLACK - DELTA_BOX[mode].hi),
-    );
-    return { top: Math.max(low, Math.min(high, mid)) / boxH, mode };
   };
 }
 
@@ -1433,6 +1417,12 @@ export default class TrendChart extends React.PureComponent<TrendChartProps, Sta
     const ordered = onAxis.concat(ownUnit);
     return (
       <section className={classes.trend} aria-label="Measurement trend">
+        {/* The panel's head and the axis strip its cells are scaled on, as one box
+            on paper (`display: contents` on screen — see `.trend_lede`). The head
+            wraps to two lines and a sheet edge fell between them: "Measurement
+            trend" printed as the last ink of sheet 1 with the list of what it plots
+            and the axis it is spaced on overleaf. */}
+        <div className={classes.trend_lede}>
         <div className={classes.findings_head}>
           <h3 className={classes.findings_title}>Measurement trend</h3>
           <span className={cx(classes.records_count, classes.trend_count)}>
@@ -1456,6 +1446,7 @@ export default class TrendChart extends React.PureComponent<TrendChartProps, Sta
           </p>
         </div>
         {this.renderAxisNote(films, axis)}
+        </div>
         {this.renderPicker(series, selected)}
         {shown.length > 0 ? (
           <div className={classes.trend_grid}>
@@ -1520,10 +1511,14 @@ export default class TrendChart extends React.PureComponent<TrendChartProps, Sta
               <span className={classes.tc_unit}>{tag}</span>
             ) : null}
             <span className={classes.tc_spacer} />
-            {/* …and on a two-film board the figure itself is on the segment,
-                between the two readings it is the difference of (see
-                `Sparkline`). */}
-            {one.net !== null && !twoPoint ? (
+            {/* The net change, in this one place at every film count. It used to
+                move: on a two-film board it was printed on the segment inside the
+                plot and only from three films up in this head, so the same figure
+                had two homes and which one it was in depended on how many films
+                the record happened to hold — a clinician comparing this year's
+                printed sheet with last year's looked in two places for it. The
+                span it is measured over is named directly under it. */}
+            {one.net !== null ? (
               <span
                 className={cx(classes.tc_net, {
                   [classes.tc_net__within]: one.net.isWithinError,
@@ -1583,12 +1578,23 @@ export default class TrendChart extends React.PureComponent<TrendChartProps, Sta
         <div className={classes.empty}>
           <TrendEmptyArt ghost />
           <p className={classes.empty_title}>No measurement plotted</p>
-          <p className={classes.empty_hint}>
-            {series.length === 1
-              ? 'The one measurement this record reports twice is above — tick ' +
-                'it to plot it.'
-              : `Tick any of the ${series.length} measurements above, or take ` +
-                'the board this analysis is read for.'}
+          <p className={cx(classes.empty_hint, classes.trend_empty_reason)}>
+            {/* On paper there are no chips to tick (see the print block), so the
+                sheet states what the record holds instead of naming a control. */}
+            <span className={classes.fb_note_screen}>
+              {series.length === 1
+                ? 'The one measurement this record reports twice is above — ' +
+                  'tick it to plot it.'
+                : `Tick any of the ${series.length} measurements above, or take ` +
+                  'the board this analysis is read for.'}
+            </span>
+            <span className={classes.fb_note_print}>
+              {series.length === 1
+                ? 'This record reports one measurement on two or more films, ' +
+                  'and none is plotted.'
+                : `This record reports ${series.length} measurements on two or ` +
+                  'more films, and none is plotted.'}
+            </span>
           </p>
           <span className={classes.empty_action}>
             <RaisedButton
@@ -1874,7 +1880,16 @@ export default class TrendChart extends React.PureComponent<TrendChartProps, Sta
         <div className={classes.fk}>
           <span className={cx(classes.fk_group, classes.tk_group)}>
             <span className={classes.fk_label}>Axis</span>
+            {/* The sample is the cell's own axis, painted at the cell's own
+                values: the ±2 envelope and the ±1 band are the same two tints
+                and the same two boundaries, placed off `SD_LIMIT`/`SD_PAD` so
+                the key cannot drift from the axis it names. Built as one
+                layered `background-image` it printed as a single pale wash with
+                the ±1 band covered over and the ±2 envelope bare white — a key
+                naming three marks and showing none of them. */}
             <span className={classes.tk_strip}>
+              <span className={classes.tk_env} style={sdBandBox(2)} />
+              <span className={classes.tk_band} style={sdBandBox(1)} />
               <span className={classes.tk_mean} />
             </span>
             <span className={classes.fk_note}>
@@ -1897,9 +1912,25 @@ export default class TrendChart extends React.PureComponent<TrendChartProps, Sta
           {hasOffAxis ? (
             <span className={classes.fk_group}>
               <span className={classes.fk_label}>Marker</span>
+              {/* Both directions. The key showed the upward marker alone while
+                  every off-axis mark on the sheet — a reading *below* −2.4 SD —
+                  was the downward one, so the key named a mark the chart did not
+                  make and did not name the mark it did. */}
               <span className={cx(classes.tk_dot, classes.tk_dot__off)} />
+              <span
+                className={cx(classes.tk_dot, classes.tk_dot__off,
+                  classes.tk_dot__offdown)}
+              />
+              {/* The same envelope, and as near the same words as a vertical
+                  axis allows, as the clinical report's own foot ("◂ ▸ beyond
+                  ±3 SD"): two sheets of one chart cannot call the same reading
+                  off-axis at two different deviations. And it points at the
+                  figure the marker carries rather than at "the figure" — the
+                  marker *is* in the figure, so the old wording sent the reader
+                  back to what they were already looking at. */}
               <span className={classes.fk_note}>
-                past ±{SD_LIMIT} SD, so off this axis — read the figure
+                beyond ±{SD_LIMIT} SD above or below, so off this axis — its
+                value is printed beside the marker
               </span>
             </span>
           ) : null}
@@ -1960,26 +1991,49 @@ export default class TrendChart extends React.PureComponent<TrendChartProps, Sta
       const when = token !== null ? token : (date !== null ? date : 'a film');
       return analysisName !== null ? `${when} ${analysisName}` : when;
     }).join(', ');
+    // Why there is no chart, written twice: as the screen's next step, and as the
+    // sheet's statement of record. "Run Auto-plot from its toolbar" on a filed
+    // chart instructs a reader who has no toolbar — the same swap `.slot_print`
+    // and `.fact_print` make wherever a control stood in for a fact.
     const reason = films.length === 0
       ? (allFilms.length === 1
-        ? 'The film on record reports nothing yet — trace it, or run Auto-plot ' +
-          'from its toolbar, and its measurements appear here.'
-        : `No film of this record reports a measurement yet — trace two of ` +
-          'them, at two different dates, and the trend is drawn from what they ' +
-          'report in common.')
+        ? {
+          screen: 'The film on record reports nothing yet — trace it, or run ' +
+            'Auto-plot from its toolbar, and its measurements appear here.',
+          print: 'The one film on record reports no measurements yet.',
+        }
+        : {
+          screen: 'No film of this record reports a measurement yet — trace ' +
+            'two of them, at two different dates, and the trend is drawn from ' +
+            'what they report in common.',
+          print: 'No film of this record reports a measurement yet.',
+        })
       : films.length === 1
-        ? `One film reports (${named}). A trend needs a second traced film, ` +
-          'captured on a different day.'
+        ? {
+          screen: `One film reports (${named}). A trend needs a second traced ` +
+            'film, captured on a different day.',
+          print: `One film reports (${named}). A trend needs a second traced ` +
+            'film, captured on a different day.',
+        }
         : days.length < 2
-          ? `${films.length} films report, all captured on ` +
-            `${days.length === 1 ? days[0] : 'the same day'} — a trend is ` +
-            'measured over time, so it needs films from different days.'
-          : `${named} — no measurement is reported on two of these films, so ` +
-            'there is nothing to follow across them.' +
-            (seriesCount === 0 && films.length > 1
-              ? ' Setting one analysis on both films gives them measurements in' +
-                ' common.'
-              : '');
+          ? {
+            screen: `${films.length} films report, all captured on ` +
+              `${days.length === 1 ? days[0] : 'the same day'} — a trend is ` +
+              'measured over time, so it needs films from different days.',
+            print: `${films.length} films report, all captured on ` +
+              `${days.length === 1 ? days[0] : 'the same day'} — a trend is ` +
+              'measured over time, so it needs films from different days.',
+          }
+          : {
+            screen: `${named} — no measurement is reported on two of these ` +
+              'films, so there is nothing to follow across them.' +
+              (seriesCount === 0 && films.length > 1
+                ? ' Setting one analysis on both films gives them measurements' +
+                  ' in common.'
+                : ''),
+            print: `${named} — no measurement is reported on two of these ` +
+              'films, so there is nothing to follow across them.',
+          };
     // A film on file that reports nothing is the one case where the action is
     // not "add a film": it is to trace the film already there.
     const untraced = allFilms.filter(
@@ -1993,7 +2047,13 @@ export default class TrendChart extends React.PureComponent<TrendChartProps, Sta
       <section className={classes.trend} aria-label="Measurement trend">
         <div className={classes.findings_head}>
           <h3 className={classes.findings_title}>Measurement trend</h3>
-          <span className={cx(classes.chip, classes.chip__muted)}>
+          {/* Screen only: on paper the panel's own sentence below is the whole
+              statement, and the chip beside the heading said the same thing a
+              second time. */}
+          <span
+            className={cx(classes.chip, classes.chip__muted,
+              classes.trend_empty_chip)}
+          >
             Nothing to plot yet
           </span>
           <span className={classes.records_spacer} />
@@ -2007,14 +2067,20 @@ export default class TrendChart extends React.PureComponent<TrendChartProps, Sta
           <p className={classes.empty_title}>
             Needs two traced films at different dates
           </p>
-          <p className={classes.empty_hint}>{reason}</p>
+          <p className={cx(classes.empty_hint, classes.trend_empty_reason)}>
+            <span className={classes.fb_note_screen}>{reason.screen}</span>
+            <span className={classes.fb_note_print}>{reason.print}</span>
+          </p>
           {undated > 0 ? (
             <p className={classes.empty_hint}>
               {undated === 1
                 ? '1 film that reports carries no capture date'
                 : `${undated} films that report carry no capture date`}
-              {' '}and cannot be placed on an axis — add the day it was taken
-              from its card above.
+              {' '}and cannot be placed on an axis
+              <span className={classes.fb_note_screen}>
+                {' '}— add the day it was taken from its card above.
+              </span>
+              <span className={classes.fb_note_print}>.</span>
             </p>
           ) : null}
           {canTrace || canAdd ? (

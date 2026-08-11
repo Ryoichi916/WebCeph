@@ -35,7 +35,12 @@ import {
 
 // The report's wording for the measurements a tracing cannot produce yet: the
 // note is a worklist, and it should read the same on the chart and on paper.
-import { missingLandmarksNote } from 'components/ClinicalReport/copy';
+import {
+  missingLandmarksNote,
+  missingLandmarksFact,
+  DEVIATION_STAR_STEPS,
+  DEVIATION_STAR_SCALE,
+} from 'components/ClinicalReport/copy';
 
 import {
   hasNorm,
@@ -540,6 +545,13 @@ const FilmStamp = ({ record }: { record: PatientRecord }) => {
           {rest}
         </span>
       ) : null}
+      {/* Paper only: the visit's whole name as one run of type, in place of the
+          reversed-out pill and the grey note beside it — the same swap the
+          timeline's own stamp makes (see `.visit_print`), so one visit is called
+          one thing on the sheet. */}
+      <span className={classes.visit_print}>
+        {label !== null ? label.trim() : 'No timepoint label'}
+      </span>
       {date !== null ? (
         <span className={classes.fb_date}>{date}</span>
       ) : (
@@ -897,17 +909,36 @@ const FilmBlock = (
   };
   // Why the film has no findings, said in the analysis' own terms rather than
   // left as an empty row. Same branch order the report's contents page uses.
-  const nothingReported = analysisId === null
-    ? 'No analysis is set on this film.'
-    : rows.length === 0
-      ? (record.landmarksPlaced === 0
-        ? 'Not traced yet — plot the analysis’ landmarks, or run Auto-plot ' +
-          'from the toolbar, and the findings appear here.'
-        : totalCount > 0 && pendingScaleCount === totalCount
-          ? 'Every measurement of this analysis is linear — the film needs a ' +
-            'mm/px scale before any of them can be reported.'
-          : 'Nothing computes from this tracing yet.')
-      : null;
+  //
+  // Each reason is written twice: as the screen's next step, and as the sheet's
+  // statement of record. A filed chart that says "run Auto-plot from the
+  // toolbar" is instructing a reader who has no toolbar, and it is the one line
+  // of the block — so on paper it says what is on file instead.
+  const nothingReported: { screen: string; print: string } | null =
+    analysisId === null
+      ? {
+        screen: 'No analysis is set on this film.',
+        print: 'No analysis is set on this film.',
+      }
+      : rows.length === 0
+        ? (record.landmarksPlaced === 0
+          ? {
+            screen: 'Not traced yet — plot the analysis’ landmarks, or run ' +
+              'Auto-plot from the toolbar, and the findings appear here.',
+            print: 'Not traced — no measurements on file.',
+          }
+          : totalCount > 0 && pendingScaleCount === totalCount
+            ? {
+              screen: 'Every measurement of this analysis is linear — the film ' +
+                'needs a mm/px scale before any of them can be reported.',
+              print: 'Every measurement of this analysis is linear — the film ' +
+                'carries no mm/px scale, so none of them is reported.',
+            }
+            : {
+              screen: 'Nothing computes from this tracing yet.',
+              print: 'Nothing computes from this tracing yet.',
+            })
+        : null;
   // The block's head is the way to the film it describes. It used to carry a
   // filled pill in the app's primary tint — the same object as the interactive
   // chips on the record card 300px above — while the panel held nothing
@@ -953,32 +984,56 @@ const FilmBlock = (
             No analysis set
           </span>
         )}
-        {totalCount > 0 ? (
-          <span
-            className={classes.fb_measured}
-            title={`${analysisName} interprets ${totalCount} measurements; ` +
-              `${reportedCount} of them are reported from this tracing.`}
-          >
-            {reportedCount} of {totalCount} measured
+        {/* The two tallies are one run of type, and the rule between them
+            belongs *inside* it: as two independent flex children, a head made to
+            wrap by a long free-text timepoint broke between them and opened its
+            second line with a dangling vertical rule. Grouped, the pair wraps
+            whole and the rule is never the first glyph on a line. */}
+        {(totalCount > 0) || (plotted > 0 && reportable > 0) ? (
+          <span className={classes.fb_tally}>
+            {totalCount > 0 ? (
+              <span
+                className={classes.fb_measured}
+                title={`${analysisName} interprets ${totalCount} measurements; ` +
+                  `${reportedCount} of them are reported from this tracing.`}
+              >
+                {reportedCount} of {totalCount} measured
+              </span>
+            ) : null}
+            {plotted > 0 && reportable > 0 ? (
+              <span
+                className={classes.fb_plotted}
+                title={'Every landmark these analyses need is already on this ' +
+                  `tracing, so any of them can be read from it without plotting ` +
+                  `anything further: ${plottedAnalyses.join(', ')}.`}
+              >
+                {plotted} of {reportable} analyses plotted
+              </span>
+            ) : null}
           </span>
         ) : null}
-        {plotted > 0 && reportable > 0 ? (
-          <span
-            className={classes.fb_plotted}
-            title={'Every landmark these analyses need is already on this ' +
-              `tracing, so any of them can be read from it without plotting ` +
-              `anything further: ${plottedAnalyses.join(', ')}.`}
-          >
-            {plotted} of {reportable} analyses plotted
-          </span>
+        {/* Paper only, and only where the block's CHANGE column would otherwise
+            be five em-dashes: the reason it has none (see `.fv__first`). */}
+        {!hasEarlierFilm && showChange ? (
+          <span className={classes.fb_first_print}>first film on record</span>
         ) : null}
         {/* Screen only: on a printed chart there is no editor to open. */}
         <span className={classes.fb_go} aria-hidden="true">Open film</span>
       </button>
 
       {nothingReported !== null ? (
-        <div className={classes.fb_body}>
-          <p className={classes.fb_none}>{nothingReported}</p>
+        // A block with nothing to report is two or three lines long: on paper it
+        // is held whole (see `.fb_body__none`), so a sheet can never end on this
+        // film's name with its one sentence and the panel's key overleaf.
+        <div className={cx(classes.fb_body, classes.fb_body__none)}>
+          <p className={classes.fb_none}>
+            <span className={classes.fb_note_screen}>
+              {nothingReported.screen}
+            </span>
+            <span className={classes.fb_note_print}>
+              {nothingReported.print}
+            </span>
+          </p>
           <Caveats caveats={caveats} markerFor={markerFor} />
         </div>
       ) : (
@@ -1036,6 +1091,12 @@ const FilmBlock = (
             className={cx(classes.fv, {
               [classes.fv__nostrip]: !showStrip,
               [classes.fv__nochange]: !showChange,
+              // No earlier film reports anything, so every cell of this block's
+              // CHANGE column is an em-dash. On screen the column stays, because
+              // the blocks are read down one page and one column anatomy is what
+              // lets them be compared; on paper the column goes and the head says
+              // why (see the print block).
+              [classes.fv__first]: showChange && !hasEarlierFilm,
             })}
             role="table"
             aria-label={`${analysisName !== null ? analysisName : 'This analysis'}` +
@@ -1135,7 +1196,11 @@ const FilmBlock = (
                   <span
                     key="c"
                     role="columnheader"
-                    className={classes.fv_col}
+                    // Its own class as well as the column head's: on paper the
+                    // first film of the record drops this column outright (see
+                    // `.fv__first`), and a heading over nothing is worse than no
+                    // heading.
+                    className={cx(classes.fv_col, classes.fv_col__change)}
                     title={'Against the same measurement on the previous film ' +
                       'of this record that reports it'}
                   >
@@ -1184,7 +1249,16 @@ const FilmBlock = (
         ) : null}
         {missingLandmarkCount > 0 ? (
           <p className={classes.fb_note}>
-            {missingLandmarksNote(missingLandmarkCount, missingSymbols)}
+            {/* On screen it is a worklist — it names where to place them. On
+                paper the instruction is something nobody can carry out, so the
+                filed sheet states what is outstanding and stops (the same swap
+                `.slot_print` and `.fact_print` make). */}
+            <span className={classes.fb_note_screen}>
+              {missingLandmarksNote(missingLandmarkCount, missingSymbols)}
+            </span>
+            <span className={classes.fb_note_print}>
+              {missingLandmarksFact(missingLandmarkCount, missingSymbols)}
+            </span>
           </p>
         ) : null}
         {/* …and the norms these figures were graded against — unless every block
@@ -1275,49 +1349,67 @@ const AnalysisFindings = ({ films, onOpenFilm }: AnalysisFindingsProps) => {
   const hoistedNorms = notes.length > 1 && notes.every(
     ({ lede, full }) => lede === notes[0].lede && full === notes[0].full,
   ) ? reporting[0] : null;
-  return (
-    <section className={classes.findings} aria-label="Analysis findings">
-      <div className={classes.findings_head}>
+  // The section's head, in one place and rendered twice: as the panel's own bar
+  // on screen, and — on paper — as the first line *inside* the first film's group
+  // (see `.findings_lede`).
+  //
+  // Chrome honours `break-inside: avoid` and nothing else about page breaks: a
+  // `break-after: avoid` on a heading, or a `break-before: avoid` on what follows
+  // it, is silently ignored (verified on this sheet at both A4 depths). So a
+  // heading is kept off the foot of a sheet the only way that works — by being
+  // *inside* the same unbreakable box as the content it introduces. The two copies
+  // carry one set of strings, and exactly one of them is displayed in each medium,
+  // which is the same swap this surface already makes for a dozen smaller facts
+  // (`.slot_print`, `.visit_print`, `.fb_note_print`).
+  const head = (forPrint: boolean) => (
+    <div
+      className={forPrint ? classes.findings_head_print : classes.findings_head}
+      aria-hidden={forPrint ? true : undefined}
+    >
+      {forPrint ? (
+        <span className={classes.findings_title}>Analysis findings</span>
+      ) : (
         <h3 className={classes.findings_title}>Analysis findings</h3>
-        <span className={classes.records_count}>
-          {reporting.length === films.length
-            ? (films.length === 1
-              ? '1 film reporting' : `${films.length} films reporting`)
-            : `${reporting.length} of ${films.length} ` +
-              `${films.length === 1 ? 'film' : 'films'} reporting`}
+      )}
+      <span className={classes.records_count}>
+        {reporting.length === films.length
+          ? (films.length === 1
+            ? '1 film reporting' : `${films.length} films reporting`)
+          : `${reporting.length} of ${films.length} ` +
+            `${films.length === 1 ? 'film' : 'films'} reporting`}
+      </span>
+      <span className={classes.records_spacer} />
+      <p className={classes.records_note}>
+        Read from each film’s own tracing, measured with the analysis set on
+        that film — the same values its Summary reports.
+        {/* Screen only: "open the film" is an instruction nobody can carry out
+            on a printed chart, and the chart is where these findings are read
+            once they leave the screen. */}
+        <span className={classes.findings_note_screen}>
+          {' '}Open a block’s head for that film’s full table and its norm
+          citations.
         </span>
-        <span className={classes.records_spacer} />
-        <p className={classes.records_note}>
-          Read from each film’s own tracing, measured with the analysis set on
-          that film — the same values its Summary reports.
-          {/* Screen only: "open the film" is an instruction nobody can carry out
-              on a printed chart, and the chart is where these findings are read
-              once they leave the screen. */}
-          <span className={classes.findings_note_screen}>
-            {' '}Open a block’s head for that film’s full table and its norm
-            citations.
-          </span>
-          {changeGap !== null ? (
-            <span className={classes.findings_note_gap}>{changeGap}</span>
-          ) : null}
-        </p>
-      </div>
-      <div className={classes.findings_body}>
-        {views.map((view) => (
-          <FilmBlock
-            key={view.film.record.imageId}
-            view={view}
-            onOpen={onOpenFilm}
-            showChange={hasChange}
-            hoistNorms={hoistedNorms !== null}
-          />
-        ))}
-      </div>
-      {/* One key for the panel, under the blocks it explains — the Summary's
-          own construction (its legend sits under its table). Every mark on the
-          rows above is named here once, rather than per block. */}
-      {reporting.length > 0 ? (
-        <div className={classes.findings_legend}>
+        {changeGap !== null ? (
+          <span className={classes.findings_note_gap}>{changeGap}</span>
+        ) : null}
+      </p>
+    </div>
+  );
+  // One key for the panel, under the blocks it explains — the Summary's own
+  // construction (its legend sits under its table). Every mark on the rows above is
+  // named here once, rather than per block.
+  //
+  // Rendered twice, exactly as the head is: the panel's own key on screen, and — on
+  // paper — a copy inside the last film's group, so the key can never print on a
+  // sheet of its own (see `.findings_coda`).
+  const legend = (forPrint: boolean) => (
+    reporting.length > 0 ? (
+      <div
+        className={forPrint
+          ? classes.findings_legend_print : classes.findings_legend}
+        aria-hidden={forPrint ? true : undefined}
+      >
+
           {/* The marks, *drawn* — one sample strip of each kind with its bands,
               its mean and a dot of each severity, beside the star scale they
               share. This key used to describe them instead: three lines of
@@ -1325,14 +1417,20 @@ const AnalysisFindings = ({ films, onOpenFilm }: AnalysisFindingsProps) => {
               naming a band, a lighter band, an amber dot, a red dot and two
               arrow glyphs, none of which was on the page beside its own name. */}
           <div className={classes.fk}>
+            {/* The star scale, in the words the printed report's own foot keys
+                it with (see `deviationStarKey`) — the same three marks on the
+                same data, so a records sheet and a report filed in one chart
+                cannot word one key two ways. The stars themselves are drawn in
+                the star colour rather than set in the sentence, which is this
+                surface's own idiom and the Summary's. */}
             <span className={classes.fk_group}>
               <span className={classes.fk_label}>Deviation</span>
-              <span className={classes.findings_legend_stars}>*</span>
-              <span className={classes.fk_note}>over 1 SD</span>
-              <span className={classes.findings_legend_stars}>**</span>
-              <span className={classes.fk_note}>over 2</span>
-              <span className={classes.findings_legend_stars}>***</span>
-              <span className={classes.fk_note}>over 3</span>
+              {DEVIATION_STAR_STEPS.map((step) => (
+                <span key={step} className={classes.findings_legend_stars}>
+                  {step}
+                </span>
+              ))}
+              <span className={classes.fk_note}>= {DEVIATION_STAR_SCALE}</span>
             </span>
             {hasSdStrip ? (
               <span
@@ -1406,8 +1504,49 @@ const AnalysisFindings = ({ films, onOpenFilm }: AnalysisFindingsProps) => {
           {hoistedNorms !== null ? (
             <NormsLineNote film={hoistedNorms} />
           ) : null}
-        </div>
-      ) : null}
+      </div>
+    ) : null
+  );
+  return (
+    <section className={classes.findings} aria-label="Analysis findings">
+      {head(false)}
+      <div className={classes.findings_body}>
+        {views.map((view, index) => {
+          const block = (
+            <FilmBlock
+              key={view.film.record.imageId}
+              view={view}
+              onOpen={onOpenFilm}
+              showChange={hasChange}
+              hoistNorms={hoistedNorms !== null}
+            />
+          );
+          const isFirst = index === 0;
+          const isLast = index === views.length - 1;
+          if (!isFirst && !isLast) {
+            return block;
+          }
+          // The printed head goes with the first block and the printed key with
+          // the last, each as one unbreakable box on paper — the only way either
+          // stays with the films it belongs to (see `.findings_lede`). On screen
+          // the wrapper is `display: contents` and both copies are hidden, so the
+          // block is exactly the flex child of the well it has always been.
+          return (
+            <div
+              key={isFirst ? 'lede' : 'coda'}
+              className={cx({
+                [classes.findings_lede]: isFirst,
+                [classes.findings_coda]: isLast,
+              })}
+            >
+              {isFirst ? head(true) : null}
+              {block}
+              {isLast ? legend(true) : null}
+            </div>
+          );
+        })}
+      </div>
+      {legend(false)}
     </section>
   );
 };

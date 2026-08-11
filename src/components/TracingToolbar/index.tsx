@@ -146,7 +146,7 @@ export default class TracingToolbar extends React.PureComponent<Props, State> {
       <div className={cx(classes.root, className)} role="toolbar" aria-label="Tracing actions">
         <button
           type="button"
-          className={cx(classes.button, {
+          className={cx(classes.button, classes.button__elastic, {
             [classes.button__open]: openMenu === 'analysis',
           })}
           disabled={!hasImage}
@@ -255,9 +255,12 @@ export default class TracingToolbar extends React.PureComponent<Props, State> {
         {record !== null ? (
           <button
             type="button"
-            className={cx(classes.button, {
-              [classes.button__open]: openMenu === 'record',
-            })}
+            className={cx(
+              classes.button,
+              classes.button__elastic,
+              classes.button__elastic_spare,
+              { [classes.button__open]: openMenu === 'record' },
+            )}
             title={`This image: ${describeRecord(record)}. ` +
               'Correct its record details, or remove it from the record.'}
             aria-label={`Record: ${describeRecord(record)}`}

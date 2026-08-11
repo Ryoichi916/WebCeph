@@ -2,7 +2,10 @@ import * as React from 'react';
 
 import * as cx from 'classnames';
 
+import { Helmet } from 'react-helmet';
+
 import RaisedButton from 'material-ui/RaisedButton';
+import IconPrint from 'material-ui/svg-icons/action/print';
 import IconChevron from 'material-ui/svg-icons/navigation/chevron-right';
 import IconPrev from 'material-ui/svg-icons/navigation/chevron-left';
 import IconBack from 'material-ui/svg-icons/navigation/arrow-back';
@@ -42,10 +45,37 @@ import { PatientDetails } from 'components/PatientFields';
 
 import { formatScale } from 'components/TracingToolbar/CalibrationDialog';
 
+// The practice identity every printable view of this app reads back (see
+// `letterhead.ts`): the records sheet was the one printed surface that did not.
+import {
+  readLetterhead,
+  formatClinicianLine,
+} from 'components/ClinicalReport/letterhead';
+
+// …and the printed page's own plumbing, from the view that established it: the
+// same font stack in the `@page` margin boxes, the same string escaping, and the
+// date form a *document* of this app states as its own — the very form the
+// report's masthead prints, so two sheets filed in one chart cannot date
+// themselves two ways. (The record's own dates — capture days — stay ISO on both
+// sheets: those are facts about the films, printed as the record stores them.)
+import {
+  PRINT_FONT,
+  cssString,
+  documentDate,
+} from 'components/ClinicalReport';
+
 import {
   formatAgeFull,
   formatSexFull,
 } from 'utils/patient';
+
+// What a "Save as PDF" of this sheet is called. Every other printable view of
+// this app declares its own document title for as long as it is mounted, because
+// the app titles the tab from the active workspace — the operator's scan file —
+// and Chrome names the PDF after `document.title`. Without this the case sheet
+// saved as `test-ceph.jpg - WebCeph.pdf`: a chart document named after neither
+// the patient nor the document.
+import { printDocumentTitle } from 'utils/printTitle';
 
 import {
   getImageTypeLabel,
@@ -91,6 +121,21 @@ const LAUNCH_ICON = '#1F2933';      // $text-primary — matches the pill's labe
 const LAUNCH_ICON_OFF = '#A9B4BE';  // $text-disabled
 const SUPERIMPOSE_ICON = '#1565C0'; // $primary-600 — matches its blue label
 const NAV_ICON = '#52616F';         // $text-secondary — the chevrons' own colour
+
+/**
+ * The standing every "not on file" statement on this surface is made under —
+ * printed once on paper, and once on screen at the foot of the coverage pane.
+ *
+ * It is what makes the omissions fair: a chart that lists five uppercase rows of
+ * types a visit does not hold, with nothing anywhere saying those types were
+ * never required, reads as a record of what the practice failed to take. The
+ * coverage pane the sentence lives in on screen is screen-only (a wide-window
+ * reading of what each visit prints for itself), so the sheet carried the
+ * omissions and not the qualifier.
+ */
+const COVERAGE_QUALIFIER =
+  'What is on file, not a requirement — a case is complete without a ' +
+  'panoramic or a photographic series.';
 
 /**
  * How far a film's tracing has got, as one of the four readings the card chips
@@ -514,6 +559,8 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
   };
 
   private root: HTMLElement | null = null;
+  /** This surface's scrollport — wound back to the top before printing. */
+  private scrollRef: HTMLElement | null = null;
   private panel: HTMLElement | null = null;
   private head: HTMLElement | null = null;
   private foot: HTMLElement | null = null;
@@ -573,6 +620,11 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
         tabIndex={-1}
         ref={this.setRoot}
       >
+        {/* The sheet's own paper: A4, its margins, and the running foot that
+            dates and numbers it (see `renderPrintPageStyle`) — and the name the
+            printed document files itself under. */}
+        {this.renderDocumentTitle()}
+        {this.renderPrintPageStyle()}
         {/* Page bar. The way out of this surface is its first control and never
             scrolls away — this screen has no other exit. Its content sits in the
             page's own centred column (same max-width, same gutter at every
@@ -612,6 +664,26 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
               </span>
             </div>
             <span className={classes.pagebar_spacer} />
+            {/* The way this sheet gets onto paper. It is built to be printed —
+                A4 portrait, a running head repeated on every sheet, a page
+                counter in the foot, print-only type labels in the slots — and it
+                was the one printable view of this app with no control to print
+                it, so all of that was reachable only through the browser's own
+                Ctrl+P. Secondary, not primary: filing an image is what this
+                screen is for. Same mark and same wording as the report, the
+                simulation and the superimposition, because it is the same act.
+                Offered once there is a record to print. */}
+            {records.length > 0 ? (
+              <button
+                type="button"
+                className={classes.print_action}
+                title="Print this patient's imaging records, or save them as a PDF"
+                onClick={this.handlePrint}
+              >
+                <IconPrint color="currentColor" style={actionIconStyle} />
+                <span>Print / Save as PDF</span>
+              </button>
+            ) : null}
             {/* One primary action per view: with nothing on file the empty state
                 below owns it, and repeating it here would give the screen two.
                 The wrapper carries the surface's own focus ring — mui's pale
@@ -629,7 +701,11 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
           </div>
         </div>
 
-        <div className={classes.scroll} onScroll={this.updateStickyState}>
+        <div
+          className={classes.scroll}
+          onScroll={this.updateStickyState}
+          ref={this.setScroll}
+        >
           {/* A table, and a presentational one: the running head below has to
               repeat on every printed sheet, and a real `<thead>` is the only
               construction a browser repeats *and* reserves the space for —
@@ -694,7 +770,12 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
                   <div className={classes.empty}>
                     <EmptyIllustration />
                     <p className={classes.empty_title}>No images on file yet</p>
-                    <p className={classes.empty_hint}>
+                    {/* Screen only: "add a lateral cephalogram" is an
+                        instruction nobody can carry out on a sheet of paper, and
+                        the headline above it — "No images on file yet" — is the
+                        whole of what the sheet has to say. Same swap the slots
+                        and the identity band's gaps already make on paper. */}
+                    <p className={cx(classes.empty_hint, classes.empty_hint__offer)}>
                       Add a lateral cephalogram to start tracing. Frontal films,
                       panoramics and photographs can be filed alongside it.
                     </p>
@@ -723,7 +804,7 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
                       <span className={classes.slots_list}>
                         {IMAGE_TYPE_OPTIONS
                           .filter(({ id }) => id !== DEFAULT_IMAGE_TYPE)
-                          .map(({ id, slotLabel }) => (
+                          .map(({ id }) => (
                             <button
                               key={id}
                               type="button"
@@ -738,7 +819,7 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
                               <span className={classes.slot_label}>
                                 {getAddSlotLabel(id)}
                               </span>
-                              <span className={classes.slot_print}>{slotLabel}</span>
+                              <span className={classes.slot_print}>{getImageTypeLabel(id)}</span>
                             </button>
                           ))}
                       </span>
@@ -823,6 +904,7 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
   }
 
   private setRoot = (el: HTMLElement | null) => { this.root = el; };
+  private setScroll = (el: HTMLElement | null) => { this.scrollRef = el; };
   private setBandTrack = (el: HTMLElement | null) => {
     this.bandTrack = el;
     // A track that has gone away takes its parked position with it: the next one
@@ -1039,6 +1121,21 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
       parts.push(span.interval !== null
         ? `${span.dates} (${span.interval})` : span.dates);
     }
+    // Whose practice holds the record. Read from the one letterhead this app
+    // stores — the same practice, clinician and license the clinical report's
+    // masthead and the superimposition's signature block print — so a records
+    // sheet, a report and a superimposition filed together in one chart cannot
+    // be signed to two different standards. Never invented: with nothing stored
+    // the line is simply not there, and the printed-on date in the running foot
+    // still says which copy this is.
+    const letterhead = readLetterhead();
+    const clinicianLine = formatClinicianLine(letterhead);
+    // …and the practice is the first thing on that line, at a weight a chart
+    // reader can see it at. Set as one run of 8.5pt tertiary grey with the
+    // clinician's name and license, the practice that holds the record was the
+    // third, smallest, greyest line of the sheet — while the report's first sheet
+    // gives the same practice a masthead. Whose record this is is not a footnote.
+    const clinic = letterhead.clinic !== '' ? letterhead.clinic : null;
     return (
       <thead className={classes.print_head} aria-hidden="true">
         <tr>
@@ -1049,11 +1146,108 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
               {parts.length > 0 ? (
                 <span className={classes.print_head_facts}>{parts.join(' · ')}</span>
               ) : null}
+              {clinic !== null || clinicianLine !== '' ? (
+                <span className={classes.print_head_clinic}>
+                  {clinic !== null ? (
+                    <span className={classes.print_head_practice}>{clinic}</span>
+                  ) : null}
+                  {clinicianLine !== '' ? (
+                    <span className={classes.print_head_clinician}>
+                      {clinicianLine}
+                    </span>
+                  ) : null}
+                </span>
+              ) : null}
             </span>
           </th>
         </tr>
       </thead>
     );
+  };
+
+  /**
+   * The printed sheet's own paper geometry and its running foot.
+   *
+   * Declared here rather than in the stylesheet for two reasons. The record's
+   * paper size and margins used to be inherited from a global `@page` declared in
+   * *another component's* stylesheet (the clinical report's) that merely happened
+   * to share the bundle — code-splitting the report would silently have dropped
+   * this chart to the browser's default margins. And the foot carries a date,
+   * which is data: it is generated at render time, exactly as the report's own
+   * running head is (see `ClinicalReport#renderRunningPageStyle`, whose margin
+   * boxes and type this matches).
+   *
+   * The foot is what makes a printed chart filable: three loose sheets with no
+   * date and no page numbers cannot be put in order, and a chart re-printed after
+   * the next visit cannot be told from the one it supersedes. The identity is not
+   * repeated here — the running head above carries it on every sheet.
+   *
+   * Rendered only while this surface is the one that prints: the superimposition,
+   * the simulation and the report each declare their own page geometry, and while
+   * one of them is open over the dashboard it is theirs that must win.
+   */
+  /** Whether one of the launched views is open over this surface. */
+  private isLaunchedViewOpen = () => {
+    const { reportImageId, simulationImageId, superimposePair } = this.state;
+    return reportImageId !== null || simulationImageId !== null ||
+      superimposePair !== null;
+  };
+
+  /**
+   * What a print of this sheet is called — the same construction every other
+   * printable view of this app uses (`utils/printTitle`), and gated the same way
+   * `renderPrintPageStyle` is: while the report, the simulation or the
+   * superimposition is open over the dashboard, the document is theirs and so is
+   * its name.
+   *
+   * The subject is the span the sheet actually covers, taken from the records
+   * rather than composed: a chart with one visit says so, and a patient with no
+   * films yields no parenthesis at all instead of an invented date range.
+   */
+  private renderDocumentTitle = () => {
+    const { patient, records } = this.props;
+    if (this.isLaunchedViewOpen()) {
+      return null;
+    }
+    const dates = records
+      .map((r) => r.captureDate)
+      .filter((d): d is string => !!d && d.trim() !== '')
+      .sort();
+    const span = dates.length === 0
+      ? null
+      : (dates[0] === dates[dates.length - 1]
+        ? dates[0] : `${dates[0]} – ${dates[dates.length - 1]}`);
+    return (
+      <Helmet
+        title={printDocumentTitle(patient, 'Imaging records', [span])}
+      />
+    );
+  };
+
+  private renderPrintPageStyle = () => {
+    if (this.isLaunchedViewOpen()) {
+      return null;
+    }
+    const printed = `Printed ${documentDate(new Date())} · WebCeph`;
+    const box = (align: string) => (
+      `font: 8pt ${PRINT_FONT}; color: #7B8794; text-align: ${align};` +
+      ' vertical-align: top; padding-top: 3mm;'
+    );
+    const css = [
+      '@page {',
+      '  size: A4 portrait;',
+      '  margin: 12mm 12mm 14mm;',
+      '  @bottom-left {',
+      `    content: ${cssString(printed)};`,
+      `    ${box('left')}`,
+      '  }',
+      '  @bottom-right {',
+      '    content: "Page " counter(page) " of " counter(pages);',
+      `    ${box('right')} color: #52616F; font-weight: 600;`,
+      '  }',
+      '}',
+    ].join('\n');
+    return <style type="text/css" dangerouslySetInnerHTML={{ __html: css }} />;
   };
 
   /**
@@ -1258,21 +1452,66 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
   private hasRecordsFooter = (): boolean =>
     this.props.records.filter((r) => r.isTraceable).length >= 2;
 
-  private renderRecordsFooter = () => {
+  /**
+   * How much of the record is ready to report on, counted once — the figures both
+   * the sticky screen bar and the printed tally are set from, so the two readings
+   * of one record cannot drift.
+   */
+  private getRecordsTally = () => {
     const { records } = this.props;
     const traceable = records.filter((r) => r.isTraceable);
-    const traced = traceable.filter(
-      (r) => r.landmarksRequired > 0 && r.landmarksPlaced >= r.landmarksRequired,
-    ).length;
-    const calibrated = traceable.filter((r) => r.isCalibrated).length;
-    // A calibration whose implied film size is outside the band a cephalogram
-    // measures is counted separately: a bare "3 of 3 calibrated" under three
-    // cards that each read "Calibrated · check scale" is the panel's summary line
-    // contradicting every card it summarises.
-    const suspect = traceable.filter((r) => {
-      const size = getImpliedFilmSize(r.width, r.height, r.scaleFactor);
-      return r.isCalibrated && size !== null && !size.isPlausible;
-    }).length;
+    return {
+      total: traceable.length,
+      traced: traceable.filter(
+        (r) => r.landmarksRequired > 0 &&
+          r.landmarksPlaced >= r.landmarksRequired,
+      ).length,
+      calibrated: traceable.filter((r) => r.isCalibrated).length,
+      // A calibration whose implied film size is outside the band a cephalogram
+      // measures is counted separately: a bare "3 of 3 calibrated" under three
+      // cards that each read "Calibrated · check scale" is the panel's summary
+      // line contradicting every card it summarises.
+      suspect: traceable.filter((r) => {
+        const size = getImpliedFilmSize(r.width, r.height, r.scaleFactor);
+        return r.isCalibrated && size !== null && !size.isPlausible;
+      }).length,
+      // Traceability is a property of the *type*, and an image filed before the
+      // records layer existed carries no type at all — those are traceable too,
+      // so the tally cannot call them lateral cephalograms.
+      noun: traceable.filter((r) => r.type !== 'ceph_lateral').length === 0
+        ? 'lateral cephs' : 'traceable images',
+    };
+  };
+
+  /** The tallies themselves, in the one wording both media state them in. */
+  private renderTallyItems = () => {
+    const { total, traced, calibrated, suspect, noun } = this.getRecordsTally();
+    return [
+      /* The base is named. Counted over the traceable films but printed as a
+         bare "3 of 3", these two figures read as "the whole record is done"
+         on a record where half the images are photographs. */
+      <span key="traced" className={classes.records_foot_item}>
+        {traced} of {total} {noun} traced
+      </span>,
+      <span key="calibrated" className={classes.records_foot_item}>
+        {calibrated} of {total} {noun} calibrated
+      </span>,
+      suspect > 0 ? (
+        <span
+          key="suspect"
+          className={cx(classes.records_foot_item, classes.records_foot_item__warn)}
+          title={`The scale on ${suspect === 1 ? 'this film makes it' : 'these films makes them'} ` +
+            `smaller or larger than the ${FILM_SIZE_BAND.minMm}–` +
+            `${FILM_SIZE_BAND.maxMm} mm a cephalogram measures.`}
+        >
+          {suspect === 1
+            ? '1 scale needs checking' : `${suspect} scales need checking`}
+        </span>
+      ) : null,
+    ];
+  };
+
+  private renderRecordsFooter = () => {
     // One traceable film says everything twice: its own two chips are the two
     // tallies. Two or more, and "2 of 3 traced" is a reading of the record that
     // no single card carries.
@@ -1280,11 +1519,6 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
       return null;
     }
     const { isFootFloating } = this.state;
-    // Traceability is a property of the *type*, and an image filed before the
-    // records layer existed carries no type at all — those are traceable too, so
-    // the tally cannot call them lateral cephalograms.
-    const noun = traceable.filter((r) => r.type !== 'ceph_lateral').length === 0
-      ? 'lateral cephs' : 'traceable images';
     return (
       <div
         ref={this.setFoot}
@@ -1292,27 +1526,100 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
           [classes.records_foot__floating]: isFootFloating,
         })}
       >
-        {/* The base is named. Counted over the traceable films but printed as a
-            bare "3 of 3", these two figures read as "the whole record is done"
-            on a record where half the images are photographs. */}
-        <span className={classes.records_foot_item}>
-          {traced} of {traceable.length} {noun} traced
-        </span>
-        <span className={classes.records_foot_item}>
-          {calibrated} of {traceable.length} {noun} calibrated
-        </span>
-        {suspect > 0 ? (
-          <span
-            className={cx(classes.records_foot_item, classes.records_foot_item__warn)}
-            title={`The scale on ${suspect === 1 ? 'this film makes it' : 'these films makes them'} ` +
-              `smaller or larger than the ${FILM_SIZE_BAND.minMm}–` +
-              `${FILM_SIZE_BAND.maxMm} mm a cephalogram measures.`}
-          >
-            {suspect === 1
-              ? '1 scale needs checking' : `${suspect} scales need checking`}
-          </span>
-        ) : null}
+        {this.renderTallyItems()}
         <span className={classes.records_foot_spacer} />
+      </div>
+    );
+  };
+
+  /**
+   * The printed panel's closing block: the same tallies, and the two notes the
+   * sheet's own claims are made under — rendered **inside the last visit's group**
+   * (see `renderGroup`), not after the list.
+   *
+   * Because that is the only way it stays with the record it tallies. As a sibling
+   * of the list the bar printed *alone* at the top of a sheet — "4 of 5 lateral
+   * cephs traced · 4 of 5 calibrated · 4 scales need checking", still wearing the
+   * panel's rounded box, torn from the films it counts at the foot of the sheet
+   * before — and no break rule can prevent it: Chrome honours `break-inside:
+   * avoid` and ignores `break-before: avoid` entirely (measured; see
+   * `.findings_lede`). A visit's group is already an unbreakable box, so a tally
+   * printed inside the last one cannot be separated from it.
+   */
+  private renderPrintRecordsTail = (
+    groups: TimepointGroup<PatientRecord>[],
+  ) => (
+    <div className={classes.records_tail_print} aria-hidden="true">
+      {this.hasRecordsFooter() ? (
+        <p className={classes.records_tail_line}>{this.renderTallyItems()}</p>
+      ) : null}
+      {this.renderRecordsNotes(groups)}
+    </div>
+  );
+
+  /**
+   * The printed sheet's closing notes — paper only, and the two facts the sheet
+   * asserted repeatedly and explained nowhere.
+   *
+   * **What the omissions are.** Each visit prints a row of the types it does not
+   * hold. The sentence that gives those rows their standing lives in the coverage
+   * pane, and that pane is a screen device (see the print block), so the deep case
+   * printed five uppercase rows of omissions with nothing on the sheet saying the
+   * types were never required — a filed chart reading as a record of what the
+   * practice failed to take. It is stated once, here, for every visit on the
+   * sheet.
+   *
+   * **What "check scale" fails against.** A suspect calibration was marked three
+   * times per film — the card's amber chip, the card's amber implied film size and
+   * the closing tally — and the reason was in a tooltip, which does not print. The
+   * report states it in full on its own paper; this states it once for the panel,
+   * and the chip's screen-only "· check scale" comes off (see `.chip_more`) so the
+   * sheet marks the film twice instead of three times: the amber chip, and the
+   * size that is the evidence.
+   *
+   * Never invented: each note is rendered only where the sheet actually carries
+   * the thing it qualifies.
+   */
+  private renderRecordsNotes = (
+    groups: TimepointGroup<PatientRecord>[],
+  ) => {
+    const { records } = this.props;
+    // Only the visits whose slot rows actually print (the offer rows and the
+    // empty state's own row are print-hidden — nothing has been filed at the
+    // timepoint they name).
+    const hasOmissions = groups.some(
+      (group) => group.label !== null &&
+        getMissingImageTypes(group.records).length > 0,
+    );
+    const suspect = records.filter((record) => {
+      const size = getImpliedFilmSize(
+        record.width, record.height, record.scaleFactor,
+      );
+      return record.isTraceable && record.isCalibrated &&
+        size !== null && !size.isPlausible;
+    }).length;
+    if (!hasOmissions && suspect === 0) {
+      return null;
+    }
+    return (
+      <div className={classes.records_notes}>
+        {hasOmissions ? (
+          <p className={classes.records_note_line}>
+            <span className={classes.records_note_key}>Not filed</span>
+            {COVERAGE_QUALIFIER}
+          </p>
+        ) : null}
+        {suspect > 0 ? (
+          <p className={classes.records_note_line}>
+            <span className={classes.records_note_key}>Check scale</span>
+            {`The amber size beside a film's scale is what that scale says the ` +
+             `film physically measures. A cephalogram's sides fall between ` +
+             `${FILM_SIZE_BAND.minMm} and ${FILM_SIZE_BAND.maxMm} mm; outside ` +
+             `that band the calibration is wrong, and every millimetre measured ` +
+             `from the film is wrong by the same factor. Angles and ratios are ` +
+             `unaffected. Re-calibrate against a known distance on the film.`}
+          </p>
+        ) : null}
       </div>
     );
   };
@@ -1361,13 +1668,13 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
       const first = getDefaultTimepoint(0);
       return (
         <div
-          className={classes.slots}
+          className={cx(classes.slots, classes.slots__offer)}
           title={`Nothing is filed at a timepoint yet — these slots open the ` +
             `upload form filed at ${first}`}
         >
           <span className={classes.slots_label}>Or file at {first}</span>
           <span className={classes.slots_list}>
-            {IMAGE_TYPE_OPTIONS.map(({ id, slotLabel }) => (
+            {IMAGE_TYPE_OPTIONS.map(({ id }) => (
               <button
                 key={id}
                 type="button"
@@ -1378,7 +1685,7 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
               >
                 <SlotPlus />
                 <span className={classes.slot_label}>{getAddSlotLabel(id)}</span>
-                <span className={classes.slot_print}>{slotLabel}</span>
+                <span className={classes.slot_print}>{getImageTypeLabel(id)}</span>
               </button>
             ))}
           </span>
@@ -1402,10 +1709,23 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
           (group.firstDate !== null ? ` · ${group.firstDate}` : '')}
       >
         <span className={classes.slots_label}>
-          Not filed at {token !== null ? token : group.label}
+          {'Not filed at '}
+          <span className={classes.slots_at}>
+            {token !== null ? token : group.label}
+          </span>
+          {/* Paper only — and it does not name the visit at all.
+              The row is *inside* the visit's own block, under the films the
+              stamp above them is the stamp of, so the boundary already says
+              which visit. Printing the label here set the visit's name a third
+              time and in caps 20mm to the right of the stamp that had just
+              said it: "T2 Mid-treatment" above, "NOT FILED AT T2
+              MID-TREATMENT" below — and with a free-text label, 60 characters
+              of uppercase repeated ("NOT FILED AT PRE-TREATMENT RECORDS,
+              ORTHOGNATHIC WORKUP, SECOND OPINION"). */}
+          <span className={classes.slots_at_print}>this visit</span>
         </span>
         <span className={classes.slots_list}>
-          {missing.map(({ id, slotLabel }) => (
+          {missing.map(({ id }) => (
             <button
               key={id}
               type="button"
@@ -1428,7 +1748,7 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
                   control: nobody can press "Add profile photo" on a printed
                   chart, so the sheet lists what the visit lacks instead. Same
                   mechanism as `.fact_print` in the identity band. */}
-              <span className={classes.slot_print}>{slotLabel}</span>
+              <span className={classes.slot_print}>{getImageTypeLabel(id)}</span>
             </button>
           ))}
         </span>
@@ -1662,11 +1982,9 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
           })}
         </dl>
         {/* The same standing this surface gives its empty slots: this is what is
-            on file, not a checklist a case can fail. */}
-        <p className={classes.coverage_note}>
-          What is on file, not a requirement — a case is complete without a
-          panoramic or a photographic series.
-        </p>
+            on file, not a checklist a case can fail. (One string, printed at the
+            panel's foot on paper — see `COVERAGE_QUALIFIER`.) */}
+        <p className={classes.coverage_note}>{COVERAGE_QUALIFIER}</p>
       </aside>
     );
   };
@@ -1777,6 +2095,16 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
         </section>
       );
     }
+    // Whether *any* visit of this case covers more than one day. A stop states
+    // its own span on a line of its own, and a line only some stops carry knocks
+    // every row below it out of true: in a seven-visit case the one multi-day
+    // visit pushed its age and its chips 16px below its neighbours', so the band
+    // could no longer be read across as "the age at each visit" and "the films at
+    // each visit". Where one stop carries the line they all reserve it (see
+    // `.stop_span__ghost`), and where none does the row is not there at all.
+    const hasAnySpan = groups.some(
+      (g) => g.lastDate !== null && g.lastDate !== g.firstDate,
+    );
     // Stops and intervals, interleaved: stop, gap, stop, gap, … stop. The first
     // and last child are always stops, which is what lets the rail stop at the
     // outermost nodes instead of running off both ends of the band.
@@ -1785,7 +2113,7 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
       if (index > 0) {
         cells.push(this.renderBandGap(groups[index - 1], group));
       }
-      cells.push(this.renderBandStop(group, index, groups.length));
+      cells.push(this.renderBandStop(group, index, groups.length, hasAnySpan));
     });
     const { hasBandStart, hasBandEnd } = this.state;
     const scrolls = hasBandStart || hasBandEnd;
@@ -1884,11 +2212,17 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
    * so a multi-day visit's own span is the piece of the record that would
    * otherwise fall between the intervals and be stated nowhere.
    *
+   * The band is read across as much as it is read along, so the stops keep their
+   * rows in true: where any visit of the case carries a span line, every stop
+   * reserves that line (`hasAnySpan`), and the ages and the chip rows stay level
+   * across the whole rail.
+   *
    * With one visit on file (`total === 1`) the rail metaphor is dropped: no axis,
    * no node, and the stamp is laid out as one line (see `.stop__solo`).
    */
   private renderBandStop = (
     group: TimepointGroup<PatientRecord>, index: number, total: number,
+    hasAnySpan: boolean = false,
   ) => {
     const hasDate = group.firstDate !== null;
     const spansDays = group.lastDate !== null && group.lastDate !== group.firstDate;
@@ -1967,7 +2301,19 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
           >
             images {innerSpan} apart
           </span>
-        ) : null}
+        ) : (
+          // Nothing to say here, but the line is held open where a sibling visit
+          // is saying it — otherwise the one multi-day stop steps its age and its
+          // chips out of line with every other stop on the rail.
+          hasAnySpan ? (
+            <span
+              className={cx(classes.stop_span, classes.stop_span__ghost)}
+              aria-hidden="true"
+            >
+              &nbsp;
+            </span>
+          ) : null
+        )}
         {ageLabel !== null ? (
           <span className={classes.stop_age}>
             <span className={classes.stop_age_key}>Age</span>
@@ -2336,6 +2682,27 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
     const token = getTimepointToken(label);
     const rest = (label !== null && token !== null)
       ? label.trim().slice(token.length).trim() : '';
+    // On paper the visit's name is *one* run of text at one weight. Split into a
+    // reversed-out pill and a grey note beside it, a free-text label printed as
+    // two severed facts — a blue "Pre-treatment" with "records, orthognathic
+    // workup, second opinion" falling out below it in another colour and weight,
+    // which reads as a timepoint plus an unrelated remark. The slots row below
+    // and the trend's cells then named the same visit two further ways.
+    const visitName = label !== null ? label.trim() : 'No timepoint label';
+    // How long after the previous visit this one was taken. The elapsed interval
+    // between consecutive stops is the case timeline's own figure on screen, and
+    // the band is a screen device (see the print block) — so on paper each visit
+    // carries its own interval here. On a growth case it is what every change in
+    // the chart is read against, and it printed nowhere.
+    const previous = index > 0 ? groups[index - 1] : undefined;
+    const sinceLabel = previous !== undefined
+      ? formatInterval(
+        parseCaptureDate(previous.lastDate !== null
+          ? previous.lastDate : previous.firstDate),
+        parseCaptureDate(group.firstDate),
+      )
+      : null;
+    const sinceFrom = previous !== undefined ? bandName(previous) : null;
     return (
       <li key={group.key !== '' ? group.key : '__untimepointed'} className={classes.group}>
         <div className={classes.group_when}>
@@ -2361,6 +2728,9 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
               {rest}
             </span>
           ) : null}
+          {/* Paper only: the whole label, once, in one run of type (see
+              `visitName` above and `.group_visit_print`). */}
+          <span className={classes.visit_print}>{visitName}</span>
           {/* Each date is its own unbreakable run (`.group_date_day`), and the
               dash is joined to the first of them by a non-breaking space, so
               the one break the stamp allows is the one before the second date.
@@ -2382,6 +2752,13 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
               <span className={classes.group_date_unset}>No capture date</span>
             )}
           </span>
+          {/* Paper only: how long after the previous visit this one was taken.
+              On screen the rail between two stops carries exactly this figure. */}
+          {sinceLabel !== null && sinceFrom !== null ? (
+            <span className={classes.group_since}>
+              +{sinceLabel} from {sinceFrom}
+            </span>
+          ) : null}
           {/* A visit where only some of the images are dated says so — the span
               above is then the span of the dated ones only. */}
           {group.undatedCount > 0 && hasDate ? (
@@ -2428,6 +2805,13 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
           {/* …and the visit closes with what it has not got. */}
           {this.renderGroupSlots(group, groups)}
         </div>
+        {/* Paper only, and only under the record's last visit: the panel's
+            tallies and the two notes its claims are made under. They print here
+            rather than after the list because a visit's group is an unbreakable
+            box on paper and a bar that tallies the films has to stay with them —
+            see `renderPrintRecordsTail`. */}
+        {index === groups.length - 1
+          ? this.renderPrintRecordsTail(groups) : null}
       </li>
     );
   };
@@ -2566,9 +2950,18 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
                       'distance on the film.'
                     : undefined}
                 >
-                  {record.isCalibrated
-                    ? (isScaleSuspect ? 'Calibrated · check scale' : 'Calibrated')
-                    : 'Not calibrated'}
+                  {record.isCalibrated ? 'Calibrated' : 'Not calibrated'}
+                  {/* Screen only. On paper the same card already carries the
+                      amber "film 83 × 100 mm" that *is* the evidence, and the
+                      panel's closing note says once what an implausible scale
+                      fails against and what it costs (see
+                      `renderRecordsNotes`) — so the sheet stated the caveat
+                      three times per film and explained it nowhere. The chip
+                      keeps its amber, which is what makes the film findable in
+                      a stack of sheets. */}
+                  {record.isCalibrated && isScaleSuspect ? (
+                    <span className={classes.chip_more}>{'· check scale'}</span>
+                  ) : null}
                 </span>
               ) : null}
             </span>
@@ -2739,6 +3132,24 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
   // Undirected: the page bar's and the empty state's "Add image", and the row
   // that closes the list. Passing no intent also clears a slot chosen earlier.
   private handleAddImage = () => this.props.onAddImage(this.props.emptyWorkspaceId);
+
+  /**
+   * Print the sheet. The paper is this surface itself — its `@media print` rules
+   * lay the records out on A4 and hide the screen chrome — so there is nothing to
+   * open first, exactly as in the report and the superimposition.
+   *
+   * The scrollport is put back to the top before the dialog opens. The printed
+   * flow is the whole list regardless of where the screen was scrolled to, but a
+   * browser paints the print preview's first sheet from the live layout, and a
+   * sheet whose preview opens mid-list reads as though the top of the chart were
+   * missing.
+   */
+  private handlePrint = () => {
+    if (this.scrollRef !== null) {
+      this.scrollRef.scrollTop = 0;
+    }
+    window.print();
+  };
 
   /**
    * Fill one empty slot of one visit: the upload screen opens with the record

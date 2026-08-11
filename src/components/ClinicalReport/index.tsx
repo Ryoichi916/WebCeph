@@ -42,6 +42,10 @@ import { parseCaptureDate, formatCaptureDate } from 'utils/records';
 // itself from the patient rather than from the image's file name.
 import { printDocumentTitle } from 'utils/printTitle';
 
+// The star scale, in the one wording every sheet this app prints keys it with —
+// this foot and the records sheet's own key read the same string.
+import { deviationStarKey } from './copy';
+
 import Wigglegram, { WigglegramKey } from './Wigglegram';
 import ResultsTable, { DeviationKey } from './ResultsTable';
 import FindingsOverview from './FindingsOverview';
@@ -202,7 +206,7 @@ class StoredEditable extends React.PureComponent<StoredEditableProps> {
 }
 
 /** Font stack of the printed page, repeated for the @page margin boxes. */
-const PRINT_FONT =
+export const PRINT_FONT =
   '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Hiragino Sans", ' +
   '"Hiragino Kaku Gothic ProN", "Noto Sans JP", Meiryo, sans-serif';
 
@@ -222,19 +226,34 @@ const PRINT_FONT =
  * two unexplained.
  */
 const RUNNING_KEY =
-  'Deviation: * ** *** = over 1 · 2 · 3 SD  |  Wigglegram: band ±1 SD, ' +
+  `Deviation: ${deviationStarKey}  |  Wigglegram: band ±1 SD, ` +
   'lighter ±2 SD; dot amber over 1 SD, red over 2 SD; ◂ ▸ beyond ±3 SD';
 
 /** A CSS string literal, safe to interpolate into a generated stylesheet. */
-const cssString = (text: string): string => (
+export const cssString = (text: string): string => (
   `"${text.replace(/[\r\n]+/g, ' ').replace(/[\\"]/g, (m) => `\\${m}`)}"`
 );
 
 /** `2026-08-06` — the unambiguous form, for the running page header. */
-const isoDate = (d: Date): string => {
+export const isoDate = (d: Date): string => {
   const pad = (n: number) => (n < 10 ? `0${n}` : String(n));
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 };
+
+/**
+ * `August 11, 2026` — the day a *document* of this app states as its own.
+ *
+ * One function, because a chart holds sheets from more than one of these views:
+ * this report's masthead dated its first sheet "August 11, 2026" while the
+ * records sheet's running foot dated the same print run "Printed 2026-08-11", so
+ * two sheets filed together in one chart identified themselves as two different
+ * documents. The data dates on both sheets stay ISO — a capture date is a fact
+ * about the film, printed the way the record stores it — and this is the one
+ * form the *document* dates itself in.
+ */
+export const documentDate = (d: Date): string => d.toLocaleDateString(undefined, {
+  year: 'numeric', month: 'long', day: 'numeric',
+});
 
 /**
  * Which analyses the paper carries. `active` prints the analysis open in the
@@ -361,9 +380,9 @@ export default class ClinicalReport extends React.PureComponent<Props, State> {
       ? (ANALYSIS_NAMES[analysisId] || analysisId)
       : null;
     const now = new Date();
-    const date = now.toLocaleDateString(undefined, {
-      year: 'numeric', month: 'long', day: 'numeric',
-    });
+    // The one form a document of this app dates itself in — shared with the
+    // records sheet's running foot, which prints the same day the same way.
+    const date = documentDate(now);
     const imageTypeName =
       (imageType !== null && IMAGE_TYPE_NAMES[imageType]) ||
       'Radiograph';
