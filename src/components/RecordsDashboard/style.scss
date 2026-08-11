@@ -1838,15 +1838,30 @@ $tp-gap: 16px;       // gutter -> cards
 
 // The records panel's own head, without the sticky behaviour: this panel's list
 // is short (one block per traced film) and there is nothing to hold a bar over.
+//
+// It wraps, and its note takes a row of its own before it is squeezed. Without
+// the wrap the note had nowhere to go but narrower: measured at 480px it was a
+// 96px column 263px tall, and at 420px a 76px column whose right edge sat 35px
+// outside the panel's own right edge and was cut off by the window. `.records_head`
+// has always wrapped for exactly this reason; both panels that borrow this head —
+// the trend chart and the analysis findings — needed the same.
 .findings_head {
   flex: 0 0 auto;
   display: flex;
   align-items: center;
-  gap: 12px;
+  flex-wrap: wrap;
+  gap: 2px 12px;
   padding: 12px 16px;
   border-bottom: 1px solid $border;
   border-radius: 7px 7px 0 0;
   background: $bg-surface;
+
+  .records_note {
+    // Beside the title while there is room for a line of it, on its own row
+    // below as soon as there is not.
+    flex: 1 1 240px;
+    min-width: 200px;
+  }
 }
 
 .findings_title {
@@ -2599,6 +2614,13 @@ $fv-columns-narrow: $fv-c-name-1 $fv-c-value 116px 96px $fv-c-change;
   line-height: 1.5;
   color: $text-tertiary;
 
+  // A line that opens with the drawn key's own label ("CHANGE") rather than with
+  // a clause naming itself: the label is the key's idiom, and it took eleven
+  // words off the one sentence of prose this key keeps.
+  .fk_label {
+    margin-right: 5px;
+  }
+
   // The strip's own key, which goes wherever the strip goes: a narrow window and
   // a printed sheet both drop the column, and a key to a mark that is not on the
   // page is worse than no key.
@@ -2669,6 +2691,907 @@ $fv-columns-narrow: $fv-c-name-1 $fv-c-value 116px 96px $fv-c-change;
   font-size: 11px;
   line-height: 1.4;
   color: $text-tertiary;
+}
+
+// ------------------------------------------------- measurement trend (chart)
+// The cross-timepoint reading of the record: one small sparkline per
+// measurement, each with its own y axis in its own unit, on the one x axis the
+// whole grid shares. It takes the findings panel's frame and its head (the
+// classes are shared outright, not copied) so the two panels are the same object
+// twice — this is the summary, those are the numbers behind it.
+
+.trend {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 16px;
+  border: 1px solid $border;
+  border-radius: 8px;
+  background: $bg-surface;
+  box-shadow: $shadow-1;
+}
+
+// What the x axis measures, with every film on it — stated once for the grid
+// rather than in every cell, where 24 copies of "age 14 y 9 m" would be the
+// largest thing on the panel. A strip, not a paragraph: the key, the stops in
+// order, and the interval they span.
+.trend_axis {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  padding: 9px 16px 8px;
+  border-bottom: 1px solid $border;
+  background: $bg-app;
+}
+
+.trend_axis_key {
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: $text-tertiary;
+}
+
+.trend_axis_stop {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+// The same filled token the timeline's stamp and the findings block use, at the
+// size a strip of them can be scanned at.
+.trend_axis_token {
+  display: inline-flex;
+  align-items: center;
+  height: 17px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: $primary-600;
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1;
+  color: #FFFFFF;
+}
+
+.trend_axis_value {
+  font-size: 12.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: $text-primary;
+}
+
+.trend_axis_date {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: $text-tertiary;
+}
+
+.trend_axis_span {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: $text-secondary;
+}
+
+.trend_axis_note {
+  flex: 1 1 220px;
+  min-width: 0;
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: $text-tertiary;
+}
+
+// ---- which measurements are plotted ----
+// Screen only: on the filed chart these are not controls, and the grid under
+// them is the answer to the question they ask.
+// ---- which measurements are plotted ----
+// Screen only: on the filed chart these are not controls, and the grid under
+// them is the answer to the question they ask.
+//
+// One flat row of fifteen chips does not scale — at two analyses on two films it
+// becomes a thirty-chip wall with no structure in it — so the chips run in the
+// regions the analyses themselves group their measurements under (see
+// `TrendChart#REGION_OF_CATEGORY`), each behind its own micro heading. Inline
+// headings rather than a row per region: grouping the reader can see, at the
+// height of the row that had none.
+.trend_pick {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  padding: 9px 16px;
+  border-bottom: 1px solid $border;
+}
+
+// Wraps inside itself rather than onto its own row: given `auto` it took a whole
+// row of the panel, pushing the PLOT label above it and the All/None actions
+// below it — four rows of chrome over four charts.
+.trend_pick_list {
+  display: inline-flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  flex: 1 1 300px;
+  min-width: 0;
+}
+
+.trend_pick_group {
+  display: inline-flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.trend_pick_region {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: $text-disabled;
+  white-space: nowrap;
+}
+
+// A toggle, in the surface's own chip idiom: unset is the quiet outline every
+// empty slot on this page wears, set is the primary tint every selected thing
+// in this app wears — *and* a tick, because selection carried by two tints of
+// one blue is a state the reader has to compare across a row to read.
+.trend_chip {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 9px;
+  border: 1px solid $border-strong;
+  border-radius: 999px;
+  background: $bg-surface;
+  font-family: $font-stack;
+  font-size: 11.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  color: $text-secondary;
+  cursor: pointer;
+  transition: background-color .12s ease, border-color .12s ease, color .12s ease;
+
+  &:hover {
+    border-color: $primary-600;
+    background: $primary-050;
+    color: $primary-900;
+  }
+
+  &:focus {
+    outline: none;
+    box-shadow: $focus-ring;
+  }
+
+  &__on {
+    border-color: $primary-600;
+    background: $primary-100;
+    color: $primary-900;
+
+    .trend_chip_tick {
+      width: 9px;
+      margin-right: 3px;
+      opacity: 1;
+    }
+  }
+}
+
+// Collapsed to nothing while the chip is off, so a row of chips does not shift
+// sideways as measurements are ticked.
+.trend_chip_tick {
+  display: inline-block;
+  width: 0;
+  overflow: hidden;
+  font-size: 10px;
+  line-height: 1;
+  opacity: 0;
+  transition: width .12s ease, margin .12s ease;
+}
+
+// Select-all and clear, so `No measurement selected` is a state the reader can
+// reach and leave on purpose rather than one they fall into chip by chip.
+.trend_pick_acts {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+}
+
+.trend_act {
+  height: 24px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  font-family: $font-stack;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1;
+  color: $primary-600;
+  cursor: pointer;
+
+  &:hover {
+    background: $primary-050;
+  }
+
+  &:focus {
+    outline: none;
+    box-shadow: $focus-ring;
+  }
+
+  &:disabled {
+    color: $text-disabled;
+    cursor: default;
+    background: none;
+  }
+
+  &__reset {
+    color: $text-secondary;
+  }
+}
+
+// ---- the grid of small multiples ----
+// Sized to its cells, wrapping into as many columns as the window allows: the
+// same measurement is the same size in every column, and every cell is on the
+// same standard-deviation axis, so the grid is read by comparing its cells.
+.trend_grid {
+  display: grid;
+  // 240 rather than 250: the opening board is five cells (see `BOARD`), and at a
+  // clinic monitor's width 250 gave four columns and orphaned the fifth on a row
+  // of its own with three empty slots beside it.
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px;
+  padding: 14px 16px 16px;
+  background: $bg-app;
+}
+
+.trend_none {
+  margin: 0;
+  padding: 16px;
+  background: $bg-app;
+  font-size: 12.5px;
+  color: $text-tertiary;
+}
+
+// ---- one measurement ----
+.tc {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  padding: 8px 10px 4px;
+  border: 1px solid $border;
+  border-radius: 8px;
+  background: $bg-surface;
+}
+
+.tc_head {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  padding-bottom: 2px;
+}
+
+.tc_symbol {
+  min-width: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: $text-primary;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+// The unit of a cell measured in its own unit rather than in standard deviations
+// (see `TrendChart#axisTag`) — a quiet tag beside the symbol, not a second figure.
+.tc_unit {
+  flex: 0 0 auto;
+  padding: 0 4px;
+  border: 1px solid $border;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: $text-tertiary;
+  white-space: nowrap;
+}
+
+.tc_spacer {
+  flex: 1 1 auto;
+}
+
+// "2/3" — the films that report this measurement out of the films on the axis.
+// Only ever present when they differ, so it is never a restatement.
+.tc_gap {
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: $text-tertiary;
+  white-space: nowrap;
+}
+
+// What the figure beside it is measured over ("T1→T3"). The findings table
+// directly below carries a CHANGE column measured against the *previous* film,
+// and an unlabelled signed figure in this head could be read as that one.
+.tc_span {
+  flex: 0 0 auto;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: .02em;
+  font-variant-numeric: tabular-nums;
+  color: $text-disabled;
+  white-space: nowrap;
+}
+
+// The signed change, in the ink the simulation's own CHANGE column uses, so one
+// quantity has one appearance across this app.
+.tc_net {
+  flex: 0 0 auto;
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: $primary-700;
+  white-space: nowrap;
+
+  // Below the hand-plotting reproducibility floor, or exactly nothing: the same
+  // measurement taken twice, dimmed exactly as the findings table dims it.
+  &__within {
+    font-weight: 500;
+    color: $text-disabled;
+  }
+}
+
+// ---- the plot, and the type around it ----
+// The box is exactly the drawing: the SVG inside it carries the marks in a
+// 200-unit space scaled to the cell, and every label is an HTML element placed
+// over the same box in per cent. Type inside the viewBox scaled with it — ~5.5pt
+// on an A4 sheet, ~1.7x at 420px — which no type scale survives.
+.tc_plotbox {
+  position: relative;
+  margin: 2px 3px 15px 40px;
+}
+
+// A fixed height at every window width, so a cell is the same object at 1440px,
+// at 480px and on paper — and so the panel does not grow with the column it is
+// in (aspect-locked, a 480px column made each plot 175px tall and the panel
+// 1846px). The drawing inside is stretched to the box (`preserveAspectRatio`),
+// which is safe because everything in it is an axis-aligned band, rule or line;
+// the dots and every figure are HTML at a fixed size over the same box.
+.tc_plot {
+  display: block;
+  width: 100%;
+  height: 92px;
+  overflow: visible;
+
+  // Two films is one segment, and one segment needs less height than a course.
+  &__short {
+    height: 68px;
+  }
+}
+
+// The norm at ±1 SD, in the same tint the findings table's strip uses, so
+// "inside the band" means one thing on this page.
+.tc_band {
+  fill: $primary-100;
+  stroke: none;
+}
+
+// …and the ±2 SD envelope behind it, which is where the dot's colour steps a
+// second time. The report's wigglegram draws both; this cell drew only the inner
+// one, so nothing on the page said why one dot was amber and the next red.
+.tc_band__outer {
+  fill: $primary-050;
+  stroke: none;
+}
+
+// The envelope's own boundary, drawn: a fill this light is about 1.03:1 on white
+// and cannot be trusted to carry a threshold on a clinic monitor or a printer.
+.tc_edge {
+  fill: none;
+  stroke: $border-strong;
+  stroke-width: 0.8;
+  stroke-dasharray: 2 2;
+}
+
+// A published range has no standard deviation, so it is not drawn as one: the
+// grey hatch of the findings table's range strip, and no mean line.
+.tc_band__range {
+  stroke: none;
+}
+
+.tc_hatch {
+  stroke: $border-strong;
+  stroke-width: 1;
+}
+
+.tc_mean {
+  fill: none;
+  stroke: $primary-600;
+  stroke-width: 1;
+  stroke-dasharray: 3 2.5;
+  opacity: .6;
+}
+
+// One hairline per film, so a visit is at the same x in every cell of the grid.
+.tc_guide {
+  stroke: $border;
+  stroke-width: 1;
+}
+
+.tc_axis {
+  stroke: $border-strong;
+  stroke-width: 1;
+}
+
+// The mark a tick label is attached to. Labels in a gutter with no rule and no
+// tick to hang from are figures floating beside a picture.
+.tc_tick {
+  stroke: $border-strong;
+  stroke-width: 1;
+}
+
+.tc_line {
+  fill: none;
+  stroke: $primary-600;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: .85;
+}
+
+// The y axis' figures: the norm's own reference values (the mean and the ±2 SD
+// bounds the colour steps at) or, in a cell measured in its own unit, round
+// numbers with that unit on every one of them.
+.tc_ytick {
+  position: absolute;
+  left: -5px;
+  transform: translate(-100%, -50%);
+  font-size: 9px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  white-space: nowrap;
+  color: $text-tertiary;
+
+  &__mean {
+    color: $primary-700;
+  }
+}
+
+// Which film each mark belongs to, under the mark. The axis it is spaced on —
+// age or capture date — is named once for the whole grid (see `renderAxisNote`).
+.tc_xtick {
+  position: absolute;
+  top: 100%;
+  transform: translate(-50%, 3px);
+  font-size: 9.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  white-space: nowrap;
+  color: $text-secondary;
+}
+
+// The reading, printed at its dot. A clinician cannot read "24.3 → 26.8" off a
+// slope, and until this was here the only statement of a value on the whole panel
+// was an SVG `<title>`: nothing on paper, nothing on a touch screen, and a second
+// of hovering on a pointer.
+.tc_val {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  padding: 0 2px;
+  border-radius: 3px;
+  background: rgba($bg-surface, .82);
+  font-size: 10px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.25;
+  white-space: nowrap;
+  color: $text-primary;
+  pointer-events: none;
+  transform: translate(-50%, calc(-50% - 12px));
+}
+
+// The step between two films, printed on the segment it is the length of — the
+// two-film case, which is the record most practices actually hold and where a
+// sparkline has no shape to read.
+.tc_delta {
+  position: absolute;
+  padding: 0 3px;
+  border-radius: 3px;
+  background: rgba($bg-surface, .88);
+  font-size: 10.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.3;
+  white-space: nowrap;
+  color: $primary-700;
+  pointer-events: none;
+  transform: translate(-50%, -160%);
+
+  &__within {
+    font-weight: 500;
+    color: $text-disabled;
+  }
+}
+
+// ---- the point, as something a pointer and a keyboard can reach ----
+// A transparent target over each dot: it grows a halo, it names itself, and it
+// carries the reading. `<title>` on a circle does none of the three.
+.tc_pt {
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  margin: -11px 0 0 -11px;
+  cursor: default;
+
+  &:focus {
+    outline: none;
+  }
+
+  &:hover,
+  &:focus {
+    z-index: 3;
+
+    .tc_pt_halo {
+      opacity: 1;
+      transform: scale(1);
+    }
+
+    // The dot itself grows, so the mark under the pointer is the mark that is
+    // being read.
+    .tc_pt_dot {
+      transform: scale(1.35);
+    }
+
+    .tc_read {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    .tc_val {
+      opacity: 0;
+    }
+  }
+}
+
+// The patient's reading. Drawn here rather than in the plot because the plot is
+// stretched to its box: a circle in a non-uniformly scaled viewBox is an ellipse,
+// and a landmark reading is not an ellipse. `currentColor` so one severity token
+// paints the fill and the rim, exactly as the findings table's own dot does.
+.tc_pt_dot {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  margin: -3.5px 0 0 -3.5px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 0 1.2px $bg-surface;
+  color: $text-primary;
+  pointer-events: none;
+  transition: transform .1s ease;
+
+  &__warn {
+    color: $warn;
+  }
+
+  &__error {
+    color: $error;
+  }
+
+  // A reading the analysis raised a caveat about: hollow, so a trend drawn
+  // through it is visibly qualified rather than silently equal to the rest.
+  &__flagged {
+    background: $bg-surface;
+    box-shadow: inset 0 0 0 1.6px currentColor;
+  }
+
+  // Beyond ±3 SD the dot becomes the wigglegram's outward-pointing marker, so a
+  // reading off the axis is never drawn as one sitting on its end.
+  &__up,
+  &__down {
+    width: 9px;
+    height: 8px;
+    margin: -4px 0 0 -4.5px;
+    border-radius: 0;
+    background: currentColor;
+    box-shadow: none;
+  }
+
+  &__up {
+    clip-path: polygon(50% 0, 100% 100%, 0 100%);
+  }
+
+  &__down {
+    clip-path: polygon(0 0, 100% 0, 50% 100%);
+  }
+}
+
+.tc_pt_halo {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 16px;
+  height: 16px;
+  margin: -8px 0 0 -8px;
+  border: 2px solid $primary-600;
+  border-radius: 50%;
+  background: rgba($primary-600, .12);
+  opacity: 0;
+  transform: scale(.6);
+  transition: opacity .1s ease, transform .1s ease;
+  pointer-events: none;
+}
+
+// The readout: what the value is, at which visit, and how far it sits from the
+// norm it was graded against — the three facts a hovered dot owes the reader.
+.tc_read {
+  position: absolute;
+  left: 50%;
+  bottom: 100%;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  width: max-content;
+  max-width: 190px;
+  margin-bottom: 4px;
+  padding: 5px 8px 6px;
+  border: 1px solid $border;
+  border-radius: 6px;
+  background: $bg-surface;
+  box-shadow: $shadow-2;
+  text-align: left;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateX(-50%);
+  transition: opacity .1s ease;
+  pointer-events: none;
+}
+
+.tc_read_when {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .02em;
+  text-transform: uppercase;
+  line-height: 1.2;
+  color: $text-disabled;
+}
+
+.tc_read_val {
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+  color: $text-primary;
+}
+
+.tc_read_dev {
+  font-size: 11px;
+  line-height: 1.35;
+  color: $text-tertiary;
+}
+
+// A figure sits on the side of its dot the line is *not* going, so it never
+// lands on the segment it belongs to. (Horizontally it stays centred on its dot
+// at both ends of the axis: the 15-unit inset plus the label gutter is exactly
+// the room a figure needs there.)
+.tc_pt__below .tc_val {
+  transform: translate(-50%, calc(-50% + 12px));
+}
+
+// The readout is far wider than a figure, so at the ends of the axis it hangs
+// inwards from its dot rather than off the cell.
+.tc_pt__lead .tc_read {
+  left: 50%;
+  transform: translateX(-11px);
+}
+
+.tc_pt__trail .tc_read {
+  left: auto;
+  right: 50%;
+  transform: translateX(11px);
+}
+
+// …and a dot near the top of the cell has no room above it for one.
+.tc_pt__high .tc_read {
+  top: 100%;
+  bottom: auto;
+  margin: 4px 0 0;
+}
+
+// ---- the key, drawn ----
+// The trend's own marks in the findings panel's key idiom (`.fk*`): the cell's y
+// axis as a sample strip with both envelopes and its mean on it, and a dot of
+// each tone beside its own two words. Described instead, this was two 1270px
+// lines of 11px grey naming four colours and showing none of them.
+.trend_legend {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 16px 12px;
+  border-top: 1px solid $border;
+  border-radius: 0 0 7px 7px;
+  background: $bg-surface;
+}
+
+.trend_legend_line {
+  font-size: 11px;
+  line-height: 1.5;
+  color: $text-tertiary;
+
+  .fk_label {
+    margin-right: 5px;
+  }
+}
+
+// The cell's y axis, laid on its side: ±2 SD envelope, ±1 SD band, the two outer
+// boundaries drawn, and three dots on it in the three tones. Built on gradients
+// rather than an image, for the same reason `.fv_strip` is — one stylesheet, so
+// the key cannot drift from the mark.
+// The trend key's own group, not the findings table's `.fk_group__strip`: that
+// one is hidden on paper and below 1080px *with the column it keys*, and the
+// trend's bands are drawn at every width and on every sheet. A key that
+// disappears while its mark stays is worse than no key.
+.tk_group {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.tk_strip {
+  position: relative;
+  flex: 0 0 auto;
+  align-self: center;
+  width: 116px;
+  height: 12px;
+  border: 1px solid $border;
+  border-radius: 2px;
+  background-image:
+    linear-gradient($primary-050, $primary-050),
+    linear-gradient($primary-100, $primary-100),
+    linear-gradient($border-strong, $border-strong),
+    linear-gradient($border-strong, $border-strong);
+  background-size: 66.667% 100%, 33.334% 100%, 1px 12px, 1px 12px;
+  background-position: 16.667% 0, 33.333% 0, 16.667% 0, 83.333% 0;
+  background-repeat: no-repeat;
+}
+
+.tk_mean {
+  position: absolute;
+  top: -1px;
+  bottom: -1px;
+  left: 50%;
+  width: 1px;
+  background: $primary-600;
+  opacity: .6;
+}
+
+.tk_dot {
+  flex: 0 0 auto;
+  align-self: center;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  color: $text-primary;
+
+  &__warn {
+    color: $warn;
+  }
+
+  &__error {
+    color: $error;
+  }
+
+  &__flagged {
+    background: $bg-surface;
+    box-shadow: inset 0 0 0 1.6px currentColor;
+    color: $text-primary;
+  }
+}
+
+// A cell that has no standard deviation to be measured in — a published range,
+// or no norm at all — is drawn on its own unit, and its shading says so.
+.tk_hatch {
+  flex: 0 0 auto;
+  align-self: center;
+  width: 34px;
+  height: 11px;
+  border: 1px solid $border-strong;
+  border-radius: 2px;
+  background-image: repeating-linear-gradient(
+    135deg,
+    $border-strong 0, $border-strong 1px,
+    transparent 1px, transparent 4px
+  );
+}
+
+// ---- nothing to plot yet ----
+// Two traced films at two different dates is the whole precondition. The panel
+// takes the records panel's own empty-state construction — a drawn mark, a
+// headline, a hint and one primary action — because the action that meets the
+// precondition belongs beside the sentence that states it, not 600px up the page.
+.trend_empty {
+  // The well, at the panel's own width — the block inside it is centred (see
+  // `.empty`), and applied to the same element the two rules cancelled: a
+  // `bg-app` panel foot 460px wide in the middle of a white one.
+  display: flex;
+  flex-direction: column;
+  border-radius: 0 0 7px 7px;
+  background: $bg-app;
+}
+
+// The ghosted chart: a norm band, one film's reading, and a second stop with
+// nothing at it yet.
+.tea_band {
+  fill: $primary-100;
+  opacity: .55;
+}
+
+.tea_mean {
+  stroke: $primary-600;
+  stroke-width: 1;
+  stroke-dasharray: 3 2.5;
+  opacity: .4;
+}
+
+.tea_axis {
+  stroke: $border-strong;
+  stroke-width: 1.25;
+}
+
+.tea_guide {
+  stroke: $border;
+  stroke-width: 1;
+}
+
+.tea_seg {
+  stroke: $primary-600;
+  stroke-width: 1.6;
+  stroke-dasharray: 4 3;
+  opacity: .5;
+}
+
+.tea_dot {
+  fill: $primary-600;
+  stroke: $bg-app;
+  stroke-width: 1.5;
+}
+
+.tea_ghost {
+  fill: none;
+  stroke: $border-strong;
+  stroke-width: 1.5;
+  stroke-dasharray: 3 2.5;
+}
+
+// The second way out of the empty state, where there are two: one primary
+// action, everything else flat (see the design brief).
+.trend_empty_alt {
+  margin-top: 8px;
+  padding: 4px 8px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  font-family: $font-stack;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: $primary-600;
+  cursor: pointer;
+
+  &:hover {
+    background: $primary-050;
+  }
+
+  &:focus {
+    outline: none;
+    box-shadow: $focus-ring;
+  }
 }
 
 // ----------------------------------------------------------------- responsive
@@ -2896,6 +3819,21 @@ $fv-columns-narrow: $fv-c-name-1 $fv-c-value 116px 96px $fv-c-change;
 
   .fb {
     padding: 11px 12px 10px;
+  }
+
+  // A narrow window gets narrower cells rather than fewer of them: the grid is
+  // read by comparing measurements against each other, so two columns of legible
+  // sparklines beat one column of wide ones.
+  .trend_grid {
+    grid-template-columns: repeat(auto-fill, minmax(232px, 1fr));
+    padding: 12px;
+  }
+
+  .trend_axis,
+  .trend_pick,
+  .trend_legend {
+    padding-left: 12px;
+    padding-right: 12px;
   }
 }
 
@@ -3252,6 +4190,140 @@ $fv-columns-narrow: $fv-c-name-1 $fv-c-value 116px 96px $fv-c-change;
     display: none;
   }
 
+  // The trend prints, and it is the one figure on the sheet that says what the
+  // course of treatment did: the grid loses its screen chrome, the chips come
+  // off (nobody toggles a measurement on paper — the grid below them is the
+  // answer they asked for), and each cell becomes an unbreakable unit so a
+  // sparkline is never cut in half by a sheet edge. Three columns rather than the
+  // window's five: an A4 sheet is 180mm wide, and a 250-unit viewBox squeezed to
+  // 45mm loses its own tick labels.
+  .trend {
+    box-shadow: none;
+    border: none;
+    margin-bottom: 6pt;
+    // Head, axis and grid on one sheet. Broken between them, the sheet carried
+    // "AGE AT CAPTURE · T1 13 y 7 m · T2 14 y · T3 14 y 8 m" as its last line
+    // and the charts it scales began on the next one. Chrome breaks the panel
+    // anyway if it cannot fit, which is the right fallback: a grid that is
+    // taller than a page has to break somewhere, and `.tc` keeps the break
+    // between cells rather than through one.
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .trend_pick {
+    display: none;
+  }
+
+  .trend_axis {
+    padding: 3pt 0;
+    border-bottom: none;
+    background: none;
+    font-size: 8pt;
+  }
+
+  .trend_axis_token {
+    height: auto;
+    padding: 0 3pt;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .trend_grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6pt 8pt;
+    padding: 4pt 0 0;
+    background: #FFFFFF;
+  }
+
+  .tc {
+    padding: 3pt 4pt 2pt;
+    border-radius: 0;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  // The plot's type is HTML around the drawing rather than text inside a scaled
+  // viewBox, so it is set in points here and prints at the size it is set at. Set
+  // in user units it came out at roughly 5.5–6pt on the sheet — "27.7°" and
+  // "17.7" at the edge of legibility, on the one figure in the chart that says
+  // what the course of treatment did.
+  .tc_plotbox {
+    margin: 1pt 2pt 10pt 26pt;
+  }
+
+  .tc_ytick {
+    left: -3pt;
+    font-size: 6.5pt;
+  }
+
+  .tc_xtick {
+    font-size: 6.5pt;
+    transform: translate(-50%, 2pt);
+  }
+
+  .tc_val {
+    font-size: 6.5pt;
+    background: none;
+  }
+
+  .tc_delta {
+    font-size: 7pt;
+    background: none;
+  }
+
+  // Nothing on a sheet is hovered or focused.
+  .tc_pt_halo,
+  .tc_read {
+    display: none;
+  }
+
+  // …but the dots are the data, and they are HTML: without this Chrome drops
+  // every one of them on a sheet printed with background graphics off.
+  .tc_pt_dot {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .trend_legend {
+    padding: 3pt 0 0;
+    border-top: 1px solid $border;
+    background: none;
+  }
+
+  .trend_legend_line {
+    font-size: 7.5pt;
+    line-height: 1.35;
+  }
+
+  // The key's own samples are the marks themselves, so they print — with the
+  // tints forced, because a key whose band prints white is a key to nothing.
+  .tk_strip,
+  .tk_dot,
+  .tk_hatch {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .trend_empty {
+    padding: 4pt 0 0;
+    background: none;
+  }
+
+  // On paper the empty state is the sentence, not the offer: the ghosted axis is
+  // hidden with the records panel's own mark (`.empty_art`), and the two controls
+  // that fill the panel are things nobody can press on a sheet — the primary one
+  // with its own wrapper, whose 20px top margin is otherwise a band of white
+  // between the sentence and the next section's heading.
+  .trend_empty .empty_action,
+  .trend_empty_alt {
+    display: none;
+  }
+
+  .trend_empty .empty {
+    padding: 2pt 0 4pt;
+  }
+
   // The analysis findings print: what the films report is the clinical half of
   // an imaging record, and a chart filed without it is a list of radiographs.
   // The panel loses its screen chrome (the well's tint, the elevation) and each
@@ -3267,9 +4339,20 @@ $fv-columns-narrow: $fv-c-name-1 $fv-c-value 116px 96px $fv-c-change;
     border: none;
   }
 
+  // …and it does not end a sheet. A section heading and its note printed as the
+  // last two lines of a page with the first film's block on the next one, and
+  // ~35% of that page left blank: a heading is not content, it is a promise about
+  // the content under it.
   .findings_head {
     padding: 4pt 0 3pt;
     border-bottom: 1px solid $border-strong;
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+
+  .findings_body > .fb:first-child {
+    break-before: avoid;
+    page-break-before: avoid;
   }
 
   .findings_note_screen {

@@ -17,6 +17,7 @@ import EditRecordDialog from 'components/RecordMetaFields/EditRecordDialog';
 import RemoveRecordDialog from 'components/RecordMetaFields/RemoveRecordDialog';
 import EditPatientDialog, { PatientEditField } from './EditPatientDialog';
 import AnalysisFindings, { FilmFindings } from './AnalysisFindings';
+import TrendChart from './TrendChart';
 
 import { PatientDetails } from 'components/PatientFields';
 
@@ -410,6 +411,8 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
     // rail, the groups and the identity band's counts are all the same reading of
     // the same records.
     const groups = groupRecordsByTimepoint(records);
+    // The traced films of this record, read once for both analysis panels below.
+    const films = this.getFilmFindings();
     return (
       <section
         className={cx(classes.surface, className)}
@@ -642,10 +645,14 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
               </div>
               {this.renderRecordsFooter()}
             </section>
-            {/* …and what the analyses already say about the films in it. Read
-                only: this panel dispatches nothing and never changes which
-                analysis is active. */}
-            {this.renderAnalysisFindings()}
+            {/* …how the measurements moved across the visits above, and what
+                the analyses say about each film in it. Both panels are handed
+                the one reading of the record's traced films (`films` above), so
+                a figure in the chart is the figure in the table under it.
+                Read only: neither dispatches, and neither changes which analysis
+                is active. */}
+            {this.renderTrend(films, groups)}
+            {this.renderAnalysisFindings(films)}
             </td>
             </tr>
             </tbody>
@@ -1161,6 +1168,60 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
   };
 
   /**
+   * The record's measurements across its timepoints, plotted (see `TrendChart`):
+   * one cell per measurement, every cell on the same standard-deviation axis with
+   * its own norm band behind the patient's readings.
+   *
+   * It sits above the per-film blocks because that is the order it is read in —
+   * the chronology, then how the numbers moved along it, then the numbers
+   * themselves — and it is drawn from the very same films those blocks tabulate,
+   * so the two panels cannot disagree.
+   *
+   * Its empty state is given the two actions that would fill it: the slot path
+   * that files a film at the record's next visit, and the editor for a film that
+   * is on file but untraced. A panel that says "trace a second film" while the
+   * controls that do it are 600px up the page is a panel giving instructions.
+   */
+  private renderTrend = (
+    films: FilmFindings[] | null,
+    groups: Array<TimepointGroup<PatientRecord>>,
+  ) => {
+    if (films === null) {
+      return null;
+    }
+    const { patient } = this.props;
+    // The next visit this record does not have yet — the same label the timeline's
+    // closing "add" row proposes, so both offer one filing rather than two.
+    const labelled = groups.filter(({ label }) => label !== null).length;
+    const next = getDefaultTimepoint(Math.max(labelled, 1));
+    return (
+      <TrendChart
+        films={films}
+        // The axis is the patient's age on the day of each film wherever the
+        // record holds a birthday; the chart falls back to the capture date and
+        // says so, rather than plotting an age it cannot know.
+        dateOfBirth={patient !== null ? patient.dateOfBirth : undefined}
+        nextTimepointLabel={next}
+        onAddFilmAtNextTimepoint={this.handleAddFilmAt(next)}
+        onOpenFilm={this.props.onOpenRecord}
+      />
+    );
+  };
+
+  /**
+   * File a lateral cephalogram at a named visit — the trend panel's empty state,
+   * on the very path the visit slots use (`handleFillSlot`): the upload form opens
+   * already stating the type and the timepoint. No capture date is proposed,
+   * because a visit that does not exist yet has no day to lend.
+   */
+  private handleAddFilmAt = (timepoint: string) => () =>
+    this.props.onAddImage(this.props.emptyWorkspaceId, {
+      type: DEFAULT_IMAGE_TYPE,
+      timepoint,
+      captureDate: null,
+    });
+
+  /**
    * What the analyses already say about this patient — one block per traced
    * film, oldest first, headline first (see `AnalysisFindings`).
    *
@@ -1168,12 +1229,28 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
    * on a patient whose images are photographs the panel would be a heading over
    * a sentence the records panel above already states ("tracing is offered on
    * lateral cephalograms only").
+   */
+  private renderAnalysisFindings = (films: FilmFindings[] | null) => {
+    if (films === null) {
+      return null;
+    }
+    return (
+      <AnalysisFindings films={films} onOpenFilm={this.props.onOpenRecord} />
+    );
+  };
+
+  /**
+   * The traced films of this record, each with what its analysis reports and
+   * whether the norms could be read against the patient's age — resolved once
+   * and read by both the trend chart and the findings panel, so the two are one
+   * reading of one evaluation rather than two.
    *
    * The two demographics the norms are read against are resolved here rather
-   * than inside the panel, so the age it prints is the age the timeline stamps
-   * for the same film — one reading of one date of birth on one page.
+   * than inside a panel, so the age either of them prints is the age the
+   * timeline stamps for the same film — one reading of one date of birth on one
+   * page. Null where there is no film to report on at all.
    */
-  private renderAnalysisFindings = () => {
+  private getFilmFindings = (): FilmFindings[] | null => {
     const { records, analyses, patient } = this.props;
     if (analyses.length === 0 || records.length === 0) {
       return null;
@@ -1209,12 +1286,7 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
           : null,
       });
     });
-    if (films.length === 0) {
-      return null;
-    }
-    return (
-      <AnalysisFindings films={films} onOpenFilm={this.props.onOpenRecord} />
-    );
+    return films.length > 0 ? films : null;
   };
 
   /**

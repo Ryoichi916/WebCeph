@@ -82,8 +82,15 @@ export interface FilmFindings {
 type ResultComponent =
   CategorizedAnalysisResult<Category>['relevantComponents'][0];
 
-/** One measurement of the film, graded exactly as the Summary grades it. */
-interface ValueRow {
+/**
+ * One measurement of the film, graded exactly as the Summary grades it.
+ *
+ * Exported for the trend chart beside this panel (`./TrendChart`), which plots
+ * the very same rows across the record's timepoints: one reading of one
+ * evaluation, so a value cannot be graded amber in the table and clean in the
+ * chart 300px above it.
+ */
+export interface ValueRow {
   symbol: string;
   name: string | null;
   component: ResultComponent;
@@ -183,8 +190,12 @@ interface FilmView {
  * result groups; it is listed here under the first of them, which is the rule
  * the Summary's table and the report's tables both follow (see
  * `AnalysisResultsViewer/grouping`).
+ *
+ * Exported for the trend chart (`./TrendChart`) for the same reason `ValueRow`
+ * is: the chart plots what this table tabulates, and it must be the same rows
+ * built the same way rather than a second reading of the same results array.
  */
-const buildValueRows = (
+export const buildValueRows = (
   results: RecordAnalysis['results'],
   landmarksBySymbol: RecordAnalysis['landmarksBySymbol'],
   markers: { [symbol: string]: string | undefined },
@@ -1349,8 +1360,8 @@ const AnalysisFindings = ({ films, onOpenFilm }: AnalysisFindingsProps) => {
                   </span>
                 </span>
                 <span className={classes.fk_note}>
-                  band ±1 SD, ticks ±2 SD, mean at centre; dot amber over 1 SD
-                  and red over 2, ◂ ▸ off the axis
+                  band ±1 SD, ticks ±2 SD, mean at centre; amber over 1 SD, red
+                  over 2, ◂ ▸ off the axis
                 </span>
               </span>
             ) : null}
@@ -1368,26 +1379,27 @@ const AnalysisFindings = ({ films, onOpenFilm }: AnalysisFindingsProps) => {
                   />
                 </span>
                 <span className={classes.fk_note}>
-                  its own two bounds, hatched, and one range-width beyond each —
-                  its author published no SD, so it is not plotted on one
+                  its own two bounds, hatched, one range-width beyond each — its
+                  author published no SD
                 </span>
               </span>
             ) : null}
           </div>
+          {/* The one sentence of prose this key keeps: the reproducibility floor,
+              which is a *fact about hand plotting* and cannot be drawn. It used
+              to be two sentences over two lines, restating in words what the
+              dimmed ink beside it already shows. */}
           {hasChange ? (
             <span className={classes.findings_legend_line}>
-              Change is against the previous film of this record that reports the
-              same measurement. Hand plotting reproduces to about
-              ±{PLOTTING_ERROR.linear} mm on a point and
-              ±{PLOTTING_ERROR.angular}° on an angle, so a smaller change — and a
-              change of nothing at all — is dimmed: it is the same measurement
-              taken twice.
+              <span className={classes.fk_label}>Change</span> against the
+              previous film reporting it — dimmed under hand-plotting error
+              (±{PLOTTING_ERROR.linear} mm on a point, ±{PLOTTING_ERROR.angular}°
+              on an angle) or at exactly nothing.
             </span>
           ) : null}
           <span className={classes.findings_legend_line}>
-            <span className={classes.fv_key}>1</span> ties a measurement to the
-            finding above it was read for; a finding with no number has none
-            outside its norm.
+            <span className={classes.fv_key}>1</span> ties a row to the finding it
+            was read for; a chip with no number has no row outside its norm.
           </span>
           {/* One norms line for the whole panel when every block was graded
               against the same one (see `hoistedNorms`). */}
