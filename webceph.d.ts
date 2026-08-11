@@ -338,6 +338,20 @@ interface Analyses {
     'soft_tissues_photo_frontal' |
     'frontal_face_proportions'
   );
+  /**
+   * The intraoral series (occlusion, buccal segments). Nothing here measures it:
+   * no intraoral analysis is implemented, so this id — like `ricketts_frontal`,
+   * `panoramic_analysis` and the two photographic ids above — is declared and
+   * not implemented. It is never resolved to a module either, because a
+   * non-traceable image carries no active analysis at all (see
+   * `reconcileAnalysisWithType`). The key exists so `photo_intraoral` is a
+   * member of `ImageType`: an intraoral photograph is a record a clinic files,
+   * and it was previously folded into `photo_frontal` alongside the full-face
+   * photograph, which is a different record entirely.
+   */
+  photo_intraoral: (
+    'intraoral_photo_record'
+  );
   panoramic: (
     'panoramic_analysis'
   );
@@ -401,6 +415,20 @@ interface NormsProvenance {
    * Returns undefined when there is nothing extra to say.
    */
   patientNote?(context?: AnalysisContext): string | undefined;
+  /**
+   * The same reading as its *figures* — the corrected norms themselves, set as a
+   * compact run a clinician can scan ("Age 22 y · facial depth 90.0° · mand.
+   * plane 23.3° · convexity 0.2 mm · mand. arc 30.5°") — with none of the
+   * methodology `patientNote` explains around them.
+   *
+   * Written by the analysis' own author, exactly as `AnalysisCaveat.lede` is,
+   * and for the same reason: a 280px block on the records dashboard sets this
+   * and carries the full `patientNote` in the element's title and on paper,
+   * while the Summary dialog and the printed report set `patientNote` outright
+   * because they have the column for it. Optional — an analysis without one has
+   * its `patientNote` shown everywhere, which is the safe fallback.
+   */
+  patientLede?(context?: AnalysisContext): string | undefined;
 }
 
 /**
@@ -421,6 +449,18 @@ type AnalysisCaveat = {
   symbols: string[];
   /** The caveat, in the clinician's terms. */
   text: string;
+  /**
+   * The same caveat as a single line — what to do and why, in one clause:
+   * "Re-check Ar — these three angles read as a misplaced articulare".
+   *
+   * Written by the caveat's own author, never derived by cutting `text` at its
+   * first full stop. Compact surfaces (the records dashboard's findings panel)
+   * set this on screen and carry the full `text` in the row's title and on
+   * paper; the Summary dialog and the printed report set `text` outright,
+   * because they have the column for it. Optional: a caveat without one is
+   * shown in full everywhere, which is the safe fallback.
+   */
+  lede?: string;
 };
 
 interface Analysis<T extends ImageType> {
@@ -681,6 +721,18 @@ interface StoreState {
   'analyses.summary.isShown': boolean;
   /** Whether the patient records dashboard (timeline of every image) is open. */
   'records.dashboard.isShown': boolean;
+  /**
+   * The record slot the clinician asked to fill, or null when the next upload
+   * was not directed at one.
+   *
+   * Set by an empty type slot on the records dashboard ("Add profile photo" in
+   * T2's panel), read by the upload form, which opens already filed as that type
+   * at that timepoint and day instead of making the clinician re-enter what they
+   * just clicked. Transient — it is the pending intent of one upload, not part
+   * of the record — so it is not persisted with the project, and any other
+   * navigation clears it (see store/reducers/workspace/records).
+   */
+  'records.filing.intent': ImageRecordMeta | null;
   'workspaces.order': string[];
   'workspaces.activeWorkspaceId': string | null;
   'workspaces.settings': {
@@ -1018,6 +1070,14 @@ interface Events {
   /** Open/close the patient records dashboard. */
   SET_RECORDS_DASHBOARD_SHOWN: {
     isShown: boolean;
+  };
+  /**
+   * Direct the next upload at one record slot — the type, timepoint and day the
+   * clinician clicked on the records dashboard. Null undirects it.
+   * @see StoreEntries['records.filing.intent']
+   */
+  SET_RECORD_FILING_INTENT: {
+    intent: ImageRecordMeta | null;
   };
   /** Set the active analysis for a specific image. */
   SET_ACTIVE_ANALYSIS_REQUESTED: {

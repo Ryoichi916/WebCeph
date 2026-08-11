@@ -229,6 +229,7 @@ const rules: Array<[
           type === 'ceph_pa' ||
           type === 'photo_lateral' ||
           type === 'photo_frontal' ||
+          type === 'photo_intraoral' ||
           type === 'panoramic'
         );
       });

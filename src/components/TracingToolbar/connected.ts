@@ -13,10 +13,16 @@ import {
   setScale,
   setScaleFactor,
   unsetScaleFactor,
+  setImageProps,
+  setActiveWorkspace,
+  removeWorkspace,
+  closeImage,
   undo,
   redo,
 } from 'actions/workspace';
-import { canUndo, canRedo } from 'store/reducers/workspace';
+import {
+  canUndo, canRedo, getPatientRecords, PatientRecord,
+} from 'store/reducers/workspace';
 import {
   getManualSteps,
   isSummaryShown,
@@ -46,8 +52,15 @@ const mapStateToProps =
       ? getManualSteps(state)(imageId)
           .filter(({ symbol }) => manual[symbol] === undefined).length
       : 0;
+    // The record this image is, and the patient's other records: the toolbar's
+    // record menu corrects or removes *this* film, and a removal needs another
+    // tile to land on.
+    const records = getPatientRecords(state);
+    const record = records.filter((r) => r.imageId === imageId)[0];
     return {
       missingLandmarkCount,
+      records,
+      record: record !== undefined ? record : null,
       // Auto-plot needs an image and an analysis whose manual steps define which
       // landmarks to place. The active predictor (see predictors/index.ts) does
       // the plotting; results are injected as a single undoable batch that can
@@ -122,6 +135,33 @@ const mapDispatchToProps =
     onUnsetScaleFactor: () => {
       if (imageId !== null) {
         dispatch(unsetScaleFactor({ imageId }));
+      }
+    },
+    // Exactly the paths the records dashboard and the read-only record viewer
+    // use — one data path per record action, whatever surface it is invoked from.
+    onSaveRecordMeta: (meta: ImageRecordMeta) => {
+      if (imageId !== null) {
+        dispatch(setImageProps({
+          id: imageId,
+          type: meta.type,
+          timepoint: meta.timepoint,
+          captureDate: meta.captureDate,
+        }));
+      }
+    },
+    onRemoveRecord: (
+      record: PatientRecord, fallbackWorkspaceId: string | null,
+    ) => {
+      dispatch(closeImage({
+        imageId: record.imageId,
+        workspaceId: record.workspaceId,
+      }));
+      if (fallbackWorkspaceId !== null) {
+        dispatch(setActiveWorkspace({ id: fallbackWorkspaceId }));
+        dispatch(removeWorkspace({
+          id: record.workspaceId,
+          removeUnreferencedImages: true,
+        }));
       }
     },
   });

@@ -30,6 +30,16 @@ export interface StateProps {
    */
   needsScaleForLinear: boolean;
   /**
+   * The film's mm/px calibration and its pixel size, so the table can flag a
+   * scale that cannot be right. The records dashboard already demotes such a
+   * calibration to amber ("Calibrated · check scale / film 83 × 100 mm"); this
+   * dialog reported millimetre values derived from the same number with no flag,
+   * so one film carried two verdicts on its own scale.
+   */
+  scaleFactor: number | null;
+  imageWidth: number | null;
+  imageHeight: number | null;
+  /**
    * Warnings the analysis draws from its own values — a landmark its numbers
    * say is misplaced, not a finding about the patient (see `AnalysisCaveat`).
    * The rows named are marked in the table and the text prints under it.

@@ -461,6 +461,29 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+
+  // An image scale that cannot be right is not printed as a plain fact: the
+  // records dashboard demotes the same film's chip to amber, and a sheet that
+  // certified it in black gave one film two verdicts on its own scale.
+  &__warn {
+    color: $warn;
+  }
+}
+
+// A reading the value cannot carry itself — what a mm/px scale means in
+// millimetres of film.
+.patient_note {
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  color: $text-tertiary;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+
+  &__warn {
+    font-weight: 600;
+    color: $warn;
+  }
 }
 
 // ---- Section labels --------------------------------------------------------

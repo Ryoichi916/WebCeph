@@ -23,6 +23,18 @@ export interface RecordMetaFieldsProps {
   hint?: string;
   /** Latest date the capture-date field accepts (defaults to today). */
   maxCaptureDate?: string;
+  /**
+   * Whether the field-level note about a non-traceable type is shown
+   * (default true).
+   *
+   * The "Edit details" dialog states the consequence of the type it is being
+   * changed *to* in its own effect line, and with both on screen the dialog
+   * stacked two amber panels saying one thing twice: "Intraoral photographs are
+   * stored and displayed with the record, but cephalometric tracing is only
+   * offered on lateral cephalograms" immediately above "…it will be kept with
+   * the record but shown read-only…". The surface that says it better keeps it.
+   */
+  showTypeNote?: boolean;
   className?: string;
 }
 
@@ -41,7 +53,9 @@ export interface RecordMetaFieldsProps {
 export default class RecordMetaFields
   extends React.PureComponent<RecordMetaFieldsProps, { }> {
   render() {
-    const { className, title, hint, maxCaptureDate } = this.props;
+    const {
+      className, title, hint, maxCaptureDate, showTypeNote = true,
+    } = this.props;
     const { type, timepoint, captureDate } = this.props.value;
     const dateEcho = formatCaptureDate(captureDate);
     return (
@@ -108,7 +122,7 @@ export default class RecordMetaFields
             </span>
           </label>
         </div>
-        {isTraceableImageType(type) ? null : (
+        {isTraceableImageType(type) || !showTypeNote ? null : (
           <p className={classes.record_note}>
             {getImageTypeLabel(type)}s are stored and displayed with the
             record, but cephalometric tracing is only offered on lateral

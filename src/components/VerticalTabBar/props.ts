@@ -23,6 +23,19 @@ export interface StateProps {
    * tile says what it is instead of only how many tiles precede it.
    */
   captions: { [workspaceId: string]: TabCaption | undefined };
+  /**
+   * The tile a slot-directed upload is waiting on, if any — the empty tile the
+   * clinician was sent to by pressing "Add frontal ceph" on the records
+   * dashboard.
+   *
+   * Without it the tile was a filled black square carrying a bare ordinal
+   * ("2", "4"): indistinguishable from a loaded film whose thumbnail failed, and
+   * silent about the filing that had just been chosen while every filed tile
+   * beside it read "T1 / Lat ceph".
+   */
+  pendingWorkspaceId: string | null;
+  /** What that pending tile is filing (from the filing intent, not the form). */
+  pendingCaption: TabCaption | null;
 }
 
 

@@ -22,6 +22,8 @@ import { mapCategoryToString } from 'components/AnalysisResultsViewer/strings';
 
 import { formatScale } from 'components/TracingToolbar/CalibrationDialog';
 
+import { getImpliedFilmSize, FILM_SIZE_BAND } from 'utils/records';
+
 import { buildProfilogram } from 'analyses/profilogram';
 import {
   evaluateAnalysis,
@@ -376,7 +378,29 @@ export default class ClinicalReport extends React.PureComponent<Props, State> {
     const withheldLinear = isCombined
       ? this.getSections().some((s) => s.evaluation.pendingScaleCount > 0)
       : this.props.needsScaleForLinear;
-    const scaleBanner = (scaleFactor === null && withheldLinear) ? (
+    // What the scale says the film physically measures, and whether that is
+    // possible for a cephalogram. The records dashboard already demotes an
+    // implausible calibration to amber ("Calibrated · check scale / film
+    // 83 × 100 mm"); this sheet printed the same film's "IMAGE SCALE 0.104 mm/px"
+    // with no flag at all, so one film got two verdicts on its own scale — and
+    // every millimetre in the tables below is scaled by the same wrong factor.
+    const filmSize = getImpliedFilmSize(
+      this.props.imageWidth, this.props.imageHeight, scaleFactor,
+    );
+    const isScaleSuspect = filmSize !== null && !filmSize.isPlausible;
+    const scaleBanner = isScaleSuspect && filmSize !== null ? (
+      <p className={classes.caveat}>
+        <strong className={classes.caveat_head}>
+          Check the image scale before reading the millimetre values.
+        </strong>
+        The stated scale of {formatScale(scaleFactor!)} makes this film
+        {' '}{filmSize.label} — outside the {FILM_SIZE_BAND.minMm}–
+        {FILM_SIZE_BAND.maxMm} mm a cephalogram measures. Every linear (mm) value
+        in this report is derived from that scale and is wrong by the same factor
+        if it is. Angles and ratios are unaffected. Re-calibrate against a known
+        distance on the film and reprint.
+      </p>
+    ) : (scaleFactor === null && withheldLinear) ? (
       <p className={classes.caveat}>
         <strong className={classes.caveat_head}>
           Millimetre measurements are withheld from this report.
@@ -630,11 +654,29 @@ export default class ClinicalReport extends React.PureComponent<Props, State> {
                 </div>
                 <div className={classes.patient_cell}>
                   <span className={classes.patient_label}>Image scale</span>
-                  <span className={classes.patient_value}>
+                  <span
+                    className={cx(classes.patient_value, {
+                      [classes.patient_value__warn]: isScaleSuspect,
+                    })}
+                  >
                     {scaleFactor !== null
                       ? formatScale(scaleFactor)
                       : 'Not calibrated'}
                   </span>
+                  {/* The scale as a physical claim about the film — the one
+                      reading of a mm/px figure a clinician can check without the
+                      ruler in front of them, and flagged where it is impossible.
+                      Same wording as the records dashboard's own card. */}
+                  {filmSize !== null ? (
+                    <span
+                      className={cx(classes.patient_note, {
+                        [classes.patient_note__warn]: isScaleSuspect,
+                      })}
+                    >
+                      film {filmSize.label}
+                      {isScaleSuspect ? ' · check scale' : ''}
+                    </span>
+                  ) : null}
                 </div>
               </div>
             </div>
@@ -688,7 +730,9 @@ export default class ClinicalReport extends React.PureComponent<Props, State> {
                   : 'No landmarks traced'}
                 <span className={classes.caption_dot}>·</span>
                 {scaleFactor !== null
-                  ? `Calibrated · ${formatScale(scaleFactor)}`
+                  ? (isScaleSuspect
+                    ? `Calibrated · ${formatScale(scaleFactor)} — scale needs checking`
+                    : `Calibrated · ${formatScale(scaleFactor)}`)
                   : 'Not calibrated — angular values unaffected'}
               </figcaption>
               {/* What the reader is looking at. Without a key the tags, the

@@ -15,6 +15,8 @@ import {
   PatientRecord,
 } from 'store/reducers/workspace';
 
+import { getRecordAnalyses } from './selectors';
+
 import { getWorkspacesIdsInOrder } from 'store/reducers/workspace/order';
 import { getWorkspaceImageIds } from 'store/reducers/workspace/settings';
 
@@ -27,6 +29,7 @@ import { PatientDetails } from 'components/PatientFields';
 
 import {
   setRecordsDashboardShown,
+  setRecordFilingIntent,
   setActiveWorkspace,
   setActiveImageId,
   addNewWorkspace,
@@ -53,6 +56,10 @@ const mapStateToProps = (state: StoreState): StateProps => {
   return {
     patient,
     records: getPatientRecords(state),
+    // Read-only: this selector never dispatches and never changes which
+    // analysis is active — it reads each film's own analysis through the store's
+    // own per-image selectors (see ./selectors).
+    analyses: getRecordAnalyses(state),
     otherChartIds: getPatientsList(state)
       .filter((p) => patient === null || p.id !== patient.id)
       .map((p) => p.chartId || ''),
@@ -75,7 +82,16 @@ const mapDispatchToProps = (dispatch: GenericDispatch): DispatchProps => ({
   },
   // Exactly the rail ghost tile's path (see VerticalTabBar/connected), reusing
   // an already-empty tile when one exists rather than stacking blank tiles.
-  onAddImage: (emptyWorkspaceId: string | null) => {
+  //
+  // `intent` carries the slot the clinician clicked (type + timepoint + the
+  // visit's day) through to the upload form, which opens on those values instead
+  // of asking for them again. It is dispatched *last* deliberately: switching or
+  // adding a rail tile clears a pending intent (that is what keeps a stale one
+  // from stamping an unrelated upload — see the records reducer), so the tile
+  // move has to happen first.
+  onAddImage: (
+    emptyWorkspaceId: string | null, intent?: ImageRecordMeta | null,
+  ) => {
     if (emptyWorkspaceId !== null) {
       dispatch(setActiveWorkspace({ id: emptyWorkspaceId }));
     } else {
@@ -83,6 +99,9 @@ const mapDispatchToProps = (dispatch: GenericDispatch): DispatchProps => ({
       dispatch(addNewWorkspace({ id }));
       dispatch(setActiveWorkspace({ id }));
     }
+    dispatch(setRecordFilingIntent({
+      intent: intent !== undefined ? intent : null,
+    }));
     dispatch(setRecordsDashboardShown({ isShown: false }));
   },
   // A patient's own details are corrected with the same action registration

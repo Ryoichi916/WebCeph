@@ -77,3 +77,12 @@
     font-variant-numeric: tabular-nums;
   }
 }
+
+// Screen-only: the modal layer must not print. Passed to mui's Dialog as both
+// `className` and `overlayClassName` — nothing else in the document can reach
+// the layer it renders into.
+.no_print {
+  @media print {
+    display: none !important;
+  }
+}

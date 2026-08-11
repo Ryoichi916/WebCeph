@@ -161,11 +161,10 @@ $page-gutter-narrow: 12px;
   scroll-padding: 53px 0 48px;
 }
 
-// The page is one column: the identity header, then the records panel. It is at
-// least as tall as the window (`flex: 1 0 auto`), which is what lets a sparse
-// records panel take the slack rather than leave 285-400px of flat app grey
-// under a floating card. A full list is still sized to its records — stretching
-// *that* panel is what opened a bordered grey void under the last record.
+// The page is one column: the identity header, then the records panel. It fills
+// the window's height (`flex: 1 0 auto`) so the app's own ground reaches the
+// bottom edge — the blocks *inside* it are each sized to their content, which is
+// what the panel's own history is about (see `.records`).
 // It is a `<table>` in the markup (see the print block: only a real `<thead>`
 // repeats a running head across printed sheets), and none of that is true of the
 // layout: `display: flex` on the table and `display: contents` on its row group,
@@ -324,7 +323,7 @@ $page-gutter-narrow: 12px;
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 3px;
+  gap: 4px;
   padding: 2px 0;
 }
 
@@ -507,11 +506,15 @@ $page-gutter-narrow: 12px;
 // chrome — the well's corners are rounded on the head and the foot instead.)
 
 .records {
-  // Always sized to its records. Stretched into the page's slack, a one-record
-  // chart was a 123px card above a 410px dashed box inside a 660px panel: the
-  // record was 19% of the panel's ink, and the eye landed on the empty target
-  // rather than on the film. What a short record has instead of slack is the
-  // filing checklist under its cards (`.filing`) — information, sized to itself.
+  // Sized to its records, at every list length — the one rule this panel keeps.
+  //
+  // It used to take the scrollport's slack (`flex: 1 0 auto`), and every attempt
+  // to *fill* that slack made the panel worse: first a dashed "add" box grown to
+  // 410px under a 123px card, then — with the add row and the coverage note
+  // pinned to the panel's bottom edge instead — ~390px of void in BOTH columns at
+  // one record and a 668px empty card holding 340px of content. A records panel
+  // that ends where its records end is what a clinical suite ships; what lies
+  // below it is the page's own ground, not a bordered void.
   flex: 0 0 auto;
   display: flex;
   flex-direction: column;
@@ -606,21 +609,174 @@ $page-gutter-narrow: 12px;
   color: $text-tertiary;
 }
 
-// A flex column that centres its child, so the empty state is centred in the
-// well it is given rather than sitting at the top of it (a percentage height on
-// the empty block could not resolve here and never centred anything).
+// Why the CHANGE column is not on the page, on its own line in the panel's head:
+// a single film on record, or films whose analyses share no measurement. Said
+// once, here, rather than as a per-cell tooltip on fifteen em-dashes.
+.findings_note_gap {
+  display: block;
+  font-weight: 500;
+  color: $text-secondary;
+}
+
+// A flex column sized to what it holds: the visits at their own heights, then the
+// row that adds the next film directly beneath the last of them. Nothing here is
+// distributed into slack — the panel has none (see `.records`).
 .records_body {
-  flex: 1 1 auto;
+  flex: 0 0 auto;
   min-height: 0;
   display: flex;
   flex-direction: column;
-  justify-content: center;
   background: $bg-app;
 
   // With nothing on file there is no footer, so the well closes the panel.
   &__flush {
     border-radius: 0 0 7px 7px;
   }
+
+  // The closing bar is `position: sticky`, so on a list taller than the window it
+  // floats over the foot of this well — and what was under it was *permanently*
+  // under it, at every scroll position including the last: at four records the
+  // coverage note's final line ("photographic series.") and the trailing add row
+  // both sat inside the bar's 20px. The bar's height is reserved instead, so the
+  // panes' own closing content clears it once the page is scrolled home.
+  //
+  // On the panes, not on the well: given to the well, the coverage pane's white
+  // column stopped 40px short of the footer and the two-pane composition ended on
+  // a grey band. 40px is the bar (~32px) plus one step of the spacing scale.
+  &__footed {
+    .timeline,
+    .coverage {
+      padding-bottom: 56px;
+    }
+  }
+}
+
+// The panel's two panes: the chronology, and (at a wide window) what the case
+// holds across every visit. One row, `stretch` so the pane divider and the
+// coverage column's own ground run the whole height of the well — the height
+// being whichever pane's *content* is taller, never the window's.
+.records_panes {
+  flex: 0 0 auto;
+  min-height: 0;
+  display: flex;
+  align-items: stretch;
+}
+
+// ---- Case coverage ---------------------------------------------------------
+// One row per image type this app files, naming the visits that hold it. The
+// per-visit slot rows answer "what is missing at T2"; this answers "does this
+// case have a panoramic at all", which no other element on the surface does.
+//
+// Screen only, and only where there is width for it: below 1200px the timeline
+// gets the whole panel, and on paper each visit prints its own "not filed" list.
+.coverage {
+  display: none;
+}
+
+@media (min-width: 1200px) {
+  .coverage {
+    box-sizing: border-box;
+    flex: 0 0 244px;
+    display: flex;
+    flex-direction: column;
+    padding: 14px 16px 16px;
+    border-left: 1px solid $border;
+    background: $bg-surface;
+  }
+}
+
+.coverage_head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid $border;
+}
+
+.coverage_title {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: $text-tertiary;
+}
+
+.coverage_count {
+  font-size: 11.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: $text-secondary;
+  white-space: nowrap;
+}
+
+.coverage_list {
+  margin: 0;
+  padding: 0;
+}
+
+.coverage_row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 0;
+  border-bottom: 1px solid $border;
+}
+
+.coverage_type {
+  min-width: 0;
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1.3;
+  color: $text-primary;
+}
+
+.coverage_at {
+  flex: 0 0 auto;
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+// The visit that holds it, in the timepoint badge's own language — one token per
+// visit, so "Lateral cephalogram · T1 T2" is read at a glance.
+.coverage_token {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: $primary-050;
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: $primary-900;
+  white-space: nowrap;
+}
+
+// Absent, stated as absent — in the slots' own quiet grey, never in amber: a
+// case is not incomplete for holding no panoramic.
+.coverage_none {
+  font-size: 11.5px;
+  color: $text-tertiary;
+  white-space: nowrap;
+}
+
+.coverage_note {
+  // Directly under the list it qualifies. Pinned to the foot of the pane
+  // (`margin-top: auto`) it was the second half of one defect: inside a pane
+  // whose panel was stretched to the window it opened ~390px between the last
+  // type row and the note, and once the list *was* taller than the window it
+  // pinned the note into the sticky footer's 20px, where the sentence ended
+  // "a case is complete without a panoramic or a".
+  margin: 10px 0 0;
+  padding-top: 10px;
+  font-size: 11px;
+  line-height: 1.45;
+  color: $text-tertiary;
 }
 
 // Closing line of the panel: how much of the record is ready to report on,
@@ -668,6 +824,15 @@ $page-gutter-narrow: 12px;
 
 .records_foot_item {
   white-space: nowrap;
+
+  // The one figure in this bar that is not a tally but a warning: films whose
+  // calibration implies a physically impossible cephalogram. Same $warn the
+  // cards' own "Calibrated · check scale" chips carry, so the summary line and
+  // the rows it summarises say one thing.
+  &__warn {
+    font-weight: 600;
+    color: $warn;
+  }
 }
 
 .records_foot_spacer {
@@ -756,36 +921,58 @@ $page-gutter-narrow: 12px;
 $tp-gutter: 136px;   // flex-basis of .group_when, right edge = where the rail is
 $tp-gap: 16px;       // gutter -> cards
 
+// The chronology pane: the visits, then the row that adds the next film.
 .timeline {
-  position: relative;
   flex: 1 1 auto;
-  margin: 0;
+  min-width: 0;
   padding: 16px 24px;
+  display: flex;
+  flex-direction: column;
+}
+
+// The visits themselves — and the rail's containing block, which is the whole
+// point of it being an element of its own: the rail can then only span the
+// groups. Spanning the list that *also* held the trailing add row, its bottom
+// edge was that row's, so a short last visit left ~90px of grey line hanging
+// below the final node into empty space.
+.groups {
+  position: relative;
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 0;
   list-style: none;
-  // A column, so the trailing "add" row can be handed the well's slack while
-  // every timepoint keeps its own content height.
   display: flex;
   flex-direction: column;
 }
 
 // The timeline rail: ONE absolutely-positioned 2px line for the whole list.
-// It starts at the first node's centre (20px list padding + 23px node offset)
-// and stops at the content-box bottom (`bottom: 24px` = the list's own bottom
-// padding); the stretch between the last node and that edge is painted out by
-// the last group's stamp (.group:last-child .group_when::after), so the line
-// runs exactly first node -> last node with no stubs and no gaps.
+// It starts at the first node's centre (12px stamp padding + the node's own
+// 17px + 6px = 23px from the first group's top) and ends at the last group's
+// bottom edge, with the stretch below the last node painted out by that group's
+// stamp (.group:last-child .group_when::after) — so the line runs exactly first
+// node -> last node with no stubs and no gaps.
 // $border (#DDE3EA) on the well's $bg-app (#F4F6F9) is 1.1:1 — the chronology
 // that organises the whole screen could not be seen at 100%. $border-strong is
 // the rule colour the brief gives table headers and inputs, and it is the
 // lightest line that actually reads on this background.
 .timeline_rail {
   position: absolute;
-  top: 39px;
-  bottom: 16px;
-  // Right edge of the timepoint gutter, inside the list's 24px left padding.
-  left: 24px + $tp-gutter - 2px;
+  top: 23px;
+  bottom: 0;
+  // Right edge of the timepoint gutter (the groups start at the pane's padding).
+  left: $tp-gutter - 2px;
   width: 2px;
   background: $border-strong;
+}
+
+// One visit on file: no chronology to draw, so neither the rail nor its node is
+// drawn. (The stamp still carries the label, the day and the age — the node's own
+// fact.)
+.timeline__single {
+  .timeline_rail,
+  .group_node {
+    display: none;
+  }
 }
 
 .group {
@@ -825,8 +1012,9 @@ $tp-gap: 16px;       // gutter -> cards
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 3px;
-  padding: 12px 18px 12px 0;
+  // On the spacing scale, like every other measurement on this surface.
+  gap: 4px;
+  padding: 12px 16px 12px 0;
   margin-right: $tp-gap;
 }
 
@@ -841,16 +1029,17 @@ $tp-gap: 16px;       // gutter -> cards
   overflow-wrap: anywhere;
 }
 
-// The rail stops at the last timepoint's node; the stretch below it is painted
-// out here. `:nth-last-child(2)` is that group when the trailing "add another
-// image" row closes the list (it is the last child then); `:last-child` covers
-// a list without one.
+// The rail stops at the last timepoint's node; the stretch below it (that
+// group's own height below the node) is painted out here. The list holds nothing
+// but groups now, so `:last-child` *is* the last visit — the
+// `:nth-last-child(2)` this rule used to carry as well, for when the trailing
+// add row was the list's last child, would today paint out the second-to-last
+// visit's rail.
 // It starts *below* the node, not at its middle: painted from the node's own
 // middle, this strip of app grey went straight through the lower half of the
 // node, so the last timepoint of every record — the newest films, the ones a
 // clinician opens the chart for — was marked by a broken ring.
-.group:last-child .group_when::after,
-.group:nth-last-child(2) .group_when::after {
+.group:last-child .group_when::after {
   content: '';
   position: absolute;
   top: 30px;
@@ -977,7 +1166,7 @@ $tp-gap: 16px;       // gutter -> cards
   flex: 0 0 auto;
   min-width: 0;
   display: flex;
-  align-items: stretch;
+  flex-direction: column;
   background: transparent;
   transition: background-color 120ms ease;
 
@@ -1014,6 +1203,33 @@ $tp-gap: 16px;       // gutter -> cards
   }
 }
 
+// The card's own first line: the open affordance and the two record actions. It
+// is a row inside the card so the card itself can carry a second line — the
+// "file this at" chips an untimepointed image needs (a chip row cannot live
+// inside `.card_open`, which is a button).
+.card_row {
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+}
+
+// Filing an image that carries no timepoint onto a visit already on file. Same
+// pills as the empty type slots, and the same standing: a proposal the clinician
+// makes with one press, not a task the record is failing.
+.file_at {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  padding: 0 12px 10px 20px;
+}
+
+.file_at_date {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: $text-tertiary;
+}
+
 // Three columns inside the row: the film, what the film is and how far it has
 // got, and the file's own technicals pulled to the row's right edge.
 //
@@ -1035,6 +1251,10 @@ $tp-gap: 16px;       // gutter -> cards
   border-radius: 0;
   background: transparent;
   font-family: inherit;
+  // A `<button>` inherits neither the page's font size nor its family, so
+  // anything inside this row that does not set its own size fell back to the UA's
+  // 13.333px button default. Stated once, at the brief's list-row size.
+  font-size: 13.5px;
   text-align: left;
   cursor: pointer;
 
@@ -1154,7 +1374,14 @@ $tp-gap: 16px;       // gutter -> cards
 .card_tech {
   grid-area: tech;
   justify-self: end;
-  min-width: 0;
+  // One column for the whole page, not one per row: right-anchored alone, the
+  // hairline landed wherever that row's own facts happened to end — 1029px on a
+  // ceph, 1137px on the photograph directly beneath it inside the *same* visit
+  // panel, so the panel had a ragged rule down its middle. The floor is the
+  // widest technicals a record carries ("SCALE 0.104 mm/px · film 83 × 100 mm"),
+  // so every rule on the page is one line and the row's slack falls to the left
+  // of it.
+  min-width: 240px;
   // Stretched, so the hairline is the height of the row rather than a 50px stub
   // floating in the middle of it.
   align-self: stretch;
@@ -1335,27 +1562,18 @@ $tp-gap: 16px;       // gutter -> cards
 }
 
 // The trailing "add" row closes the list: the same action as the page bar's,
-// offered where the reader arrives after the newest record. One height at every
-// list length — grown to the panel's slack it was a 410px dashed box with a 116px
-// illustration in it, four times the ink of the record it sat under.
+// offered where the reader arrives after the newest record — directly beneath the
+// last visit, 12px under it, the same air a visit's own panel keeps from the next
+// visit's stamp, and no more.
+//
+// It has been pinned to the pane's bottom edge twice, and both times that was the
+// defect: first as a dashed row *grown* to 410px under a 123px card, then (with
+// `margin-top: auto`) as a 44px row left ~390px below the newest film, sitting
+// under the sticky footer at a longer list. The chronology ends where the records
+// end, and the invitation to extend it follows them.
 .add_entry {
-  position: relative;
-  list-style: none;
-  padding-top: 4px;
-}
-
-// The rail belongs to the chronology and must end on the last timepoint's node,
-// so the gutter behind this row (and the last group's own bottom padding) is
-// painted out. The offset is the rail's x less the list's own left padding, i.e.
-// the gutter's width less the rail's 2px.
-.add_entry::before {
-  content: '';
-  position: absolute;
-  top: -24px;
-  bottom: 0;
-  left: $tp-gutter - 2px;
-  width: 2px;
-  background: $bg-app;
+  flex: 0 0 auto;
+  padding-top: 12px;
 }
 
 .add_row {
@@ -1401,112 +1619,101 @@ $tp-gap: 16px;       // gutter -> cards
   gap: 8px;
 }
 
-// ---- Filing checklist ------------------------------------------------------
-// Under a short record: which of the image types this record holds and which it
-// does not. This is the space a one-to-four-image chart used to spend on a
-// 410px dashed button — information instead of a bigger target, and every line of
-// it read off the records.
+// ---- Empty type slots ------------------------------------------------------
+// The closing row of a visit's panel: one quiet slot per image type this visit
+// has not got. It answers the question a clinician opens a chart with — what is
+// this case missing? — in the place where it can be answered, because pressing a
+// slot opens the upload form already filed as that type at that timepoint.
+//
+// Deliberately the lightest thing on the row: a hairline-dashed pill in
+// $text-secondary, no fill, on the panel's own white. A record is not incomplete
+// for holding no panoramic, so a slot must never read like an outstanding task
+// the way an amber chip on the card above it does.
+//
+// (It replaced a record-level checklist of the same types under the timeline —
+// see renderGroupSlots.)
 
-.filing {
-  box-sizing: border-box;
-  margin: 0 24px 20px;
-  // Aligned with the cards, so the timeline's gutter stays the gutter.
-  margin-left: 24px + $tp-gutter + $tp-gap;
-  padding: 12px 16px;
-  border: 1px solid $border;
-  border-radius: 8px;
-  background: $bg-surface;
-}
-
-.filing_head {
+.slots {
+  flex: 0 0 auto;
   display: flex;
   align-items: baseline;
-  gap: 8px;
-  margin-bottom: 8px;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  padding: 9px 12px 10px;
+  // Dashed, where a record row's divider is solid: what follows this line is not
+  // an image on file, and the rule says so before the words do.
+  border-top: 1px dashed $border-strong;
 }
 
-.filing_title {
+.slots_label {
+  flex: 0 0 auto;
   font-size: 11px;
   font-weight: 600;
   letter-spacing: .06em;
   text-transform: uppercase;
   color: $text-tertiary;
+  white-space: nowrap;
 }
 
-.filing_count {
-  font-size: 12px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  color: $text-secondary;
-}
-
-.filing_list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 4px 24px;
-}
-
-.filing_item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+.slots_list {
+  flex: 1 1 auto;
   min-width: 0;
-  padding: 3px 0;
-  font-size: 13px;
-  color: $text-tertiary;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
 
-  &__held {
-    color: $text-primary;
+.slot {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  padding: 0 10px 0 7px;
+  border: 1px dashed $border-strong;
+  border-radius: 999px;
+  background: transparent;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1;
+  color: $text-secondary;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: border-color 120ms ease, color 120ms ease,
+    background-color 120ms ease;
+
+  // The empty slot becomes a real target under the pointer — the app's own
+  // list-row hover tint, and the dash closes into a line.
+  &:hover {
+    border-style: solid;
+    border-color: $primary-500;
+    background: $primary-050;
+    color: $primary-700;
+  }
+
+  &:focus {
+    outline: none;
+    box-shadow: $focus-ring;
+    border-style: solid;
+    border-color: $primary-600;
   }
 }
 
-.filing_mark {
+// Two strokes in `currentColor`, so the chip's `+`, border and label change
+// together on hover and focus.
+.slot_plus {
   flex: 0 0 auto;
   display: block;
 }
 
-// The stepper's own status marks: a $success disc with a white tick for what is
-// done, a hollow $border-strong ring for what is not.
-.filing_mark_disc {
-  fill: $success;
+.slot_label {
+  display: inline;
 }
 
-.filing_mark_tick {
-  stroke: #FFFFFF;
-}
-
-.filing_mark_ring {
-  stroke: $border-strong;
-}
-
-.filing_label {
-  flex: 1 1 auto;
-  min-width: 0;
-  font-weight: 500;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.filing_state {
-  flex: 0 0 auto;
-  font-size: 12px;
-  font-weight: 500;
-  font-variant-numeric: tabular-nums;
-  color: $text-tertiary;
-}
-
-// Said once, so a hollow ring is never read as an outstanding task.
-.filing_note {
-  margin: 10px 0 0;
-  padding-top: 8px;
-  border-top: 1px solid $border;
-  font-size: 12px;
-  line-height: 1.45;
-  color: $text-tertiary;
+// Print-only: the type's own name, in place of the instruction the screen shows.
+.slot_print {
+  display: none;
 }
 
 // ---- Empty state -----------------------------------------------------------
@@ -1529,30 +1736,35 @@ $tp-gap: 16px;       // gutter -> cards
   display: block;
 }
 
-.empty_folder {
-  fill: $bg-surface;
-  stroke: $border-strong;
-  stroke-width: 1.5;
-  stroke-linejoin: round;
-}
-
-// Front pocket of the folder: its own edge, so the folder reads as a folder and
-// not as a rectangle with a bite taken out of it.
-.empty_pocket {
+// The folder: a sunken tab behind, a white pocket in front. Two tones, because
+// one flat grey shape on the well's own grey read as a rounded rectangle with a
+// notch in it rather than as a folder.
+.empty_tab {
   fill: $bg-sunken;
   stroke: $border-strong;
   stroke-width: 1.5;
   stroke-linejoin: round;
 }
 
-.empty_card {
+.empty_pocket {
   fill: $bg-surface;
   stroke: $border-strong;
   stroke-width: 1.5;
+  stroke-linejoin: round;
 }
 
+// The film itself, in the app's own canvas black — the colour every radiograph
+// in this app is displayed on.
+.empty_film {
+  fill: $canvas-bg;
+  stroke: $canvas-border;
+  stroke-width: 1.5;
+}
+
+// The soft-tissue profile as a silhouette, not a stroke: a 2px line at this size
+// read as a squiggle, and a filled shape reads as a head.
 .empty_profile {
-  stroke: $primary-600;
+  fill: $text-secondary;
 }
 
 // Landmarks, in the editor's own colours (TracingViewer `.point`, and the
@@ -1583,6 +1795,880 @@ $tp-gap: 16px;       // gutter -> cards
 .empty_action {
   display: block;
   margin-top: 20px;
+}
+
+// The other five types, at the same first visit: the empty state's prose names
+// them ("Frontal films, panoramics and photographs can be filed alongside it"),
+// so the controls have to offer them — otherwise the first record of a case is
+// the one record whose type is typed into the form by hand.
+.slots__empty {
+  justify-content: center;
+  // Wide enough for the five remaining types to sit on one line at this
+  // surface's own width.
+  max-width: 800px;
+  margin-top: 14px;
+  padding: 12px 0 0;
+  border-top: 1px dashed $border-strong;
+
+  .slots_list {
+    flex: 0 1 auto;
+    justify-content: center;
+  }
+}
+
+// ------------------------------------------------------- analysis findings
+// What the analyses already say about the films in the record: one block per
+// traced film, oldest first, headline first. The panel is the records panel's
+// sibling and wears its chrome — same border, same radius, same head — because
+// it is the same kind of thing: a reading of the record, not a dialog about it.
+//
+// It is a read-out. Nothing in it is a control, so nothing in it carries a
+// hover, a focus ring or a pointer: the film's card 300px above is what opens
+// the film, and a second "open" here would give the surface two of them.
+
+.findings {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid $border;
+  border-radius: 8px;
+  background: $bg-surface;
+  box-shadow: $shadow-1;
+}
+
+// The records panel's own head, without the sticky behaviour: this panel's list
+// is short (one block per traced film) and there is nothing to hold a bar over.
+.findings_head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid $border;
+  border-radius: 7px 7px 0 0;
+  background: $bg-surface;
+}
+
+.findings_title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: $text-primary;
+  white-space: nowrap;
+}
+
+.findings_body {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 16px 16px;
+  background: $bg-app;
+
+  // The well runs to the panel's own corners only when it is the last thing in
+  // it; the key (`.findings_legend`) takes them when there is one.
+  &:last-child {
+    border-radius: 0 0 7px 7px;
+  }
+}
+
+// ---- one film ----
+.fb {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px 11px;
+  border: 1px solid $border;
+  border-radius: 8px;
+  background: $bg-surface;
+}
+
+// The block's head is the control that opens the film the block is about — the
+// record card's own affordance, in the panel that had none. It bleeds to the
+// card's edges so the hover tint reads as a row rather than as an inset box.
+.fb_head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  width: calc(100% + 28px);
+  margin: -12px -14px 0;
+  padding: 12px 14px 9px;
+  border: none;
+  border-bottom: 1px solid $border;
+  border-radius: 7px 7px 0 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover {
+    background: $primary-050;
+  }
+
+  &:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(21, 101, 192, .28);
+  }
+
+  &:hover .fb_go,
+  &:focus .fb_go {
+    color: $primary-600;
+  }
+}
+
+// Says what pressing the head does, always visible: a recovery path — or a
+// route to the film a set of numbers came from — must not hide behind hover.
+.fb_go {
+  flex: 0 0 auto;
+  font-size: 12px;
+  font-weight: 600;
+  color: $text-tertiary;
+  white-space: nowrap;
+}
+
+.fb_stamp {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+// The gutter's pill, in a row rather than a column: it can take the width it
+// needs here, because nothing sits under it.
+.fb_timepoint {
+  max-width: 280px;
+}
+
+// The rest of a free-text timepoint label ("post-treatment" out of "T2
+// post-treatment"), beside the pill that carries its token — the timeline's own
+// construction, so the same visit is named the same way in both panels.
+.fb_note_label {
+  flex: 0 1 auto;
+  min-width: 0;
+  font-size: 12.5px;
+  color: $text-secondary;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fb_date {
+  font-size: 13px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: $text-secondary;
+  white-space: nowrap;
+
+  &__unset {
+    font-weight: 400;
+    color: $text-tertiary;
+  }
+}
+
+.fb_spacer {
+  flex: 1 1 auto;
+  min-width: 8px;
+}
+
+// Which analysis these findings are: named, not chipped in a semantic tint — it
+// is an identity, not a grade, and the chips 20px below carry the grades.
+//
+// Flat text, and deliberately so. Set as a filled pill with a border in the
+// app's primary tint it was visually the same object as the interactive chips on
+// the record card 300px above — one of which is a button — while being inert.
+// The control here is the head that carries it.
+.fb_analysis {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: $primary-700;
+  white-space: nowrap;
+}
+
+.fb_measured {
+  font-size: 12px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: $text-tertiary;
+  white-space: nowrap;
+}
+
+// What the *tracing* can carry, as against what the one analysis set on the film
+// reports from it: the selector's own answer to "which analyses can this film
+// report" (`RecordAnalysis.plottedAnalyses`), which was computed on every
+// recompute for every film and shown on no surface at all.
+.fb_plotted {
+  padding-left: 12px;
+  border-left: 1px solid $border;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: $text-disabled;
+  white-space: nowrap;
+}
+
+.fb_body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+// The reason a film reports nothing, in the analysis' own terms.
+.fb_none {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: $text-secondary;
+}
+
+.fb_quiet {
+  font-size: 12.5px;
+  color: $text-tertiary;
+}
+
+// ---- the headline: the analysis' conclusions ----
+.fb_findings {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+}
+
+// A finding is a pair — the category and its verdict — and the pair has to stay
+// together when the row wraps, or "Growth pattern" ends a line and "Horizontal"
+// starts the next one under a different category.
+.ff_pair {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+}
+
+.ff_cat {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: $text-secondary;
+  white-space: nowrap;
+}
+
+// The chip tones are the surface's own (see `.chip`): the panel reuses them so a
+// verdict cannot be tinted one way here and another way on a card 300px above.
+.ff_chip {
+  font-weight: 600;
+}
+
+// The finding's own number, carried by every row it was read from (see
+// `.fv_key`). The Summary dialog pairs a verdict with its measurements in one
+// column; this panel is 7–10 verdicts in a flat row over a separate list, and
+// without the numeral nothing said that "Growth pattern — Horizontal" rests on
+// the Y-FH Angle three rows below.
+.ff_key {
+  align-self: center;
+  min-width: 13px;
+  padding: 0 3px;
+  border-radius: 3px;
+  background: $bg-sunken;
+  font-size: 10px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  color: $text-tertiary;
+}
+
+// ---- the numbers behind it ----
+// The measurement grid, stated once: the name column is *capped* and the
+// deviation strip takes the slack, so value, norm, deviation and change line up
+// down the block and the column heads land over the columns they name.
+//
+// The name column used to be the flexible one. At a 1440 viewport it measured
+// 870px while its longest ink ended at 311px, so every row carried 670–750px of
+// void between the measurement's name and its value — in a block that was at the
+// same time hiding three or four abnormal rows behind "+4 more in the Summary".
+// The reclaimed width now carries the wigglegram strip (see `.fv_strip`), which
+// is the same reading this app already draws on paper.
+//
+// The cap is 470px, not 320px, and the 150px cannot come off the strip's floor:
+// at 320px the two longest names this app has — "Posterior / anterior facial
+// height ratio (S-Go / N-Me)" and "Upper share of anterior face height (N-ANS /
+// N-Me)" — were cut on screen *and* on the filed chart, where there is no
+// tooltip to recover them. The column is content-sized up to the cap, so a block
+// of short names still gives every spare pixel to the strip.
+$fv-c-name:   minmax(0, 470px);
+$fv-c-name-1: minmax(0, 1fr);
+$fv-c-value:  78px;
+$fv-c-norm:   118px;
+$fv-c-dev:    98px;
+$fv-c-strip:  minmax(150px, 1fr);
+$fv-c-change: 92px;
+
+$fv-columns: $fv-c-name $fv-c-value $fv-c-norm $fv-c-dev $fv-c-strip
+  $fv-c-change;
+
+// Narrow windows, and paper: the strip is the column that gives up its width
+// first (it is a reading aid for a number that is printed beside it), and the
+// name column takes the slack back.
+$fv-columns-narrow: $fv-c-name-1 $fv-c-value 116px 96px $fv-c-change;
+
+.fv {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+
+  // A block with no strip to draw — every row of it graded without a usable
+  // norm — gives the column back to the name rather than reserving the widest
+  // column in the grid for a void and heading it with a scale.
+  &__nostrip &_head,
+  &__nostrip &_row {
+    grid-template-columns: $fv-c-name-1 $fv-c-value $fv-c-norm $fv-c-dev
+      $fv-c-change;
+  }
+
+  // …and when *nothing in the panel* has a change to show, the CHANGE column
+  // goes the way its key already goes: a header over a column of em-dashes is a
+  // column that looks alive and shows nothing.
+  &__nochange &_head,
+  &__nochange &_row {
+    grid-template-columns: $fv-c-name $fv-c-value $fv-c-norm $fv-c-dev
+      $fv-c-strip;
+  }
+
+  &__nochange#{&}__nostrip &_head,
+  &__nochange#{&}__nostrip &_row {
+    grid-template-columns: $fv-c-name-1 $fv-c-value $fv-c-norm $fv-c-dev;
+  }
+}
+
+// The block's own head sits on the measurement grid, so the three numeric
+// column names land exactly over the columns they name (see `$fv-columns`).
+.fv_head {
+  display: grid;
+  grid-template-columns: $fv-columns;
+  align-items: baseline;
+  gap: 0 10px;
+  padding-bottom: 3px;
+}
+
+.fv_headline {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+}
+
+.fv_title {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: $text-tertiary;
+}
+
+.fv_count {
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  color: $text-tertiary;
+}
+
+// The brief's table head: 11/600 caps, right-aligned over a numeric column.
+.fv_col {
+  text-align: right;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: $text-disabled;
+  white-space: nowrap;
+}
+
+// The strip's own axis, over the strips it scales: three labels at the two ends
+// and the mean, which is what a ±3 SD axis needs to be read at all.
+.fv_axis {
+  position: relative;
+  align-self: center;
+  height: 11px;
+}
+
+// One grey weight for all three, as `.fv_col` is. Set in $primary at 600 the
+// word "Mean" was the heaviest, most saturated ink in the whole header row — the
+// least actionable label on it, louder than VALUE, NORM and DEVIATION.
+.fv_axis_tick {
+  position: absolute;
+  top: 0;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  font-variant-numeric: tabular-nums;
+  color: $text-disabled;
+  white-space: nowrap;
+
+  &__start {
+    left: 0;
+  }
+
+  // Centred on the mean line the strips below draw at 50 %.
+  &__mean {
+    left: 50%;
+    transform: translateX(-50%);
+  }
+
+  &__end {
+    right: 0;
+  }
+}
+
+.fv_list {
+  display: flex;
+  flex-direction: column;
+}
+
+// One measurement per line: the name at the left, then the three numbers in
+// fixed columns so value, norm and deviation line up down the block the way they
+// line up in the Summary's table.
+.fv_row {
+  display: grid;
+  grid-template-columns: $fv-columns;
+  align-items: baseline;
+  gap: 0 10px;
+  padding: 3px 0;
+  border-top: 1px solid $bg-sunken;
+
+  &:first-child {
+    border-top: none;
+  }
+}
+
+.fv_measure {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  overflow: hidden;
+}
+
+.fv_symbol {
+  flex: 0 0 auto;
+  font-size: 13px;
+  font-weight: 600;
+  color: $text-primary;
+  white-space: nowrap;
+}
+
+// The Summary's footnote marker, on the Summary's rows, drawn the Summary's way
+// (see `AnalysisResultsViewer/style.scss#cell_caveat_mark`): the reader must not
+// meet three amber starred numbers and only then the sentence saying they may be
+// an artefact of one misplaced landmark.
+.fv_mark {
+  display: inline-block;
+  margin-left: 3px;
+  font-size: 10px;
+  font-weight: 700;
+  color: $warn;
+  vertical-align: super;
+}
+
+.fv_name {
+  flex: 0 1 auto;
+  min-width: 0;
+  font-size: 12px;
+  color: $text-tertiary;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+// The number of the finding this measurement was read for, matching the numeral
+// on the chip above (see `.ff_key`). A numeral and not the category's own words:
+// "Lower incisor inclination" is 150px of caps in the one column of this grid
+// that has ever had to truncate.
+.fv_key {
+  flex: 0 0 auto;
+  min-width: 13px;
+  padding: 0 3px;
+  border-radius: 3px;
+  background: $bg-sunken;
+  font-size: 10px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: .04em;
+  text-align: center;
+  color: $text-tertiary;
+}
+
+.fv_value {
+  text-align: right;
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: $text-primary;
+
+  // One severity scale across the app: 1 SD out is amber, 2 and beyond is red —
+  // the tints the Summary's own value column paints.
+  &__warn {
+    color: $warn;
+  }
+
+  &__error {
+    color: $error;
+  }
+}
+
+.fv_norm {
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 5px;
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  color: $text-secondary;
+  white-space: nowrap;
+}
+
+// A published range is not a mean ± SD, and it carries no stars: the row says
+// which kind of norm it is graded against, exactly as the Summary's does.
+.fv_norm_kind {
+  padding: 0 4px;
+  border-radius: 3px;
+  background: $bg-sunken;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: $text-tertiary;
+}
+
+.fv_dev {
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: $text-secondary;
+  white-space: nowrap;
+
+  &__warn {
+    color: $warn;
+  }
+
+  &__error {
+    color: $error;
+  }
+}
+
+// The stars' slot is always rendered, so the signed numbers stay in one column
+// whether or not a row carries markers.
+.fv_stars {
+  display: inline-block;
+  min-width: 22px;
+  text-align: left;
+  font-weight: 700;
+  letter-spacing: .06em;
+}
+
+// ---- the deviation strip: the printed report's wigglegram, row by row ----
+// Same axis (±3 SD), same bands (±1 SD dark, ±2 SD light) and the same marks as
+// `ClinicalReport/Wigglegram`, which is where this app already solves the "how
+// far out is it, really" reading — so a clinician reads one chart, not two.
+// Colour stops are 1/6 of the axis apart, an SD each.
+// Three kinds of layer: the axis itself, a hairline running the whole ±3 SD; the
+// ±1 SD band shaded over it; and a tick at each ±2 SD.
+//
+// The ±2 SD band used to be shaded too, in $primary-050 (#EBF3FB) on a white
+// block — a contrast ratio of about 1.03, which at 100 % on a monitor is not a
+// band at all. Only the inner one read, while the key underneath named "lighter
+// ±2 SD": a key to a mark the reader cannot see. A tick states the same boundary
+// at a contrast that survives a printer and a clinic monitor.
+.fv_strip {
+  position: relative;
+  align-self: center;
+  height: 9px;
+  border-radius: 2px;
+  background-image:
+    linear-gradient($border-strong, $border-strong),
+    linear-gradient($primary-100, $primary-100),
+    linear-gradient($border-strong, $border-strong),
+    linear-gradient($border-strong, $border-strong);
+  // …at ±2 SD, which on a ±3 SD axis is a sixth in from each end — not the edge
+  // of the ±1 SD band, where a tick would be invisible under the band itself.
+  background-size: 100% 1px, 33.334% 100%, 1px 7px, 1px 7px;
+  background-position: 0 50%, 50% 0, 16.667% 50%, 83.333% 50%;
+  background-repeat: no-repeat;
+
+  // A published *range* is drawn on the axis it does have — its own two bounds,
+  // hatched between them, with one range-width of axis beyond each — and drawn
+  // unmistakably unlike the SD strip: a grey hatch rather than a solid tint, and
+  // no mean line, because a range has no mean. Left blank, these were four of
+  // the eight rows of a Jarabak block, the facial-height ratios the analysis is
+  // run for, with deviations of +7.8 %, +6.9 %, +1.7 % and −9.5 % and no
+  // graphical reading of any of them.
+  &__range {
+    background-image:
+      linear-gradient($border-strong, $border-strong),
+      repeating-linear-gradient(
+        135deg,
+        $border-strong 0, $border-strong 1px,
+        transparent 1px, transparent 4px
+      ),
+      linear-gradient($text-tertiary, $text-tertiary),
+      linear-gradient($text-tertiary, $text-tertiary);
+    background-size: 100% 1px, 33.334% 100%, 1px 9px, 1px 9px;
+    background-position: 0 50%, 50% 0, 33.333% 50%, 66.667% 50%;
+  }
+
+  // Nothing published to draw at all — no norm, or bounds this app cannot read.
+  &__none {
+    background-image: none;
+  }
+}
+
+.fv_strip_mean {
+  position: absolute;
+  top: -1px;
+  bottom: -1px;
+  left: 50%;
+  width: 1px;
+  background: $primary-600;
+  opacity: .65;
+}
+
+.fv_dot {
+  position: absolute;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  // `currentColor` so one severity token paints the dot and, when the value is
+  // off the axis, the marker glyph that replaces it.
+  color: $text-primary;
+  background: currentColor;
+
+  &__warn {
+    color: $warn;
+  }
+
+  &__error {
+    color: $error;
+  }
+
+  // Beyond ±3 SD the dot becomes the outward-pointing marker, so a value off the
+  // axis is never drawn as one sitting on its end.
+  &__clamped {
+    width: auto;
+    height: auto;
+    border-radius: 0;
+    background: none;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1;
+  }
+}
+
+// ---- what moved since the last film that reported it ----
+// The superimposition's CHANGE column, in the records panel: T2 − T1 of the same
+// measurement, so two identical tracings no longer print two byte-identical
+// blocks and a real change is visible without opening another view.
+.fv_change {
+  text-align: right;
+  font-size: 12.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: $text-secondary;
+  white-space: nowrap;
+
+  // Below the hand-plotting reproducibility floor: the same measurement taken
+  // twice, dimmed exactly as the superimposition's table dims it.
+  &__within {
+    font-weight: 500;
+    color: $text-disabled;
+  }
+
+  &__none {
+    font-weight: 400;
+    color: $text-disabled;
+  }
+}
+
+// ---- the caveat, anchored to the rows it marks ----
+.fb_caveats {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+// One line, in the surface's warn tint: what to do and why. Set verbatim, the
+// articulare caveat was 60 words over three lines — the largest single element
+// in the block and the only wall of prose on the surface. The full text is the
+// line's own title on screen, and it is what prints.
+.fb_caveat {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin: 0;
+  padding: 5px 8px;
+  border-radius: 6px;
+  background: $warn-bg;
+  font-size: 12px;
+  line-height: 1.4;
+  color: $warn;
+}
+
+.fb_caveat_mark {
+  flex: 0 0 auto;
+  font-weight: 700;
+}
+
+.fb_caveat_lede {
+  min-width: 0;
+  font-weight: 500;
+}
+
+// Paper only (see the print block): a filed chart carries the whole caveat.
+.fb_caveat_full {
+  display: none;
+}
+
+// ---- what qualifies the block ----
+.fb_foot {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.fb_note {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: $text-tertiary;
+
+  // A caveat that can invalidate the rows above it, or a measurement the film
+  // cannot report: outstanding work, in the surface's warn tint.
+  &__warn {
+    color: $warn;
+  }
+}
+
+// "Norms" ahead of the sentence that says what these figures were graded
+// against — the printed report's own construction (`ClinicalReport/NormsNote`),
+// so a citation is never read as another remark about the tracing.
+.fb_note_key {
+  margin-right: 6px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: $text-disabled;
+}
+
+// The norms line, split exactly as a caveat is (`.fb_caveat_lede` /
+// `.fb_caveat_full`): the corrected figures on screen, the methodology behind
+// them in the element's title and on the filed chart. Set verbatim, Ricketts'
+// 90-word sentence was three lines of 10px grey and the largest single element in
+// the block — physically bigger than the measurement table it qualifies.
+.fb_norms_lede {
+  font-variant-numeric: tabular-nums;
+}
+
+// Paper only (see the print block).
+.fb_norms_full {
+  display: none;
+}
+
+// ---- one key for the panel ----
+// Under the blocks it explains, once — the Summary's own construction, whose
+// legend sits under its table. Repeated per block, four lines of key under every
+// film would outweigh the films.
+.findings_legend {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px 16px 12px;
+  border-top: 1px solid $border;
+  background: $bg-surface;
+  border-radius: 0 0 7px 7px;
+}
+
+.findings_legend_line {
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: $text-tertiary;
+
+  // The strip's own key, which goes wherever the strip goes: a narrow window and
+  // a printed sheet both drop the column, and a key to a mark that is not on the
+  // page is worse than no key.
+  &__strip {
+    display: block;
+  }
+}
+
+.findings_legend_stars {
+  font-weight: 700;
+  letter-spacing: .06em;
+  color: $text-secondary;
+}
+
+.findings_legend_dot {
+  padding: 0 6px;
+  color: $text-disabled;
+}
+
+// ---- the key, drawn ----
+// A key that *shows* the marks: one sample strip of each kind, with its bands,
+// its ticks, its mean and a dot of each severity on it, beside the star scale.
+// Described instead, this was three lines of running prose in 10px grey — one of
+// them a 176-character sentence naming a band, a lighter band, an amber dot, a
+// red dot and two arrow glyphs, none of which was on the page beside its name.
+.fk {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 20px;
+  padding-bottom: 2px;
+}
+
+.fk_group {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: $text-tertiary;
+
+  // The two strip keys carry a 120px sample and a clause; they take a line of
+  // their own when the row cannot hold them beside the star scale.
+  &__strip {
+    flex: 0 1 auto;
+    min-width: 0;
+  }
+}
+
+.fk_label {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: $text-disabled;
+  white-space: nowrap;
+}
+
+// The sample itself: the row strip, at the width a key needs rather than the
+// column's, and always drawn on the row strip's own rules — one stylesheet, so
+// the key cannot drift from the mark.
+.fk_strip {
+  flex: 0 0 auto;
+  width: 120px;
+}
+
+.fk_note {
+  min-width: 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: $text-tertiary;
 }
 
 // ----------------------------------------------------------------- responsive
@@ -1641,6 +2727,9 @@ $tp-gap: 16px;       // gutter -> cards
   .card_tech {
     justify-self: stretch;
     align-self: auto;
+    // The technicals are a line under the record here, not a column beside it,
+    // so the wide layout's column floor goes with the axis.
+    min-width: 0;
     flex-direction: row;
     flex-wrap: wrap;
     align-items: baseline;
@@ -1663,24 +2752,51 @@ $tp-gap: 16px;       // gutter -> cards
     text-align: left;
   }
 
+  // Only the pane's own padding changes here. The rail needs no adjustment: it is
+  // positioned inside `.groups`, so its offsets are measured from the first
+  // group's own box rather than from the pane's padding. (The gutter still has to
+  // hold a timepoint pill, a date and an age, and cannot be narrowed the way a
+  // date-only gutter could.)
   .timeline {
     padding: 14px 12px;
   }
 
-  // Only the list's own padding changes here, so the rail's absolute offset is
-  // the one thing that has to move with it — the gutter still has to hold a
-  // timepoint pill, a date and an age, and cannot be narrowed the way a
-  // date-only gutter could.
-  .timeline_rail {
-    top: 37px;
-    bottom: 14px;
-    left: 12px + $tp-gutter - 2px;
+  // The slots live inside a visit's own panel, so they follow the cards without
+  // an offset of their own — only their padding closes up with the timeline's.
+  .slots {
+    padding: 8px 10px 9px;
   }
 
-  // …and the checklist keeps its alignment with the cards.
-  .filing {
-    margin: 0 12px 16px;
-    margin-left: 12px + $tp-gutter + $tp-gap;
+  // Below a clinic monitor's width the measurement grid can no longer hold six
+  // columns without cutting the names, and the strip is the one that goes: it is
+  // a reading aid for the deviation printed two columns to its left, not a
+  // number of its own. The name column takes the width back.
+  .fv_head,
+  .fv_row {
+    grid-template-columns: $fv-columns-narrow;
+  }
+
+  // …and the two modifiers keep the shapes they mean at this width (the outer
+  // rules are more specific than the one above, so each is restated here).
+  .fv__nochange .fv_head,
+  .fv__nochange .fv_row {
+    grid-template-columns: $fv-c-name-1 $fv-c-value 116px 96px;
+  }
+
+  .fv__nostrip .fv_head,
+  .fv__nostrip .fv_row {
+    grid-template-columns: $fv-columns-narrow;
+  }
+
+  .fv__nochange.fv__nostrip .fv_head,
+  .fv__nochange.fv__nostrip .fv_row {
+    grid-template-columns: $fv-c-name-1 $fv-c-value 116px 96px;
+  }
+
+  .fv_strip,
+  .fv_axis,
+  .fk_group__strip {
+    display: none;
   }
 }
 
@@ -1725,35 +2841,61 @@ $tp-gap: 16px;       // gutter -> cards
   }
 
   .group_node,
-  .group:last-child .group_when::after,
-  .group:nth-last-child(2) .group_when::after {
+  .group:last-child .group_when::after {
     display: none;
   }
 
   // …and the trailing add row loses the gutter indent with it.
-  .add_entry::before {
-    display: none;
-  }
-
   .add_row {
     margin-left: 0;
     width: 100%;
   }
 
-  // With the gutter gone, the checklist runs the width of the well like the
-  // groups above it.
-  .filing {
-    margin-left: 12px;
-  }
-
-  .filing_list {
-    grid-template-columns: minmax(0, 1fr);
+  // Narrow enough that a label and five pills cannot share a baseline: the
+  // heading takes its own line above the slots it heads.
+  .slots {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
   }
 
   // Decoration only (the whole card is the button, and the chevron is
   // aria-hidden): it is the first thing to give up its width.
   .card_go {
     display: none;
+  }
+
+  // The measurement lines keep their columns — the whole point of them is that
+  // value, norm, deviation and change line up — but the numeric ones close up to
+  // what a one-decimal figure with a unit actually needs. Head and rows move
+  // together, or the column names stop naming their columns. (The strip is
+  // already gone at this width; see the 1080 band.)
+  .fv_head,
+  .fv_row,
+  .fv__nostrip .fv_head,
+  .fv__nostrip .fv_row {
+    grid-template-columns: minmax(0, 1fr) 74px 114px 92px 84px;
+    gap: 0 8px;
+  }
+
+  .fv__nochange .fv_head,
+  .fv__nochange .fv_row,
+  .fv__nochange.fv__nostrip .fv_head,
+  .fv__nochange.fv__nostrip .fv_row {
+    grid-template-columns: minmax(0, 1fr) 74px 114px 92px;
+    gap: 0 8px;
+  }
+
+  .fv_norm {
+    font-size: 12px;
+  }
+
+  .findings_body {
+    padding: 12px;
+  }
+
+  .fb {
+    padding: 11px 12px 10px;
   }
 }
 
@@ -1764,11 +2906,13 @@ $tp-gap: 16px;       // gutter -> cards
 // mid-word, and the panel was a fixed-height box with sticky chrome that could
 // not flow onto a second sheet.
 //
-// What prints is the record: the patient's identity, the demographics every
-// analysis is read against, and every image on file with its dates, its tracing
-// state and its scale. What does not print is chrome — the exit, the shortcut
-// key, the add actions, the per-record edit/remove buttons: none of them mean
-// anything on a sheet of paper.
+// What prints is the record: one running head carrying the patient's identity,
+// the demographics every analysis is read against and what the record covers
+// (`.print_head`, repeated on every sheet), then every image on file with its
+// dates, its tracing state and its scale. What does not print is chrome — the
+// exit, the shortcut key, the add actions, the per-record edit/remove buttons —
+// nor anything the running head already states, which is why the screen's
+// identity band is hidden here rather than compressed.
 @media print {
   .surface {
     display: block;
@@ -1851,7 +2995,15 @@ $tp-gap: 16px;       // gutter -> cards
 
   // Chrome: the way out of a screen, and the actions that change the record.
   // Nothing here can be pressed on a sheet of paper.
+  //
+  // The identity band goes with them — not because it is chrome, but because the
+  // running head above carries every fact in it (name, chart ID, date of birth,
+  // sex, timepoints, span) on *every* sheet. Printed as well, the patient was
+  // named in two adjacent rows 20px apart and the date of birth and sex appeared
+  // twice each, and the duplicate cost the chart a 58px band of its first page —
+  // which is a whole record row.
   .pagebar,
+  .identity,
   .primary_action,
   .add_entry,
   .card_actions,
@@ -1887,11 +3039,16 @@ $tp-gap: 16px;       // gutter -> cards
     display: inline;
   }
 
-  // The mask that ends the timeline rail is painted in the app's background;
-  // on paper the well is white.
-  .group:last-child .group_when::after,
-  .group:nth-last-child(2) .group_when::after {
-    background: #FFFFFF;
+  // The rail is a screen device: its offsets are tuned to the list's own screen
+  // padding (first node's centre to last node's centre), and it exists to say
+  // "these rows are one chronology" in a scrolling column. On paper the stamps do
+  // that in words — each one carries its visit's label, day and age — so the rail,
+  // its nodes and the mask that ends it all come off the sheet rather than
+  // printing a line that starts a few millimetres below the first node.
+  .timeline_rail,
+  .group_node,
+  .group:last-child .group_when::after {
+    display: none;
   }
 
   // A long free-text timepoint prints in full, so the pill has to grow with it:
@@ -1915,22 +3072,32 @@ $tp-gap: 16px;       // gutter -> cards
     white-space: normal;
   }
 
-  // Bordered rather than shadowed. The two blocks a break must not fall inside
-  // are the identity band and a single record; the panel itself is free to break,
-  // because the whole point is that it flows across sheets.
-  .identity,
+  // The one block a page break must not fall inside is a record: a film's name
+  // above the fold and its scale below it is not a record entry. (The panel is
+  // free to break — the whole point is that it flows across sheets.)
   .card {
     break-inside: avoid;
     page-break-inside: avoid;
   }
 
-  .identity,
   .records {
     box-shadow: none;
   }
 
-  .identity {
-    margin-bottom: 8pt;
+  // Screen devices: the coverage pane is a wide-window reading of the record that
+  // each visit already prints for itself ("not filed at T2 · …"), and the "file
+  // this at" chips are controls nobody can press on a sheet.
+  .coverage,
+  .file_at {
+    display: none !important;
+  }
+
+  .records_panes {
+    display: block;
+  }
+
+  .card_row {
+    display: block;
   }
 
   // Static on paper, and without the scrims and shadows that exist to say a bar
@@ -1950,9 +3117,34 @@ $tp-gap: 16px;       // gutter -> cards
     background: #FFFFFF;
   }
 
-  .timeline {
+  // On paper the closing bar is static and nothing floats over the well, so the
+  // reserve the screen keeps for it (`.records_body__footed`) would print as
+  // ~15mm of white between the last visit and the tallies.
+  .records_body__footed .timeline {
+    padding-bottom: 5pt;
+  }
+
+  // The empty state's mark is a folder holding a radiograph, drawn in the canvas
+  // black a film is displayed on: legible on screen, an inch of solid ink in the
+  // middle of an otherwise white sheet. "No images on file yet" is the whole fact,
+  // and it prints.
+  .empty_art {
+    display: none;
+  }
+
+  .empty {
+    padding: 8pt;
+  }
+
+  .timeline,
+  .groups {
     display: block;
-    padding: 8pt 10pt;
+    padding: 5pt 8pt;
+  }
+
+  // The pane's padding is the timeline's on paper; the list inside it adds none.
+  .groups {
+    padding: 0;
   }
 
   // A printed record is a list of films, and a 113px card for three short lines
@@ -1977,18 +3169,63 @@ $tp-gap: 16px;       // gutter -> cards
     gap: 1pt 10pt;
   }
 
-  .filing {
-    margin: 0 10pt 6pt;
-    padding: 6pt 8pt;
+  // On paper a slot is a statement about the visit, not a control: the pills
+  // become a plain dot-separated list of what the visit lacks, and each one
+  // prints its type's name in place of the screen's "Add …".
+  .slots {
+    gap: 1pt 8pt;
+    padding: 3pt 0 1pt;
+    border-top: 1px solid $border;
     break-inside: avoid;
     page-break-inside: avoid;
   }
 
+  .slots_label {
+    font-size: 7.5pt;
+  }
+
+  .slots_list {
+    gap: 0 6pt;
+  }
+
+  .slot {
+    height: auto;
+    padding: 0;
+    border: none;
+    border-radius: 0;
+    font-size: 8.5pt;
+    color: $text-secondary;
+  }
+
+  .slot svg,
+  .slot_label {
+    display: none !important;
+  }
+
+  .slot_print {
+    display: inline;
+  }
+
+  // Without the pills' edges, five type names in a row are one run of words:
+  // "PA ceph panoramic profile photo". The list gets its separator back.
+  .slot + .slot::before {
+    content: '·';
+    margin-right: 4pt;
+    color: $text-tertiary;
+  }
+
   // A timepoint is what a page break must not fall inside — the stamp that says
   // which visit and how old the patient was has to stay with its films.
+  // 24px between visits is the screen's rhythm; on paper it is 6mm of white per
+  // visit, which is a film's worth of sheet across a six-visit chart.
   .group {
+    padding-bottom: 6pt;
     break-inside: avoid;
     page-break-inside: avoid;
+  }
+
+  .group_when {
+    padding: 4pt 8pt 4pt 0;
   }
 
   // Grid tracks and a paged medium do not mix: on paper the visit's images are a
@@ -2013,5 +3250,180 @@ $tp-gap: 16px;       // gutter -> cards
 
   .chip__active {
     display: none;
+  }
+
+  // The analysis findings print: what the films report is the clinical half of
+  // an imaging record, and a chart filed without it is a list of radiographs.
+  // The panel loses its screen chrome (the well's tint, the elevation) and each
+  // film's block becomes an unbreakable unit — a headline above the fold with
+  // its numbers below it is not a finding.
+  // No border either: `.fb` sets `break-inside: avoid`, so a block that will not
+  // fit pushes to the next sheet — and the panel's own 1px border then ran down
+  // both edges of ~170px of empty paper at the foot of the page, which on a filed
+  // chart reads as a form field left blank. The head's bottom rule is what
+  // separates the section, and it is enough.
+  .findings {
+    box-shadow: none;
+    border: none;
+  }
+
+  .findings_head {
+    padding: 4pt 0 3pt;
+    border-bottom: 1px solid $border-strong;
+  }
+
+  .findings_note_screen {
+    display: none;
+  }
+
+  .findings_body {
+    display: block;
+    padding: 4pt 0 0;
+    background: #FFFFFF;
+  }
+
+  .fb {
+    padding: 4pt 0 3pt;
+    border: none;
+    border-top: 1px solid $border;
+    border-radius: 0;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .findings_body > .fb:first-child {
+    border-top: none;
+  }
+
+  // On paper the head is not a control: it is the line that says which film the
+  // block is about. The button's bleed, its hover surface and the word that names
+  // the action all come off the sheet.
+  .fb_head {
+    display: flex;
+    width: 100%;
+    margin: 0;
+    padding: 0 0 3pt;
+    background: none !important;
+    box-shadow: none !important;
+    cursor: default;
+  }
+
+  .fb_go {
+    display: none;
+  }
+
+  .fv_row {
+    padding: 1pt 0;
+  }
+
+  // The page box is ~700px wide: the strip is a screen reading aid and the
+  // printed report draws the full wigglegram anyway, so the sheet keeps the five
+  // columns that are numbers.
+  // The norm column is the widest of the four on paper, not the narrowest: a
+  // published range carries two bounds *and* the word that says it is a range
+  // ("62.0–65.0 RANGE"), and set in 74pt it overran its cell and printed into
+  // the value beside it — "69.8 %62.0–65.0" on a filed chart.
+  .fv_head,
+  .fv_row,
+  .fv__nostrip .fv_head,
+  .fv__nostrip .fv_row {
+    grid-template-columns: minmax(0, 1fr) 58pt 94pt 62pt 50pt;
+    gap: 0 8pt;
+  }
+
+  .fv__nochange .fv_head,
+  .fv__nochange .fv_row,
+  .fv__nochange.fv__nostrip .fv_head,
+  .fv__nochange.fv__nostrip .fv_row {
+    grid-template-columns: minmax(0, 1fr) 58pt 94pt 62pt;
+    gap: 0 8pt;
+  }
+
+  // The name column is ~305px on an A4 page box, which is not enough for the
+  // longest measurement names this app has, and a filed chart has no tooltip to
+  // recover a cut one: on paper the name wraps to a second line instead.
+  .fv_measure {
+    align-items: baseline;
+    flex-wrap: wrap;
+    overflow: visible;
+  }
+
+  .fv_name {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+  }
+
+  .fv_norm_kind {
+    padding: 0 2pt;
+    font-size: 6.5pt;
+  }
+
+  .fv_strip,
+  .fv_axis,
+  .fk_group__strip {
+    display: none;
+  }
+
+  // A filed chart carries the whole caveat, not the one-line instruction the
+  // screen has room for: on paper the lede's own full text takes its place.
+  .fb_caveat {
+    padding: 2pt 0;
+    background: none;
+  }
+
+  .fb_caveat_lede {
+    display: none;
+  }
+
+  // …unless it is the caveat's only text (see `Caveats`).
+  .fb_caveat_lede__whole {
+    display: inline;
+  }
+
+  .fb_caveat_full {
+    display: inline;
+  }
+
+  // …and the same trade on the norms line: the filed chart carries the whole
+  // methodology, the 280px block carries the figures.
+  .fb_norms_lede {
+    display: none;
+  }
+
+  // …unless the figures are the whole note, in which case they print.
+  .fb_norms_lede__whole {
+    display: inline;
+  }
+
+  .fb_norms_full {
+    display: inline;
+  }
+
+  // The drawn key's strip samples go with the strips (hidden above); the star
+  // scale, the change floor and the finding numbers all still print.
+  .fk {
+    padding-bottom: 1pt;
+  }
+
+  .fk_group {
+    font-size: 7.5pt;
+  }
+
+  .fk_label {
+    font-size: 7pt;
+  }
+
+  // The key prints with the rows it explains — a sheet of starred, dotted and
+  // signed columns whose marks are named nowhere is not a record.
+  .findings_legend {
+    padding: 3pt 0 0;
+    border-top: 1px solid $border;
+    background: none;
+  }
+
+  .findings_legend_line {
+    font-size: 7.5pt;
+    line-height: 1.35;
   }
 }

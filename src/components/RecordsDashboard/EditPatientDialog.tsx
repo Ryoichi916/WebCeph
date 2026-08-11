@@ -127,6 +127,11 @@ export default class EditPatientDialog
         // unsaved changes is left through Cancel or Save.
         modal={this.isDirty()}
         onRequestClose={onCancel}
+        // Screen-only chrome: printing the records chart with this dialog open
+        // put the overlay's grey wash over the whole sheet and the dialog on
+        // top of the films.
+        className={classes.no_print}
+        overlayClassName={classes.no_print}
         title={
           <div className={classes.title}>
             <h3 className={classes.title_heading}>Edit patient details</h3>

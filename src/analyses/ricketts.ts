@@ -185,13 +185,34 @@ const analysis: Analysis<'ceph_lateral'> = {
       'lower facial height have none). The molar-to-PtV norm is age-dependent ' +
       'outright — the patient\'s age + 3 mm — and is therefore withheld ' +
       'rather than graded.',
+    // The figures alone, for a compact surface (see `NormsProvenance.patientLede`).
+    // The instruction that follows from a missing date is *not* here: which date
+    // is missing is a fact about the record, not about Ricketts' norms, and the
+    // surface that knows it writes that sentence.
+    patientLede: (context) => {
+      if (context === undefined || typeof context.ageInYears !== 'number') {
+        return (
+          'No date of birth on record — Ricketts’ age-9 figures, uncorrected. ' +
+          'Record one to grade against the age-corrected norms.'
+        );
+      }
+      const years = context.ageInYears;
+      const shown = years >= 10 ? years.toFixed(0) : years.toFixed(1);
+      const grown = Math.min(Math.max(years, 9), 18) - 9;
+      return (
+        `Age ${shown} y · facial depth ${(87 + 0.33 * grown).toFixed(1)}° · ` +
+        `mand. plane ${(26 - 0.3 * grown).toFixed(1)}° · ` +
+        `convexity ${(2 - 0.2 * grown).toFixed(1)} mm · ` +
+        `mand. arc ${(26 + 0.5 * grown).toFixed(1)}°`
+      );
+    },
     patientNote: (context) => {
       if (context === undefined || typeof context.ageInYears !== 'number') {
         return (
           'No date of birth is on record for this patient, so the age-9 ' +
           'figures are printed uncorrected: an adult will read further from ' +
-          'these means than from his own. Record a date of birth and a film ' +
-          'date to grade against the age-corrected norms.'
+          'these means than from their own. Record a date of birth to grade ' +
+          'against the age-corrected norms.'
         );
       }
       const years = context.ageInYears;

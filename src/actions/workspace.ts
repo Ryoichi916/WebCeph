@@ -34,6 +34,10 @@ export const exportImage = createActionCreator('EXPORT_IMAGE_REQUESTED');
 // Patient records dashboard (the timeline of every image on file).
 export const setRecordsDashboardShown = createActionCreator('SET_RECORDS_DASHBOARD_SHOWN');
 
+// Direct the next upload at one record slot (type + timepoint + day), so an
+// empty slot on the dashboard opens an upload form that is already filled in.
+export const setRecordFilingIntent = createActionCreator('SET_RECORD_FILING_INTENT');
+
 // Patient records (name + chart id + demographics).
 export const addPatient = createActionCreator('ADD_PATIENT_REQUESTED');
 export const updatePatient = createActionCreator('UPDATE_PATIENT_REQUESTED');

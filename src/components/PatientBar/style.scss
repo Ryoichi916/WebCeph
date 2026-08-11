@@ -225,7 +225,12 @@
   // adjacent rows, 35px apart, and the duplicate cost the chart a band of the
   // first page. The dashboard sets this class on <body> while it is the open
   // surface.
-  :global(body.records-dashboard-open) & {
+  //
+  // Written out as a descendant of the body class rather than with `&`: at the
+  // root of a media query `&` has no parent to stand for, and sass passed the
+  // literal `… &` through to the sheet, where the browser dropped the whole rule
+  // as unparseable — so the bar went on printing above the running head.
+  :global(body.records-dashboard-open) .root {
     display: none !important;
   }
 

@@ -15,6 +15,15 @@ export interface ImageTypeOption {
   /** Rail-sized abbreviation, e.g. "Lat ceph" (must fit a 56px rail). */
   shortLabel: string;
   /**
+   * The type as it is named on an empty slot — the middle length, between the
+   * rail's abbreviation and the full clinical name, and lower-case because it is
+   * always read after a verb ("Add profile photo"). A row of six slots set in
+   * full clinical names does not fit a visit's panel; set in rail
+   * abbreviations ("Lat ceph", "Pano") it reads as jargon on the one surface a
+   * clinician scans for what a case is missing.
+   */
+  slotLabel: string;
+  /**
    * Whether this kind of image supports cephalometric tracing in this app.
    * Only the lateral cephalogram does: every implemented analysis
    * (Downs, Steiner, Tweed, Ricketts, Björk, dental, soft tissues, Jarabak,
@@ -25,38 +34,63 @@ export interface ImageTypeOption {
 }
 
 /**
- * The record's image types, in the order a clinic usually collects them.
- * `id` values are the existing `ImageType` keys — no new taxonomy.
+ * The record's image types, in the order a clinic usually collects them:
+ * the two cephalograms, the panoramic, then the extraoral photographs and the
+ * intraoral series. This order is the order the timepoint slots are offered in
+ * and the order the type select lists, so a clinician meets the record's
+ * vocabulary in the same sequence everywhere.
  */
 export const IMAGE_TYPE_OPTIONS: ImageTypeOption[] = [
   {
     id: 'ceph_lateral',
     label: 'Lateral cephalogram',
     shortLabel: 'Lat ceph',
+    slotLabel: 'lateral ceph',
     isTraceable: true,
   },
   {
     id: 'ceph_pa',
     label: 'Frontal (PA) cephalogram',
     shortLabel: 'PA ceph',
+    // Not "PA ceph": that is the *rail's* abbreviation, and a slot set in it
+    // reads as jargon on the one surface a clinician scans for what a case is
+    // missing (the rule this field's own doc comment states).
+    slotLabel: 'frontal ceph',
     isTraceable: false,
   },
   {
     id: 'panoramic',
     label: 'Panoramic radiograph',
     shortLabel: 'Pano',
+    // A noun, like every one of its siblings: "Add panoramic" named no thing.
+    slotLabel: 'panoramic film',
     isTraceable: false,
   },
   {
     id: 'photo_lateral',
     label: 'Profile photograph',
     shortLabel: 'Profile',
+    slotLabel: 'profile photo',
     isTraceable: false,
   },
   {
+    // Extraoral, i.e. the face: this used to be "Frontal / intraoral
+    // photograph", one option covering two records that are not alike in any
+    // clinical sense — a full-face photograph is read for facial symmetry and
+    // proportion, an intraoral series for the occlusion — and a clinic filing
+    // both had no way to tell them apart afterwards on the card, in the rail or
+    // on the printed chart. They are two types now (see `photo_intraoral`).
     id: 'photo_frontal',
-    label: 'Frontal / intraoral photograph',
-    shortLabel: 'Photo',
+    label: 'Frontal photograph',
+    shortLabel: 'Frontal',
+    slotLabel: 'frontal photo',
+    isTraceable: false,
+  },
+  {
+    id: 'photo_intraoral',
+    label: 'Intraoral photograph',
+    shortLabel: 'Intraoral',
+    slotLabel: 'intraoral photo',
     isTraceable: false,
   },
 ];
@@ -84,6 +118,44 @@ export const getImageTypeShortLabel = (
 };
 
 /**
+ * The type as an empty slot names it, e.g. `"Add profile photo"` — the *visible*
+ * label of the control, at the middle length a row of six pills can hold.
+ *
+ * Its tooltip and its accessible name are deliberately longer and are built by
+ * the call sites from `getImageTypeLabelInSentence` plus the visit being filed
+ * into ("Add a frontal (PA) cephalogram to T2 · 2026-01-12"): a screen reader
+ * announcing the short label alone would not say *which visit* the press files
+ * at, which is the whole of what distinguishes one slot row from the next.
+ * So: one wording for the label, a fuller one for the tooltip and the accessible
+ * name — and those two always agree with each other.
+ */
+export const getAddSlotLabel = (type: ImageType): string => {
+  const option = findOption(type);
+  return `Add ${option !== undefined ? option.slotLabel : 'image'}`;
+};
+
+/**
+ * The image types a set of records does *not* hold, in the catalogue's own
+ * order — what the timepoint's empty slots offer, and the one reading of "what
+ * is missing here" the dashboard has.
+ *
+ * An image filed before the records layer existed carries no type at all
+ * (`type === null`); it cannot fill a slot, because nothing states which slot it
+ * would fill, so it is simply not counted as one.
+ */
+export const getMissingImageTypes = (
+  records: Array<{ type: ImageType | null }>,
+): ImageTypeOption[] => {
+  const held: { [type: string]: true } = {};
+  records.forEach(({ type }) => {
+    if (type !== null) {
+      held[type] = true;
+    }
+  });
+  return IMAGE_TYPE_OPTIONS.filter(({ id }) => held[id] !== true);
+};
+
+/**
  * Whether an image of this type can be traced and analysed here.
  * Unknown/unset types are treated as traceable: every image that predates the
  * records layer was loaded through the lateral-ceph tracing flow, so calling
@@ -106,11 +178,18 @@ export const getTodayISO = (at: Date = new Date()): string =>
   `${at.getFullYear()}-${pad2(at.getMonth() + 1)}-${pad2(at.getDate())}`;
 
 /**
- * The default timepoint label for the n-th image of a record (0-based):
- * T1, T2, T3… — the convention used in growth and treatment series.
+ * The n-th timepoint label of a series (0-based): T1, T2, T3… — the convention
+ * used in growth and treatment series.
+ *
+ * **This counts visits, not images.** Handed a count of *images* it mis-files
+ * every case that photographs a visit as well as radiographing it: with a lateral
+ * ceph and a profile photograph both filed at T1, "the third image" proposed T3
+ * for the second visit, the prefill was accepted (it is there to be), and the
+ * record carried a permanent T2-shaped hole. What a fresh upload should propose
+ * is `getNextTimepointLabel`, which reads the labels actually in use.
  */
-export const getDefaultTimepoint = (existingImageCount: number): string =>
-  `T${existingImageCount + 1}`;
+export const getDefaultTimepoint = (existingTimepointCount: number): string =>
+  `T${existingTimepointCount + 1}`;
 
 /**
  * A date for display, or null when it is missing or malformed — never a guessed
@@ -189,6 +268,20 @@ export const getImageTypeLabelInSentence = (
 ): string => {
   const label = getImageTypeLabel(type);
   return label.charAt(0).toLowerCase() + label.slice(1);
+};
+
+/**
+ * The same, with its article: `"a panoramic radiograph"`, `"an intraoral
+ * photograph"`. The article is chosen from the label, not written into the copy
+ * that uses it — the upload screen greeted a clinician with "Add a intraoral
+ * photograph to this patient's record" the moment the catalogue gained a type
+ * beginning with a vowel.
+ */
+export const getImageTypeLabelWithArticle = (
+  type: ImageType | null | undefined,
+): string => {
+  const label = getImageTypeLabelInSentence(type);
+  return `${/^[aeiou]/.test(label) ? 'an' : 'a'} ${label}`;
 };
 
 /**
@@ -306,6 +399,47 @@ export const groupRecordsByTimepoint = <T extends TimepointGroupable>(
     // day keep their stated order instead of an accidental one.
     return a.key === b.key ? 0 : (a.key < b.key ? -1 : 1);
   });
+};
+
+/**
+ * The timepoint label a fresh upload should propose for a patient's record: the
+ * next unused `T<n>` after the labels the record already carries.
+ *
+ * Counted off the record's own **distinct timepoint labels**, never off the number
+ * of images: a visit that is radiographed and photographed holds two images and
+ * is still one visit, so an image count proposed T3 for the second visit of a
+ * two-image T1 — and, because the proposal is prefilled and therefore accepted,
+ * the record was left with a T2 nobody had skipped on purpose.
+ *
+ * Free-text labels are read through their first token, exactly as every other
+ * surface reads them ("T3 pre-treatment" is T3). A record labelled only in words
+ * ("Pre-treatment") contributes no number, so the next visit is offered T1 — the
+ * first label of the series this app names, and one the clinician can overwrite.
+ */
+export const getNextTimepointLabel = (records: TimepointGroupable[]): string => {
+  const used: { [token: string]: true } = {};
+  let highest = 0;
+  groupRecordsByTimepoint(records).forEach(({ label }) => {
+    const token = getTimepointToken(label);
+    if (token === null) {
+      return;
+    }
+    used[token.toUpperCase()] = true;
+    const match = /^T(\d{1,4})$/i.exec(token);
+    if (match !== null) {
+      const n = parseInt(match[1], 10);
+      if (n > highest) {
+        highest = n;
+      }
+    }
+  });
+  let next = highest + 1;
+  // A label may be in use without being a number we counted ("t2" written in
+  // lower case, say): never propose a label the record already holds.
+  while (used[`T${next}`] === true) {
+    next += 1;
+  }
+  return getDefaultTimepoint(next - 1);
 };
 
 // ---- Elapsed interval -------------------------------------------------------

@@ -98,6 +98,22 @@
   stroke: $primary-600;
 }
 
+// A photograph's mount and its window: a print is not a film, so it is not drawn
+// on one. The mount is the surface's own white with a hairline edge; the window
+// is the sunken grey, which reads as a photographic ground rather than as a
+// radiograph's black.
+.illustration_photo_mount {
+  fill: $bg-surface;
+  stroke: $border-strong;
+  stroke-width: 1.5;
+  transition: stroke 200ms ease;
+}
+
+.illustration_photo_window {
+  fill: $bg-sunken;
+  stroke: none;
+}
+
 .illustration_construction {
   stroke: $text-disabled;
 }
@@ -136,7 +152,8 @@
     fill: $primary-050;
   }
 
-  .illustration_card {
+  .illustration_card,
+  .illustration_photo_mount {
     stroke: $primary-500;
   }
 
@@ -157,7 +174,8 @@
     fill: $error-bg;
   }
 
-  .illustration_card {
+  .illustration_card,
+  .illustration_photo_mount {
     stroke: $error;
   }
 

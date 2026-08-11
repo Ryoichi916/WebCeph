@@ -11,6 +11,18 @@ import TreatmentSimulation from 'components/TreatmentSimulation/connected';
 
 import { LATERAL_ANALYSES } from 'analyses/lateral';
 
+import { PatientRecord } from 'store/reducers/workspace';
+
+import EditRecordDialog from 'components/RecordMetaFields/EditRecordDialog';
+import RemoveRecordDialog from 'components/RecordMetaFields/RemoveRecordDialog';
+
+import {
+  getImageTypeShortLabel,
+  getImageTypeLabel,
+  getTimepointToken,
+  formatCaptureDate,
+} from 'utils/records';
+
 import Popover from 'material-ui/Popover';
 import Menu from 'material-ui/Menu';
 import MenuItem from 'material-ui/MenuItem';
@@ -30,6 +42,7 @@ import IconZoomIn from 'material-ui/svg-icons/action/zoom-in';
 import IconZoomOut from 'material-ui/svg-icons/action/zoom-out';
 import IconZoomFit from 'material-ui/svg-icons/maps/zoom-out-map';
 import IconRuler from 'material-ui/svg-icons/image/straighten';
+import IconFilm from 'material-ui/svg-icons/image/crop-original';
 import IconUndo from 'material-ui/svg-icons/content/undo';
 import IconRedo from 'material-ui/svg-icons/content/redo';
 
@@ -42,9 +55,13 @@ const classes = require('./style.scss');
 const ANALYSES = LATERAL_ANALYSES;
 
 interface State {
-  openMenu: 'analysis' | 'export' | null;
+  openMenu: 'analysis' | 'export' | 'record' | null;
   anchorEl: Element | null;
   isCalibrationOpen: boolean;
+  /** Correcting this film's record details from the editor. */
+  isEditRecordOpen: boolean;
+  /** Removing this film from the patient's record, from the editor. */
+  isRemoveRecordOpen: boolean;
   isReportOpen: boolean;
   isSuperimpositionOpen: boolean;
   isSimulationOpen: boolean;
@@ -91,6 +108,8 @@ export default class TracingToolbar extends React.PureComponent<Props, State> {
     openMenu: null,
     anchorEl: null,
     isCalibrationOpen: false,
+    isEditRecordOpen: false,
+    isRemoveRecordOpen: false,
     isReportOpen: false,
     isSuperimpositionOpen: false,
     isSimulationOpen: false,
@@ -109,6 +128,7 @@ export default class TracingToolbar extends React.PureComponent<Props, State> {
       scaleFactor,
       canSuperimpose, superimposeReason,
       canSimulate, simulateReason,
+      record, records,
     } = this.props;
     const {
       openMenu, anchorEl, isCalibrationOpen, isReportOpen,
@@ -225,6 +245,35 @@ export default class TracingToolbar extends React.PureComponent<Props, State> {
         </button>
 
         <span className={classes.spacer} />
+
+        {/* What this film *is*, and the two things a record needs done to it when
+            it is wrong. Correction and removal used to live only on the records
+            dashboard and on the read-only viewer, so whether a record could be
+            fixed where it was being looked at depended on its type: a photograph
+            carried both controls, the lateral ceph open in this editor carried
+            neither. */}
+        {record !== null ? (
+          <button
+            type="button"
+            className={cx(classes.button, {
+              [classes.button__open]: openMenu === 'record',
+            })}
+            title={`This image: ${describeRecord(record)}. ` +
+              'Correct its record details, or remove it from the record.'}
+            aria-label={`Record: ${describeRecord(record)}`}
+            aria-haspopup="true"
+            onClick={this.openRecordMenu}
+          >
+            <IconFilm color={ICON_COLOR} style={iconStyle} />
+            <span className={classes.button_label}>
+              {[
+                getTimepointToken(record.timepoint),
+                getImageTypeShortLabel(record.type),
+              ].filter((part) => part !== null).join(' · ')}
+            </span>
+            <IconArrowUp color={ICON_COLOR} style={caretStyle} />
+          </button>
+        ) : null}
 
         <button
           type="button"
@@ -446,6 +495,76 @@ export default class TracingToolbar extends React.PureComponent<Props, State> {
           </Menu>
         </Popover>
 
+        <Popover
+          open={openMenu === 'record'}
+          style={popoverStyle}
+          anchorEl={anchorEl as any}
+          anchorOrigin={{ horizontal: 'left', vertical: 'top' }}
+          targetOrigin={{ horizontal: 'left', vertical: 'bottom' }}
+          onRequestClose={this.closeMenu}
+        >
+          <Menu desktop width={264} onEscKeyDown={this.closeMenu}>
+            <div className={classes.menu_heading}>
+              {record !== null ? describeRecord(record) : 'Record'}
+            </div>
+            <MenuItem
+              style={analysisItemStyle}
+              innerDivStyle={analysisItemInnerStyle}
+              onClick={this.openEditRecord}
+            >
+              <span className={classes.menu_item}>
+                <span className={classes.menu_item_title}>Edit details…</span>
+                <span className={classes.menu_item_focus}>
+                  Image type, timepoint, capture date
+                </span>
+              </span>
+            </MenuItem>
+            <MenuItem
+              style={analysisItemStyle}
+              innerDivStyle={analysisItemInnerStyle}
+              onClick={this.openRemoveRecord}
+            >
+              <span className={classes.menu_item}>
+                <span className={cx(classes.menu_item_title, classes.menu_item__danger)}>
+                  Remove from record…
+                </span>
+                <span className={classes.menu_item_focus}>
+                  Drops this image and its tracing
+                </span>
+              </span>
+            </MenuItem>
+          </Menu>
+        </Popover>
+
+        {record !== null ? (
+          <EditRecordDialog
+            open={this.state.isEditRecordOpen}
+            initialValue={{
+              type: record.type,
+              timepoint: record.timepoint,
+              captureDate: record.captureDate,
+            }}
+            fileName={record.name}
+            onSave={this.handleSaveRecordMeta}
+            onCancel={this.closeEditRecord}
+          />
+        ) : null}
+
+        {record !== null ? (
+          <RemoveRecordDialog
+            open={this.state.isRemoveRecordOpen}
+            type={record.type}
+            timepoint={record.timepoint}
+            captureDate={record.captureDate}
+            fileName={record.name}
+            thumbnail={record.thumbnail}
+            otherRecordCount={Math.max(records.length - 1, 0)}
+            landmarksPlaced={record.landmarksPlaced}
+            onConfirm={this.handleConfirmRemoveRecord}
+            onCancel={this.closeRemoveRecord}
+          />
+        ) : null}
+
         {isReportOpen && (
           <ClinicalReport
             imageId={imageId}
@@ -542,6 +661,43 @@ export default class TracingToolbar extends React.PureComponent<Props, State> {
     this.setState({ openMenu: 'export', anchorEl: e.currentTarget });
   };
 
+  private openRecordMenu = (e: React.MouseEvent<HTMLButtonElement>) => {
+    this.setState({ openMenu: 'record', anchorEl: e.currentTarget });
+  };
+
+  private openEditRecord = () => {
+    this.closeMenu();
+    this.setState({ isEditRecordOpen: true });
+  };
+
+  private closeEditRecord = () => this.setState({ isEditRecordOpen: false });
+
+  private handleSaveRecordMeta = (meta: ImageRecordMeta) => {
+    this.setState({ isEditRecordOpen: false });
+    this.props.onSaveRecordMeta(meta);
+  };
+
+  private openRemoveRecord = () => {
+    this.closeMenu();
+    this.setState({ isRemoveRecordOpen: true });
+  };
+
+  private closeRemoveRecord = () => this.setState({ isRemoveRecordOpen: false });
+
+  private handleConfirmRemoveRecord = () => {
+    const { record, records, onRemoveRecord } = this.props;
+    this.setState({ isRemoveRecordOpen: false });
+    if (record === null) {
+      return;
+    }
+    // Another record's rail tile to land on, if the patient has one — the same
+    // rule the dashboard and the record viewer apply.
+    const fallback = records
+      .filter((r) => r.workspaceId !== record.workspaceId)
+      .map((r) => r.workspaceId)[0];
+    onRemoveRecord(record, fallback !== undefined ? fallback : null);
+  };
+
   private closeMenu = () => {
     this.setState({ openMenu: null, anchorEl: null });
   };
@@ -568,3 +724,15 @@ export default class TracingToolbar extends React.PureComponent<Props, State> {
     this.props.onZoomChange(1);
   };
 }
+
+/**
+ * One-line identity of the open film for the record control: `T2 · Panoramic
+ * radiograph · 2026-03-19`, with every part omitted rather than guessed. Same
+ * shape the records dashboard and the record viewer use in their own tooltips.
+ */
+const describeRecord = (record: PatientRecord): string =>
+  [
+    record.timepoint,
+    getImageTypeLabel(record.type),
+    formatCaptureDate(record.captureDate),
+  ].filter((part) => part !== null).join(' · ');

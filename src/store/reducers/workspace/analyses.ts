@@ -93,6 +93,7 @@ const reducers: Partial<ReducerMap> = {
     ceph_pa: 'ricketts_frontal',
     photo_frontal: 'frontal_face_proportions',
     photo_lateral: 'soft_tissues_photo_lateral',
+    photo_intraoral: 'intraoral_photo_record',
     panoramic: 'panoramic_analysis',
   }),
   [KEY_SUMMARY_SHOWN]: handleActions<typeof KEY_SUMMARY_SHOWN>({

@@ -32,7 +32,7 @@ export type WCephJSON = {
       /** A null value indicates that the image type is not set or is unknown */
       type: (
         'ceph_lateral' | 'ceph_pa' |
-        'photo_lateral' | 'photo_frontal' |
+        'photo_lateral' | 'photo_frontal' | 'photo_intraoral' |
         'panoramic' | null
       );
       /**
@@ -74,6 +74,12 @@ export type WCephJSON = {
           'soft_tissues_photo_frontal' |
           'soft_tissues_photo_lateral' |
           'frontal_face_proportions' |
+          // Declared, not implemented — the same status the four ids above it
+          // have (@see the `Analyses` interface). A non-traceable image carries
+          // no active analysis, so in practice an intraoral photograph is written
+          // with `activeId: null`; the id is listed so this union stays the whole
+          // of `AnalysisId<ImageType>` and the export cannot drift from it.
+          'intraoral_photo_record' |
           'panoramic_analysis'
         ) | null;
       };

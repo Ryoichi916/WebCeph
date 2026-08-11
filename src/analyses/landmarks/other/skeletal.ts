@@ -81,6 +81,11 @@ export const articulareCaveats = (
   }
   return [{
     symbols: [NSAr.symbol, SArGo.symbol, ArGoMe.symbol],
+    // The one line a compact surface has room for: what to do, and why. See
+    // `AnalysisCaveat.lede` — the full paragraph below still travels with it.
+    lede:
+      'Re-check Ar before reading these three angles — they deviate the ' +
+      'way a misplaced articulare does, not the way a mandible does.',
     text:
       'These three angles are all measured from articulare, and their sum is ' +
       'not — it is fixed by N, S, Go and Me. Here they deviate in opposite ' +

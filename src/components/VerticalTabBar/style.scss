@@ -70,6 +70,25 @@
       color: $primary-700;
     }
   }
+
+  // Waiting on a slot-directed upload: the tile is empty, so it is drawn empty —
+  // the ghost tile's dashed frame, tinted primary because this is the tile the
+  // clinician was just sent to.
+  &__pending {
+    .tab_preview__empty {
+      border-color: $primary-500;
+      background: $primary-050;
+    }
+
+    .tab_number {
+      color: $primary-600;
+    }
+
+    .tab_index,
+    .tab_type {
+      color: $primary-600;
+    }
+  }
 }
 
 // The miniature of the loaded radiograph (or the page number while no image
@@ -85,7 +104,16 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: border-color 120ms ease, box-shadow 120ms ease;
+  transition: border-color 120ms ease, box-shadow 120ms ease,
+    background-color 120ms ease;
+
+  // A tile with no image in it is not a film: it gets the ghost tile's dashed,
+  // unfilled treatment rather than the canvas black, which on a bare ordinal was
+  // indistinguishable from a loaded film whose thumbnail had failed to render.
+  &__empty {
+    background: transparent;
+    border-style: dashed;
+  }
 }
 
 .tab_thumbnail {
@@ -97,13 +125,15 @@
   pointer-events: none;
 }
 
-// Placeholder page number shown inside the tile before an image exists.
+// Placeholder page number (or the pending tile's plus) shown inside the tile
+// before an image exists. On the empty tile's light ground, so it is set in the
+// page's own secondary ink rather than the canvas's.
 .tab_number {
   font-size: 14px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   line-height: 1;
-  color: $canvas-text;
+  color: $text-tertiary;
 }
 
 // Primary caption under the tile — the record's timepoint (T1, T2, …), or the

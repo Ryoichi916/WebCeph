@@ -22,7 +22,17 @@
  * it are named in that group's FINDING cell, each with its own conclusion chip
  * and with the measurement it was read from, so nothing is attributed to a row
  * it did not come from.
+ *
+ * The module also owns the two rules that decide how a finding *looks* and where
+ * it *sits* — its chip tone (`chipToneFor`) and its position in a headline list
+ * (`orderFindings`) — for the same reason: three surfaces print those headlines
+ * (the Summary dialog, the report's contents page and the records dashboard's
+ * findings panel), and three copies of one rule is how they silently diverge.
+ * `AnalysisResultsViewer/index` re-exports the tone helpers, so every existing
+ * importer keeps its import.
  */
+
+import { NEUTRAL_CATEGORY } from 'analyses/helpers';
 
 type ResultComponent =
   CategorizedAnalysisResult<Category>['relevantComponents'][0];
@@ -123,3 +133,117 @@ export const alsoFindingLabel = (symbols: string[]): string => (
   // not an attribution anybody reads as one.
   `from\u00A0${symbols.join(', ')}`
 );
+
+// ---------------------------------------------------------------- finding tone
+//
+// Whether a conclusion is a clinically *normal* one, and the chip tone that
+// follows from it. Lives here rather than in the dialog that used to own it
+// because `orderFindings` below ranks on it, and this module must stay free of
+// React.
+
+/**
+ * Whether a finding's conclusion is a clinically *normal* one. Drives the chip
+ * colour on every surface that prints a finding — the Summary dialog, the
+ * report's tables and its findings overview, the records dashboard — so that one
+ * conclusion cannot appear in three tints on three pages of one document.
+ */
+export const isNormalIndication = (indication: Indication<Category>): boolean => (
+  indication === 'normal' ||
+  indication === 'class1' ||
+  indication === 'within_norm'
+);
+
+/**
+ * Chip tone for a finding. Driven by the **indication**, never by the worst
+ * severity in the group: the report used to tint the chip by the group's worst
+ * star count, so "Growth pattern — Horizontal" printed amber under Björk and
+ * red under Jarabak, one above the other on the same page, from the same
+ * tracing. Severity still shows — on the value and deviation of the individual
+ * row that carries it, where it belongs.
+ */
+export type ChipTone = 'success' | 'neutral' | 'warn';
+
+export const chipToneFor = (indication: Indication<Category>): ChipTone => {
+  if (isNormalIndication(indication)) {
+    return 'success';
+  }
+  // A measurement this app states no norm for is not abnormal; it is ungraded.
+  if (indication === 'not_graded') {
+    return 'neutral';
+  }
+  return 'warn';
+};
+
+/** One headline finding: a category and the conclusion drawn for it. */
+export interface HeadlineFinding {
+  category: Category;
+  indication: Indication<Category>;
+}
+
+/**
+ * A canonical slot per category — "keep this order whatever the ranking says".
+ * See `orderFindings`.
+ */
+export interface FindingOrder { [category: string]: number | undefined; }
+
+/**
+ * An analysis' findings ordered for a headline: what is abnormal first, ties in
+ * the analysis' own order.
+ *
+ * The neutral bucket is not a finding (it is the measured-values list, printed
+ * in full in the table below wherever this list appears), and the rank follows
+ * the **indication** rather than the worst severity inside the group, so the
+ * same conclusion is ranked and tinted identically on every surface.
+ *
+ * `pinned` exists for the one surface that prints these lists *repeatedly, side
+ * by side*: the records dashboard shows one block per film, and a ranking
+ * recomputed per film moved "Skeletal profile" from slot 4 to slot 1 to slot 3
+ * down a three-film chart, so nothing could be compared across the blocks. It
+ * passes the first film's order here and every later block keeps it; categories
+ * absent from it fall in behind, ranked the usual way. Passing nothing gives the
+ * plain worst-first order the printed report's contents page wants.
+ */
+export const orderFindings = (
+  results: Array<CategorizedAnalysisResult<Category>>,
+  pinned?: FindingOrder,
+): HeadlineFinding[] => {
+  const findings: HeadlineFinding[] = results
+    .filter((r) => r.category !== NEUTRAL_CATEGORY)
+    .map(({ category, indication }) => ({ category, indication }));
+  const rank = (f: HeadlineFinding) => (
+    chipToneFor(f.indication) === 'warn' ? 0 : 1
+  );
+  const slot = (f: HeadlineFinding) => (
+    pinned !== undefined ? pinned[f.category as string] : undefined
+  );
+  return findings
+    .map((f, i) => ({ f, i }))
+    .sort((a, b) => {
+      const sa = slot(a.f);
+      const sb = slot(b.f);
+      if (sa !== undefined && sb !== undefined) {
+        return sa - sb;
+      }
+      // A pinned category keeps its slot ahead of one the pinning never saw:
+      // the alternative is a new finding pushing every aligned row down by one.
+      if (sa !== undefined) {
+        return -1;
+      }
+      if (sb !== undefined) {
+        return 1;
+      }
+      return (rank(a.f) - rank(b.f)) || (a.i - b.i);
+    })
+    .map(({ f }) => f);
+};
+
+/** The canonical slots a list of findings defines, for `orderFindings#pinned`. */
+export const findingOrderOf = (findings: HeadlineFinding[]): FindingOrder => {
+  const order: FindingOrder = {};
+  findings.forEach(({ category }, i) => {
+    if (order[category as string] === undefined) {
+      order[category as string] = i;
+    }
+  });
+  return order;
+};

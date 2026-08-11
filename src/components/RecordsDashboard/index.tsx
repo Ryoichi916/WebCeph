@@ -16,6 +16,7 @@ import { PatientRecord } from 'store/reducers/workspace';
 import EditRecordDialog from 'components/RecordMetaFields/EditRecordDialog';
 import RemoveRecordDialog from 'components/RecordMetaFields/RemoveRecordDialog';
 import EditPatientDialog, { PatientEditField } from './EditPatientDialog';
+import AnalysisFindings, { FilmFindings } from './AnalysisFindings';
 
 import { PatientDetails } from 'components/PatientFields';
 
@@ -28,6 +29,12 @@ import {
 
 import {
   getImageTypeLabel,
+  getImageTypeLabelInSentence,
+  getAddSlotLabel,
+  IMAGE_TYPE_OPTIONS,
+  DEFAULT_IMAGE_TYPE,
+  getDefaultTimepoint,
+  getMissingImageTypes,
   formatCaptureDate,
   formatDisplayDate,
   parseCaptureDate,
@@ -36,7 +43,6 @@ import {
   FILM_SIZE_BAND,
   getTimepointToken,
   groupRecordsByTimepoint,
-  IMAGE_TYPE_OPTIONS,
   TimepointGroup,
 } from 'utils/records';
 
@@ -47,33 +53,44 @@ const classes = require('./style.scss');
 const actionIconStyle: React.CSSProperties = { width: 18, height: 18 };
 
 /**
- * Below this many images the record counts as sparse and the panel states what
- * the record does *not* yet hold (`renderFilingChecklist`) under its cards —
- * information in the space a nearly-empty list would otherwise leave blank.
- *
- * Five, not three: grouping the record by timepoint made every row shorter, so a
- * three- or four-image record leaves a band of empty grey under a content-sized
- * panel — which is the state a newly opened case is in most often.
- *
- * The panel itself is *always* sized to its records now. Stretched to the page's
- * slack, a one-record chart was a 123px card above a 410px dashed box: the
- * record was 19% of the panel's ink and the eye landed on the empty target
- * rather than on the film.
+ * The `+` on an empty type slot: authored, not mui's IconAdd, because a mui
+ * SvgIcon resolves `currentColor` against its own inline palette colour rather
+ * than its parent's — so a fixed grey plus stayed grey inside a slot whose
+ * border and label had both turned blue under the pointer. Drawn as two strokes
+ * in `currentColor`, the whole chip changes colour as one thing.
  */
-const SPARSE_RECORD_LIMIT = 5;
+const SlotPlus = () => (
+  <svg
+    className={classes.slot_plus}
+    width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"
+  >
+    <path
+      d="M5 1 V9 M1 5 H9"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+    />
+  </svg>
+);
 
 /**
- * The empty state's illustration: an open records folder — back panel, raised
- * tab, front pocket with a thumb cut — and, standing clear of it, a film card
- * carrying a lateral soft-tissue profile with three landmarks on it.
+ * The empty state's mark: a records folder — raised tab, front pocket with a
+ * thumb cut — with a lateral cephalogram standing in it.
  *
- * Drawn at 200px in a 200-wide viewBox so every feature is at its intended size:
- * the previous mark was a 190px drawing whose folder read as a rounded rectangle
- * with a notch, whose profile read as a cursive "3", and whose landmarks (r=2.8,
- * blue on white) were effectively invisible. The profile is the one an
- * orthodontist traces — glabella, soft-tissue nasion, nasal tip, subnasale,
- * lips, pogonion, menton — and the landmarks are the editor's own amber-on-dark
- * dots at the size they are actually placed at.
+ * Both halves are drawn as *filled* shapes, because a 200px illustration made of
+ * 2px strokes does not survive its own size: the mark this replaces was a folder
+ * that read as a rounded rectangle with a notch beside a stroked profile that
+ * read as a cursive "3", and its three landmarks (r=2.8, blue on white) were
+ * invisible. The film is the app's own canvas black carrying a soft-tissue
+ * profile as a silhouette — the one shape that stays a human head at this size —
+ * cropped by the film's edge the way a real ceph crops the neck, with three
+ * landmarks (nasion, pronasale, pogonion) in the editor's amber-on-dark at the
+ * radius they are actually placed at.
+ *
+ * Every colour is the palette's: $bg-sunken / $bg-surface / $border-strong for
+ * the folder, $canvas-bg / $canvas-border for the film, $text-secondary for the
+ * profile, #FFC400 over #14181D for the landmarks.
  */
 const EmptyIllustration = () => (
   <svg
@@ -83,51 +100,58 @@ const EmptyIllustration = () => (
     viewBox="0 0 200 140"
     aria-hidden="true"
   >
-    {/* Folder back panel, with the tab standing above its top edge. */}
+    <defs>
+      {/* The film crops the silhouette, so the profile can run off the bottom
+          edge as a neck instead of closing into a point. */}
+      <clipPath id="records-empty-film">
+        <rect x="98" y="8" width="86" height="108" rx="5" />
+      </clipPath>
+    </defs>
+    {/* Folder tab, standing above the pocket's top edge. */}
     <path
-      className={classes.empty_folder}
-      d="M12 44 v-9 a5 5 0 0 1 5 -5 h27 a5 5 0 0 1 5 5 v9 h49 a6 6 0 0 1 6 6
-         v66 a6 6 0 0 1 -6 6 H18 a6 6 0 0 1 -6 -6 Z"
+      className={classes.empty_tab}
+      d="M8 60 v-10 a5 5 0 0 1 5 -5 h30 a5 5 0 0 1 5 5 v10 Z"
     />
-    {/* Front pocket: a lower front edge with a thumb cut, so the folder has a
-        mouth to file into rather than being a rectangle with a bite out of it. */}
-    <path
-      className={classes.empty_pocket}
-      d="M12 76 h30 c4 0 5 5 9 5 h20 c4 0 5 -5 9 -5 h24 v40 a6 6 0 0 1 -6 6
-         H18 a6 6 0 0 1 -6 -6 Z"
+    {/* The film, behind the folder's front pocket. */}
+    <rect
+      className={classes.empty_film}
+      x="98" y="8" width="86" height="108" rx="5"
     />
-    {/* Film card, tilted, clear to the right of the folder. */}
-    <g transform="rotate(6 158 70)">
-      <rect
-        x="122" y="20" width="72" height="100" rx="6"
-        className={classes.empty_card}
-      />
-      {/* Soft-tissue profile, facing right. */}
-      <path
-        className={classes.empty_profile}
-        fill="none"
-        strokeWidth="2.2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M144 32
-           C156 36 161 46 160 55
-           C159 60 156 61 155 64
-           C159 68 166 75 167 79
-           C167 82 163 83 158 83
-           C157 87 160 89 159 92
-           C158 95 161 98 159 101
-           C157 104 160 109 155 114
-           C149 118 143 117 139 114"
-      />
-      {/* Three landmarks, in the editor's own amber-on-dark: soft-tissue
-          nasion, pronasale, pogonion. Ringed and at placement size, so they
-          read as plotted points rather than as stray specks. */}
-      <g className={classes.empty_dots}>
-        <circle cx="155" cy="64" r="4.2" />
-        <circle cx="167" cy="79" r="4.2" />
-        <circle cx="160" cy="107" r="4.2" />
+    <g clipPath="url(#records-empty-film)">
+      <g transform="translate(101 18) scale(0.82)">
+        {/* Soft-tissue profile facing right, in the order it is traced:
+            occiput, cranium, forehead, nasion, nasal tip, subnasale, upper and
+            lower lip, pogonion, menton, jawline, neck. */}
+        <path
+          className={classes.empty_profile}
+          d="M22 130
+             C16 110 10 80 18 54
+             C26 26 56 14 74 30
+             C82 38 84 46 80 52
+             L78 58
+             C84 62 90 68 92 72
+             C88 74 82 74 78 75
+             C82 79 82 82 77 84
+             C82 87 81 90 76 92
+             C74 94 76 97 79 100
+             C80 108 74 112 64 114
+             C52 116 44 114 38 110
+             C40 118 42 124 42 130 Z"
+        />
       </g>
     </g>
+    {/* Nasion, pronasale, pogonion — on the profile, at placement radius. */}
+    <g className={classes.empty_dots}>
+      <circle cx="164.9" cy="65.6" r="4.4" />
+      <circle cx="176.4" cy="77" r="4.4" />
+      <circle cx="166.6" cy="100" r="4.4" />
+    </g>
+    {/* Front pocket, over the film: the folder has a mouth to file into. */}
+    <path
+      className={classes.empty_pocket}
+      d="M8 58 h40 c5 0 6 6 11 6 h22 c5 0 6 -6 11 -6 h16
+         a6 6 0 0 1 6 6 v58 a6 6 0 0 1 -6 6 H14 a6 6 0 0 1 -6 -6 Z"
+    />
   </svg>
 );
 
@@ -219,6 +243,13 @@ const StatusChip = (
 const FilmThumb = ({ record }: { record: PatientRecord }) => {
   const { width, height, landmarkPoints } = record;
   const marks = (
+    // Only a film that can actually be traced carries marks. Landmarks outlive a
+    // re-filing: a lateral ceph that was traced and then corrected to "Profile
+    // photograph" keeps its stored points, and plotted here they put a
+    // cephalometric tracing on a card whose own chip reads "View only · not
+    // analysable" — the tracing state the record is not entitled to, drawn 100px
+    // from the sentence denying it.
+    record.isTraceable &&
     width !== null && height !== null && width > 0 && height > 0 &&
     landmarkPoints.length > 0
   ) ? { w: width, h: height } : null;
@@ -255,6 +286,20 @@ const FilmThumb = ({ record }: { record: PatientRecord }) => {
     </span>
   );
 };
+
+/**
+ * A visit an untimepointed image can be filed at from its own card: one of the
+ * record's labelled groups, or — where it has none — the T1 that would start the
+ * series. `date` is the day that gets written onto the image, null where the
+ * target lends none and the image keeps its own.
+ */
+interface FileTarget {
+  key: string;
+  label: string;
+  date: string | null;
+  /** True for the proposed first visit, which is not on file yet. */
+  isNew?: boolean;
+}
 
 interface State {
   /** Image id whose details are being edited, or null. */
@@ -322,8 +367,9 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
   };
 
   private root: HTMLElement | null = null;
-  private scroller: HTMLElement | null = null;
   private panel: HTMLElement | null = null;
+  private head: HTMLElement | null = null;
+  private foot: HTMLElement | null = null;
 
   componentDidMount() {
     document.addEventListener('keydown', this.handleDocumentKeyDown);
@@ -360,6 +406,10 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
       : null;
     const note = this.getTraceableNote();
     const { isHeadFloating } = this.state;
+    // The grouping the timeline draws, read once here and handed down, so the
+    // rail, the groups and the identity band's counts are all the same reading of
+    // the same records.
+    const groups = groupRecordsByTimepoint(records);
     return (
       <section
         className={cx(classes.surface, className)}
@@ -423,11 +473,7 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
           </div>
         </div>
 
-        <div
-          className={classes.scroll}
-          ref={this.setScroller}
-          onScroll={this.updateStickyState}
-        >
+        <div className={classes.scroll} onScroll={this.updateStickyState}>
           {/* A table, and a presentational one: the running head below has to
               repeat on every printed sheet, and a real `<thead>` is the only
               construction a browser repeats *and* reserves the space for —
@@ -454,6 +500,7 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
                 it had been. */}
             <section className={classes.records} ref={this.setPanel}>
               <div
+                ref={this.setHead}
                 className={cx(classes.records_head, {
                   [classes.records_head__floating]: isHeadFloating,
                 })}
@@ -473,6 +520,13 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
               <div
                 className={cx(classes.records_body, {
                   [classes.records_body__flush]: records.length === 0,
+                  // The footer is sticky, so at a list taller than the window it
+                  // floats over the foot of this well. Without the reserve below,
+                  // the pane's closing content was *permanently* under it: at four
+                  // records the coverage note ended "a case is complete without a
+                  // panoramic or a" with "photographic series." hidden, and the
+                  // trailing add row shared the same 20px.
+                  [classes.records_body__footed]: this.hasRecordsFooter(),
                 })}
               >
                 {records.length === 0 ? (
@@ -483,34 +537,90 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
                       Add a lateral cephalogram to start tracing. Frontal films,
                       panoramics and photographs can be filed alongside it.
                     </p>
+                    {/* Typed, like every affordance after it. The prose above
+                        names the types a first visit can hold while the only
+                        control offered was an untyped "Add image", so the first
+                        record of a case was the one record whose type had to be
+                        typed into the form by hand — and the screen's words and
+                        its controls disagreed. The primary action files the film
+                        this app traces; the row beneath it files any of the
+                        others at the same first visit. */}
                     <span className={classes.empty_action}>
                       <RaisedButton
                         primary
                         className={classes.primary_action}
-                        label="Add image"
+                        label="Add lateral cephalogram"
                         icon={<IconAdd color="#FFFFFF" style={actionIconStyle} />}
                         labelStyle={{ textTransform: 'none', fontWeight: 600 }}
-                        onClick={this.handleAddImage}
+                        onClick={this.handleFillFirstSlot(DEFAULT_IMAGE_TYPE)}
                       />
                     </span>
+                    <div className={cx(classes.slots, classes.slots__empty)}>
+                      <span className={classes.slots_label}>
+                        Or file at {getDefaultTimepoint(0)}
+                      </span>
+                      <span className={classes.slots_list}>
+                        {IMAGE_TYPE_OPTIONS
+                          .filter(({ id }) => id !== DEFAULT_IMAGE_TYPE)
+                          .map(({ id, slotLabel }) => (
+                            <button
+                              key={id}
+                              type="button"
+                              className={classes.slot}
+                              title={`Add ${getImageTypeLabelInSentence(id)} ` +
+                                `at ${getDefaultTimepoint(0)}`}
+                              aria-label={`Add ${getImageTypeLabelInSentence(id)} ` +
+                                `at ${getDefaultTimepoint(0)}`}
+                              onClick={this.handleFillFirstSlot(id)}
+                            >
+                              <SlotPlus />
+                              <span className={classes.slot_label}>
+                                {getAddSlotLabel(id)}
+                              </span>
+                              <span className={classes.slot_print}>{slotLabel}</span>
+                            </button>
+                          ))}
+                      </span>
+                    </div>
                   </div>
                 ) : (
-                  <ol className={classes.timeline}>
-                    {/* One rail for the whole timeline, drawn from the first
-                        timepoint's node down to the last (the tail below the last
-                        node is masked by that group's stamp) — never one stub per
-                        group. */}
-                    <span className={classes.timeline_rail} aria-hidden="true" />
-                    {groupRecordsByTimepoint(records).map(
-                      (group, index) => this.renderGroup(group, index),
-                    )}
+                  /* A chronology needs two points on it: with a single visit on
+                     file the rail and its node are suppressed, because a lone
+                     12px dot in an empty gutter with no line through it is a
+                     decoration, and the one thing it could have said — the day
+                     of the visit — is written beside it. */
+                  /* Two panes at a wide window: the chronology, and what the
+                     case holds across all of its visits (see `renderCoverage`) —
+                     the one reading of the record the timeline cannot give. Both
+                     panes are sized to their own content; neither is stretched to
+                     the window. */
+                  <div className={classes.records_panes}>
+                  <div
+                    className={cx(classes.timeline, {
+                      [classes.timeline__single]: groups.length < 2,
+                    })}
+                  >
+                    {/* The visits, and nothing else: the rail is drawn inside
+                        *this* wrapper, so it can only ever span the first
+                        timepoint's node to the last one's. Drawn on a list that
+                        also held the trailing "add" row, its bottom edge was that
+                        row's — a grey line hanging ~90px below the final node
+                        into empty space whenever the last visit's panel was
+                        short. */}
+                    <ol className={classes.groups}>
+                      <span className={classes.timeline_rail} aria-hidden="true" />
+                      {groups.map(
+                        (group, index) => this.renderGroup(group, index, groups),
+                      )}
+                    </ol>
                     {/* The list closes on the way to add the next film — the
                         same action as the page bar's, offered where a reader
-                        arrives after the newest record. One height at every list
-                        length: grown to the panel's slack it was a 410px dashed
-                        box under a 123px card, and the eye landed on the empty
-                        target instead of on the film. */}
-                    <li className={classes.add_entry}>
+                        arrives after the newest record, directly beneath the last
+                        visit. One height at every list length, and no longer
+                        pushed to the panel's bottom edge: pinned there it left
+                        ~390px of void between the newest film and itself, and at
+                        a long list it slid under the sticky footer. */}
+                    <div className={classes.add_entry}>
                       <button
                         type="button"
                         className={classes.add_row}
@@ -524,18 +634,18 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
                           <span>Add another image to this record</span>
                         </span>
                       </button>
-                    </li>
-                  </ol>
+                    </div>
+                  </div>
+                  {this.renderCoverage(groups)}
+                  </div>
                 )}
-                {/* What the record does not yet hold, while it is short enough
-                    for that to be the useful thing to say. This is the space a
-                    grown add row used to occupy, carrying information instead of
-                    a bigger button. */}
-                {records.length > 0 && records.length < SPARSE_RECORD_LIMIT
-                  ? this.renderFilingChecklist() : null}
               </div>
               {this.renderRecordsFooter()}
             </section>
+            {/* …and what the analyses already say about the films in it. Read
+                only: this panel dispatches nothing and never changes which
+                analysis is active. */}
+            {this.renderAnalysisFindings()}
             </td>
             </tr>
             </tbody>
@@ -547,32 +657,46 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
   }
 
   private setRoot = (el: HTMLElement | null) => { this.root = el; };
-  private setScroller = (el: HTMLElement | null) => { this.scroller = el; };
   private setPanel = (el: HTMLElement | null) => { this.panel = el; };
+  private setHead = (el: HTMLElement | null) => { this.head = el; };
+  private setFoot = (el: HTMLElement | null) => { this.foot = el; };
 
   /**
    * Whether the panel's sticky head and foot are currently floating over the
-   * list, measured rather than guessed: the head floats exactly while the
-   * panel's top edge is above the scrollport's, the foot exactly while its
-   * bottom edge is below it. (Deriving this from `scrollTop` alone would fade
-   * the head while the identity band was still scrolling past and nothing was
-   * under it.)
+   * list — measured off the bars themselves, which is the only test that cannot
+   * disagree with what the eye sees: a sticky bar is displaced from its natural
+   * place in the panel *exactly* when it is holding position over content. So
+   * the head floats while it sits below the panel's own top edge, and the foot
+   * while it sits above the panel's bottom edge.
    *
-   * The scrims and shadows those two flags switch on are the surface's answer to
+   * (Comparing the panel's edges to the scrollport's instead — the first
+   * formulation here — missed the last few pixels of a scroll: at the end of a
+   * five-record list the head was measured as "not floating" while it was in fact
+   * 5px over the first card, so the shadow the overlap exists to announce never
+   * appeared.)
+   *
+   * The scrims and shadows these two flags switch on are the surface's answer to
    * a bar that overlaps content: at 6 records the head covered the top 63px of a
    * 123px card, and at the default list the foot covered the bottom half of the
    * last one — with no shadow, no fade and no shift in the card, so a film simply
    * ended mid-line.
    */
   private updateStickyState = () => {
-    const { scroller, panel } = this;
-    if (scroller === null || panel === null) {
+    const { panel, head, foot } = this;
+    if (panel === null) {
       return;
     }
-    const port = scroller.getBoundingClientRect();
     const box = panel.getBoundingClientRect();
-    const isHeadFloating = box.top < port.top - 0.5;
-    const isFootFloating = box.bottom > port.bottom + 0.5;
+    // The bars' natural place is inside the panel's own 1px border, so the border
+    // is discounted before a displacement is called one: measured against the
+    // panel's outer edge, both bars were "floating" by exactly 1px at rest and
+    // the scrim the overlap exists to announce was on before anything had
+    // scrolled at all.
+    const inset = panel.clientTop;
+    const isHeadFloating = head !== null &&
+      head.getBoundingClientRect().top > box.top + inset + 0.5;
+    const isFootFloating = foot !== null &&
+      foot.getBoundingClientRect().bottom < box.bottom - inset - 0.5;
     if (
       isHeadFloating !== this.state.isHeadFloating ||
       isFootFloating !== this.state.isFootFloating
@@ -598,14 +722,22 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
   };
 
   /**
-   * The printed chart's running head: it repeats on every sheet, because a
-   * sheet of a patient's imaging record that does not name the patient is not
-   * filable. Never rendered on screen — the page bar and the identity band own
-   * that job there — and it replaces the page bar on paper, where an exit
-   * control and a keyboard shortcut mean nothing.
+   * The printed chart's running head — and, on paper, the record's *only* header:
+   * it repeats on every sheet, because a sheet of a patient's imaging record that
+   * does not name the patient is not filable, and the identity band is hidden
+   * behind it (see the print block) so no fact is printed twice. It replaces the
+   * page bar, whose exit control and keyboard shortcut mean nothing on paper.
    *
-   * Every part is read off the patient record; a part that is not recorded is
-   * simply not printed, and the identity band below states the gap in full.
+   * It therefore carries everything the band carries except the age today, which
+   * a printed chart does not need and cannot keep true: the identity (name, chart
+   * ID, date of birth, sex) and what the record covers (its timepoints and the
+   * span between its first and last capture date). A value that is not recorded is
+   * printed *as* unrecorded: a sheet that simply leaves the date of birth out
+   * cannot be told from one belonging to a patient who has one, and every norm in
+   * this app is age- and sex-corrected.
+   *
+   * Never rendered on screen: the page bar and the identity band own that job
+   * there.
    */
   private renderPrintHead = () => {
     const { patient } = this.props;
@@ -616,14 +748,26 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
     const heading = name !== null ? name
       : (chartId !== null ? chartId : '(unnamed patient)');
     const parts: string[] = [];
-    if (name !== null && chartId !== null) {
-      parts.push(`Chart ${chartId}`);
+    if (name !== null) {
+      parts.push(chartId !== null ? `Chart ${chartId}` : 'No chart ID');
     }
-    if (dob !== null) {
-      parts.push(`DOB ${dob}`);
+    if (patient !== null) {
+      parts.push(dob !== null ? `DOB ${dob}` : 'Date of birth not recorded');
+      parts.push(sex !== null ? sex : 'Sex not recorded');
     }
-    if (sex !== null) {
-      parts.push(sex);
+    // What the record covers, on the same terms the band states it on screen.
+    const { groups, timepointCount, unlabelled, span } = this.getRecordFacts();
+    if (groups.length > 1) {
+      const labelled = timepointCount > 0
+        ? `${timepointCount} timepoints` : 'No timepoint labels';
+      parts.push(unlabelled > 0
+        ? `${labelled} + ${unlabelled} unlabelled ` +
+          `${unlabelled === 1 ? 'image' : 'images'}`
+        : labelled);
+    }
+    if (span !== null) {
+      parts.push(span.interval !== null
+        ? `${span.dates} (${span.interval})` : span.dates);
     }
     return (
       <thead className={classes.print_head} aria-hidden="true">
@@ -643,13 +787,45 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
   };
 
   /**
+   * What the imaging record covers, counted off the very grouping the timeline
+   * draws so no two parts of this surface can disagree about it: the labelled
+   * timepoints (T1, T2, …), the images that carry no label at all — which the
+   * timeline still draws as a row of their own — and the span between the first
+   * and last capture date on file.
+   *
+   * Read by the identity band on screen and by the running head on paper, which is
+   * the whole point: "TIMEPOINTS 3" above four visible rows was one number with
+   * two readings, 120px apart.
+   */
+  private getRecordFacts = () => {
+    const { records } = this.props;
+    const groups = groupRecordsByTimepoint(records);
+    const dated = records
+      .map(({ captureDate }) => formatCaptureDate(captureDate))
+      .filter((d): d is string => d !== null)
+      .sort();
+    return {
+      groups,
+      timepointCount: groups.filter(({ label }) => label !== null).length,
+      unlabelled: groups
+        .filter(({ label }) => label === null)
+        .reduce((total, group) => total + group.records.length, 0),
+      span: getRecordSpan(dated),
+    };
+  };
+
+  /**
    * The patient's identity: who this record belongs to, and the demographics
    * every analysis and printed report is read against. Unrecorded values are
    * shown as unrecorded rather than hidden — a missing date of birth is a fact
    * about the record, and the button underneath is how it gets filled in.
+   *
+   * Screen only: on paper the running head carries all of this on every sheet
+   * (see `renderPrintHead`), and printing it twice named the patient in two
+   * adjacent rows and cost the chart a band of its first page.
    */
   private renderIdentity = () => {
-    const { patient, records } = this.props;
+    const { patient } = this.props;
     // Whose record this is. Saving a blank name is legal wherever a chart ID
     // exists, and then the chart ID *is* the heading — so it must not be printed
     // a second time as the pill under it (the guard PatientBar keeps): a
@@ -670,26 +846,13 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
     const dob = patient !== null ? formatDisplayDate(patient.dateOfBirth) : null;
     const age = patient !== null ? formatAgeFull(patient.dateOfBirth) : null;
     const sex = patient !== null ? formatSexFull(patient.sex) : null;
-    // Counted off the very grouping the timeline below draws, so the band and
-    // the timeline can never disagree: labelled timepoints (T1, T2, …) are the
-    // count, and the images that carry no label — which the timeline still
-    // draws as a row of its own, with its own pill, date and age — are stated
-    // beside it rather than silently left out of the total. "TIMEPOINTS 3"
-    // above four visible rows was one number with two readings, 120px apart.
-    const groups = groupRecordsByTimepoint(records);
-    const timepointCount = groups.filter(({ label }) => label !== null).length;
-    const unlabelled = groups
-      .filter(({ label }) => label === null)
-      .reduce((total, group) => total + group.records.length, 0);
-    // How long the record actually spans, counted between the earliest and the
-    // latest capture date on file. The panel states the two dates; how much
-    // growth sits between them is what a longitudinal record is read for, and
-    // nothing else on this screen says it.
-    const dated = records
-      .map(({ captureDate }) => formatCaptureDate(captureDate))
-      .filter((d): d is string => d !== null)
-      .sort();
-    const span = getRecordSpan(dated);
+    const { groups, timepointCount, unlabelled, span } = this.getRecordFacts();
+    // A count of one is not a chronology, and the record it counts is the single
+    // stamp 120px below this cell: on a one-visit chart "TIMEPOINTS 1" was the
+    // fourth statement of "one" inside one screen (the top bar's "Records (1)",
+    // the panel's "1 on file", the timeline's own single row). The cell earns its
+    // place from two visits on, or where some images carry no label at all.
+    const showTimepoints = groups.length > 1;
     return (
       <header className={classes.identity}>
         <div className={classes.identity_head}>
@@ -740,15 +903,16 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
             onFix={patient !== null ? this.openEditPatientField('sex') : undefined}
             fixLabel="Add sex"
           />
-          {/* What is on file — dropped entirely when nothing is. On an empty
-              record these two cells spent a third of the band on facts that
-              cannot exist ("TIMEPOINTS 0", "RECORD SPAN — No capture dates");
-              the demographics, which do exist the moment a patient is
-              registered, have the strip to themselves instead. */}
-          {records.length > 0 ? (
+          {/* What is on file — and only where it is something the record does not
+              already state. On an empty record these two cells spent a third of
+              the band on facts that cannot exist ("TIMEPOINTS 0", "RECORD SPAN —
+              No capture dates"); on a one-visit record they restated the single
+              stamp below. The rule goes with them: a group boundary with nothing
+              after it is a hairline at the end of a strip. */}
+          {showTimepoints || span !== null ? (
             <span className={classes.facts_rule} aria-hidden="true" />
           ) : null}
-          {records.length > 0 ? (
+          {showTimepoints ? (
             <IdentityFact
               label="Timepoints"
               // With images on file but none labelled, "None labelled" is the
@@ -808,6 +972,16 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
    * not rendered — a sticky strip of chrome with one restated fact in it is worse
    * than no strip at all, because it also floats over the last card.
    */
+  /**
+   * Whether the closing bar is rendered at all — one traceable film says
+   * everything twice (its own two chips *are* the two tallies), so the bar earns
+   * its place from two on. Asked here as well as in `renderRecordsFooter`,
+   * because the well above has to reserve the height of a bar that floats over
+   * it (see `.records_body__footed`).
+   */
+  private hasRecordsFooter = (): boolean =>
+    this.props.records.filter((r) => r.isTraceable).length >= 2;
+
   private renderRecordsFooter = () => {
     const { records } = this.props;
     const traceable = records.filter((r) => r.isTraceable);
@@ -815,16 +989,29 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
       (r) => r.landmarksRequired > 0 && r.landmarksPlaced >= r.landmarksRequired,
     ).length;
     const calibrated = traceable.filter((r) => r.isCalibrated).length;
+    // A calibration whose implied film size is outside the band a cephalogram
+    // measures is counted separately: a bare "3 of 3 calibrated" under three
+    // cards that each read "Calibrated · check scale" is the panel's summary line
+    // contradicting every card it summarises.
+    const suspect = traceable.filter((r) => {
+      const size = getImpliedFilmSize(r.width, r.height, r.scaleFactor);
+      return r.isCalibrated && size !== null && !size.isPlausible;
+    }).length;
     // One traceable film says everything twice: its own two chips are the two
     // tallies. Two or more, and "2 of 3 traced" is a reading of the record that
     // no single card carries.
-    if (traceable.length < 2) {
+    if (!this.hasRecordsFooter()) {
       return null;
     }
     const { isFootFloating } = this.state;
-    const noun = 'lateral cephs';
+    // Traceability is a property of the *type*, and an image filed before the
+    // records layer existed carries no type at all — those are traceable too, so
+    // the tally cannot call them lateral cephalograms.
+    const noun = traceable.filter((r) => r.type !== 'ceph_lateral').length === 0
+      ? 'lateral cephs' : 'traceable images';
     return (
       <div
+        ref={this.setFoot}
         className={cx(classes.records_foot, {
           [classes.records_foot__floating]: isFootFloating,
         })}
@@ -838,94 +1025,255 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
         <span className={classes.records_foot_item}>
           {calibrated} of {traceable.length} {noun} calibrated
         </span>
+        {suspect > 0 ? (
+          <span
+            className={cx(classes.records_foot_item, classes.records_foot_item__warn)}
+            title={`The scale on ${suspect === 1 ? 'this film makes it' : 'these films makes them'} ` +
+              `smaller or larger than the ${FILM_SIZE_BAND.minMm}–` +
+              `${FILM_SIZE_BAND.maxMm} mm a cephalogram measures.`}
+          >
+            {suspect === 1
+              ? '1 scale needs checking' : `${suspect} scales need checking`}
+          </span>
+        ) : null}
         <span className={classes.records_foot_spacer} />
       </div>
     );
   };
 
   /**
-   * What this record does not yet hold, while it is short enough for that to be
-   * worth stating: every image type the app files, ticked where the record has
-   * one and hollow where it does not, with the count where there are several.
+   * What this visit does not hold: one quiet slot per image type the app files
+   * and this timepoint has not got, as the closing row of the visit's own panel.
    *
-   * This is information, not a requirement — a case is not incomplete for having
-   * no panoramic — and it is read straight off the records, so it can never claim
-   * a film that is not there. It occupies the space a one-record chart used to
-   * spend on a 410px dashed button.
+   * This is the surface's answer to the question a clinician opens a chart with —
+   * *what is this case missing?* — asked where it can be answered: pressing
+   * "Add profile photo" under T2 opens the upload form already filed as a profile
+   * photograph at T2 on that visit's day (see `handleFillSlot`), so the record
+   * details are not re-entered by hand.
+   *
+   * It is information and an invitation, never a requirement: a case is not
+   * incomplete for having no panoramic, which is why the slots are hairline-dashed
+   * and grey rather than amber, and why the row is headed "Not filed" and not
+   * "Missing". A visit that holds every type gets no row at all.
+   *
+   * (This replaced a record-level checklist of the same five types under the
+   * timeline. Per visit it says strictly more — *which* visit lacks the
+   * photograph — and it is actionable where the checklist could only be read;
+   * kept as well, the two blocks listed the same types twice on the one-visit
+   * chart that is a newly opened case's normal state.)
    */
-  private renderFilingChecklist = () => {
-    const { records } = this.props;
-    const counts: { [type: string]: number } = {};
-    records.forEach(({ type }) => {
-      if (type !== null) {
-        counts[type] = (counts[type] || 0) + 1;
+  private renderGroupSlots = (
+    group: TimepointGroup<PatientRecord>,
+    groups: TimepointGroup<PatientRecord>[],
+  ) => {
+    if (group.label === null) {
+      // An untimepointed group gets no slots of its own: filing *into* it would
+      // mean adding an image with no timepoint on purpose, and a records surface
+      // should not invite that. Its images are corrected onto a visit from their
+      // own cards ("File this at").
+      //
+      // Unless there is no visit to correct them onto. A record whose only image
+      // carries no label then had *no* typed affordance anywhere on the surface —
+      // no slot row, no file-at chip — while the coverage pane beside it printed
+      // five "Not on file" rows nobody could act on, and the only control left
+      // was the untyped "Add another image", which re-asked for the very three
+      // fields the slots exist to fill in. So the first visit's own slot row is
+      // offered here, exactly as the empty state offers it.
+      if (groups.some((g) => g.label !== null)) {
+        return null;
       }
-    });
-    const filed = IMAGE_TYPE_OPTIONS.filter(
-      ({ id }) => (counts[id] || 0) > 0,
-    ).length;
-    return (
-      <div className={classes.filing}>
-        <div className={classes.filing_head}>
-          <span className={classes.filing_title}>Image types in this record</span>
-          <span className={classes.filing_count}>
-            {filed} of {IMAGE_TYPE_OPTIONS.length} filed
+      const first = getDefaultTimepoint(0);
+      return (
+        <div
+          className={classes.slots}
+          title={`Nothing is filed at a timepoint yet — these slots open the ` +
+            `upload form filed at ${first}`}
+        >
+          <span className={classes.slots_label}>Or file at {first}</span>
+          <span className={classes.slots_list}>
+            {IMAGE_TYPE_OPTIONS.map(({ id, slotLabel }) => (
+              <button
+                key={id}
+                type="button"
+                className={classes.slot}
+                title={`Add ${getImageTypeLabelInSentence(id)} at ${first}`}
+                aria-label={`Add ${getImageTypeLabelInSentence(id)} at ${first}`}
+                onClick={this.handleFillFirstSlot(id)}
+              >
+                <SlotPlus />
+                <span className={classes.slot_label}>{getAddSlotLabel(id)}</span>
+                <span className={classes.slot_print}>{slotLabel}</span>
+              </button>
+            ))}
           </span>
         </div>
-        <ul className={classes.filing_list}>
-          {IMAGE_TYPE_OPTIONS.map(({ id, label }) => {
-            const held = counts[id] || 0;
-            return (
-              <li
-                key={id}
-                className={cx(classes.filing_item, {
-                  [classes.filing_item__held]: held > 0,
-                })}
-              >
-                {held > 0 ? (
-                  <svg
-                    className={classes.filing_mark}
-                    width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"
-                  >
-                    <circle className={classes.filing_mark_disc} cx="7" cy="7" r="7" />
-                    <path
-                      className={classes.filing_mark_tick}
-                      fill="none"
-                      strokeWidth="1.8"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M3.6 7.2 L6 9.5 L10.4 4.6"
-                    />
-                  </svg>
-                ) : (
-                  <svg
-                    className={classes.filing_mark}
-                    width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"
-                  >
-                    <circle
-                      className={classes.filing_mark_ring}
-                      cx="7" cy="7" r="6"
-                      fill="none"
-                      strokeWidth="1.5"
-                    />
-                  </svg>
-                )}
-                <span className={classes.filing_label}>{label}</span>
-                <span className={classes.filing_state}>
-                  {held > 0 ? (held === 1 ? '1 image' : `${held} images`)
-                    : 'Not on file'}
-                </span>
-              </li>
-            );
-          })}
-        </ul>
-        {/* Stated once, so a hollow circle is never read as an outstanding
-            task: a cephalometric record is whatever the case needs. */}
-        <p className={classes.filing_note}>
-          A record may hold any of these — this is what has been filed, not a
-          checklist a case has to complete.
-        </p>
+      );
+    }
+    const missing = getMissingImageTypes(group.records);
+    if (missing.length === 0) {
+      return null;
+    }
+    // The row's micro-label carries the label's *token* — "T2" out of "T2
+    // post-treatment" — exactly as the timepoint pill 2cm to its left does, with
+    // the whole label in the row's tooltip. Set whole and in caps it read "NOT
+    // FILED AT T2 POST-TREATMENT REVIEW" on screen and on the print sheet, and a
+    // slightly longer visit label pushed the five pills into an ugly wrap.
+    const token = getTimepointToken(group.label);
+    return (
+      <div
+        className={classes.slots}
+        title={`Not filed at ${group.label}` +
+          (group.firstDate !== null ? ` · ${group.firstDate}` : '')}
+      >
+        <span className={classes.slots_label}>
+          Not filed at {token !== null ? token : group.label}
+        </span>
+        <span className={classes.slots_list}>
+          {missing.map(({ id, slotLabel }) => (
+            <button
+              key={id}
+              type="button"
+              className={classes.slot}
+              // The label is short ("Add profile photo"); the tooltip and the
+              // accessible name state the whole of what the click will do,
+              // including the visit it files into. Only the first letter of the
+              // type is lowered — `label.toLowerCase()` had a screen reader and
+              // the tooltip both saying "Add frontal (pa) cephalogram to T1".
+              title={`Add ${getImageTypeLabelInSentence(id)} to ${group.label}` +
+                (group.firstDate !== null ? ` · ${group.firstDate}` : '')}
+              aria-label={
+                `Add ${getImageTypeLabelInSentence(id)} to ${group.label}`
+              }
+              onClick={this.handleFillSlot(group, id)}
+            >
+              <SlotPlus />
+              <span className={classes.slot_label}>{getAddSlotLabel(id)}</span>
+              {/* On paper the slot is a statement about the visit, not a
+                  control: nobody can press "Add profile photo" on a printed
+                  chart, so the sheet lists what the visit lacks instead. Same
+                  mechanism as `.fact_print` in the identity band. */}
+              <span className={classes.slot_print}>{slotLabel}</span>
+            </button>
+          ))}
+        </span>
       </div>
+    );
+  };
+
+  /**
+   * What the analyses already say about this patient — one block per traced
+   * film, oldest first, headline first (see `AnalysisFindings`).
+   *
+   * Rendered only where the record holds a film that can carry a tracing at all:
+   * on a patient whose images are photographs the panel would be a heading over
+   * a sentence the records panel above already states ("tracing is offered on
+   * lateral cephalograms only").
+   *
+   * The two demographics the norms are read against are resolved here rather
+   * than inside the panel, so the age it prints is the age the timeline stamps
+   * for the same film — one reading of one date of birth on one page.
+   */
+  private renderAnalysisFindings = () => {
+    const { records, analyses, patient } = this.props;
+    if (analyses.length === 0 || records.length === 0) {
+      return null;
+    }
+    // Whether the record holds the patient's birthday at all — the first half of
+    // any age, and the half a film's own capture date cannot supply.
+    const hasDateOfBirth = patient !== null &&
+      typeof patient.dateOfBirth === 'string' && patient.dateOfBirth !== '';
+    const byImageId: { [imageId: string]: PatientRecord | undefined } = {};
+    records.forEach((record) => { byImageId[record.imageId] = record; });
+    const films: FilmFindings[] = [];
+    analyses.forEach((analysis) => {
+      const record = byImageId[analysis.imageId];
+      if (record === undefined) {
+        return;
+      }
+      films.push({
+        record,
+        analysis,
+        // Which of the two facts an age needs is the missing one: an age-indexed
+        // norm read against a film with no capture date was read against the age
+        // *today*, and the panel's norms line says so rather than quoting the
+        // figure as the age on the film.
+        //
+        // The date of birth is tested first, and it has to be: with neither date
+        // on record this reported `captureDate`, so the panel asked for the film
+        // date of a patient whose birthday it did not know — an instruction that
+        // cannot produce an age.
+        ageGap: this.getAgeOn(record.captureDate) !== null ? null
+          : (!hasDateOfBirth ? 'dateOfBirth' : 'captureDate'),
+        analysisName: analysis.analysisId !== null
+          ? getNameForAnalysis(analysis.analysisId)
+          : null,
+      });
+    });
+    if (films.length === 0) {
+      return null;
+    }
+    return (
+      <AnalysisFindings films={films} onOpenFilm={this.props.onOpenRecord} />
+    );
+  };
+
+  /**
+   * What the case holds, read across every visit at once: one row per image type
+   * this app files, naming the timepoints that hold it — or stating that it is not
+   * on file anywhere.
+   *
+   * This is the one reading of the record the timeline cannot give. A visit's own
+   * slot row answers "what is missing *here*"; scanning six visits for "does this
+   * case have a panoramic at all" was the reader's job.
+   *
+   * It is information, not filler. It was introduced partly to fill a panel that
+   * had been stretched to the window, and pinning its closing note to the pane's
+   * foot for that reason turned one void into two (~390px in both columns at one
+   * record) and slid the note under the sticky footer at four. The panel is sized
+   * to its records again; this pane is sized to its rows.
+   *
+   * Screen only, and only at ≥1200px (see the stylesheet): on paper each visit
+   * prints its own "not filed" list, and below 1200 the timeline gets the width.
+   */
+  private renderCoverage = (groups: TimepointGroup<PatientRecord>[]) => {
+    const held = IMAGE_TYPE_OPTIONS.map((option) => ({
+      option,
+      // Where it is held, in chronological order — the timeline's own order.
+      at: groups
+        .filter((group) => group.records.some((r) => r.type === option.id))
+        .map((group) => group.label !== null
+          ? getTimepointToken(group.label) : 'Unlabelled'),
+    }));
+    const onFile = held.filter(({ at }) => at.length > 0).length;
+    return (
+      <aside className={classes.coverage} aria-label="What this case holds">
+        <div className={classes.coverage_head}>
+          <span className={classes.coverage_title}>Across all visits</span>
+          <span className={classes.coverage_count}>
+            {onFile} of {IMAGE_TYPE_OPTIONS.length} types
+          </span>
+        </div>
+        <dl className={classes.coverage_list}>
+          {held.map(({ option, at }) => (
+            <div key={option.id} className={classes.coverage_row}>
+              <dt className={classes.coverage_type}>{option.label}</dt>
+              <dd className={classes.coverage_at}>
+                {at.length > 0 ? at.map((token, i) => (
+                  <span key={i} className={classes.coverage_token}>{token}</span>
+                )) : (
+                  <span className={classes.coverage_none}>Not on file</span>
+                )}
+              </dd>
+            </div>
+          ))}
+        </dl>
+        {/* The same standing this surface gives its empty slots: this is what is
+            on file, not a checklist a case can fail. */}
+        <p className={classes.coverage_note}>
+          What is on file, not a requirement — a case is complete without a
+          panoramic or a photographic series.
+        </p>
+      </aside>
     );
   };
 
@@ -976,6 +1324,7 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
    */
   private renderGroup = (
     group: TimepointGroup<PatientRecord>, index: number,
+    groups: TimepointGroup<PatientRecord>[],
   ) => {
     const { patient } = this.props;
     // The day, or the span, the visit actually covers — never a borrowed date.
@@ -1088,7 +1437,11 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
         <div className={classes.group_cards}>
           {/* The card is handed its group: what the stamp beside it already
               states, the card does not repeat. */}
-          {group.records.map((record) => this.renderRecord(record, group))}
+          {group.records.map(
+            (record) => this.renderRecord(record, group, groups),
+          )}
+          {/* …and the visit closes with what it has not got. */}
+          {this.renderGroupSlots(group, groups)}
         </div>
       </li>
     );
@@ -1105,6 +1458,7 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
    */
   private renderRecord = (
     record: PatientRecord, group: TimepointGroup<PatientRecord>,
+    groups: TimepointGroup<PatientRecord>[],
   ) => {
     const dateLabel = formatCaptureDate(record.captureDate);
     const typeLabel = getImageTypeLabel(record.type);
@@ -1125,6 +1479,31 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
       record.width, record.height, record.scaleFactor,
     );
     const isScaleSuspect = filmSize !== null && !filmSize.isPlausible;
+    // An image that carries no timepoint can be filed onto a visit from here.
+    // Until now the only way was Edit details, re-typing by hand the label and
+    // the day this surface already knows — one row under the slots that offer
+    // exactly the inverse.
+    //
+    // Where there is no labelled visit to file onto, the chip *starts* the series
+    // at T1 instead of disappearing: on a record whose only image is
+    // untimepointed, this was the gap — the surface could name the gap five times
+    // over in the coverage pane and offer nothing that closed it.
+    const fileTargets: FileTarget[] = group.label === null
+      ? (() => {
+        const labelled = groups
+          .filter((g) => g.label !== null)
+          .map((g): FileTarget => ({
+            key: g.key, label: g.label as string, date: g.firstDate,
+          }));
+        return labelled.length > 0 ? labelled : [{
+          key: '__first',
+          label: getDefaultTimepoint(0),
+          // A visit that does not exist yet lends no day: the image keeps its own.
+          date: null,
+          isNew: true,
+        }];
+      })()
+      : [];
     return (
       <div
         key={record.imageId}
@@ -1132,6 +1511,7 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
           [classes.card__active]: record.isActive,
         })}
       >
+        <div className={classes.card_row}>
         <button
           type="button"
           className={classes.card_open}
@@ -1227,13 +1607,22 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
                 The implied physical size is printed beside it, because that is
                 what the number means: "0.104 mm/px" is unreadable as a claim,
                 "83 × 100 mm" on a lateral cephalogram is obviously wrong. */}
-            <FactRow
-              label="Scale"
-              value={record.scaleFactor !== null
-                ? formatScale(record.scaleFactor) : null}
-              note={filmSize !== null ? `film ${filmSize.label}` : undefined}
-              isNoteWarn={isScaleSuspect}
-            />
+            {/* …and only on a record a scale means something on. A mm/px
+                calibration is a claim about a radiograph, made by the tracing
+                editor; a photograph re-filed out of that editor keeps the number
+                it was given there, and printed here it read "Scale 0.104 mm/px ·
+                film 83 × 100 mm" on a card that says the image is not analysable
+                and calls a portrait a film. Nothing measures it, so nothing
+                states its scale. */}
+            {record.isTraceable ? (
+              <FactRow
+                label="Scale"
+                value={record.scaleFactor !== null
+                  ? formatScale(record.scaleFactor) : null}
+                note={filmSize !== null ? `film ${filmSize.label}` : undefined}
+                isNoteWarn={isScaleSuspect}
+              />
+            ) : null}
             {record.name !== null ? (
               <span className={classes.card_file} title={record.name}>
                 {record.name}
@@ -1264,6 +1653,47 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
             <IconDelete color="currentColor" style={actionIconStyle} />
           </button>
         </span>
+        </div>
+        {/* One chip per visit already on file: pressing it writes that visit's
+            label and its earliest capture date onto this image — the slots' own
+            data path (`handleFileAt`), applied to a record that already exists.
+            Offered on the untimepointed group only, where it is the gap. */}
+        {fileTargets.length > 0 ? (
+          <div className={classes.file_at}>
+            <span className={classes.slots_label}>File this at</span>
+            <span className={classes.slots_list}>
+              {fileTargets.map((target) => {
+                const token = getTimepointToken(target.label);
+                const label = token !== null ? token : target.label;
+                return (
+                  <button
+                    key={target.key}
+                    type="button"
+                    className={classes.slot}
+                    title={`File ${identity} at ${target.label}` +
+                      (target.date !== null
+                        ? ` · ${target.date} (this visit's day is written ` +
+                          'onto the image)'
+                        : (target.isNew === true
+                          ? " — the record's first visit (the image keeps its " +
+                            'own capture date)'
+                          : ' (this visit carries no capture date, so the ' +
+                            "image keeps its own)"))}
+                    aria-label={`File this image at ${target.label}`}
+                    onClick={this.handleFileAt(record, target)}
+                  >
+                    <span className={classes.slot_label}>{label}</span>
+                    {target.date !== null ? (
+                      <span className={classes.file_at_date}>
+                        {target.date}
+                      </span>
+                    ) : null}
+                  </button>
+                );
+              })}
+            </span>
+          </div>
+        ) : null}
       </div>
     );
   };
@@ -1302,6 +1732,10 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
           timepoint={removing !== undefined ? removing.timepoint : null}
           captureDate={removing !== undefined ? removing.captureDate : null}
           fileName={removing !== undefined ? removing.name : null}
+          // The film itself: on a record holding two identically named lateral
+          // cephs the file name was the whole of the evidence.
+          thumbnail={removing !== undefined ? removing.thumbnail : null}
+          otherRecordCount={Math.max(records.length - 1, 0)}
           landmarksPlaced={removing !== undefined ? removing.landmarksPlaced : 0}
           onConfirm={this.handleConfirmRemove}
           onCancel={this.closeRemove}
@@ -1313,7 +1747,63 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
   private handleOpen = (record: PatientRecord) => () =>
     this.props.onOpenRecord(record);
 
+  // Undirected: the page bar's and the empty state's "Add image", and the row
+  // that closes the list. Passing no intent also clears a slot chosen earlier.
   private handleAddImage = () => this.props.onAddImage(this.props.emptyWorkspaceId);
+
+  /**
+   * Fill one empty slot of one visit: the upload screen opens with the record
+   * details already stating this type, this timepoint and this visit's day, so
+   * the three fields the clinician just chose by clicking are not asked for a
+   * second time. All three remain editable there — the slot proposes the filing,
+   * it does not commit it.
+   *
+   * The day is the visit's *earliest* recorded capture date, and only when it has
+   * one: a group whose images carry no date cannot lend one, and the form falls
+   * back to today (which the clinician then corrects) rather than inventing the
+   * visit's date.
+   */
+  private handleFillSlot = (
+    group: TimepointGroup<PatientRecord>, type: ImageType,
+  ) => () => this.props.onAddImage(this.props.emptyWorkspaceId, {
+    type,
+    timepoint: group.label,
+    captureDate: group.firstDate,
+  });
+
+  /**
+   * The same, for a record with nothing on file yet: the first visit's label
+   * (T1) and the chosen type, with no capture date — the visit has no day yet, so
+   * none is claimed and the upload form falls back to today for the clinician to
+   * correct.
+   */
+  private handleFillFirstSlot = (type: ImageType) => () =>
+    this.props.onAddImage(this.props.emptyWorkspaceId, {
+      type,
+      timepoint: getDefaultTimepoint(0),
+      captureDate: null,
+    });
+
+  /**
+   * File an untimepointed image onto an existing visit: it takes that visit's
+   * label and, where the visit has one, its earliest capture date — the very data
+   * path the empty slots use (`handleFillSlot`), applied to an image that is
+   * already on file instead of one about to be added.
+   *
+   * Without it, the one thing this surface knows about T1 (its day) had to be
+   * re-typed by hand in Edit details to file an image at T1, one row under the
+   * slots that offer exactly the inverse. A visit with no capture date lends
+   * none — and neither does a visit that does not exist yet (`isNew`, the T1 a
+   * record with no labelled visit starts from): the image keeps whatever date it
+   * already carries.
+   */
+  private handleFileAt = (
+    record: PatientRecord, target: FileTarget,
+  ) => () => this.props.onSaveRecordMeta(record, {
+    type: record.type,
+    timepoint: target.label,
+    captureDate: target.date !== null ? target.date : record.captureDate,
+  });
 
   /** The band's own button: the whole form, no field singled out. */
   private openEditPatient = () =>

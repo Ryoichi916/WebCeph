@@ -44,8 +44,11 @@ import {
 import {
   getImageTypeShortLabel,
   getImageTypeLabel,
+  getImageTypeLabelWithArticle,
   formatCaptureDate,
 } from 'utils/records';
+
+import { getRecordFilingIntent } from 'store/reducers/workspace/records';
 
 import { TabCaption } from './props';
 
@@ -78,12 +81,34 @@ const mapStateToProps: MapStateToProps<StateProps, OwnProps, StoreState> =
         };
       }
     }
+    // The slot-directed upload in progress, and the tile it is waiting on: the
+    // dashboard sends the clinician to an empty tile with a filing intent
+    // attached (see workspace/records#KEY_FILING_INTENT), so that tile can say
+    // what it is about to hold instead of showing a bare ordinal.
+    const activeTabId = getActiveWorkspaceId(state);
+    const intent = getRecordFilingIntent(state);
+    const isActiveEmpty = activeTabId !== null &&
+      thumbnails[activeTabId] === undefined;
+    const isPending = intent !== null && isActiveEmpty;
+    const intentDate = intent !== null
+      ? formatCaptureDate(intent.captureDate) : null;
     return {
-      activeTabId: getActiveWorkspaceId(state),
+      activeTabId,
       tabs,
       thumbnails,
       captions,
       canAddWorkspace: isLastWorkspaceUsed(state),
+      pendingWorkspaceId: isPending ? activeTabId : null,
+      pendingCaption: isPending && intent !== null ? {
+        timepoint: intent.timepoint,
+        typeLabel: getImageTypeShortLabel(intent.type),
+        fullLabel: [
+          `Filing ${getImageTypeLabelWithArticle(intent.type)}`,
+          intent.timepoint !== null ? `at ${intent.timepoint}` : null,
+          intentDate !== null ? `· ${intentDate}` : null,
+          '— pick an image for this tile',
+        ].filter((part) => part !== null).join(' '),
+      } : null,
     };
   };
 

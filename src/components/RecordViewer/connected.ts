@@ -25,18 +25,31 @@ import {
 } from 'store/reducers/workspace';
 
 import {
+  getActivePatient,
+  getPatientsList,
+} from 'store/reducers/patients';
+
+import { PatientDetails } from 'components/PatientFields';
+
+import {
   setRecordsDashboardShown,
   setActiveWorkspace,
   setActiveImageId,
   setImageProps,
   removeWorkspace,
+  updatePatient,
   closeImage,
 } from 'actions/workspace';
 
 const mapStateToProps: MapStateToProps<StateProps, OwnProps, StoreState> =
   (state: StoreState, { imageId }: OwnProps): StateProps => {
     const props = getImageProps(state)(imageId);
+    const patient = getActivePatient(state);
     return {
+      patient,
+      otherChartIds: getPatientsList(state)
+        .filter((p) => patient === null || p.id !== patient.id)
+        .map((p) => p.chartId || ''),
       src: (props && props.data) || null,
       name: (props && props.name) || null,
       width: (props && props.width) || null,
@@ -51,6 +64,17 @@ const mapStateToProps: MapStateToProps<StateProps, OwnProps, StoreState> =
 const mapDispatchToProps: MapDispatchToPropsFunction<DispatchProps, OwnProps> =
   (dispatch: GenericDispatch, { imageId }: OwnProps): DispatchProps => ({
     onOpenRecordsClick: () => dispatch(setRecordsDashboardShown({ isShown: true })),
+    // The dashboard's own path (RecordsDashboard/connected#onSavePatient): the
+    // action registration uses, so one code path writes a patient's demographics.
+    onSavePatient: (id: string, details: PatientDetails) => {
+      dispatch(updatePatient({
+        id,
+        name: details.name,
+        chartId: details.chartId,
+        dateOfBirth: details.dateOfBirth,
+        sex: details.sex,
+      }));
+    },
     // Same path the records dashboard uses to open a card.
     onOpenRecord: (record: PatientRecord) => {
       dispatch(setActiveWorkspace({ id: record.workspaceId }));

@@ -639,6 +639,13 @@
   }
 }
 
+// The one destructive item in a toolbar menu — removing this film from the
+// patient's record. Named in the app's error colour, as it is on the card and in
+// the record viewer's own panel.
+.menu_item__danger {
+  color: $error;
+}
+
 .zoom_divider {
   width: 1px;
   height: 16px;
