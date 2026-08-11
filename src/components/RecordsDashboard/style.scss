@@ -521,6 +521,11 @@ $band-axis: 20px;
   border-radius: 8px;
   background: $bg-surface;
   box-shadow: $shadow-1;
+
+  // Sized to one line of content, not to a rail that is not there.
+  &__solo {
+    padding-bottom: 12px;
+  }
 }
 
 .band_head {
@@ -529,6 +534,73 @@ $band-axis: 20px;
   flex-wrap: wrap;
   gap: 2px 12px;
   margin-bottom: 6px;
+}
+
+// The rail's own pointer route through the case, at the right of its heading row.
+// Rendered only while there is case off one of the edges (`renderCaseBand`), so
+// the head of a two-visit band is not carrying two dead controls.
+.band_nav {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  // The chevrons sit on the *heading* row, whose items are baseline-aligned;
+  // without this the 26px buttons drag the title's baseline down with them.
+  align-self: center;
+}
+
+// The record viewer's own prev/next button (`.nav_button` there), so the two
+// surfaces scroll a list of this patient's visits with the same control. The
+// chevron *mark* is coloured per state by the component (a mui SvgIcon does not
+// inherit the button's `color`), so this rule owns the frame and the fill only.
+.band_nav_button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid $border;
+  border-radius: 6px;
+  background: $bg-surface;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease;
+
+  &:hover:not(:disabled) {
+    border-color: $primary-500;
+    background: $primary-050;
+  }
+
+  &:focus {
+    outline: none;
+    box-shadow: $focus-ring;
+  }
+
+  // Spent: the frame goes with the mark, so a chevron with nothing behind it
+  // reads as spent rather than as a control that ignored the click.
+  &:disabled {
+    background: $bg-sunken;
+    cursor: default;
+  }
+}
+
+// One visit on file: no rail, no track, no scrollport — the visit's own stamp on
+// one line with the sentence that says what a second visit would add beside it.
+// Drawn as a rail, this section was 190px tall with a 116px stop hard left in a
+// 1266px track and 91% of it empty, which reads as a component that failed
+// rather than as a case at its first visit.
+.band_solo {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 20px;
+  padding: 2px 0 1px;
+
+  .band_note {
+    flex: 1 1 260px;
+    margin: 0;
+    max-width: 62ch;
+  }
 }
 
 .band_title {
@@ -630,6 +702,24 @@ $band-axis: 20px;
   gap: 4px;
   padding: 0 8px;
   text-align: center;
+
+  // The only visit on file: the stamp reads across as one line — label, day,
+  // age, images — because there is no second stop for it to line up under, and a
+  // column centred in a 1266px track is a column of four things in a void.
+  &__solo {
+    min-width: 0;
+    max-width: none;
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 4px 10px;
+    padding: 0;
+    text-align: left;
+
+    .stop_chips {
+      margin-top: 0;
+    }
+  }
 }
 
 // One interval. It takes the row's slack — the stops are sized to their content,
@@ -643,6 +733,12 @@ $band-axis: 20px;
   align-items: center;
   gap: 6px;
   padding: 0 4px;
+
+  // Where the rail carries "interval unknown" instead of a figure: the floor is
+  // the sentence's own width, so it cannot be pushed over the stop next to it.
+  &__unknown {
+    min-width: 132px;
+  }
 }
 
 // The rail is painted by each cell's own axis row, which is what lets it stop at
@@ -719,6 +815,17 @@ $band-axis: 20px;
   }
 }
 
+// How long the visit itself covers, where its images are not all from one day.
+// The rail states the time *between* visits (from this visit's last day), so
+// without this line the months inside a multi-day visit belonged to no figure on
+// the band at all.
+.stop_span {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: $text-tertiary;
+  white-space: nowrap;
+}
+
 .stop_age {
   display: inline-flex;
   align-items: baseline;
@@ -776,6 +883,13 @@ $band-axis: 20px;
     box-shadow: inset 0 0 0 1.5px currentColor;
   }
 
+  // The ring is focus, and *only* focus now. Painted on the open record as well
+  // (the old `__active`, a primary border), the two were near-identical blue
+  // rings and a reader tabbing the rail could not tell the film they were on
+  // from the film that was on screen behind the dashboard. `:focus` rather than
+  // `:focus-visible`, like every other authored control on this surface: the
+  // ring has to appear for a focus moved by script (the app returns focus to
+  // this surface when a view closes) as well as for one moved by the Tab key.
   &:focus {
     outline: none;
     box-shadow: $focus-ring;
@@ -806,11 +920,30 @@ $band-axis: 20px;
     color: $text-secondary;
   }
 
-  // The image the surface behind this one is holding. Marked with the primary
-  // border rather than a fifth fill, because the fill is carrying the tracing.
+  // The image the surface behind this one is holding — said in a word, in the
+  // record viewer's own "shown" badge (`.context_current_tag` there), because
+  // this app already has a convention for "this is the one you are looking at"
+  // and it is not a coloured outline. The fill still carries the tracing.
   &__active {
-    border-color: $primary-600;
+    padding-right: 4px;
+    border-color: transparent;
   }
+}
+
+// …the word itself. Set on the chip's own tint rather than in the primary blue,
+// so an active chip is one object and not a pill with a badge stuck to it.
+.bchip_shown {
+  margin-left: 5px;
+  padding: 0 5px;
+  border-radius: 999px;
+  // A filled tint, no outline — the record viewer's badge is filled, and an
+  // outlined pill inside a pill reads as a second control.
+  background: rgba(255, 255, 255, .82);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: inherit;
 }
 
 // The elapsed time, written on the rail. It interrupts the line rather than
@@ -827,10 +960,37 @@ $band-axis: 20px;
   font-variant-numeric: tabular-nums;
   color: $text-secondary;
   white-space: nowrap;
+
+  // No measurable interval — stated in the same quiet grey, and in the same
+  // words, as the stops' own "No capture date" and "No timepoint". Left blank
+  // (what it was), the one gap on the rail that had something to say about
+  // itself was the one that said nothing.
+  &__unset {
+    font-weight: 400;
+    font-style: italic;
+    color: $text-tertiary;
+  }
 }
 
+// The interval's control, and — where it is off — the reason under it.
 .gap_action {
   display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+}
+
+// Why the superimposition is not offered here, on the surface. It was a native
+// `title` alone: a 600ms hover, nothing on a touch screen, nothing on paper —
+// inside a cell that is 150–1000px of otherwise empty rail. The full
+// requirement (what a registration needs) stays in the tooltip.
+.gap_reason {
+  max-width: 22ch;
+  font-size: 11px;
+  line-height: 1.3;
+  text-align: center;
+  color: $text-tertiary;
 }
 
 // The cross-timepoint action, on the interval it belongs to. Secondary by the
@@ -1206,17 +1366,25 @@ $band-axis: 20px;
   padding: 0;
 }
 
+// The type, and the visits that hold it. The tokens drop to a line of their own
+// rather than compressing the type they belong to: in a 244px pane a seven-visit
+// run crushed "Lateral cephalogram" to "Lɑ" with the first token drawn on top of
+// the glyph and the word "cephalogram" wrapped underneath the chips — a row of
+// this list contradicting itself. The label is never shrunk (`flex-shrink: 0`)
+// and the row wraps instead.
 .coverage_row {
   display: flex;
   align-items: baseline;
-  justify-content: space-between;
-  gap: 10px;
+  flex-wrap: wrap;
+  gap: 3px 10px;
   padding: 7px 0;
   border-bottom: 1px solid $border;
 }
 
 .coverage_type {
+  flex: 1 0 auto;
   min-width: 0;
+  max-width: 100%;
   font-size: 12.5px;
   font-weight: 500;
   line-height: 1.3;
@@ -1225,11 +1393,34 @@ $band-axis: 20px;
 
 .coverage_at {
   flex: 0 0 auto;
-  margin: 0;
+  // Right-aligned whether it sits beside the label or on the line under it: a
+  // wrapped flex line does not inherit `justify-content: space-between`, so the
+  // tokens would otherwise jump to the left margin on wrapping.
+  margin: 0 0 0 auto;
   display: flex;
+  align-items: baseline;
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 4px;
+}
+
+// A run of visits stated as its ends: the ellipsis between the first and last
+// token. Not a token itself — it is the gap between two of them.
+.coverage_run {
+  align-self: center;
+  padding: 0 1px;
+  font-size: 11px;
+  font-weight: 600;
+  color: $text-tertiary;
+}
+
+// …and how many visits the run actually covers, which is the fact the collapsed
+// list would otherwise lose ("T1 … T7" says nothing about T4).
+.coverage_count_at {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: $text-tertiary;
+  white-space: nowrap;
 }
 
 // The visit that holds it, in the timepoint badge's own language — one token per
@@ -3272,6 +3463,35 @@ $fv-columns-narrow: $fv-c-name-1 $fv-c-value 116px 96px $fv-c-change;
   font-size: 11.5px;
   line-height: 1.4;
   color: $text-tertiary;
+}
+
+// What the axis is spaced on, where the chronology itself belongs to the case
+// timeline further up the page. Screen only, and printed nowhere: on paper there
+// is no band, so the strip prints its full list of stamps instead (below).
+.trend_axis_cede {
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: $text-tertiary;
+}
+
+@media screen {
+  // The stamps stay in the DOM for the sheet; on screen the band above states
+  // every one of them — each visit's token, day, age, and the interval across
+  // the record — so printing them here made one visit's date the fifth statement
+  // of itself on one surface.
+  .trend_axis__ceded {
+    .trend_axis_stop,
+    .trend_axis_span {
+      display: none;
+    }
+  }
+}
+
+@media print {
+  // …and on paper the pointer has nothing to point at.
+  .trend_axis_cede {
+    display: none;
+  }
 }
 
 // ---- which measurements are plotted ----

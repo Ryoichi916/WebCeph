@@ -13,7 +13,7 @@ import * as cx from 'classnames';
 
 import Props from './props';
 
-import { formatAgeShort, formatSexShort } from 'utils/patient';
+import { formatAgeFull, formatSexShort } from 'utils/patient';
 
 const classes = require('./style.scss');
 
@@ -78,10 +78,16 @@ export default class PatientBar extends React.PureComponent<Props, { }> {
       activePatient.chartId : null;
     const initials = activePatient !== null ?
       getInitials(activePatient.name || activePatient.chartId || '') : '';
-    // Quiet demographics (e.g. "28 y · F") — shown only when recorded.
+    // Quiet demographics (e.g. "28 y 4 mo · F") — shown only when recorded.
+    //
+    // The *same* precision the records dashboard's identity band and every
+    // report header print (`formatAgeFull`), not the list-row short form: the
+    // bar read "16 y · F" while the identity band one Escape away read
+    // "16 y 1 mo" for the same patient on the same day, which is one age stated
+    // two ways rather than one age stated compactly.
     const demographics = activePatient !== null
       ? [
-          formatAgeShort(activePatient.dateOfBirth),
+          formatAgeFull(activePatient.dateOfBirth),
           formatSexShort(activePatient.sex),
         ].filter((p) => p !== null).join(' · ')
       : '';
@@ -119,9 +125,11 @@ export default class PatientBar extends React.PureComponent<Props, { }> {
               band 40px below this bar owns the identity: it carries the chart ID
               as a pill and the demographics as labelled cells, in larger type.
               Repeated here, the same chart ID appeared twice inside 120 vertical
-              pixels and the same age was written two ways at once ("15 y" here,
-              "15 y 5 m" there) — the bar keeps the name, which is what labels
-              this control and the way back to the editor. */}
+              pixels and the same age twice — the bar keeps the name, which is
+              what labels this control and the way back to the editor. (Where the
+              bar does print the age — on every other surface — it now prints it
+              at the band's own precision, so leaving the dashboard cannot change
+              the patient's age.) */}
           {chartId && !isRecordsShown ? (
             <span className={classes.chart_id}>{chartId}</span>
           ) : null}

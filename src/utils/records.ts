@@ -455,11 +455,12 @@ export const getNextTimepointLabel = (records: TimepointGroupable[]): string => 
  * is what it measures; `analyses/superimposition` re-exports it so its own
  * importers keep working.
  *
- * Months are `mo`, never the bare `m` the age chips use: this string is printed
- * on surfaces whose every other number is a millimetre — "+1.7 mm", a 10 mm
- * scale bar, 0.104 mm/px — and "5 m apart" beside them read as five metres. The
- * age chips keep `y / m` (see `utils/patient`), where nothing is measured in
- * millimetres and the ambiguity cannot arise.
+ * Months are `mo`, never a bare `m`: this string is printed on surfaces whose
+ * every other number is a millimetre — "+1.7 mm", a 10 mm scale bar,
+ * 0.104 mm/px — and "5 m apart" beside them read as five metres. The ages
+ * (`utils/patient#formatAgeFull`) now write `mo` for the same reason, so an age
+ * and an interval standing side by side — which is exactly what a stop and its
+ * rail on the case timeline are — cannot spell one unit two ways.
  */
 export const formatInterval = (
   from: Date | null, to: Date | null,

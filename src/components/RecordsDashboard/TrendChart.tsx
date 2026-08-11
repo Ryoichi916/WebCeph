@@ -1319,6 +1319,16 @@ export interface TrendChartProps {
   /** The patient's date of birth, which is what makes the x axis an age axis. */
   dateOfBirth?: string;
   /**
+   * Whether the surface this chart is rendered on carries a case timeline above
+   * it — the band that states every visit's day, the patient's age on it and the
+   * interval between consecutive visits.
+   *
+   * Where it does, the axis strip cedes the chronology to it on screen and states
+   * only what the axis is spaced on (see `renderAxisNote`): one fact, one home.
+   * The stamps stay in the DOM for the printed sheet, which has no band.
+   */
+  hasCaseTimeline?: boolean;
+  /**
    * Files a lateral cephalogram at the record's next unused timepoint — the very
    * action the empty state asks for, wired to the same slot path the records
    * panel's own "+" affordances use, rather than named in a sentence and left in
@@ -1602,6 +1612,16 @@ export default class TrendChart extends React.PureComponent<TrendChartProps, Sta
    * This is the line that makes the tick labels ("T1", "T2") readable as
    * positions rather than as an ordering — the spacing between them is a real
    * interval, and this says what of.
+   *
+   * On screen, where a case timeline is on the page above (`hasCaseTimeline`),
+   * the strip states only *what* the axis measures and points at the surface that
+   * owns the chronology. Every stamp here — "T1 11 y 10 mo 2024-01-08 · T2 …
+   * · 1 y 5 mo from T1 to T2" — is a fact the band 600px up already carries on
+   * its stops and its rail, and at two timepoints it was the fifth printing of
+   * one visit's date on one screen. The strip keeps the whole list *in the DOM*
+   * because on paper there is no band (it is screen-only) and the printed axis
+   * must still say what it is spaced on: the stylesheet hides the stops on screen
+   * and prints them (see `.trend_axis__ceded`).
    */
   private renderAxisNote = (films: TrendFilm[], axis: TrendAxis) => {
     const first = films[0];
@@ -1610,11 +1630,26 @@ export default class TrendChart extends React.PureComponent<TrendChartProps, Sta
       parseCaptureDate(first.record.captureDate),
       parseCaptureDate(last.record.captureDate),
     );
+    const ceded = this.props.hasCaseTimeline === true;
     return (
-      <div className={classes.trend_axis}>
+      <div
+        className={cx(classes.trend_axis, {
+          [classes.trend_axis__ceded]: ceded,
+        })}
+      >
         <span className={classes.trend_axis_key}>
           {axis.mode === 'age' ? 'Age at capture' : 'Capture date'}
         </span>
+        {/* Screen only, and only where the band is there to be pointed at. */}
+        {ceded ? (
+          <span className={classes.trend_axis_cede}>
+            {axis.mode === 'age'
+              ? 'Each film is placed at the patient’s age on the day it was ' +
+                'taken — the case timeline above carries every visit’s day and age.'
+              : 'Each film is placed on its capture date — the case timeline ' +
+                'above carries every visit’s day.'}
+          </span>
+        ) : null}
         {films.map((film, i) => (
           <span key={i} className={classes.trend_axis_stop}>
             {film.token !== null ? (

@@ -4,6 +4,7 @@ import * as cx from 'classnames';
 
 import RaisedButton from 'material-ui/RaisedButton';
 import IconChevron from 'material-ui/svg-icons/navigation/chevron-right';
+import IconPrev from 'material-ui/svg-icons/navigation/chevron-left';
 import IconBack from 'material-ui/svg-icons/navigation/arrow-back';
 import IconEdit from 'material-ui/svg-icons/image/edit';
 import IconDelete from 'material-ui/svg-icons/action/delete';
@@ -75,6 +76,9 @@ const actionIconStyle: React.CSSProperties = { width: 18, height: 18 };
 /** The launch controls' mark — sized to a 26px pill, like the slots' plus. */
 const launchIconStyle: React.CSSProperties = { width: 15, height: 15 };
 
+/** The case timeline's scroll chevrons — the record viewer's own 26px button. */
+const navIconStyle: React.CSSProperties = { width: 18, height: 18 };
+
 /**
  * A mui `SvgIcon` puts `color: <theme svgIcon colour>` on the `<svg>` itself and
  * only then fills with `currentColor`, so `currentColor` resolves against the
@@ -86,6 +90,7 @@ const launchIconStyle: React.CSSProperties = { width: 15, height: 15 };
 const LAUNCH_ICON = '#1F2933';      // $text-primary — matches the pill's label
 const LAUNCH_ICON_OFF = '#A9B4BE';  // $text-disabled
 const SUPERIMPOSE_ICON = '#1565C0'; // $primary-600 — matches its blue label
+const NAV_ICON = '#52616F';         // $text-secondary — the chevrons' own colour
 
 /**
  * How far a film's tracing has got, as one of the four readings the card chips
@@ -514,6 +519,11 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
   private foot: HTMLElement | null = null;
   /** The case timeline's scrolling rail (see `hasBandStart` / `hasBandEnd`). */
   private bandTrack: HTMLElement | null = null;
+  /**
+   * The shape of the case the rail has already been wound to its latest visit
+   * for — the number of cells on the track (see `parkBandAtLatestVisit`).
+   */
+  private bandParkedFor: string | null = null;
 
   componentDidMount() {
     document.addEventListener('keydown', this.handleDocumentKeyDown);
@@ -815,6 +825,12 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
   private setRoot = (el: HTMLElement | null) => { this.root = el; };
   private setBandTrack = (el: HTMLElement | null) => {
     this.bandTrack = el;
+    // A track that has gone away takes its parked position with it: the next one
+    // mounted (the band returns as soon as a second visit is filed) is wound to
+    // its own latest visit rather than inheriting a stale key.
+    if (el === null) {
+      this.bandParkedFor = null;
+    }
     this.updateStickyState();
   };
   private setPanel = (el: HTMLElement | null) => { this.panel = el; };
@@ -879,6 +895,7 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
    */
   private updateBandScrollState = () => {
     const track = this.bandTrack;
+    this.parkBandAtLatestVisit();
     const hasBandStart = track !== null && track.scrollLeft > 1;
     const hasBandEnd = track !== null &&
       track.scrollLeft + track.clientWidth < track.scrollWidth - 1;
@@ -888,6 +905,61 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
     ) {
       this.setState({ hasBandStart, hasBandEnd });
     }
+  };
+
+  /**
+   * The rail opens on the *latest* visit, not the earliest.
+   *
+   * A seven-visit case is 1533px of rail in a 1266px window, and opened at
+   * `scrollLeft: 0` the one stop under the fade was T7 — the visit a clinician
+   * looks at first, and the one whose interval carries the superimposition they
+   * are most likely to want. The case still reads left to right; it is simply
+   * wound to its end, the way a chart is opened at its last page.
+   *
+   * Parked once per shape of the case *at a given width*: the key is the number
+   * of cells on the track and the width of the port they are read through, so a
+   * newly filed visit winds the rail on to it and a window narrowed to 1024 —
+   * where a stop that was on screen no longer is — is wound on again, while a
+   * reader who has scrolled back to T1 is never yanked forward by a hover, a
+   * dialog closing or any other re-render.
+   */
+  private parkBandAtLatestVisit = () => {
+    const track = this.bandTrack;
+    if (track === null) {
+      return;
+    }
+    const key = `${track.children.length}@${track.clientWidth}`;
+    if (this.bandParkedFor === key) {
+      return;
+    }
+    this.bandParkedFor = key;
+    track.scrollLeft = track.scrollWidth;
+  };
+
+  /**
+   * Scroll the rail one window-full towards the earlier (-1) or later (+1)
+   * visits. Two thirds of the port rather than all of it, so the stop that was
+   * at the edge stays on screen and the reader keeps their place in the case.
+   */
+  private scrollBand = (direction: 1 | -1) => () => {
+    const track = this.bandTrack;
+    if (track === null) {
+      return;
+    }
+    const step = Math.max(Math.round(track.clientWidth * 0.66), 180);
+    const left = Math.max(
+      0,
+      Math.min(track.scrollWidth, track.scrollLeft + direction * step),
+    );
+    // `scrollTo` with a behaviour where the browser has it (every browser this
+    // app supports), so the case slides and the reader sees which way it moved;
+    // the assignment is the same scroll without the animation.
+    if (typeof track.scrollTo === 'function') {
+      track.scrollTo({ left, behavior: 'smooth' });
+    } else {
+      track.scrollLeft = left;
+    }
+    this.updateBandScrollState();
   };
 
   /**
@@ -1125,16 +1197,22 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
           {/* Only where there is a span to state. On a record captured on one
               day this cell read "RECORD SPAN — One capture date", which is
               "TIMEPOINTS 1" beside it in other words; and the panel's footer
-              then restated the day itself a third time. The endpoints are the
-              value, with the elapsed time beside them — the same interval
-              formatter the superimposition prints ("1 y 4 mo"), which used to
-              read "1 y 4 m" here for the identical pair of dates. */}
+              then restated the day itself a third time.
+
+              The endpoints only. The elapsed figure that used to stand beside
+              them ("3 y 11 mo") was the *total* of a chain the case timeline
+              writes out interval by interval 60px below — and a chain of whole
+              months cannot sum to a total of whole months (six intervals each
+              losing up to 30 days lost two months of a 47-month record), so the
+              two figures disagreed on the same screen by arithmetic alone. The
+              timeline owns the chronology: it states each interval, and each
+              multi-day visit's own span, so the chain is complete and there is
+              nothing left for a total to add. On paper, where the band is not
+              printed, the running head still carries the span *and* its elapsed
+              time (see `renderPrintHead`) — there is no chain there to contradict
+              it. */}
           {span !== null ? (
-            <IdentityFact
-              label="Record span"
-              value={span.dates}
-              note={span.interval !== null ? span.interval : undefined}
-            />
+            <IdentityFact label="Record span" value={span.dates} />
           ) : null}
         </dl>
 
@@ -1392,6 +1470,10 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
         // record holds a birthday; the chart falls back to the capture date and
         // says so, rather than plotting an age it cannot know.
         dateOfBirth={patient !== null ? patient.dateOfBirth : undefined}
+        // The case timeline above owns each visit's day, the age on it and the
+        // interval between visits, so the chart's axis strip does not restate
+        // them on screen (it still prints them, where there is no band).
+        hasCaseTimeline={groups.length > 0}
         // The board this patient is followed on, off their own record — so it is
         // still that board when the case is reopened tomorrow. Undefined (not
         // null) where there is no patient to file a choice against, which is
@@ -1537,18 +1619,47 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
           </span>
         </div>
         <dl className={classes.coverage_list}>
-          {held.map(({ option, at }) => (
-            <div key={option.id} className={classes.coverage_row}>
-              <dt className={classes.coverage_type}>{option.label}</dt>
-              <dd className={classes.coverage_at}>
-                {at.length > 0 ? at.map((token, i) => (
-                  <span key={i} className={classes.coverage_token}>{token}</span>
-                )) : (
-                  <span className={classes.coverage_none}>Not on file</span>
-                )}
-              </dd>
-            </div>
-          ))}
+          {held.map(({ option, at }) => {
+            // Past four visits the tokens stop being a list and start being a
+            // block: in a 244px pane, seven of them crushed "Lateral
+            // cephalogram" to "Lɑ" with the T1 chip drawn over the glyph and the
+            // word "cephalogram" wrapped underneath the chips. Four fit; beyond
+            // that the run is stated as its ends and its count — the reading a
+            // clinician actually wants from this pane ("at every visit from T1 to
+            // T7") — with every visit named in the tooltip and, of course, on the
+            // timeline itself.
+            const isRun = at.length > 4;
+            const shown = isRun
+              ? [at[0], '…', at[at.length - 1]] : at;
+            return (
+              <div key={option.id} className={classes.coverage_row}>
+                <dt className={classes.coverage_type}>{option.label}</dt>
+                <dd
+                  className={classes.coverage_at}
+                  title={at.length > 0
+                    ? `${option.label} on file at ${at.join(', ')}`
+                    : undefined}
+                >
+                  {at.length > 0 ? shown.map((token, i) => (
+                    token === '…' ? (
+                      <span key={i} className={classes.coverage_run} aria-hidden="true">
+                        …
+                      </span>
+                    ) : (
+                      <span key={i} className={classes.coverage_token}>{token}</span>
+                    )
+                  )) : (
+                    <span className={classes.coverage_none}>Not on file</span>
+                  )}
+                  {isRun ? (
+                    <span className={classes.coverage_count_at}>
+                      {at.length} visits
+                    </span>
+                  ) : null}
+                </dd>
+              </div>
+            );
+          })}
         </dl>
         {/* The same standing this surface gives its empty slots: this is what is
             on file, not a checklist a case can fail. */}
@@ -1619,9 +1730,11 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
    * pair cannot be registered the control says which visit is short of a tracing
    * and what a registration needs, in the superimposition's own words.
    *
-   * Degrades by construction: one stop draws no rail and no interval (there is no
-   * elapsed time to state) and says so under the band; two draw one interval; six
-   * draw five, and the track scrolls sideways rather than crushing the stops.
+   * Degrades by construction: one visit drops the rail metaphor altogether and is
+   * one compact line (there is no elapsed time to state and nothing to scroll);
+   * two draw one interval; seven draw six, and the track scrolls sideways —
+   * chevrons in its head, opened at the latest visit — rather than crushing the
+   * stops.
    *
    * Screen only. On paper each visit prints its own stamp — label, day, age — in
    * the list below, and the running head carries the record's span, so a printed
@@ -1631,6 +1744,38 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
   private renderCaseBand = (groups: TimepointGroup<PatientRecord>[]) => {
     if (groups.length === 0) {
       return null;
+    }
+    // One visit is not a chronology, and a rail with one stop on it is not a
+    // timeline: at 1440px the track was 1266px wide with a 116px stop hard left
+    // in it and its explanatory sentence beneath, which reads as a rail that
+    // failed to render rather than as a case with one visit on file. So the rail
+    // metaphor is dropped entirely below two visits — the visit's own stamp on
+    // one line, and the sentence that says what a second one would add beside
+    // it — and the section is sized to that line instead of to a full-width
+    // track. (The caption drops its second clause with the rail: the surface
+    // must not instruct a reader to superimpose two visits directly above a
+    // sentence saying a superimposition needs a second visit.)
+    if (groups.length < 2) {
+      return (
+        <section
+          className={cx(classes.band, classes.band__solo)}
+          aria-label="Case timeline"
+        >
+          <div className={classes.band_head}>
+            <h3 className={classes.band_title}>Case timeline</h3>
+            <span className={classes.band_caption}>
+              Every visit in order. Open a record from its chip.
+            </span>
+          </div>
+          <div className={classes.band_solo}>
+            {this.renderBandStop(groups[0], 0, 1)}
+            <p className={classes.band_note}>
+              One visit on file. An elapsed interval and a superimposition both
+              need a second timepoint — file the next visit and they appear here.
+            </p>
+          </div>
+        </section>
+      );
     }
     // Stops and intervals, interleaved: stop, gap, stop, gap, … stop. The first
     // and last child are always stops, which is what lets the rail stop at the
@@ -1643,6 +1788,7 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
       cells.push(this.renderBandStop(group, index, groups.length));
     });
     const { hasBandStart, hasBandEnd } = this.state;
+    const scrolls = hasBandStart || hasBandEnd;
     return (
       <section className={classes.band} aria-label="Case timeline">
         <div className={classes.band_head}>
@@ -1651,14 +1797,59 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
             Every visit in order. Open a record from its chip; superimpose two
             visits from the interval between them.
           </span>
+          {/* The rail is scrolled by a control, not only by a gesture. A styled
+              `::-webkit-scrollbar` reserves no layout space and this browser
+              does not paint it at all, so a seven-visit case offered the reader
+              a 32px edge fade and shift+wheel — no target for a pointer and
+              nothing at all on a touch screen. These are the record viewer's own
+              prev/next chevrons, in its own idiom, and they are rendered only
+              while there is case off one of the edges. */}
+          {scrolls ? (
+            <span className={classes.band_nav}>
+              <button
+                type="button"
+                className={classes.band_nav_button}
+                disabled={!hasBandStart}
+                title={hasBandStart
+                  ? 'Scroll back to the earlier visits'
+                  : 'The first visit is already on screen'}
+                aria-label="Scroll to earlier visits"
+                onClick={this.scrollBand(-1)}
+              >
+                {/* The colour is handed over per state, never `currentColor`: a
+                    mui SvgIcon resolves `currentColor` against its own theme
+                    colour and not against the button, so a spent chevron kept a
+                    full-strength mark in a disabled-grey button. */}
+                <IconPrev
+                  color={hasBandStart ? NAV_ICON : LAUNCH_ICON_OFF}
+                  style={navIconStyle}
+                />
+              </button>
+              <button
+                type="button"
+                className={classes.band_nav_button}
+                disabled={!hasBandEnd}
+                title={hasBandEnd
+                  ? 'Scroll on to the later visits'
+                  : 'The latest visit is already on screen'}
+                aria-label="Scroll to later visits"
+                onClick={this.scrollBand(1)}
+              >
+                <IconChevron
+                  color={hasBandEnd ? NAV_ICON : LAUNCH_ICON_OFF}
+                  style={navIconStyle}
+                />
+              </button>
+            </span>
+          ) : null}
         </div>
         {/* A six-visit case does not fit 1300px with its dates, its ages and a
             control on every interval, and shrinking the type until it does is
             not an answer on a clinical surface — so the rail scrolls sideways
             and *says* it does: a fade at whichever edge still has case behind
-            it, measured off the track itself (see `updateStickyState`). Without
-            it, T6 was simply cut mid-word with nothing to say a sixth visit
-            existed. */}
+            it, measured off the track itself (see `updateStickyState`), and the
+            chevrons above. Without it, T6 was simply cut mid-word with nothing to
+            say a sixth visit existed. */}
         <div
           className={cx(classes.band_scroller, {
             [classes.band_scroller__more_start]: hasBandStart,
@@ -1673,12 +1864,6 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
             {cells}
           </div>
         </div>
-        {groups.length < 2 ? (
-          <p className={classes.band_note}>
-            One visit on file. An elapsed interval and a superimposition both need
-            a second timepoint — file the next visit and they appear here.
-          </p>
-        ) : null}
       </section>
     );
   };
@@ -1692,6 +1877,15 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
    * date), and the patient's age then, which is the number a norm and a growth
    * increment are read against. A visit whose images straddle a birthday states
    * both readings rather than picking one.
+   *
+   * A visit whose images span more than one day also states *how long* it spans,
+   * and that figure is not decoration: the rail's intervals are measured from
+   * the last day of one visit to the first day of the next (see `renderBandGap`),
+   * so a multi-day visit's own span is the piece of the record that would
+   * otherwise fall between the intervals and be stated nowhere.
+   *
+   * With one visit on file (`total === 1`) the rail metaphor is dropped: no axis,
+   * no node, and the stamp is laid out as one line (see `.stop__solo`).
    */
   private renderBandStop = (
     group: TimepointGroup<PatientRecord>, index: number, total: number,
@@ -1703,32 +1897,43 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
     const ageLabel = ageFirst === null ? null
       : (ageLast !== null && ageLast !== ageFirst
         ? `${ageFirst} – ${ageLast}` : ageFirst);
+    // How much of the record's own span sits inside this one stop.
+    const innerSpan = spansDays
+      ? formatInterval(
+        parseCaptureDate(group.firstDate), parseCaptureDate(group.lastDate),
+      )
+      : null;
     const label = group.label;
     const token = getTimepointToken(label);
+    const isSolo = total === 1;
     return (
       <div
         key={`stop-${group.key !== '' ? group.key : '__untimepointed'}`}
-        className={classes.stop}
+        className={cx(classes.stop, { [classes.stop__solo]: isSolo })}
       >
         {/* The rail is painted by the axis row of each cell, and stops at the
             outermost nodes: the first stop paints only its right half, the last
-            only its left. With a single stop both apply and there is no rail at
-            all — the same rule the vertical timeline follows. */}
-        <span
-          className={cx(classes.stop_axis, {
-            [classes.stop_axis__start]: index === 0,
-            [classes.stop_axis__end]: index === total - 1,
-          })}
-        >
+            only its left. With a single stop there is no chronology to draw at
+            all and the row is not rendered — the same rule the vertical timeline
+            follows. */}
+        {!isSolo ? (
           <span
-            className={cx(classes.stop_dot, {
-              // Filled for a visit whose day is on file, hollow for one that
-              // carries no capture date: a label alone cannot be placed in time.
-              [classes.stop_dot__dated]: hasDate,
+            className={cx(classes.stop_axis, {
+              [classes.stop_axis__start]: index === 0,
+              [classes.stop_axis__end]: index === total - 1,
             })}
-            aria-hidden="true"
-          />
-        </span>
+          >
+            <span
+              className={cx(classes.stop_dot, {
+                // Filled for a visit whose day is on file, hollow for one that
+                // carries no capture date: a label alone cannot be placed in
+                // time.
+                [classes.stop_dot__dated]: hasDate,
+              })}
+              aria-hidden="true"
+            />
+          </span>
+        ) : null}
         <span
           className={cx(classes.timepoint, {
             [classes.timepoint__unset]: label === null,
@@ -1746,6 +1951,23 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
             <span className={classes.stop_date__unset}>No capture date</span>
           )}
         </span>
+        {/* The visit's own span, where it has one — stated as what it is, the
+            distance between this visit's own images, and never as another leg of
+            the rail: the intervals either side of a stop are measured to and from
+            the films they compare, so this figure lies *inside* them and must not
+            read as something to add to them. Without it a visit that covers four
+            months was two dates and no duration on a band whose every other
+            duration is written out. */}
+        {innerSpan !== null ? (
+          <span
+            className={classes.stop_span}
+            title={`The first and last image of this visit are ${innerSpan} ` +
+              `apart — the label ${token !== null ? token : 'here'} covers more ` +
+              'than one day.'}
+          >
+            images {innerSpan} apart
+          </span>
+        ) : null}
         {ageLabel !== null ? (
           <span className={classes.stop_age}>
             <span className={classes.stop_age_key}>Age</span>
@@ -1768,6 +1990,12 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
    * The chip opens the image, in the editor or in the read-only viewer according
    * to what the image is, and its tooltip states the whole of that before the
    * click: the full type, the day, the tracing, and where it will land.
+   *
+   * The image the surface *behind* this one is holding is marked "shown" — the
+   * word, in the record viewer's own badge (`.context_current_tag`), not a blue
+   * ring: a ring is what keyboard focus is, and drawn on the chip as well it left
+   * a reader tabbing the rail unable to tell which film was on screen from which
+   * film their cursor was on. The ring now belongs to `:focus-visible` alone.
    */
   private renderBandChip = (record: PatientRecord) => {
     const { tone, phrase } = getTracingTone(record);
@@ -1776,9 +2004,11 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
       getImageTypeLabel(record.type),
       date !== null ? date : 'no capture date',
       phrase,
-    ].join(' · ') + (record.isTraceable
-      ? ' — open in the tracing editor'
-      : ' — open in the record viewer (view only)');
+    ].join(' · ') + (record.isActive
+      ? ' — shown on the surface behind this one'
+      : (record.isTraceable
+        ? ' — open in the tracing editor'
+        : ' — open in the record viewer (view only)'));
     return (
       <button
         key={record.imageId}
@@ -1788,15 +2018,19 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
           [classes.bchip__partial]: tone === 'partial',
           [classes.bchip__todo]: tone === 'todo',
           [classes.bchip__muted]: tone === 'muted',
-          // The image the surface behind this one is holding, marked as such
-          // rather than tinted a fourth colour: the tracing reading must survive.
+          // Marked with a word rather than tinted a fourth colour: the tracing
+          // reading must survive.
           [classes.bchip__active]: record.isActive,
         })}
         title={title}
         aria-label={title}
+        aria-current={record.isActive ? 'true' : undefined}
         onClick={this.handleOpen(record)}
       >
         {getImageTypeShortLabel(record.type)}
+        {record.isActive ? (
+          <span className={classes.bchip_shown}>shown</span>
+        ) : null}
       </button>
     );
   };
@@ -1805,25 +2039,39 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
    * The interval between two consecutive visits: the elapsed time, written on the
    * rail, and the action that belongs to it.
    *
-   * The elapsed time comes from the app's one duration formatter, the same one
-   * the identity band's record span and the superimposition's "… apart" print, so
-   * one pair of dates cannot read three ways on one screen. It is stated only
-   * where both visits carry a day — an interval between an undated visit and a
-   * dated one is not a measurement.
+   * **The interval is measured between the very two films the control will
+   * open.** The rail used to read from the *first* day of the earlier visit
+   * (`before.firstDate`) while the button handed the superimposition the earlier
+   * visit's *last* registrable film — so on a visit whose images spanned four
+   * months the rail and its tooltip said "4 mo apart" and the view they opened
+   * printed "1 mo apart" for the same press. A control cannot state one interval
+   * and open another: the pair is resolved first, and the figure is read off it.
+   *
+   * Where the pair cannot be resolved (nothing traced yet) the figure is the gap
+   * between the visits themselves — the earlier visit's last day to the later
+   * visit's first — which is the interval a reader can check against the two
+   * stops either side of it, and which leaves a multi-day visit's own span to be
+   * stated on its stop (see `renderBandStop`) rather than swallowed here.
+   *
+   * The elapsed figure itself comes from the app's one duration formatter, the
+   * same one the superimposition's "… apart" prints, so one pair of dates cannot
+   * read two ways on one screen. Where it cannot be measured at all the rail says
+   * so in the band's own vocabulary for an absent fact ("interval unknown", the
+   * stops' "No capture date"), never by falling silent: a blank rail beside a stop
+   * that explicitly states what it is missing reads as a rendering fault.
    *
    * The control opens the superimposition on *these two* timepoints: the earlier
    * visit's latest registrable film against the later visit's earliest, i.e. the
-   * two films closest to the interval it is standing on. Disabled, it names the
-   * visit that is short of a tracing and what a registration needs — never a grey
-   * button with nothing to say.
+   * two films closest to the interval it is standing on. Disabled, it prints the
+   * short form of what is missing under the pill — the gap cell is 150–1000px of
+   * empty rail, and a native `title` costs a 600ms hover, never prints and never
+   * appears at all on a touch screen — and keeps the whole requirement, in the
+   * superimposition's own words, in the tooltip.
    */
   private renderBandGap = (
     before: TimepointGroup<PatientRecord>, after: TimepointGroup<PatientRecord>,
   ) => {
     const { launch } = this.props;
-    const interval = formatInterval(
-      parseCaptureDate(before.firstDate), parseCaptureDate(after.firstDate),
-    );
     const registrable = (group: TimepointGroup<PatientRecord>) =>
       group.records.filter((r) => {
         const entry = launch[r.imageId];
@@ -1834,6 +2082,16 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
     const t1 = earlier[earlier.length - 1];
     const t2 = later[0];
     const canSuperimpose = t1 !== undefined && t2 !== undefined;
+    // The two days the figure is measured between, named — so the tooltip can
+    // state them and nothing on this rail is a number with no referent.
+    const pairFrom = canSuperimpose ? formatCaptureDate(t1.captureDate) : null;
+    const pairTo = canSuperimpose ? formatCaptureDate(t2.captureDate) : null;
+    const isPairDated = pairFrom !== null && pairTo !== null;
+    const fromDay = isPairDated ? pairFrom : before.lastDate;
+    const toDay = isPairDated ? pairTo : after.firstDate;
+    const interval = formatInterval(
+      parseCaptureDate(fromDay), parseCaptureDate(toDay),
+    );
     const beforeName = bandName(before);
     const afterName = bandName(after);
     const pair = `${beforeName} → ${afterName}`;
@@ -1841,6 +2099,13 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
       t1 === undefined ? beforeName : null,
       t2 === undefined ? afterName : null,
     ].filter((n): n is string => n !== null);
+    // "the unlabelled images" is a plural subject; a timepoint token is not.
+    const needs = (name: string) => name.indexOf('the ') === 0
+      ? `${name} need tracings` : `${name} needs a tracing`;
+    // Null where the pair *is* registrable — there is nothing missing to name.
+    const shortReason = canSuperimpose ? null
+      : (missing.length === 2
+        ? `${beforeName} and ${afterName} need tracings` : needs(missing[0]));
     const reason = canSuperimpose
       ? `Superimpose ${pair}` +
         (interval !== null ? ` — ${interval} apart` : '') +
@@ -1852,15 +2117,38 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
           `registration needs ${registrationRequirement()}.`
         : `Trace ${missing[0]} first — no film there carries a tracing that ` +
           `can be registered. A registration needs ${registrationRequirement()}.`);
+    // Which visit is short of the day, so the missing interval names its own
+    // cause rather than leaving the reader to hunt for it.
+    const undatedSide = before.lastDate === null ? beforeName
+      : (after.firstDate === null ? afterName : null);
+    const intervalTitle = interval !== null
+      ? `${fromDay} → ${toDay} — the elapsed time between ` + (isPairDated
+        ? 'the two films this superimposition would compare.'
+        : 'these two visits.')
+      : (undatedSide !== null
+        ? `${undatedSide} carries no capture date, so the time between these ` +
+          'two visits cannot be measured. Add the day it was taken with Edit ' +
+          'details on its card below.'
+        : 'The dates on file do not measure the time between these two visits.');
     return (
       <div
         key={`gap-${after.key !== '' ? after.key : '__untimepointed'}`}
-        className={classes.gap}
+        // "interval unknown" is a wider figure than "1 y 4 mo": the cell is given
+        // the room for it rather than letting the sentence run over the stop
+        // beside it, and only where it is the sentence being written.
+        className={cx(classes.gap, {
+          [classes.gap__unknown]: interval === null,
+        })}
       >
         <span className={classes.gap_axis}>
-          {interval !== null ? (
-            <span className={classes.gap_interval}>{interval}</span>
-          ) : null}
+          <span
+            className={cx(classes.gap_interval, {
+              [classes.gap_interval__unset]: interval === null,
+            })}
+            title={intervalTitle}
+          >
+            {interval !== null ? interval : 'interval unknown'}
+          </span>
         </span>
         {/* The tooltip is on the wrapper, not on the button: a browser fires no
             hover on a disabled control, so a `disabled` button's own title is
@@ -1874,7 +2162,7 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
             })}
             aria-disabled={!canSuperimpose}
             aria-label={canSuperimpose
-              ? `Superimpose ${pair}` : `Superimpose ${pair} — unavailable`}
+              ? `Superimpose ${pair}` : `Superimpose ${pair} — ${shortReason}`}
             onClick={canSuperimpose
               ? this.handleSuperimpose(t1.imageId, t2.imageId) : undefined}
           >
@@ -1884,6 +2172,11 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
             />
             <span>Superimpose</span>
           </button>
+          {/* Off, and why — on the surface, in the empty rail the ghost pill is
+              standing in. The whole requirement stays in the tooltip above. */}
+          {!canSuperimpose ? (
+            <span className={classes.gap_reason}>{shortReason}</span>
+          ) : null}
         </span>
       </div>
     );
