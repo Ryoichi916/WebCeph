@@ -8,6 +8,12 @@ import IconBack from 'material-ui/svg-icons/navigation/arrow-back';
 import IconEdit from 'material-ui/svg-icons/image/edit';
 import IconDelete from 'material-ui/svg-icons/action/delete';
 import IconAdd from 'material-ui/svg-icons/content/add';
+// The three launch icons are the editor toolbar's own, so the same action wears
+// the same mark on both surfaces.
+import IconTrace from 'material-ui/svg-icons/image/crop-original';
+import IconReport from 'material-ui/svg-icons/action/description';
+import IconSuperimpose from 'material-ui/svg-icons/maps/layers';
+import IconSimulate from 'material-ui/svg-icons/image/tune';
 
 import Props from './props';
 
@@ -18,6 +24,18 @@ import RemoveRecordDialog from 'components/RecordMetaFields/RemoveRecordDialog';
 import EditPatientDialog, { PatientEditField } from './EditPatientDialog';
 import AnalysisFindings, { FilmFindings } from './AnalysisFindings';
 import TrendChart from './TrendChart';
+
+// The three views this surface launches. Each is the connected component the
+// editor's toolbar opens, opened here with the record the dashboard is pointing
+// at — nothing is reimplemented, and the superimposition is handed the pair to
+// start on rather than being given a picker of its own.
+import ClinicalReport from 'components/ClinicalReport/connected';
+import Superimposition from 'components/Superimposition/connected';
+import TreatmentSimulation from 'components/TreatmentSimulation/connected';
+
+// What a tracing must carry before it can be registered — the superimposition's
+// own sentence, so the timeline's tooltip cannot drift from the view's.
+import { registrationRequirement } from 'components/Superimposition/selectors';
 
 import { PatientDetails } from 'components/PatientFields';
 
@@ -30,6 +48,7 @@ import {
 
 import {
   getImageTypeLabel,
+  getImageTypeShortLabel,
   getImageTypeLabelInSentence,
   getAddSlotLabel,
   IMAGE_TYPE_OPTIONS,
@@ -52,6 +71,100 @@ import { getNameForAnalysis } from 'components/AnalysisSelector/strings';
 const classes = require('./style.scss');
 
 const actionIconStyle: React.CSSProperties = { width: 18, height: 18 };
+
+/** The launch controls' mark — sized to a 26px pill, like the slots' plus. */
+const launchIconStyle: React.CSSProperties = { width: 15, height: 15 };
+
+/**
+ * A mui `SvgIcon` puts `color: <theme svgIcon colour>` on the `<svg>` itself and
+ * only then fills with `currentColor`, so `currentColor` resolves against the
+ * *theme's* colour and never against the button's — the trap `SlotPlus` above was
+ * authored to get out of. So each launch mark is handed the colour of the state
+ * its control is in: a greyed-out "Simulation" carried a full-strength #1F2933
+ * icon in an otherwise disabled-grey pill without this.
+ */
+const LAUNCH_ICON = '#1F2933';      // $text-primary — matches the pill's label
+const LAUNCH_ICON_OFF = '#A9B4BE';  // $text-disabled
+const SUPERIMPOSE_ICON = '#1565C0'; // $primary-600 — matches its blue label
+
+/**
+ * How far a film's tracing has got, as one of the four readings the card chips
+ * already carry — done (green), under way (amber), outstanding (amber hairline),
+ * or never applicable to this kind of image (grey) — with the phrase that states
+ * it in a tooltip.
+ *
+ * Shared by the timeline band's chips and nothing else *by design*: `StatusChip`
+ * keeps its own, fuller wording, because it has a whole card row to say it in and
+ * has to name the analysis the count belongs to. This is the same three-way
+ * reading compressed to a tint and a clause, so a band chip and the card 200px
+ * below it can never contradict each other about which films still need work.
+ */
+type TracingTone = 'ok' | 'partial' | 'todo' | 'muted';
+
+const getTracingTone = (
+  record: PatientRecord,
+): { tone: TracingTone; phrase: string } => {
+  if (!record.isTraceable) {
+    return { tone: 'muted', phrase: 'view only, not analysable' };
+  }
+  const { landmarksPlaced, landmarksRequired } = record;
+  if (landmarksRequired === 0) {
+    return { tone: 'muted', phrase: 'no analysis set' };
+  }
+  const count = `${landmarksPlaced} of ${landmarksRequired} landmarks`;
+  if (landmarksPlaced === 0) {
+    return { tone: 'todo', phrase: `not traced · ${count}` };
+  }
+  if (landmarksPlaced >= landmarksRequired) {
+    return { tone: 'ok', phrase: `traced · ${count}` };
+  }
+  return { tone: 'partial', phrase: `partly traced · ${count}` };
+};
+
+/**
+ * How the timeline band names a visit in prose — its label's token ("T2" out of
+ * "T2 mid-treatment"), or a phrase for the images that carry no label at all,
+ * which is not a point in time and must never be printed as though it were one.
+ */
+const bandName = (group: TimepointGroup<PatientRecord>): string => {
+  const token = getTimepointToken(group.label);
+  return token !== null ? token : 'the unlabelled images';
+};
+
+/**
+ * One launch control: an action that leaves this surface for a view of one film.
+ *
+ * The tooltip is always on the enabled wrapper rather than on the button, because
+ * a browser fires no hover on a disabled control and its `title` is therefore
+ * never read — which would make a greyed-out "Simulation" a dead end. The button
+ * itself stays focusable and states its condition through `aria-disabled`, so the
+ * reason is reachable by pointer and by keyboard alike. (The superimposition
+ * view's registration segments are built the same way.)
+ */
+const LaunchAction = (
+  { label, icon, title, isEnabled, onClick }: {
+    label: string;
+    icon: JSX.Element;
+    title: string;
+    isEnabled: boolean;
+    onClick: () => any;
+  },
+) => (
+  <span className={classes.launch_slot} title={title}>
+    <button
+      type="button"
+      className={cx(classes.launch_btn, {
+        [classes.launch_btn__off]: !isEnabled,
+      })}
+      aria-disabled={!isEnabled}
+      aria-label={isEnabled ? label : `${label} — unavailable`}
+      onClick={isEnabled ? onClick : undefined}
+    >
+      {icon}
+      <span className={classes.launch_btn_label}>{label}</span>
+    </button>
+  </span>
+);
 
 /**
  * The `+` on an empty type slot: authored, not mui's IconAdd, because a mui
@@ -326,6 +439,29 @@ interface State {
   isHeadFloating: boolean;
   /** The same, for the footer: content continues below the panel's bottom edge. */
   isFootFloating: boolean;
+  /**
+   * Whether the case timeline's rail has visits scrolled off its left / right
+   * edge. A horizontal band that is wider than its window has to say so, or a
+   * six-visit case reads as a four-visit case with a cut-off label at the end.
+   */
+  hasBandStart: boolean;
+  hasBandEnd: boolean;
+  /**
+   * The film whose printable clinical report is open, or null. Held as an image
+   * id rather than a boolean because the report is *of a film*, and this surface
+   * lists every film of the case: opening it from T2's card must report T2 even
+   * though the editor behind the dashboard still holds T1.
+   */
+  reportImageId: string | null;
+  /** The film whose treatment simulation is open, or null. Same reasoning. */
+  simulationImageId: string | null;
+  /**
+   * The two films a superimposition was started on, or null. These seed the
+   * superimposition view's own T1/T2 selection (`Superimposition#initialT1Id`);
+   * the pickers in its chrome own the choice from there, so the dashboard adds a
+   * starting point and not a second picker.
+   */
+  superimposePair: { t1Id: string; t2Id: string } | null;
 }
 
 /**
@@ -365,12 +501,19 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
     patientFocusField: null,
     isHeadFloating: false,
     isFootFloating: false,
+    hasBandStart: false,
+    hasBandEnd: false,
+    reportImageId: null,
+    simulationImageId: null,
+    superimposePair: null,
   };
 
   private root: HTMLElement | null = null;
   private panel: HTMLElement | null = null;
   private head: HTMLElement | null = null;
   private foot: HTMLElement | null = null;
+  /** The case timeline's scrolling rail (see `hasBandStart` / `hasBandEnd`). */
+  private bandTrack: HTMLElement | null = null;
 
   componentDidMount() {
     document.addEventListener('keydown', this.handleDocumentKeyDown);
@@ -495,6 +638,11 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
             <tr className={classes.page_row}>
             <td className={classes.page_cell}>
             {this.renderIdentity()}
+            {/* …then the case as one horizontal line of time: every visit as a
+                stop on a rail, the elapsed interval written on the rail between
+                consecutive stops, and the cross-timepoint action that lives in
+                exactly that gap. Screen only — see `renderCaseBand`. */}
+            {this.renderCaseBand(groups)}
             {/* The panel is sized to its records at every list length. Its head
                 and foot stay put while the page scrolls, and both wear a shadow
                 and a fade scrim for exactly as long as there is list passing
@@ -659,11 +807,16 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
           </table>
         </div>
         {this.renderDialogs()}
+        {this.renderLaunchedViews()}
       </section>
     );
   }
 
   private setRoot = (el: HTMLElement | null) => { this.root = el; };
+  private setBandTrack = (el: HTMLElement | null) => {
+    this.bandTrack = el;
+    this.updateStickyState();
+  };
   private setPanel = (el: HTMLElement | null) => { this.panel = el; };
   private setHead = (el: HTMLElement | null) => { this.head = el; };
   private setFoot = (el: HTMLElement | null) => { this.foot = el; };
@@ -689,6 +842,7 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
    * ended mid-line.
    */
   private updateStickyState = () => {
+    this.updateBandScrollState();
     const { panel, head, foot } = this;
     if (panel === null) {
       return;
@@ -713,6 +867,30 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
   };
 
   /**
+   * Whether the case timeline's rail has case scrolled off either edge — read
+   * off the track's own scroll geometry, on mount, on every update, on resize
+   * and on the track's own scroll. The two flags switch on the fades that are the
+   * only thing telling a reader a seventh visit exists to the right.
+   *
+   * A 1px tolerance, because a scrollport that is *not* scrollable reports
+   * `scrollWidth` a fraction over `clientWidth` at some zoom levels, and a
+   * permanent fade over a band with nothing behind it is a lie in the other
+   * direction.
+   */
+  private updateBandScrollState = () => {
+    const track = this.bandTrack;
+    const hasBandStart = track !== null && track.scrollLeft > 1;
+    const hasBandEnd = track !== null &&
+      track.scrollLeft + track.clientWidth < track.scrollWidth - 1;
+    if (
+      hasBandStart !== this.state.hasBandStart ||
+      hasBandEnd !== this.state.hasBandEnd
+    ) {
+      this.setState({ hasBandStart, hasBandEnd });
+    }
+  };
+
+  /**
    * Escape leaves the surface, exactly like the page bar's back control — but
    * not while one of this screen's own dialogs is open, where Escape belongs to
    * the dialog.
@@ -721,8 +899,21 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
     if (e.key !== 'Escape' && e.key !== 'Esc') {
       return;
     }
-    const { editingImageId, removingImageId, isEditingPatient } = this.state;
+    const {
+      editingImageId, removingImageId, isEditingPatient,
+      reportImageId, simulationImageId, superimposePair,
+    } = this.state;
     if (editingImageId !== null || removingImageId !== null || isEditingPatient) {
+      return;
+    }
+    // …nor while one of the views this surface launches is over it. Each of the
+    // three closes on Escape itself, and both handlers are on `document`: without
+    // this guard, one Escape closed the report *and* left the dashboard, so the
+    // clinician landed in the tracing editor having asked for neither.
+    if (
+      reportImageId !== null || simulationImageId !== null ||
+      superimposePair !== null
+    ) {
       return;
     }
     this.props.onBackToEditor();
@@ -1201,6 +1392,14 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
         // record holds a birthday; the chart falls back to the capture date and
         // says so, rather than plotting an age it cannot know.
         dateOfBirth={patient !== null ? patient.dateOfBirth : undefined}
+        // The board this patient is followed on, off their own record — so it is
+        // still that board when the case is reopened tomorrow. Undefined (not
+        // null) where there is no patient to file a choice against, which is
+        // what tells the chart to keep it in its own state instead.
+        plotted={patient !== null
+          ? (patient.trendPlot !== undefined ? patient.trendPlot : null)
+          : undefined}
+        onSetPlotted={patient !== null ? this.handleSetTrendPlot : undefined}
         nextTimepointLabel={next}
         onAddFilmAtNextTimepoint={this.handleAddFilmAt(next)}
         onOpenFilm={this.props.onOpenRecord}
@@ -1220,6 +1419,18 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
       timepoint,
       captureDate: null,
     });
+
+  /**
+   * Files the trend board on this patient (see `TrendChart#plotted`). One bound
+   * handler rather than one per render, so the chart's own pure comparison still
+   * means something.
+   */
+  private handleSetTrendPlot = (symbols: string[] | null) => {
+    const { patient, onSetTrendPlot } = this.props;
+    if (patient !== null) {
+      onSetTrendPlot(patient.id, symbols);
+    }
+  };
 
   /**
    * What the analyses already say about this patient — one block per traced
@@ -1387,6 +1598,415 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
     }
     return formatAgeFull(patient.dateOfBirth, day);
   };
+
+  // ---- The case as one line of time ----------------------------------------
+
+  /**
+   * The treatment timeline: the whole case on one horizontal rail, above the
+   * records panel that lists it.
+   *
+   * The vertical list below is the *record* — every file, its type, its scale,
+   * its tracing, the actions that correct it. This band is the *chronology*, and
+   * a chronology is read across: each visit is a stop carrying its timepoint, the
+   * day it was captured, the patient's age on that day and its images as chips,
+   * and the elapsed time between consecutive visits is written on the rail
+   * between them. Six visits are then one glance instead of six rows.
+   *
+   * It is also where the one action that belongs to *two* timepoints lives.
+   * "Superimpose" is not a property of a film, it is a property of an interval —
+   * so the control sits on the interval, and it opens the superimposition view on
+   * exactly the pair it is standing between (see `handleSuperimpose`). Where a
+   * pair cannot be registered the control says which visit is short of a tracing
+   * and what a registration needs, in the superimposition's own words.
+   *
+   * Degrades by construction: one stop draws no rail and no interval (there is no
+   * elapsed time to state) and says so under the band; two draw one interval; six
+   * draw five, and the track scrolls sideways rather than crushing the stops.
+   *
+   * Screen only. On paper each visit prints its own stamp — label, day, age — in
+   * the list below, and the running head carries the record's span, so a printed
+   * band would restate every fact on the sheet and none of its controls could be
+   * pressed.
+   */
+  private renderCaseBand = (groups: TimepointGroup<PatientRecord>[]) => {
+    if (groups.length === 0) {
+      return null;
+    }
+    // Stops and intervals, interleaved: stop, gap, stop, gap, … stop. The first
+    // and last child are always stops, which is what lets the rail stop at the
+    // outermost nodes instead of running off both ends of the band.
+    const cells: JSX.Element[] = [];
+    groups.forEach((group, index) => {
+      if (index > 0) {
+        cells.push(this.renderBandGap(groups[index - 1], group));
+      }
+      cells.push(this.renderBandStop(group, index, groups.length));
+    });
+    const { hasBandStart, hasBandEnd } = this.state;
+    return (
+      <section className={classes.band} aria-label="Case timeline">
+        <div className={classes.band_head}>
+          <h3 className={classes.band_title}>Case timeline</h3>
+          <span className={classes.band_caption}>
+            Every visit in order. Open a record from its chip; superimpose two
+            visits from the interval between them.
+          </span>
+        </div>
+        {/* A six-visit case does not fit 1300px with its dates, its ages and a
+            control on every interval, and shrinking the type until it does is
+            not an answer on a clinical surface — so the rail scrolls sideways
+            and *says* it does: a fade at whichever edge still has case behind
+            it, measured off the track itself (see `updateStickyState`). Without
+            it, T6 was simply cut mid-word with nothing to say a sixth visit
+            existed. */}
+        <div
+          className={cx(classes.band_scroller, {
+            [classes.band_scroller__more_start]: hasBandStart,
+            [classes.band_scroller__more_end]: hasBandEnd,
+          })}
+        >
+          <div
+            className={classes.band_track}
+            ref={this.setBandTrack}
+            onScroll={this.updateStickyState}
+          >
+            {cells}
+          </div>
+        </div>
+        {groups.length < 2 ? (
+          <p className={classes.band_note}>
+            One visit on file. An elapsed interval and a superimposition both need
+            a second timepoint — file the next visit and they appear here.
+          </p>
+        ) : null}
+      </section>
+    );
+  };
+
+  /**
+   * One stop on the rail: a visit, everything the chronology says about it, and
+   * its images as chips that open them.
+   *
+   * Every fact is the one the vertical timeline stamps for the same visit,
+   * computed the same way — the day or the span it covers (never a borrowed
+   * date), and the patient's age then, which is the number a norm and a growth
+   * increment are read against. A visit whose images straddle a birthday states
+   * both readings rather than picking one.
+   */
+  private renderBandStop = (
+    group: TimepointGroup<PatientRecord>, index: number, total: number,
+  ) => {
+    const hasDate = group.firstDate !== null;
+    const spansDays = group.lastDate !== null && group.lastDate !== group.firstDate;
+    const ageFirst = this.getAgeOn(group.firstDate);
+    const ageLast = this.getAgeOn(group.lastDate);
+    const ageLabel = ageFirst === null ? null
+      : (ageLast !== null && ageLast !== ageFirst
+        ? `${ageFirst} – ${ageLast}` : ageFirst);
+    const label = group.label;
+    const token = getTimepointToken(label);
+    return (
+      <div
+        key={`stop-${group.key !== '' ? group.key : '__untimepointed'}`}
+        className={classes.stop}
+      >
+        {/* The rail is painted by the axis row of each cell, and stops at the
+            outermost nodes: the first stop paints only its right half, the last
+            only its left. With a single stop both apply and there is no rail at
+            all — the same rule the vertical timeline follows. */}
+        <span
+          className={cx(classes.stop_axis, {
+            [classes.stop_axis__start]: index === 0,
+            [classes.stop_axis__end]: index === total - 1,
+          })}
+        >
+          <span
+            className={cx(classes.stop_dot, {
+              // Filled for a visit whose day is on file, hollow for one that
+              // carries no capture date: a label alone cannot be placed in time.
+              [classes.stop_dot__dated]: hasDate,
+            })}
+            aria-hidden="true"
+          />
+        </span>
+        <span
+          className={cx(classes.timepoint, {
+            [classes.timepoint__unset]: label === null,
+          })}
+          title={label !== null ? label : 'These images carry no timepoint label'}
+        >
+          <span className={classes.timepoint_label}>
+            {token !== null ? token : 'No timepoint'}
+          </span>
+        </span>
+        <span className={classes.stop_date}>
+          {hasDate ? (
+            spansDays ? `${group.firstDate} – ${group.lastDate}` : group.firstDate
+          ) : (
+            <span className={classes.stop_date__unset}>No capture date</span>
+          )}
+        </span>
+        {ageLabel !== null ? (
+          <span className={classes.stop_age}>
+            <span className={classes.stop_age_key}>Age</span>
+            <span className={classes.stop_age_value}>{ageLabel}</span>
+          </span>
+        ) : null}
+        <span className={classes.stop_chips}>
+          {group.records.map(this.renderBandChip)}
+        </span>
+      </div>
+    );
+  };
+
+  /**
+   * One image of a visit, as a chip on the band: the type in its rail-sized
+   * form, tinted by how far its tracing has got — the card chips' own three
+   * readings (done, outstanding, never applicable), so the band can be scanned
+   * for the film that still needs work.
+   *
+   * The chip opens the image, in the editor or in the read-only viewer according
+   * to what the image is, and its tooltip states the whole of that before the
+   * click: the full type, the day, the tracing, and where it will land.
+   */
+  private renderBandChip = (record: PatientRecord) => {
+    const { tone, phrase } = getTracingTone(record);
+    const date = formatCaptureDate(record.captureDate);
+    const title = [
+      getImageTypeLabel(record.type),
+      date !== null ? date : 'no capture date',
+      phrase,
+    ].join(' · ') + (record.isTraceable
+      ? ' — open in the tracing editor'
+      : ' — open in the record viewer (view only)');
+    return (
+      <button
+        key={record.imageId}
+        type="button"
+        className={cx(classes.bchip, {
+          [classes.bchip__ok]: tone === 'ok',
+          [classes.bchip__partial]: tone === 'partial',
+          [classes.bchip__todo]: tone === 'todo',
+          [classes.bchip__muted]: tone === 'muted',
+          // The image the surface behind this one is holding, marked as such
+          // rather than tinted a fourth colour: the tracing reading must survive.
+          [classes.bchip__active]: record.isActive,
+        })}
+        title={title}
+        aria-label={title}
+        onClick={this.handleOpen(record)}
+      >
+        {getImageTypeShortLabel(record.type)}
+      </button>
+    );
+  };
+
+  /**
+   * The interval between two consecutive visits: the elapsed time, written on the
+   * rail, and the action that belongs to it.
+   *
+   * The elapsed time comes from the app's one duration formatter, the same one
+   * the identity band's record span and the superimposition's "… apart" print, so
+   * one pair of dates cannot read three ways on one screen. It is stated only
+   * where both visits carry a day — an interval between an undated visit and a
+   * dated one is not a measurement.
+   *
+   * The control opens the superimposition on *these two* timepoints: the earlier
+   * visit's latest registrable film against the later visit's earliest, i.e. the
+   * two films closest to the interval it is standing on. Disabled, it names the
+   * visit that is short of a tracing and what a registration needs — never a grey
+   * button with nothing to say.
+   */
+  private renderBandGap = (
+    before: TimepointGroup<PatientRecord>, after: TimepointGroup<PatientRecord>,
+  ) => {
+    const { launch } = this.props;
+    const interval = formatInterval(
+      parseCaptureDate(before.firstDate), parseCaptureDate(after.firstDate),
+    );
+    const registrable = (group: TimepointGroup<PatientRecord>) =>
+      group.records.filter((r) => {
+        const entry = launch[r.imageId];
+        return entry !== undefined && entry.isRegistrable;
+      });
+    const earlier = registrable(before);
+    const later = registrable(after);
+    const t1 = earlier[earlier.length - 1];
+    const t2 = later[0];
+    const canSuperimpose = t1 !== undefined && t2 !== undefined;
+    const beforeName = bandName(before);
+    const afterName = bandName(after);
+    const pair = `${beforeName} → ${afterName}`;
+    const missing = [
+      t1 === undefined ? beforeName : null,
+      t2 === undefined ? afterName : null,
+    ].filter((n): n is string => n !== null);
+    const reason = canSuperimpose
+      ? `Superimpose ${pair}` +
+        (interval !== null ? ` — ${interval} apart` : '') +
+        '. Opens with these two timepoints already selected; the registration ' +
+        'and the pair can be changed there.'
+      : (missing.length === 2
+        ? 'Needs two traced films: neither ' + beforeName + ' nor ' + afterName +
+          ' holds a lateral cephalogram whose tracing can be registered. A ' +
+          `registration needs ${registrationRequirement()}.`
+        : `Trace ${missing[0]} first — no film there carries a tracing that ` +
+          `can be registered. A registration needs ${registrationRequirement()}.`);
+    return (
+      <div
+        key={`gap-${after.key !== '' ? after.key : '__untimepointed'}`}
+        className={classes.gap}
+      >
+        <span className={classes.gap_axis}>
+          {interval !== null ? (
+            <span className={classes.gap_interval}>{interval}</span>
+          ) : null}
+        </span>
+        {/* The tooltip is on the wrapper, not on the button: a browser fires no
+            hover on a disabled control, so a `disabled` button's own title is
+            never seen — the same construction the superimposition view uses for
+            a registration basis its two films cannot supply. */}
+        <span className={classes.gap_action} title={reason}>
+          <button
+            type="button"
+            className={cx(classes.superimpose, {
+              [classes.superimpose__off]: !canSuperimpose,
+            })}
+            aria-disabled={!canSuperimpose}
+            aria-label={canSuperimpose
+              ? `Superimpose ${pair}` : `Superimpose ${pair} — unavailable`}
+            onClick={canSuperimpose
+              ? this.handleSuperimpose(t1.imageId, t2.imageId) : undefined}
+          >
+            <IconSuperimpose
+              color={canSuperimpose ? SUPERIMPOSE_ICON : LAUNCH_ICON_OFF}
+              style={launchIconStyle}
+            />
+            <span>Superimpose</span>
+          </button>
+        </span>
+      </div>
+    );
+  };
+
+  // ---- Launching a view off a film -----------------------------------------
+
+  /**
+   * The ways out of a film's card: the tracing editor, the printable clinical
+   * report, and the treatment simulation. One row per traceable film, in the
+   * `.slots` idiom the visit's "Not filed" row already uses, so the surface has
+   * one vocabulary for "here is a row of things you can press".
+   *
+   * Offered on traceable films only. A photograph has no report to print, no
+   * tracing to simulate on, and its card opens it in the viewer already — a strip
+   * with one live control repeating the card's own click would be filler.
+   *
+   * Nothing here is enabled on a promise: the report needs a tracing, and the
+   * simulation needs an anatomical reference plane and one possible movement.
+   * Each control that is off carries the sentence that says which, read from the
+   * module that owns the rule (see `selectors#getRecordLaunch`).
+   */
+  private renderCardLaunch = (record: PatientRecord, identity: string) => {
+    const entry = this.props.launch[record.imageId];
+    if (!record.isTraceable || entry === undefined) {
+      return null;
+    }
+    return (
+      <div className={classes.launch}>
+        <span className={classes.slots_label}>Open</span>
+        <span className={classes.launch_list}>
+          <LaunchAction
+            label="Tracing editor"
+            icon={<IconTrace color={LAUNCH_ICON} style={launchIconStyle} />}
+            title={`Open ${identity} in the tracing editor`}
+            isEnabled={true}
+            onClick={this.handleOpen(record)}
+          />
+          <LaunchAction
+            label="Clinical report"
+            icon={(
+              <IconReport
+                color={entry.canReport ? LAUNCH_ICON : LAUNCH_ICON_OFF}
+                style={launchIconStyle}
+              />
+            )}
+            title={entry.reportReason}
+            isEnabled={entry.canReport}
+            onClick={this.handleOpenReport(record)}
+          />
+          <LaunchAction
+            label="Simulation"
+            icon={(
+              <IconSimulate
+                color={entry.canSimulate ? LAUNCH_ICON : LAUNCH_ICON_OFF}
+                style={launchIconStyle}
+              />
+            )}
+            title={entry.simulateReason}
+            isEnabled={entry.canSimulate}
+            onClick={this.handleOpenSimulation(record)}
+          />
+        </span>
+      </div>
+    );
+  };
+
+  /**
+   * The three views this surface launches, each opened on the record the
+   * dashboard was pointing at rather than on whatever the editor behind it holds
+   * — which is the whole reason they are rendered here: opening T2's report from
+   * T2's card must report T2.
+   *
+   * They are the editor toolbar's own connected components, unchanged, and each
+   * is a fixed full-screen surface of its own; the dashboard stays mounted behind
+   * so closing one lands back on the chart at the same scroll position.
+   */
+  private renderLaunchedViews = () => {
+    const { reportImageId, simulationImageId, superimposePair } = this.state;
+    return (
+      <div>
+        {reportImageId !== null ? (
+          <ClinicalReport
+            imageId={reportImageId}
+            onRequestClose={this.closeReport}
+          />
+        ) : null}
+        {simulationImageId !== null ? (
+          <TreatmentSimulation
+            imageId={simulationImageId}
+            onRequestClose={this.closeSimulation}
+          />
+        ) : null}
+        {superimposePair !== null ? (
+          <Superimposition
+            initialT1Id={superimposePair.t1Id}
+            initialT2Id={superimposePair.t2Id}
+            onRequestClose={this.closeSuperimposition}
+          />
+        ) : null}
+      </div>
+    );
+  };
+
+  private handleOpenReport = (record: PatientRecord) => () =>
+    this.setState({ reportImageId: record.imageId });
+
+  private closeReport = () => this.setState({ reportImageId: null });
+
+  private handleOpenSimulation = (record: PatientRecord) => () =>
+    this.setState({ simulationImageId: record.imageId });
+
+  private closeSimulation = () => this.setState({ simulationImageId: null });
+
+  /**
+   * Start a superimposition on a named pair. The two ids seed the view's own
+   * T1/T2 selection and nothing more — its pickers, its registration bases and
+   * its export all behave exactly as they do when it is opened from the editor.
+   */
+  private handleSuperimpose = (t1Id: string, t2Id: string) => () =>
+    this.setState({ superimposePair: { t1Id, t2Id } });
+
+  private closeSuperimposition = () => this.setState({ superimposePair: null });
 
   /**
    * One timepoint of the record: its stamp in the timeline gutter (the label, the
@@ -1726,6 +2346,10 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
           </button>
         </span>
         </div>
+        {/* …and the ways out of this screen for this film: its editor, its
+            clinical report, its treatment simulation. Traceable films only, and
+            every control that is off explains itself. */}
+        {this.renderCardLaunch(record, identity)}
         {/* One chip per visit already on file: pressing it writes that visit's
             label and its earliest capture date onto this image — the slots' own
             data path (`handleFileAt`), applied to a record that already exists.

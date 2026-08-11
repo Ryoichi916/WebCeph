@@ -80,10 +80,15 @@ never from the on-screen preview alone.
 
 ## P3 — modules still missing against the commercial field
 
-- [ ] **Patient dashboard is a records list wearing a dashboard's name** — a
-  modal with two image rows and ~60 % empty space. No extraoral/intraoral
-  photographs, no models, no per-timepoint analysis history, no treatment
-  timeline, and no entry point to superimposition or simulation from it.
+- [ ] **Patient dashboard: study models are still missing.** The surface itself
+  is done — it is a full workspace page, not a modal, and it now holds the
+  extraoral/intraoral photograph types, the per-timepoint analysis history, the
+  cross-timepoint measurement trend, a horizontal treatment timeline with the
+  elapsed interval on every gap, and working launch points into the tracing
+  editor, the clinical report, the treatment simulation and a superimposition of
+  a named pair of timepoints. What the commercial field still has and this does
+  not is **study models / 3D records** (plaster scans, IOS meshes): a new record
+  type with its own viewer, not a variation on an image.
   `components/RecordsDashboard/`.
 - [ ] **Non-lateral analysis.** PA/frontal cephalometric analysis (the frontal
   landmark points already exist in `analyses/landmarks/frontalPhoto/`),

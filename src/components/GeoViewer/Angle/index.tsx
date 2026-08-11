@@ -26,6 +26,26 @@ export interface AngleProps extends React.SVGAttributes<SVGLineElement> {
   angleIndicatorProps?: React.SVGAttributes<SVGCircleElement>;
 }
 
+/**
+ * Geometry an SVG attribute can actually take.
+ *
+ * `getIntersectionPoint` returns `undefined` only for two exactly parallel
+ * lines: given a degenerate or non-finite vector its determinant is NaN, not 0,
+ * so it returns a point whose coordinates are NaN — and this component then
+ * handed React `<polygon points="482,NaN NaN,NaN 512,…">`, `<circle cx={NaN}>`
+ * and `<line y2={NaN}>`, one warning per attribute per render. Nothing is drawn
+ * either way (a NaN coordinate has no position), so the mark is skipped here
+ * rather than passed to the DOM to be rejected — which also keeps the console
+ * readable for the errors that matter. The shared math is left alone: the
+ * analyses cast its result and read a NaN measurement, which their own
+ * `isFinite` guards already handle.
+ */
+const isFinitePoint = ({ x, y }: GeoPoint): boolean =>
+  isFinite(x) && isFinite(y);
+
+const isFiniteVector = ({ x1, y1, x2, y2 }: GeoVector): boolean =>
+  isFinite(x1) && isFinite(y1) && isFinite(x2) && isFinite(y2);
+
 interface ArcProps extends React.SVGAttributes<SVGCircleElement> {
   vector1: GeoVector;
   vector2: GeoVector;
@@ -33,7 +53,7 @@ interface ArcProps extends React.SVGAttributes<SVGCircleElement> {
 
 const Arc = ({ vector1, vector2, ...rest }: ArcProps) => {
   const i = getIntersectionPoint(vector1, vector2);
-  if (i !== undefined) {
+  if (i !== undefined && isFinitePoint(i)) {
     const { x, y } = i;
     const [point1, point2] = getVectorPoints(vector1);
     const [point3, point4] = getVectorPoints(vector2);
@@ -70,8 +90,11 @@ const Angle = pure((props: AngleProps): JSX.Element => {
     ...rest
   } = props;
   const [vector1, vector2] = vectors;
+  if (!isFiniteVector(vector1) || !isFiniteVector(vector2)) {
+    return <g/>;
+  }
   const intersection = getIntersectionPoint(vector1, vector2);
-  if (intersection === undefined) {
+  if (intersection === undefined || !isFinitePoint(intersection)) {
     // console.info('The two vectors are parallel. No extension.');
     return <g/>;
   }
@@ -123,12 +146,22 @@ const Angle = pure((props: AngleProps): JSX.Element => {
     ];
     finalVectors = [parallel, vector2];
   }
+  // The two segments are the measurement and always draw; the extension and the
+  // arc are constructions on top of them, and a construction that came out
+  // non-finite is dropped rather than drawn as NaN.
+  const isDrawable = isFiniteVector(finalVectors[0]) &&
+    isFiniteVector(finalVectors[1]);
   return (
     <g>
       <line {...rest} {...segmentProps} {...vector1} />
       <line {...rest} {...segmentProps} {...vector2} />
-      {additionalElements}
-      <Arc vector1={finalVectors[0]} vector2={finalVectors[1]} {...angleIndicatorProps} />
+      {isDrawable ? additionalElements : null}
+      {isDrawable ? (
+        <Arc
+          vector1={finalVectors[0]} vector2={finalVectors[1]}
+          {...angleIndicatorProps}
+        />
+      ) : null}
     </g>
   );
 });

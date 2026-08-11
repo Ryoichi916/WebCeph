@@ -499,6 +499,497 @@ $page-gutter-narrow: 12px;
   }
 }
 
+// ---- Case timeline band ----------------------------------------------------
+// The case as one horizontal line of time, above the records panel that lists
+// it. The panel below is the *record* — every file, its scale, its tracing, the
+// actions that correct it, read down the page. This band is the *chronology*, and
+// a chronology is read across: stop, interval, stop.
+//
+// It is also where the one action belonging to two timepoints lives. A
+// superimposition is a property of an interval, not of a film, so its control
+// stands on the interval — between the two visits it compares.
+
+// The height of the row the rail runs through. Every offset below is derived from
+// it, so the dots, the rail and the interval labels cannot drift apart.
+$band-axis: 20px;
+
+.band {
+  flex: 0 0 auto;
+  box-sizing: border-box;
+  padding: 12px 16px 14px;
+  border: 1px solid $border;
+  border-radius: 8px;
+  background: $bg-surface;
+  box-shadow: $shadow-1;
+}
+
+.band_head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+  margin-bottom: 6px;
+}
+
+.band_title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: $text-primary;
+}
+
+.band_caption {
+  font-size: 12.5px;
+  color: $text-tertiary;
+}
+
+// The rail and everything on it. It scrolls sideways rather than crushing its
+// stops: at six visits a stop still carries its date, its age and its chips at
+// full size, and the case is dragged through instead of being read at 9px.
+//
+// A band that is wider than its window has to *say* so, or the case simply ends
+// mid-word at the right edge and a sixth visit is invisible. The scroller paints
+// a fade over whichever edge still has case behind it — the flags are measured
+// off the track (`updateBandScrollState`), the same way the records panel's
+// sticky bars measure their own overlap.
+.band_scroller {
+  position: relative;
+
+  &::before,
+  &::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 32px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 140ms ease;
+  }
+
+  &::before {
+    left: 0;
+    background: linear-gradient(to right, $bg-surface, rgba(255, 255, 255, 0));
+  }
+
+  &::after {
+    right: 0;
+    background: linear-gradient(to left, $bg-surface, rgba(255, 255, 255, 0));
+  }
+
+  &__more_start::before,
+  &__more_end::after {
+    opacity: 1;
+  }
+}
+
+.band_track {
+  display: flex;
+  align-items: flex-start;
+  overflow-x: auto;
+  overflow-y: hidden;
+  // The focus ring of a chip on the first or last stop must not be clipped by
+  // the scrollport it lives in.
+  padding: 2px 0 3px;
+
+  // The second half of saying "this scrolls": a slim rule that is *there* only
+  // while the band overflows. The platform's overlay scrollbar appears during a
+  // scroll and vanishes, which is no use to a reader who has not scrolled yet
+  // and does not know there is anything to scroll to.
+  scrollbar-width: thin;
+  scrollbar-color: $border-strong transparent;
+
+  &::-webkit-scrollbar {
+    height: 6px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: $border-strong;
+    border-radius: 999px;
+  }
+
+  &::-webkit-scrollbar-thumb:hover {
+    background: $text-tertiary;
+  }
+}
+
+// One visit. Centred on its own node, which is what makes the row read as a
+// timeline rather than as a table with a line drawn through it.
+.stop {
+  flex: 0 0 auto;
+  box-sizing: border-box;
+  min-width: 116px;
+  max-width: 240px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 0 8px;
+  text-align: center;
+}
+
+// One interval. It takes the row's slack — the stops are sized to their content,
+// so at two visits the gap opens up and at six it holds its floor.
+.gap {
+  flex: 1 1 auto;
+  box-sizing: border-box;
+  min-width: 96px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 0 4px;
+}
+
+// The rail is painted by each cell's own axis row, which is what lets it stop at
+// the outermost nodes: the first stop paints only the half to its right, the last
+// only the half to its left. With one visit on file both apply, the rail has zero
+// width, and nothing is drawn — a single 12px dot with no line through it is a
+// decoration, exactly as on the vertical timeline.
+//
+// $border-strong (#C3CCD6), not $border: on white at 100% the lighter rule is the
+// chronology that organises the band being invisible.
+.stop_axis,
+.gap_axis {
+  position: relative;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: $band-axis;
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 0;
+    right: 0;
+    height: 2px;
+    margin-top: -1px;
+    background: $border-strong;
+  }
+}
+
+.stop_axis {
+  &__start::before {
+    left: 50%;
+  }
+
+  &__end::before {
+    right: 50%;
+  }
+}
+
+// The node carries a fact as well as a position: filled for a visit whose day is
+// on file, hollow for one that carries no capture date — a label on its own
+// cannot be placed in a chronology.
+.stop_dot {
+  position: relative;
+  z-index: 1;
+  box-sizing: border-box;
+  width: 12px;
+  height: 12px;
+  border: 2px solid $border-strong;
+  border-radius: 999px;
+  background: $bg-surface;
+
+  &__dated {
+    border-color: $primary-600;
+    background: $primary-600;
+    // A halo in the palette's own faintest tint, so the node reads as a marker
+    // on the rail instead of a bead threaded onto it.
+    box-shadow: 0 0 0 3px $primary-050;
+  }
+}
+
+.stop_date {
+  font-size: 12.5px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: $text-primary;
+  white-space: nowrap;
+
+  &__unset {
+    font-weight: 400;
+    color: $text-tertiary;
+  }
+}
+
+.stop_age {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.stop_age_key {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: $text-tertiary;
+}
+
+.stop_age_value {
+  font-variant-numeric: tabular-nums;
+  color: $text-secondary;
+}
+
+.stop_chips {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+// One image of the visit: the type in its rail-sized form, tinted by how far its
+// tracing has got — the card chips' own three readings, so the band can be
+// scanned for the film that still needs work and cannot disagree with the card
+// 200px below it. Pressing it opens the image.
+.bchip {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 9px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: box-shadow 120ms ease, transform 60ms ease;
+
+  // A tinted pill cannot take a tinted hover without losing its reading, so the
+  // pointer state is a ring in the chip's *own* colour — legible on all four
+  // tints, and it says "this is a target" without saying anything else.
+  &:hover {
+    box-shadow: inset 0 0 0 1.5px currentColor;
+  }
+
+  &:focus {
+    outline: none;
+    box-shadow: $focus-ring;
+  }
+
+  &:active {
+    transform: translateY(1px);
+  }
+
+  &__ok {
+    background: $success-bg;
+    color: $success;
+  }
+
+  &__partial {
+    background: $warn-bg;
+    color: $warn;
+  }
+
+  &__todo {
+    background: $warn-bg;
+    box-shadow: inset 0 0 0 1px rgba(178, 106, 0, .30);
+    color: $warn;
+  }
+
+  &__muted {
+    background: $bg-sunken;
+    color: $text-secondary;
+  }
+
+  // The image the surface behind this one is holding. Marked with the primary
+  // border rather than a fifth fill, because the fill is carrying the tracing.
+  &__active {
+    border-color: $primary-600;
+  }
+}
+
+// The elapsed time, written on the rail. It interrupts the line rather than
+// floating beside it, so a reader's eye goes stop -> interval -> stop. The figure
+// is the app's one duration formatter — the same string the identity band's record
+// span and the superimposition's "… apart" print.
+.gap_interval {
+  position: relative;
+  z-index: 1;
+  padding: 0 8px;
+  background: $bg-surface;
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: $text-secondary;
+  white-space: nowrap;
+}
+
+.gap_action {
+  display: inline-flex;
+}
+
+// The cross-timepoint action, on the interval it belongs to. Secondary by the
+// brief — this surface's one primary action is "Add image" in the page bar.
+.superimpose {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 11px 0 9px;
+  border: 1px solid $border-strong;
+  border-radius: 6px;
+  background: $bg-surface;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1;
+  color: $primary-700;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease,
+    color 120ms ease;
+
+  &:hover {
+    background: $primary-050;
+    border-color: $primary-500;
+    color: $primary-900;
+  }
+
+  &:active {
+    background: $primary-100;
+    border-color: $primary-600;
+  }
+
+  &:focus {
+    outline: none;
+    box-shadow: $focus-ring;
+    border-color: $primary-600;
+  }
+
+  // Unavailable, and unmistakably so: dashed, sunken, disabled-grey, no pointer
+  // state at all. It keeps its focus ring and its `aria-disabled`, and the
+  // enabled wrapper around it carries the sentence that says what is missing —
+  // a browser fires no hover on a `disabled` control, so its own title would
+  // never be read.
+  &__off {
+    border-style: dashed;
+    border-color: $border;
+    background: $bg-sunken;
+    color: $text-disabled;
+    cursor: not-allowed;
+
+    &:hover,
+    &:active {
+      background: $bg-sunken;
+      border-color: $border;
+      color: $text-disabled;
+    }
+  }
+}
+
+.band_note {
+  margin: 8px 0 0;
+  font-size: 12.5px;
+  color: $text-tertiary;
+}
+
+// ---- Launch strip on a film's card -----------------------------------------
+// The ways out of this screen for one film: its tracing editor, its printable
+// clinical report, its treatment simulation. A second row of the card, in the
+// `.file_at` / `.slots` idiom — one vocabulary on this surface for "here is a row
+// of things you can press" — and transparent, so the card's own hover and
+// selected tints run under it.
+
+.launch {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  // Left-aligned with the card's main column, not with the thumbnail: the strip
+  // belongs to the film named 20px to the right of the card's edge.
+  padding: 0 12px 9px 20px;
+}
+
+.launch_list {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+// The tooltip lives here rather than on the button (see `LaunchAction`).
+.launch_slot {
+  display: inline-flex;
+}
+
+.launch_btn {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 10px 0 8px;
+  border: 1px solid $border-strong;
+  border-radius: 6px;
+  background: $bg-surface;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1;
+  color: $text-primary;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease,
+    color 120ms ease;
+
+  &:hover {
+    background: $primary-050;
+    border-color: $primary-500;
+    color: $primary-700;
+  }
+
+  &:active {
+    background: $primary-100;
+    border-color: $primary-600;
+    color: $primary-900;
+  }
+
+  &:focus {
+    outline: none;
+    box-shadow: $focus-ring;
+    border-color: $primary-600;
+  }
+
+  // …and one that cannot be pressed says so in its own shape: dashed hairline,
+  // no fill, disabled grey, no pointer state. The reason is on the wrapper.
+  &__off {
+    border-style: dashed;
+    border-color: $border;
+    background: transparent;
+    color: $text-disabled;
+    cursor: not-allowed;
+
+    &:hover,
+    &:active {
+      background: transparent;
+      border-color: $border;
+      color: $text-disabled;
+    }
+  }
+}
+
+.launch_btn_label {
+  display: inline;
+}
+
 // ---- Records panel ---------------------------------------------------------
 // One model, at every list length: the panel is sized to its records, the page
 // scrolls, and the panel's own header and footer stay put while it does. (The
@@ -2933,6 +3424,14 @@ $fv-columns-narrow: $fv-c-name-1 $fv-c-value 116px 96px $fv-c-change;
   }
 }
 
+// The panel's count, and the line that replaces it on paper. On screen "5 of 10
+// across 3 films" is answered by the picker directly under it; on a sheet the
+// picker is not there, so a count against a list nothing on the page states is a
+// figure with no referent — the filed chart names what it plots instead.
+.trend_count__print {
+  display: none;
+}
+
 // ---- the grid of small multiples ----
 // Sized to its cells, wrapping into as many columns as the window allows: the
 // same measurement is the same size in every column, and every cell is on the
@@ -2948,12 +3447,29 @@ $fv-columns-narrow: $fv-c-name-1 $fv-c-value 116px 96px $fv-c-change;
   background: $bg-app;
 }
 
-.trend_none {
+
+// A subheading over one run of the grid, spanning every column of it: which of
+// the two y scales the cells under it are on. The grid is read by comparing its
+// cells, so the one place it must be explicit is where two of them cannot be
+// compared (see `TrendChart#render`).
+.tc_sub {
+  grid-column: 1 / -1;
   margin: 0;
-  padding: 16px;
-  background: $bg-app;
-  font-size: 12.5px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  line-height: 1.4;
   color: $text-tertiary;
+
+  // …and the run that is *not* on the shared axis says so in a full clause, in
+  // sentence case: it is a caveat, not a column label.
+  &__own {
+    text-transform: none;
+    letter-spacing: 0;
+    font-size: 11px;
+    font-weight: 500;
+  }
 }
 
 // ---- one measurement ----
@@ -2965,20 +3481,58 @@ $fv-columns-narrow: $fv-c-name-1 $fv-c-value 116px 96px $fv-c-change;
   border: 1px solid $border;
   border-radius: 8px;
   background: $bg-surface;
+
+  // A cell measured in its own unit is not on the grid's shared axis, so its plot
+  // stands on its own ground: at the same size in the same frame with the same
+  // marks, a slope in one of these read as comparable with the slope beside it,
+  // and a 10px unit pill was carrying that whole distinction.
+  &__own .tc_plotbox {
+    background: $bg-sunken;
+    border-radius: 2px;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
 }
 
 .tc_head {
   display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding-bottom: 3px;
+}
+
+// Two of them: the measurement and its figure on the first, what the figure is
+// measured over on the second. One row held a symbol, a unit pill, an n/m badge,
+// a span label and a signed figure in the 244px a cell gets, and what it dropped
+// was the identity of the cell — "L1-NB : Pog-NB" printed as "L1-NB : Pog-…".
+.tc_head_row {
+  display: flex;
   align-items: baseline;
   gap: 5px;
-  padding-bottom: 2px;
+  min-width: 0;
 }
 
 .tc_symbol {
+  flex: 0 1 auto;
   min-width: 0;
   font-size: 12.5px;
   font-weight: 600;
   color: $text-primary;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+// The analysis' own name for the measurement, under its construction code. A
+// clinician follows "Facial Angle"; "Or-Po,N-Pog" is how it is drawn. The Summary
+// dialog and the findings table both print the pair, and this cell printed only
+// the code — the name was carried on the series and spent on a `title`.
+.tc_name {
+  flex: 0 1 auto;
+  min-width: 0;
+  font-size: 11px;
+  line-height: 1.35;
+  color: $text-tertiary;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -3071,10 +3625,17 @@ $fv-columns-narrow: $fv-c-name-1 $fv-c-value 116px 96px $fv-c-change;
   }
 }
 
-// The norm at ±1 SD, in the same tint the findings table's strip uses, so
-// "inside the band" means one thing on this page.
+// The norm at ±1 SD. A step darker than the tint the findings table's strip
+// uses, because here it is nested inside a second envelope: measured down a cell,
+// $primary-100 on $primary-050 was rgb(214,231,247) on rgb(235,243,251) — about
+// 3% of a luminance apart on white, which is one band on a clinic monitor however
+// nested the structure behind it. The ±1 boundary is the one the dot's colour
+// steps at first, so it has to be seen.
+$tc-band-inner: #C2DBF3;
+$tc-band-outer: #F1F7FC;
+
 .tc_band {
-  fill: $primary-100;
+  fill: $tc-band-inner;
   stroke: none;
 }
 
@@ -3082,17 +3643,27 @@ $fv-columns-narrow: $fv-c-name-1 $fv-c-value 116px 96px $fv-c-change;
 // second time. The report's wigglegram draws both; this cell drew only the inner
 // one, so nothing on the page said why one dot was amber and the next red.
 .tc_band__outer {
-  fill: $primary-050;
+  fill: $tc-band-outer;
   stroke: none;
 }
 
-// The envelope's own boundary, drawn: a fill this light is about 1.03:1 on white
+// Each envelope's own boundary, drawn: a fill this light is about 1.03:1 on white
 // and cannot be trusted to carry a threshold on a clinic monitor or a printer.
 .tc_edge {
   fill: none;
   stroke: $border-strong;
   stroke-width: 0.8;
   stroke-dasharray: 2 2;
+
+  // The ±1 bound, in the band's own ink rather than the frame's, so the two
+  // boundaries are two things: the inner one belongs to the shaded band, the
+  // outer one is where the shading ends.
+  &__inner {
+    stroke: $primary-500;
+    stroke-width: 0.7;
+    stroke-dasharray: none;
+    opacity: .55;
+  }
 }
 
 // A published range has no standard deviation, so it is not drawn as one: the
@@ -3211,6 +3782,18 @@ $fv-columns-narrow: $fv-c-name-1 $fv-c-value 116px 96px $fv-c-change;
   color: $primary-700;
   pointer-events: none;
   transform: translate(-50%, -160%);
+
+  // Tucked immediately above the segment, or under it, where the ordinary place
+  // over it is the header row or the norm's own hairline (see
+  // `Sparkline#placeDelta`). The anchor is clamped into the plot; these are the
+  // three ways the figure hangs off it.
+  &__tight {
+    transform: translate(-50%, -115%);
+  }
+
+  &__below {
+    transform: translate(-50%, 60%);
+  }
 
   &__within {
     font-weight: 500;
@@ -3339,9 +3922,12 @@ $fv-columns-narrow: $fv-c-name-1 $fv-c-value 116px 96px $fv-c-change;
   flex-direction: column;
   gap: 1px;
   width: max-content;
-  max-width: 190px;
+  // Two short lines, not three long ones: at 190px the card covered its own
+  // cell's y-tick labels, the neighbouring dot's printed figure and the whole
+  // x-tick row, so reading one value cost the reader the axis it is read against.
+  max-width: 132px;
   margin-bottom: 4px;
-  padding: 5px 8px 6px;
+  padding: 4px 7px 5px;
   border: 1px solid $border;
   border-radius: 6px;
   background: $bg-surface;
@@ -3358,12 +3944,17 @@ $fv-columns-narrow: $fv-c-name-1 $fv-c-value 116px 96px $fv-c-change;
   font-size: 10px;
   font-weight: 600;
   letter-spacing: .02em;
-  text-transform: uppercase;
   line-height: 1.2;
   color: $text-disabled;
+  // No `text-transform`: uppercased, this printed "AGE 15 Y 5 M" directly under
+  // an axis strip reading "15 y 5 m" — two spellings of one datum on one screen,
+  // and an uppercased unit symbol is wrong twice over.
 }
 
 .tc_read_val {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
   font-size: 14px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
@@ -3371,8 +3962,12 @@ $fv-columns-narrow: $fv-c-name-1 $fv-c-value 116px 96px $fv-c-change;
   color: $text-primary;
 }
 
+// The one fact the plot itself cannot show — how far this reading is from its
+// norm's mean — beside the reading, not on a third line of a card that then
+// covered the axis it was being read against.
 .tc_read_dev {
   font-size: 11px;
+  font-weight: 500;
   line-height: 1.35;
   color: $text-tertiary;
 }
@@ -3452,8 +4047,8 @@ $fv-columns-narrow: $fv-c-name-1 $fv-c-value 116px 96px $fv-c-change;
   border: 1px solid $border;
   border-radius: 2px;
   background-image:
-    linear-gradient($primary-050, $primary-050),
-    linear-gradient($primary-100, $primary-100),
+    linear-gradient($tc-band-outer, $tc-band-outer),
+    linear-gradient($tc-band-inner, $tc-band-inner),
     linear-gradient($border-strong, $border-strong),
     linear-gradient($border-strong, $border-strong);
   background-size: 66.667% 100%, 33.334% 100%, 1px 12px, 1px 12px;
@@ -3493,6 +4088,17 @@ $fv-columns-narrow: $fv-c-name-1 $fv-c-value 116px 96px $fv-c-change;
     box-shadow: inset 0 0 0 1.6px currentColor;
     color: $text-primary;
   }
+
+  // A reading past the end of the shared axis: the plot's own outward-pointing
+  // marker, which is now the *usual* way a 3-SD value is drawn (see `SD_LIMIT`)
+  // and therefore owes the reader a key entry.
+  &__off {
+    width: 9px;
+    height: 8px;
+    border-radius: 0;
+    clip-path: polygon(50% 0, 100% 100%, 0 100%);
+    color: $error;
+  }
 }
 
 // A cell that has no standard deviation to be measured in — a published range,
@@ -3524,6 +4130,13 @@ $fv-columns-narrow: $fv-c-name-1 $fv-c-value 116px 96px $fv-c-change;
   flex-direction: column;
   border-radius: 0 0 7px 7px;
   background: $bg-app;
+}
+
+// Quieter again where the panel is not empty but merely unticked: the picker
+// directly above it is what fills it, and the mark is there to say which panel is
+// waiting rather than to compete with the control that answers it.
+.tea__ghost {
+  opacity: .5;
 }
 
 // The ghosted chart: a norm band, one film's reading, and a second stop with
@@ -3940,14 +4553,24 @@ $fv-columns-narrow: $fv-c-name-1 $fv-c-value 116px 96px $fv-c-change;
   // named in two adjacent rows 20px apart and the date of birth and sex appeared
   // twice each, and the duplicate cost the chart a 58px band of its first page —
   // which is a whole record row.
+  // The case timeline band goes with them, and for the identity band's reason:
+  // every fact on it is printed elsewhere on the sheet. Each visit's stamp in the
+  // list below carries its label, its day and the patient's age then; the running
+  // head carries the record's span; and the band's own contribution — the elapsed
+  // interval and the Superimpose control — is a screen device, one of them being a
+  // button nobody can press on paper.
   .pagebar,
+  .band,
   .identity,
   .primary_action,
   .add_entry,
   .card_actions,
   .card_go,
   .identity_edit,
-  .fact_fix {
+  .fact_fix,
+  // Launch controls: three buttons per film, opening three screens. On a sheet of
+  // paper they are 90pt of pill outlines saying "Tracing editor".
+  .launch {
     display: none !important;
   }
 
@@ -4229,18 +4852,48 @@ $fv-columns-narrow: $fv-c-name-1 $fv-c-value 116px 96px $fv-c-change;
     print-color-adjust: exact;
   }
 
+  // Three columns wide (an A4 sheet is 180mm, and a 200-unit viewBox squeezed to
+  // 45mm loses its own tick labels) — but laid out as a wrapping row rather than
+  // a grid, so a five-cell board prints 3 + 2 *centred* instead of 3 + 2 with a
+  // hole where the sixth cell would be.
   .trend_grid {
-    grid-template-columns: repeat(3, 1fr);
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
     gap: 6pt 8pt;
     padding: 4pt 0 0;
     background: #FFFFFF;
   }
 
   .tc {
+    flex: 0 1 calc(33.333% - 5.5pt);
+    min-width: 0;
     padding: 3pt 4pt 2pt;
     border-radius: 0;
     break-inside: avoid;
     page-break-inside: avoid;
+  }
+
+  // A heading over a run of the wrapped row still owns the whole width of it.
+  .tc_sub {
+    flex: 0 0 100%;
+    font-size: 7pt;
+  }
+
+  .tc_name {
+    font-size: 7pt;
+  }
+
+  .trend_count {
+    display: none;
+  }
+
+  .trend_count__print {
+    display: inline;
+    font-size: 8pt;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: $text-secondary;
   }
 
   // The plot's type is HTML around the drawing rather than text inside a scaled

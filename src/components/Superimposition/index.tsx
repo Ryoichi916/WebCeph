@@ -253,16 +253,29 @@ const formatDisplacement = (
  * smaller than hand-plotting error is labelled as one.
  */
 export default class Superimposition extends React.PureComponent<Props, State> {
-  state: State = {
-    t1Id: null,
-    t2Id: null,
-    basisId: null,
-    isExporting: false,
-    exportError: null,
-    figurePx: null,
-  };
-
   private figureEl: HTMLDivElement | null = null;
+
+  /**
+   * The selection starts wherever the caller pointed it. Opened from the
+   * editor's toolbar nothing is named and both slots are null, which `getPair`
+   * reads as "earliest against latest" — the comparison this view exists for.
+   * Opened from the records dashboard's timeline, the two visits whose interval
+   * was clicked are named here, and they seed the very same two slots the
+   * chrome's own pickers write to: one selection, one picker, wherever the view
+   * was entered from.
+   */
+  constructor(props: Props) {
+    super(props);
+    const { initialT1Id, initialT2Id } = props;
+    this.state = {
+      t1Id: initialT1Id !== undefined && initialT1Id !== null ? initialT1Id : null,
+      t2Id: initialT2Id !== undefined && initialT2Id !== null ? initialT2Id : null,
+      basisId: null,
+      isExporting: false,
+      exportError: null,
+      figurePx: null,
+    };
+  }
 
   componentDidMount() {
     document.addEventListener('keydown', this.handleKeyDown);

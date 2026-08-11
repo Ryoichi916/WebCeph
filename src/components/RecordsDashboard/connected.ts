@@ -15,7 +15,7 @@ import {
   PatientRecord,
 } from 'store/reducers/workspace';
 
-import { getRecordAnalyses } from './selectors';
+import { getRecordAnalyses, getRecordLaunch } from './selectors';
 
 import { getWorkspacesIdsInOrder } from 'store/reducers/workspace/order';
 import { getWorkspaceImageIds } from 'store/reducers/workspace/settings';
@@ -36,6 +36,7 @@ import {
   removeWorkspace,
   setImageProps,
   updatePatient,
+  setPatientTrendPlot,
   closeImage,
 } from 'actions/workspace';
 
@@ -60,6 +61,11 @@ const mapStateToProps = (state: StoreState): StateProps => {
     // analysis is active — it reads each film's own analysis through the store's
     // own per-image selectors (see ./selectors).
     analyses: getRecordAnalyses(state),
+    // What each film's card can open, read from the modules that own those
+    // views' own availability rules (see ./selectors). Memoized, so the launch
+    // strip does not re-derive nine simulation readiness checks on every mouse
+    // move over the canvas behind this surface.
+    launch: getRecordLaunch(state),
     otherChartIds: getPatientsList(state)
       .filter((p) => patient === null || p.id !== patient.id)
       .map((p) => p.chartId || ''),
@@ -127,6 +133,11 @@ const mapDispatchToProps = (dispatch: GenericDispatch): DispatchProps => ({
       timepoint: meta.timepoint,
       captureDate: meta.captureDate,
     }));
+  },
+  // The trend board is a per-patient clinical setting, not a view state, so it
+  // is dispatched to the store the demographics live in and persisted with them.
+  onSetTrendPlot: (patientId: string, symbols: string[] | null) => {
+    dispatch(setPatientTrendPlot({ id: patientId, symbols }));
   },
   onRemoveRecord: (record: PatientRecord, fallbackWorkspaceId: string | null) => {
     dispatch(closeImage({

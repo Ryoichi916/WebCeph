@@ -624,6 +624,18 @@ interface Patient {
   dateOfBirth?: string;
   /** Recorded sex, or empty/absent when unspecified (older records). */
   sex?: PatientSex;
+  /**
+   * The measurements this patient's trend board is plotted on (see the records
+   * dashboard's `TrendChart`), or absent/null while it is on the chart's own
+   * defaults.
+   *
+   * A clinical setting rather than a view state: a case is followed on three or
+   * four values across its films, and that choice has to be the same choice when
+   * the patient is opened again tomorrow. Stored on the patient rather than in
+   * the project, because it is about how this patient is read and not about the
+   * images on file.
+   */
+  trendPlot?: string[] | null;
 }
 
 interface StoreState {
@@ -1107,6 +1119,14 @@ interface Events {
   };
   REMOVE_PATIENT_REQUESTED: {
     id: string;
+  };
+  /**
+   * Sets which measurements this patient's trend board plots — null to put it
+   * back on the chart's defaults. Persisted with the patient (see `Patient`).
+   */
+  SET_PATIENT_TREND_PLOT_REQUESTED: {
+    id: string;
+    symbols: string[] | null;
   };
   SET_ACTIVE_PATIENT_REQUESTED: {
     id: string | null;

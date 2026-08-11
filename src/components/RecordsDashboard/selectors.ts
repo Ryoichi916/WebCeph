@@ -22,6 +22,11 @@ import {
 import LATERAL_ANALYSES from 'analyses/lateral';
 import { getStepsForAnalysis, isStepManual } from 'analyses/helpers';
 
+// The two modules that already own "can this film do X", so the dashboard's
+// launch controls and the editor's toolbar controls cannot disagree.
+import { getSuperimpositionTimepoints } from 'components/Superimposition/selectors';
+import { getSimulationReadiness } from 'analyses/simulation';
+
 /**
  * What one traced film reports, for the records dashboard's analysis findings —
  * read-only, and read through the **same evaluation path** the Summary dialog
@@ -188,6 +193,88 @@ export const getRecordAnalyses = createSelector(
           : 0,
       };
     });
+  },
+);
+
+/**
+ * What can be launched from one film's card on the dashboard, and — when
+ * something cannot — the sentence that says why.
+ *
+ * Every one of these three answers is read from the module that already owns the
+ * question, never re-derived here, because the dashboard's control and the
+ * editor's toolbar control open the *same* view and must agree about whether it
+ * is available:
+ *
+ *  - the treatment simulation's readiness (and its reason) is
+ *    `analyses/simulation#getSimulationReadiness`, the same pure rule the
+ *    simulation view enables its own movement controls with;
+ *  - "this tracing can be registered" is membership of
+ *    `Superimposition/selectors#getSuperimpositionTimepoints`, the same list the
+ *    superimposition view fills its pickers from;
+ *  - the clinical report's gate is the tracing itself: the report prints
+ *    measurements computed from placed landmarks, so a film with nothing plotted
+ *    would print a chart of "not measured" rows over a bare radiograph. The
+ *    toolbar can be loose about this (the film in the editor is the one being
+ *    traced); a records surface listing six films cannot.
+ */
+export interface RecordLaunch {
+  /** Whether the printable clinical report has anything to report. */
+  canReport: boolean;
+  /** Tooltip: the invitation when it can, the reason when it cannot. */
+  reportReason: string;
+  canSimulate: boolean;
+  simulateReason: string;
+  /**
+   * Whether this film's tracing carries a complete registration basis — i.e.
+   * whether it can be one half of a superimposition. Read by the timeline band,
+   * which offers the comparison on the interval between two visits.
+   */
+  isRegistrable: boolean;
+}
+
+const NO_TRACING_REASON =
+  'Trace this film first — a clinical report prints measurements, and no ' +
+  'landmark is plotted on this one yet. Open it in the tracing editor and run ' +
+  'Auto-plot.';
+
+const REPORT_REASON =
+  'Open the printable clinical report for this film — every analysis it can ' +
+  'report, with its norms and provenance (print or save as PDF).';
+
+/**
+ * One entry per traceable film of the open patient, keyed by image id. Films
+ * that can never be traced are absent: a photograph has no report, no
+ * simulation and no registration, and its card says so already.
+ */
+export const getRecordLaunch = createSelector(
+  getPatientRecords,
+  getSuperimpositionTimepoints,
+  getManualLandmarks,
+  getScaleFactor,
+  (
+    records, timepoints, getLandmarks, getScale,
+  ): { [imageId: string]: RecordLaunch | undefined } => {
+    const registrable: { [imageId: string]: true } = {};
+    timepoints.forEach(({ imageId }) => { registrable[imageId] = true; });
+    const launch: { [imageId: string]: RecordLaunch | undefined } = {};
+    records.filter((r) => r.isTraceable).forEach((record) => {
+      const { imageId } = record;
+      const simulation = getSimulationReadiness(
+        getLandmarks(imageId), getScale(imageId),
+      );
+      // The tracing as it exists, not the active analysis' count of it: a film
+      // plotted under Downs and then switched to Jarabak still carries every
+      // point it was given, and the report evaluates all nine analyses from them.
+      const hasTracing = record.landmarkPoints.length > 0;
+      launch[imageId] = {
+        canReport: hasTracing,
+        reportReason: hasTracing ? REPORT_REASON : NO_TRACING_REASON,
+        canSimulate: simulation.canSimulate,
+        simulateReason: simulation.reason,
+        isRegistrable: registrable[imageId] === true,
+      };
+    });
+    return launch;
   },
 );
 

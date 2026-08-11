@@ -43,6 +43,12 @@ export const addPatient = createActionCreator('ADD_PATIENT_REQUESTED');
 export const updatePatient = createActionCreator('UPDATE_PATIENT_REQUESTED');
 export const removePatient = createActionCreator('REMOVE_PATIENT_REQUESTED');
 export const setActivePatient = createActionCreator('SET_ACTIVE_PATIENT_REQUESTED');
+// Which measurements this patient's trend board is followed on — persisted with
+// the patient, because a board that resets every time the case is reopened makes
+// the reader re-tick it every morning.
+export const setPatientTrendPlot = createActionCreator(
+  'SET_PATIENT_TREND_PLOT_REQUESTED',
+);
 
 // Project lifecycle (a project is a patient's images + tracings + analyses).
 export const openPatient = createActionCreator('OPEN_PATIENT_REQUESTED');

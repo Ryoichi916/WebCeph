@@ -2,7 +2,7 @@ import { PatientRecord } from 'store/reducers/workspace';
 
 import { PatientDetails } from 'components/PatientFields';
 
-import { RecordAnalysis } from './selectors';
+import { RecordAnalysis, RecordLaunch } from './selectors';
 
 export interface StateProps {
   /** The patient whose record is on screen. */
@@ -16,6 +16,13 @@ export interface StateProps {
    * `./selectors`.
    */
   analyses: RecordAnalysis[];
+  /**
+   * What each traceable film can launch — its clinical report, a treatment
+   * simulation, one half of a superimposition — and the sentence that explains
+   * every one it cannot. Keyed by image id; films that can never be traced are
+   * absent. See `./selectors#getRecordLaunch`.
+   */
+  launch: { [imageId: string]: RecordLaunch | undefined };
   /**
    * Chart IDs of every *other* patient, so correcting this patient's chart ID
    * cannot silently collide with another record.
@@ -52,6 +59,13 @@ export interface DispatchProps {
    * keeps the (now empty) tile as the upload surface.
    */
   onRemoveRecord(record: PatientRecord, fallbackWorkspaceId: string | null): any;
+  /**
+   * Set which measurements this patient's trend board plots — null puts it back
+   * on the chart's own defaults. Filed on the patient, so the three or four
+   * values a case is being followed on are still the ones on screen the next
+   * morning (see `TrendChart`).
+   */
+  onSetTrendPlot(patientId: string, symbols: string[] | null): any;
 }
 
 export interface OwnProps {

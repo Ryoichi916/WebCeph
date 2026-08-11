@@ -14,12 +14,22 @@ const reducers: Partial<ReducerMap> = {
         ...state,
         [id]: { id, name, chartId, dateOfBirth, sex },
       }),
+      // Spread over whatever is already on file: the dialog corrects the four
+      // demographic fields, and everything else the record carries about how this
+      // patient is read (their trend board) is not part of that correction.
       UPDATE_PATIENT_REQUESTED: (
         state, { payload: { id, name, chartId, dateOfBirth, sex } },
       ) => ({
         ...state,
-        [id]: { id, name, chartId, dateOfBirth, sex },
+        [id]: { ...state[id], id, name, chartId, dateOfBirth, sex },
       }),
+      // Which measurements this patient's trend board plots. Ignored for a
+      // patient not on file, so a stale panel cannot resurrect a removed record.
+      SET_PATIENT_TREND_PLOT_REQUESTED: (state, { payload: { id, symbols } }) => (
+        state[id] === undefined
+          ? state
+          : { ...state, [id]: { ...state[id], trendPlot: symbols } }
+      ),
       REMOVE_PATIENT_REQUESTED: (state, { payload: { id } }) =>
         omit(state, id) as typeof state,
     },

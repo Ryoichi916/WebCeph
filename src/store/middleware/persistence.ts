@@ -29,6 +29,9 @@ const PERSISTABLE_EVENTS: ActionType[] = [
   'UPDATE_PATIENT_REQUESTED',
   'REMOVE_PATIENT_REQUESTED',
   'SET_ACTIVE_PATIENT_REQUESTED',
+  // The trend board a case is followed on lives on the patient (see `Patient`),
+  // so setting it has to reach the same store the demographics are saved to.
+  'SET_PATIENT_TREND_PLOT_REQUESTED',
 ];
 
 const isPersistenceNeededForAction = ({ type }: GenericAction): boolean => {
