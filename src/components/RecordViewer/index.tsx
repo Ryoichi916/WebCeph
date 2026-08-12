@@ -28,6 +28,10 @@ import {
   getImageTypeLabelInSentence,
   formatCaptureDate,
   parseCaptureDate,
+  // Which frame of the photographic series a photograph is — a fact of the
+  // record, so the surface a photograph opens on states it (see `PhotoView`).
+  isPhotographType,
+  getPhotoViewLabel,
 } from 'utils/records';
 
 import { formatAgeFull } from 'utils/patient';
@@ -135,7 +139,8 @@ export default class RecordViewer extends React.PureComponent<Props, State> {
 
   render() {
     const {
-      className, src, name, type, timepoint, captureDate, width, height,
+      className, src, name, type, timepoint, captureDate, photoView,
+      width, height,
       patient, otherChartIds, records, imageId, onOpenRecordsClick,
     } = this.props;
     const dateOfBirth = patient !== null ? patient.dateOfBirth : null;
@@ -145,7 +150,7 @@ export default class RecordViewer extends React.PureComponent<Props, State> {
     // A photograph is not a film, and the ground it is shown on has to say so:
     // a studio-grey portrait floating on the radiograph light-box black read as
     // a film on the one surface whose job is to say it is not one.
-    const isPhotograph = type !== null && type.indexOf('photo_') === 0;
+    const isPhotograph = isPhotographType(type);
     // The age *at this capture date*, derived exactly as the dashboard's group
     // stamp derives it (RecordsDashboard#getAgeOn), so the two surfaces cannot
     // describe one record at two depths.
@@ -281,6 +286,18 @@ export default class RecordViewer extends React.PureComponent<Props, State> {
               onFix={this.openEdit}
               fixLabel="Add timepoint"
             />
+            {/* Photographs only, because only a photograph holds a position in
+                the photographic series — and it is offered for filling the same
+                way the timepoint above it is, because an unplaced photograph is
+                missing from the visit's series grid on the records dashboard. */}
+            {isPhotograph ? (
+              <MetaRow
+                label="Series position"
+                value={photoView !== null ? getPhotoViewLabel(photoView) : null}
+                onFix={this.openEdit}
+                fixLabel="Set series position"
+              />
+            ) : null}
             <MetaRow
               label="Capture date"
               value={dateLabel}
@@ -487,7 +504,7 @@ export default class RecordViewer extends React.PureComponent<Props, State> {
 
         <EditRecordDialog
           open={this.state.isEditOpen}
-          initialValue={{ type, timepoint, captureDate }}
+          initialValue={{ type, timepoint, captureDate, photoView }}
           fileName={name}
           onSave={this.handleSaveMeta}
           onCancel={this.closeEdit}

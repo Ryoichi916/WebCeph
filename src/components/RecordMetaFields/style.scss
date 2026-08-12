@@ -44,23 +44,93 @@
   gap: 12px;
 }
 
+// The timepoint's own row: three controls that compose one label, plus the
+// echo of what that label will be. It carries a hairline above it because it is
+// a second group of fields and not a wrapped continuation of the first.
+.record_form_row__tp {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid $border;
+  // Top-aligned, so the four columns' *inputs* sit on one line. Bottom-aligned, the
+  // Visit column's convention hint ("T1, T2, T3…") pushed its own input 14px above
+  // the Stage select and the Note field beside it — a row of controls stepped out of
+  // true by the line under one of them.
+  align-items: flex-start;
+}
+
+// The photographs' own row: which frame of the series this photograph is. It is
+// a row and not a fourth column of the row above because it appears and
+// disappears with the type — squeezed in beside the type and the date, choosing
+// "Intraoral photograph" reflowed the two fields the clinician had already
+// filled.
+.record_form_row__view {
+  margin-top: 12px;
+}
+
+// Sized to its longest option name — "Intraoral frontal (centre)" — so the frame
+// a photograph is filed at is readable in the closed select and not "Intraoral
+// frontal (cen…".
+.record_field__view {
+  flex: 0 0 268px;
+}
+
 .record_field {
   // The type select is sized to its longest option name ("Lateral cephalogram")
-  // and the date to its native control; the timepoint takes what is left, which
-  // is wide enough to read a spelled-out label ("T2 post-treatment") back — the
-  // field accepts one, so the field has to show one.
+  // and the date to its native control; the timepoint's three parts take a row
+  // of their own below them (`.record_form_row__tp`), because a controlled
+  // vocabulary is a picker and a note and not a 132px text box.
   flex: 0 0 186px;
   min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 6px;
 
-  &__timepoint {
-    flex: 1 1 132px;
-  }
-
   &__date {
     flex: 0 0 164px;
+  }
+
+  // "T1" and nothing longer — the series token, tabular so T1…T12 line up.
+  &__series {
+    flex: 0 0 74px;
+
+    .record_input {
+      font-variant-numeric: tabular-nums;
+      font-weight: 600;
+    }
+  }
+
+  &__stage {
+    flex: 0 0 148px;
+  }
+
+  // Whatever else the clinician wants to say, taking the row's slack.
+  &__note {
+    flex: 1 1 150px;
+  }
+}
+
+// What the three controls will actually store, at the end of their own row —
+// the same statement the capture date makes under itself ("Stored as …"), for
+// the same reason: the record holds one string and the clinician is editing it
+// in parts.
+.record_form_echo {
+  flex: 0 0 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 220px;
+
+  // The one string this echo exists to state, stated whole. Clipped to one
+  // nowrap line it read "T12 Post-surgical bimaxillary osteoto…" — a line whose
+  // only job is to show the label three controls are about to store, failing at
+  // it the moment the label is long enough to be worth showing. It wraps instead,
+  // to at most two lines of the 220px column, and the full text is in the
+  // element's `title` (see the component).
+  .record_help {
+    overflow-wrap: anywhere;
+    white-space: normal;
+    line-height: 1.35;
   }
 }
 

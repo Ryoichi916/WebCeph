@@ -43,6 +43,30 @@ export type WCephJSON = {
       timepoint?: string | null;
       /** ISO `YYYY-MM-DD` capture date of this image. Optional, as above. */
       captureDate?: string | null;
+      /**
+       * Which position of the photographic series a photograph is — one of the nine
+       * frames of the standard series (@see PhotoView). Optional: every file written
+       * before the series existed carries none, and they must keep importing (a
+       * photograph with no position is simply unplaced in the series grid, which is
+       * exactly what the record then states).
+       *
+       * A position belongs to exactly one image type, and the image reducer drops one
+       * that contradicts the `type` beside it on import — so a hand-edited file cannot
+       * make a record claim a frame its own type denies.
+       */
+      photoView?: PhotoView | null;
+      /**
+       * The image this one's mm/px scale was **copied from** — the records
+       * dashboard's batched "apply this scale to the record's other films" — or null
+       * when the scale was measured on this image. Optional: every file written
+       * before the provenance existed carries none, and they must keep importing.
+       *
+       * It is an id of *this file's* images, and import re-mints those ids, so a
+       * source that cannot be resolved after import is simply not claimed: no
+       * surface asserts a provenance it cannot name (see
+       * `RecordsDashboard#scaleCopiedFrom`).
+       */
+      scaleSourceId?: string | null;
       flipX: boolean;
       flipY: boolean;
       /** Wether the image colors should be inverted */

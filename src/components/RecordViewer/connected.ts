@@ -17,6 +17,7 @@ import {
   getImageType,
   getImageTimepoint,
   getImageCaptureDate,
+  getImagePhotoView,
 } from 'store/reducers/workspace/image';
 
 import {
@@ -57,6 +58,7 @@ const mapStateToProps: MapStateToProps<StateProps, OwnProps, StoreState> =
       type: getImageType(state)(imageId),
       timepoint: getImageTimepoint(state)(imageId),
       captureDate: getImageCaptureDate(state)(imageId),
+      photoView: getImagePhotoView(state)(imageId),
       records: getPatientRecords(state),
     };
   };
@@ -89,6 +91,7 @@ const mapDispatchToProps: MapDispatchToPropsFunction<DispatchProps, OwnProps> =
         type: meta.type,
         timepoint: meta.timepoint,
         captureDate: meta.captureDate,
+        photoView: meta.photoView,
       }));
     },
     onRemoveRecord: (record: PatientRecord, fallbackWorkspaceId: string | null) => {

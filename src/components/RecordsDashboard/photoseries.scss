@@ -1,0 +1,444 @@
+@import 'src/_variables.scss';
+
+// The composite photographic series of one visit (see `PhotoSeries.tsx`).
+//
+// Two rules decide every number below.
+//
+//  1. **A cell is shaped like the photograph it holds.** The facial frames are
+//     portrait (a full face and a profile are framed head-and-neck, tall); the
+//     intraoral and occlusal frames are landscape (an arch and a buccal segment
+//     are wider than they are tall). One square grid for both would crop the
+//     record to a shape no clinic shoots, which is what makes a photograph
+//     un-assessable — the very defect this tile exists to fix. The photograph is
+//     *contained* in its frame, never cropped to fill it.
+//  2. **An empty position is as informative as a filled one.** The whole point of
+//     a composite is that the gaps are in the shape of the thing: a visit missing
+//     its buccal segments should look like a visit missing its buccal segments.
+//     So the empty cells are drawn, quietly, at the same size — and each is the
+//     control that fills exactly its own position.
+
+// One tile is one visit's series. 760 holds four facial frames at ~181px (241 tall)
+// and three intraoral at ~248 — large enough to *assess* a frame, which is the whole
+// complaint the old 112px photograph rows earned, and small enough that a visit's
+// tile plus its cephalogram cards is still one screenful.
+$series-max: 760px;
+
+.series {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: $series-max;
+  padding: 12px 12px 14px 20px;
+  font-family: $font-stack;
+
+  // Inside the comparison viewer the tile is one of two columns and carries no
+  // head of its own (the viewer's chrome names the visit): it fills its column.
+  &__compare {
+    max-width: none;
+    padding: 0;
+  }
+}
+
+.series_head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.series_title {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: $text-tertiary;
+}
+
+.series_count {
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  color: $text-tertiary;
+}
+
+// The comparison this tile is a half of — a flat control, because the visit's
+// primary act is filing and this is a way of looking.
+.series_compare {
+  margin-left: auto;
+  padding: 3px 10px;
+  border: 1px solid $border-strong;
+  border-radius: 999px;
+  background: $bg-surface;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: $primary-600;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease;
+
+  &:hover {
+    background: $primary-050;
+    border-color: $primary-600;
+  }
+
+  &:focus {
+    outline: none;
+    box-shadow: $focus-ring;
+  }
+}
+
+.band {
+  margin-top: 10px;
+}
+
+.band_label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: $text-tertiary;
+}
+
+.band_cells {
+  display: grid;
+  gap: 8px;
+}
+
+// Four facial frames across.
+.band_cells__extraoral {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+// Right buccal → centre → left buccal: the patient's right on the left of the
+// sheet, the convention every clinical photograph set follows.
+.band_cells__intraoral {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+// The two occlusals sit on the intraoral band's own column grid, so upper and
+// lower line up under the buccal segments above them instead of being stretched
+// to half the tile each.
+.band_cells__occlusal {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+
+  &:focus {
+    outline: none;
+
+    .cell_frame {
+      box-shadow: $focus-ring;
+    }
+  }
+
+  &__empty {
+    cursor: default;
+  }
+}
+
+// The frame itself. Its height comes from its width (the padding trick, which
+// every browser this app runs in honours), so the grid can stay fluid and the
+// aspect stays the aspect the frame is shot in.
+.cell_frame {
+  position: relative;
+  display: block;
+  width: 100%;
+  border-radius: 6px;
+  overflow: hidden;
+  background: $canvas-bg;
+  border: 1px solid $border-strong;
+  color: $canvas-text;
+}
+
+.cell__portrait .cell_frame {
+  // 3:4 — a facial photograph.
+  padding-top: 133.33%;
+}
+
+.cell__landscape .cell_frame {
+  // 3:2 — an intraoral or occlusal photograph.
+  padding-top: 66.67%;
+}
+
+.cell_img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  // Contained, never cropped: a photograph shot in a slightly different aspect
+  // is letterboxed on the frame's own dark ground rather than having its chin or
+  // its last molar cut off by the grid.
+  object-fit: contain;
+  pointer-events: none;
+}
+
+// An empty position: quiet, and unmistakably not a photograph. Dashed, on the
+// page's sunken ground rather than on canvas black, so a run of gaps reads as
+// "nothing filed here" and not as a run of black photographs.
+.cell__slot,
+.cell__empty {
+  .cell_frame {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: $bg-sunken;
+    border: 1px dashed $border-strong;
+    color: $text-tertiary;
+  }
+}
+
+.cell__slot:hover .cell_frame {
+  background: $primary-050;
+  border-color: $primary-600;
+  color: $primary-600;
+}
+
+.cell__slot:hover .cell_caption {
+  color: $primary-600;
+}
+
+// Paper only (see `.cell_print` in the print block below).
+.cell_print {
+  display: none;
+}
+
+// The plus and the "not on file" phrase are centred inside a frame whose height
+// is padding, so they are positioned rather than laid out.
+.cell_plus,
+.cell_none {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.cell_none {
+  width: 100%;
+  padding: 0 6px;
+  box-sizing: border-box;
+  font-size: 11px;
+  text-align: center;
+  color: $text-tertiary;
+}
+
+.cell__filled .cell_none {
+  color: $canvas-text;
+}
+
+// More than one photograph filed at the same position.
+.cell_more {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(20, 24, 29, .82);
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: $text-on-dark;
+}
+
+.cell_caption {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: $text-secondary;
+}
+
+.cell__empty .cell_caption,
+.cell__slot .cell_caption {
+  font-weight: 400;
+  color: $text-tertiary;
+}
+
+// The photograph currently open behind this surface, marked the way a card row
+// marks it.
+.cell__active .cell_frame {
+  border-color: $primary-600;
+  box-shadow: inset 0 0 0 2px $primary-600;
+}
+
+.cell__active .cell_caption {
+  color: $primary-700;
+  font-weight: 600;
+}
+
+// ---- Photographs the record holds but does not place ------------------------
+
+.unplaced {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid $border;
+}
+
+.unplaced_label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 12px;
+  color: $warn;
+}
+
+.unplaced_list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+
+.unplaced_item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px 4px 4px;
+  border: 1px solid $border;
+  border-radius: 8px;
+  background: $bg-surface;
+}
+
+.unplaced_open {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  cursor: pointer;
+
+  &:focus {
+    outline: none;
+
+    .unplaced_frame {
+      box-shadow: $focus-ring;
+    }
+  }
+}
+
+.unplaced_frame {
+  position: relative;
+  flex: 0 0 auto;
+  width: 54px;
+  height: 36px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: $canvas-bg;
+  border: 1px solid $border-strong;
+}
+
+.unplaced_name {
+  font-size: 12.5px;
+  color: $text-primary;
+}
+
+.unplaced_fix {
+  padding: 2px 8px;
+  border: 1px solid $border-strong;
+  border-radius: 999px;
+  background: $bg-surface;
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: $primary-600;
+  cursor: pointer;
+
+  &:hover {
+    background: $primary-050;
+    border-color: $primary-600;
+  }
+
+  &:focus {
+    outline: none;
+    box-shadow: $focus-ring;
+  }
+}
+
+// ---- Paper ------------------------------------------------------------------
+// The printed case sheet carries the series as a composite too — that is what a
+// records sheet is for — but not its controls: nobody can press an empty frame on
+// paper. The empty positions stay drawn (a gap in the series is a fact about the
+// visit, and the sheet's own qualifier says once that a case is complete without
+// a photographic series), at a size that keeps a visit's block on one page.
+@media print {
+  .series {
+    max-width: none;
+    padding: 8px 0 4px 0;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .series_compare {
+    display: none;
+  }
+
+  .cell_frame {
+    border-color: #C3CCD6;
+    background: #FFFFFF;
+    // Empty frames must not print as filled boxes of ink.
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .cell__filled .cell_frame {
+    background: #14181D;
+  }
+
+  .cell_more,
+  .unplaced_fix,
+  .cell_plus {
+    display: none;
+  }
+
+  // …and the empty position says so in words, since the plus it says it with on
+  // screen is a control.
+  .cell_print {
+    display: block;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 100%;
+    padding: 0 4px;
+    box-sizing: border-box;
+    transform: translate(-50%, -50%);
+    font-size: 8.5px;
+    text-align: center;
+    color: #7B8794;
+  }
+
+  // A record being open in the editor is a fact about the screen, not about the
+  // chart: the printed sheet must not ring one photograph of a visit in blue.
+  .cell__active .cell_frame {
+    border-color: #C3CCD6;
+    box-shadow: none;
+  }
+
+  .cell__active .cell_caption {
+    color: #52616F;
+    font-weight: 500;
+  }
+
+  .band_cells {
+    gap: 6px;
+  }
+
+  .cell_caption {
+    font-size: 9px;
+  }
+
+  .band_label {
+    font-size: 8.5px;
+  }
+}

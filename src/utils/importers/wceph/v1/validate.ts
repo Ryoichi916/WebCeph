@@ -19,6 +19,10 @@ import isBoolean from 'lodash/isBoolean';
 import isNumber from 'lodash/isNumber';
 import isString from 'lodash/isString';
 
+// The catalogue of photographic-series frames, so a file cannot import a position
+// this app has no cell, label or comparison for.
+import { findPhotoView } from 'utils/records';
+
 export function isV1GeometricalPoint(object: any) {
   return has(object, 'x') && has(object, 'y');
 };
@@ -147,11 +151,14 @@ const rules: Array<[
     undefined,
   ],
   [
-    // Records metadata (timepoint + capture date). Both are optional so files
-    // written before the records layer keep importing; when present, a
-    // timepoint must be text and a capture date must be an ISO `YYYY-MM-DD`.
+    // Records metadata (timepoint + capture date + photographic series position).
+    // All three are optional so files written before the records layer — and before
+    // the series — keep importing; when present, a timepoint must be text, a
+    // capture date must be an ISO `YYYY-MM-DD`, and a position must be one of the
+    // nine frames this app names (an unknown one is a file claiming a frame no
+    // surface here can place or label).
     ({ data }) => {
-      return every(values(data), ({ timepoint, captureDate }) => {
+      return every(values(data), ({ timepoint, captureDate, photoView }) => {
         const isValidTimepoint = (
           isUndefined(timepoint) || timepoint === null || isString(timepoint)
         );
@@ -160,7 +167,11 @@ const rules: Array<[
             isString(captureDate) && /^\d{4}-\d{2}-\d{2}$/.test(captureDate)
           )
         );
-        return isValidTimepoint && isValidCaptureDate;
+        const isValidPhotoView = (
+          isUndefined(photoView) || photoView === null ||
+          findPhotoView(photoView) !== undefined
+        );
+        return isValidTimepoint && isValidCaptureDate && isValidPhotoView;
       });
     },
     createErrorMaker(ValidationErrorType.INVALID_RECORD_METADATA),

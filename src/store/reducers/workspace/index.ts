@@ -37,7 +37,7 @@ import mapValues from 'lodash/mapValues';
 import every from 'lodash/every';
 import last from 'lodash/last';
 
-import { getCaptureDateSortKey } from 'utils/records';
+import { getCaptureDateSortKey, reconcilePhotoView } from 'utils/records';
 import { isGeoPoint } from 'utils/math';
 
 export default {
@@ -244,6 +244,13 @@ export interface PatientRecord {
   timepoint: string | null;
   /** ISO `YYYY-MM-DD`, or null when the capture date was not recorded. */
   captureDate: string | null;
+  /**
+   * Which frame of the photographic series this photograph is, or null — null on
+   * every radiograph, and on a photograph whose frame the record does not state.
+   * What places a photograph in the visit's composite series tile; never inferred
+   * from the type. @see PhotoView
+   */
+  photoView: PhotoView | null;
   /** Whether this image type supports cephalometric tracing. */
   isTraceable: boolean;
   /** Active analysis id for this image (null for non-traceable types). */
@@ -264,6 +271,19 @@ export interface PatientRecord {
   isCalibrated: boolean;
   /** mm per pixel, or null when the image has never been calibrated. */
   scaleFactor: number | null;
+  /**
+   * The film this one's scale was **copied from**, or null when it was measured on
+   * this film.
+   *
+   * A calibration a clinician marked against a ruler and a calibration carried
+   * over from a sibling film are not the same claim, and on a record a practice
+   * keeps for years the difference is chart integrity: without it, T2's card read
+   * "SCALE 0.25 mm/px" exactly as T1's did, and nothing on screen or on the printed
+   * sheet said which of the two had ever been measured. It is also what lets the
+   * batched reversal be derived from the record rather than remembered by a
+   * component (see `RecordsDashboard#appliedFrom`).
+   */
+  scaleSourceId: string | null;
   /** Natural pixel dimensions of the file, or null when not yet known. */
   width: number | null;
   height: number | null;
@@ -334,6 +354,14 @@ export const getPatientRecords = createSelector(
           type: getType(imageId),
           timepoint: getTimepoint(imageId),
           captureDate: getCaptureDate(imageId),
+          // Read off the props this row already holds, through the same
+          // reconciliation the store's own selector applies: a position that does
+          // not belong to the stored type is *no* position, never a translated
+          // one. (Not a 15th input selector: reselect's typings stop resolving
+          // `createSelector` past fourteen, and the whole record row then typed
+          // as `any`.)
+          photoView: props !== undefined
+            ? reconcilePhotoView(props.type, props.photoView) : null,
           isTraceable: isTraceable(imageId),
           analysisId,
           landmarksPlaced: steps.filter(
@@ -349,6 +377,9 @@ export const getPatientRecords = createSelector(
           isCalibrated: props !== undefined && typeof props.scaleFactor === 'number',
           scaleFactor: (props && typeof props.scaleFactor === 'number')
             ? props.scaleFactor
+            : null,
+          scaleSourceId: (props && typeof props.scaleSourceId === 'string')
+            ? props.scaleSourceId
             : null,
           width: (props && props.width) || null,
           height: (props && props.height) || null,

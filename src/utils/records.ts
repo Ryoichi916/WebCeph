@@ -98,6 +98,360 @@ export const IMAGE_TYPE_OPTIONS: ImageTypeOption[] = [
 /** The type a fresh record defaults to — the film this app actually traces. */
 export const DEFAULT_IMAGE_TYPE: ImageType = 'ceph_lateral';
 
+// ---- The photographic series ------------------------------------------------
+
+/**
+ * One position of the standard orthodontic photographic series (@see PhotoView),
+ * with everything the record surfaces need to name it and to lay it out.
+ */
+export interface PhotoViewOption {
+  id: PhotoView;
+  /** Full clinical name of the frame, e.g. "Frontal at rest". */
+  label: string;
+  /** Cell-sized name, e.g. "Frontal rest" (must fit a ~130px caption). */
+  shortLabel: string;
+  /**
+   * The image type a photograph in this frame **is**. One position belongs to
+   * exactly one type, which is what keeps the two facts of a photograph from
+   * contradicting each other: setting the position sets the type with it, and a
+   * position that does not belong to the stored type is dropped rather than
+   * shown (see `reconcilePhotoView`).
+   */
+  imageType: ImageType;
+  /**
+   * How the frame is shot, which is the aspect the grid gives its cell.
+   *
+   * The facial frames are portrait: a full face and a profile are framed head-and-
+   * neck, tall. The intraoral frames are landscape: an arch, a buccal segment and
+   * an occlusal view are all wider than they are tall. Laid out as one square grid
+   * both were cropped to something no clinic shoots, which is exactly what makes a
+   * photograph un-assessable — so the cell is shaped like the photograph, and the
+   * photograph is *contained* in it, never cropped to fit.
+   */
+  frame: 'portrait' | 'landscape';
+}
+
+/**
+ * The series' positions in the order the composite is read: the four extraoral
+ * (facial) frames, then the three intraoral frames a clinician reads the occlusion
+ * across, then the two occlusal views.
+ */
+export const PHOTO_VIEW_OPTIONS: PhotoViewOption[] = [
+  {
+    id: 'face_frontal_rest',
+    label: 'Frontal at rest',
+    shortLabel: 'Frontal rest',
+    imageType: 'photo_frontal',
+    frame: 'portrait',
+  },
+  {
+    id: 'face_frontal_smiling',
+    label: 'Frontal smiling',
+    shortLabel: 'Smiling',
+    imageType: 'photo_frontal',
+    frame: 'portrait',
+  },
+  {
+    id: 'face_three_quarter',
+    label: 'Three-quarter (oblique)',
+    shortLabel: 'Three-quarter',
+    // Not a profile: the oblique frame is a full-face photograph taken at an
+    // angle, and `photo_lateral` is this app's *profile* photograph (its label
+    // says so, and the soft-tissue profile analysis is declared on it).
+    imageType: 'photo_frontal',
+    frame: 'portrait',
+  },
+  {
+    id: 'face_profile',
+    label: 'Profile',
+    shortLabel: 'Profile',
+    imageType: 'photo_lateral',
+    frame: 'portrait',
+  },
+  {
+    id: 'intraoral_right_buccal',
+    label: 'Right buccal',
+    shortLabel: 'Right buccal',
+    imageType: 'photo_intraoral',
+    frame: 'landscape',
+  },
+  {
+    id: 'intraoral_frontal',
+    label: 'Intraoral frontal (centre)',
+    shortLabel: 'Frontal (centre)',
+    imageType: 'photo_intraoral',
+    frame: 'landscape',
+  },
+  {
+    id: 'intraoral_left_buccal',
+    label: 'Left buccal',
+    shortLabel: 'Left buccal',
+    imageType: 'photo_intraoral',
+    frame: 'landscape',
+  },
+  {
+    id: 'intraoral_upper_occlusal',
+    label: 'Upper occlusal',
+    shortLabel: 'Upper occlusal',
+    imageType: 'photo_intraoral',
+    frame: 'landscape',
+  },
+  {
+    id: 'intraoral_lower_occlusal',
+    label: 'Lower occlusal',
+    shortLabel: 'Lower occlusal',
+    imageType: 'photo_intraoral',
+    frame: 'landscape',
+  },
+];
+
+/**
+ * One band of the composite tile: the positions that are read together, in the
+ * order they are read.
+ *
+ * Three bands and not one flat row of nine, because that is how the series is
+ * shot and how it is read: the face, then the occlusion from the right through
+ * the centre to the left, then the two arches from above and below. The buccal
+ * band deliberately runs right → centre → left, which is the patient's right on
+ * the *left* of the sheet — the convention every clinical photograph set and every
+ * radiograph in this app already follows.
+ */
+export interface PhotoSeriesRow {
+  key: string;
+  /** The band's micro-label above the cells. */
+  label: string;
+  views: PhotoView[];
+}
+
+export const PHOTO_SERIES_ROWS: PhotoSeriesRow[] = [
+  {
+    key: 'extraoral',
+    label: 'Extraoral',
+    views: [
+      'face_frontal_rest',
+      'face_frontal_smiling',
+      'face_three_quarter',
+      'face_profile',
+    ],
+  },
+  {
+    key: 'intraoral',
+    label: 'Intraoral',
+    views: [
+      'intraoral_right_buccal',
+      'intraoral_frontal',
+      'intraoral_left_buccal',
+    ],
+  },
+  {
+    key: 'occlusal',
+    label: 'Occlusal',
+    views: [
+      'intraoral_upper_occlusal',
+      'intraoral_lower_occlusal',
+    ],
+  },
+];
+
+/** The image types that are photographs — the ones that hold a series position. */
+const PHOTO_TYPES: ImageType[] = [
+  'photo_frontal', 'photo_lateral', 'photo_intraoral',
+];
+
+/**
+ * Whether this kind of image is a photograph, i.e. part of the photographic
+ * series rather than of the radiographic record.
+ *
+ * An image with no type at all is **not** treated as one: every image that
+ * predates the records layer was loaded through the lateral-ceph tracing flow (the
+ * same assumption `isTraceableImageType` makes), and putting one in a photograph
+ * grid would put a cephalogram in a facial series.
+ */
+export const isPhotographType = (
+  type: ImageType | null | undefined,
+): boolean =>
+  type !== null && type !== undefined && PHOTO_TYPES.indexOf(type) >= 0;
+
+/** The position of a given id, or undefined — never a guessed position. */
+export const findPhotoView = (
+  id: PhotoView | null | undefined,
+): PhotoViewOption | undefined => (
+  id === null || id === undefined
+    ? undefined
+    : PHOTO_VIEW_OPTIONS.filter((v) => v.id === id)[0]
+);
+
+/** Full name of a position, or a neutral phrase when none is recorded. */
+export const getPhotoViewLabel = (id: PhotoView | null | undefined): string => {
+  const view = findPhotoView(id);
+  return view !== undefined ? view.label : 'Position not recorded';
+};
+
+/** Caption-sized name of a position (see `PhotoViewOption#shortLabel`). */
+export const getPhotoViewShortLabel = (
+  id: PhotoView | null | undefined,
+): string => {
+  const view = findPhotoView(id);
+  return view !== undefined ? view.shortLabel : 'No position';
+};
+
+/**
+ * The position in the middle of a sentence, e.g. "the upper occlusal photograph".
+ * Only the first letter is lowered, so "Three-quarter (oblique)" keeps its
+ * parenthesis and "Right buccal" its meaning.
+ */
+export const getPhotoViewLabelInSentence = (
+  id: PhotoView | null | undefined,
+): string => {
+  const label = getPhotoViewLabel(id);
+  return label.charAt(0).toLowerCase() + label.slice(1);
+};
+
+/** The positions a photograph of this type can hold (empty for a radiograph). */
+export const getPhotoViewsForType = (
+  type: ImageType | null | undefined,
+): PhotoViewOption[] =>
+  type === null || type === undefined
+    ? []
+    : PHOTO_VIEW_OPTIONS.filter((v) => v.imageType === type);
+
+/**
+ * The position a fresh photograph of this type is filed at unless the clinician
+ * says otherwise — the first position of that type in the series' own order.
+ *
+ * Null for anything that is not a photograph. This is a *proposal*, and it is
+ * only ever used where it is on screen and editable before the record is written
+ * (the upload form's Position field, which the grid's own cells prefill exactly),
+ * so nothing is stamped on a record unseen. A photograph already on file is never
+ * given one behind the clinician's back: an intraoral photograph whose position
+ * was never recorded stays "not recorded" and the grid says so, because
+ * "Intraoral photograph" is five different photographs and the record does not
+ * state which.
+ */
+export const getDefaultPhotoView = (
+  type: ImageType | null | undefined,
+): PhotoView | null => {
+  // Named per type rather than "the first frame of that type": the profile
+  // photograph *is* the profile frame, the frontal photograph is read at rest,
+  // and the one intraoral photograph a clinic files on its own is the centre
+  // (the anterior occlusion) — not the right buccal, which is merely the first
+  // intraoral frame in reading order.
+  switch (type) {
+    case 'photo_frontal': return 'face_frontal_rest';
+    case 'photo_lateral': return 'face_profile';
+    case 'photo_intraoral': return 'intraoral_frontal';
+    default: return null;
+  }
+};
+
+/**
+ * The position a record may honestly carry given its type: the stored one where
+ * it belongs to that type, and null otherwise.
+ *
+ * The safety net under the one rule of this pair of fields — a position belongs to
+ * exactly one image type — for the paths that write a type without writing a
+ * position (a legacy project, an older import, a surface that only edits the
+ * type). It drops a contradicting position rather than translating it: nothing
+ * knows which of the five intraoral frames a photograph re-filed from "Frontal
+ * photograph" is, so nothing claims one.
+ */
+export const reconcilePhotoView = (
+  type: ImageType | null | undefined,
+  photoView: PhotoView | null | undefined,
+): PhotoView | null => {
+  const view = findPhotoView(photoView);
+  if (view === undefined) {
+    return null;
+  }
+  return view.imageType === type ? view.id : null;
+};
+
+/**
+ * The minimum a record has to state to be placed in the series grid. Declared
+ * structurally for the same reason `TimepointGroupable` is: `PatientRecord` lives
+ * in the workspace reducer, which imports this module.
+ */
+export interface PhotoPlaceable {
+  type: ImageType | null;
+  photoView: PhotoView | null;
+}
+
+/** One cell of the composite: a position, and what is filed at it. */
+export interface PhotoSeriesCell<T extends PhotoPlaceable> {
+  view: PhotoViewOption;
+  /** The photograph shown in this cell, or null when the position is empty. */
+  record: T | null;
+  /**
+   * Further photographs filed at the *same* position — a re-shoot, or a second
+   * frame the clinic files there. The cell shows the first and says how many more
+   * there are; they are all reachable, and none of them is silently dropped.
+   */
+  extras: T[];
+}
+
+/** The composite series of one visit, laid out by band. */
+export interface PhotoSeriesLayout<T extends PhotoPlaceable> {
+  rows: Array<{ row: PhotoSeriesRow; cells: Array<PhotoSeriesCell<T>> }>;
+  /** How many of the nine positions hold a photograph. */
+  filled: number;
+  /** Every photograph handed in, however it is placed. */
+  total: number;
+  /**
+   * The photographs that carry no position — a photograph filed before this field
+   * existed, or one whose position was cleared by a type correction. Listed under
+   * the grid rather than guessed into a cell.
+   */
+  unplaced: T[];
+}
+
+/**
+ * Lays a visit's photographs out as the composite series a clinician reads.
+ *
+ * Placement is by the position **recorded on the photograph** and by nothing else.
+ * A photograph whose position is not recorded is returned in `unplaced`: the type
+ * alone does not say which frame an intraoral photograph is, and a grid that puts
+ * it in the centre cell would be the app filing a photograph the clinic did not
+ * file.
+ *
+ * Non-photographs are ignored outright, so the same visit's cephalograms can be
+ * handed in without being filtered by every caller.
+ */
+export const buildPhotoSeries = <T extends PhotoPlaceable>(
+  records: T[],
+): PhotoSeriesLayout<T> => {
+  const photos = records.filter(({ type }) => isPhotographType(type));
+  const byView: { [view: string]: T[] } = {};
+  const unplaced: T[] = [];
+  photos.forEach((record) => {
+    const view = reconcilePhotoView(record.type, record.photoView);
+    if (view === null) {
+      unplaced.push(record);
+      return;
+    }
+    if (byView[view] === undefined) {
+      byView[view] = [];
+    }
+    byView[view].push(record);
+  });
+  let filled = 0;
+  const rows = PHOTO_SERIES_ROWS.map((row) => ({
+    row,
+    cells: row.views.map((id): PhotoSeriesCell<T> => {
+      const view = findPhotoView(id) as PhotoViewOption;
+      const held = byView[id] !== undefined ? byView[id] : [];
+      if (held.length > 0) {
+        filled += 1;
+      }
+      return {
+        view,
+        record: held.length > 0 ? held[0] : null,
+        extras: held.slice(1),
+      };
+    }),
+  }));
+  return { rows, filled, total: photos.length, unplaced };
+};
+
 const findOption = (type: ImageType | null | undefined) =>
   type === null || type === undefined
     ? undefined
@@ -284,6 +638,186 @@ export const getImageTypeLabelWithArticle = (
   return `${/^[aeiou]/.test(label) ? 'an' : 'a'} ${label}`;
 };
 
+// ---- The timepoint vocabulary ----------------------------------------------
+
+/**
+ * One stage of treatment a visit can be filed at — the controlled half of a
+ * timepoint label.
+ *
+ * A timepoint label is stored as free text and always will be (every project
+ * ever saved by this app holds one, and rewriting a clinician's own words is not
+ * this app's business). What was missing is a *vocabulary*: with nothing but a
+ * text field, "T1" meant whatever the person typing felt like, and one practice's
+ * record read "T2 post-tx", "T2 post-treatment", "T2 debond" and "T2 finish" for
+ * the same visit — labels no surface can group, sort or compare.
+ *
+ * So the label is composed of three parts (see `composeTimepointLabel`): the
+ * series token the whole app already reads a label through
+ * (`getTimepointToken`), one of these stages, and whatever else the clinician
+ * wants to say. Nothing is *required*: a record can carry a series alone, a stage
+ * alone, or neither, and a label typed before this vocabulary existed parses back
+ * into its parts unchanged (`parseTimepointLabel`).
+ */
+export interface TimepointStage {
+  /** Stable id, stored nowhere — the label carries the word, not the id. */
+  id: string;
+  /** The word written into the label, and shown in the picker. */
+  label: string;
+  /** What the stage means clinically — the picker's secondary line. */
+  hint: string;
+}
+
+/**
+ * The stages themselves, in treatment order.
+ *
+ * Deliberately five and deliberately generic: these are the record stages an
+ * orthodontic case is filed under whatever the appliance or the technique, which
+ * is what makes them a vocabulary rather than one clinic's house style.
+ */
+export const TIMEPOINT_STAGES: TimepointStage[] = [
+  {
+    id: 'initial',
+    label: 'Initial',
+    hint: 'diagnostic records, before treatment starts',
+  },
+  {
+    id: 'progress',
+    label: 'Progress',
+    hint: 'taken during active treatment',
+  },
+  {
+    id: 'debond',
+    label: 'Debond',
+    hint: 'at appliance removal — the treatment result',
+  },
+  {
+    id: 'retention',
+    label: 'Retention',
+    hint: 'taken in retention, after debond',
+  },
+  {
+    id: 'post-surgical',
+    label: 'Post-surgical',
+    hint: 'after orthognathic surgery',
+  },
+];
+
+/** The stage of a given id, or undefined — never a guessed stage. */
+export const findTimepointStage = (
+  id: string | null | undefined,
+): TimepointStage | undefined => (
+  id === null || id === undefined || id === ''
+    ? undefined
+    : TIMEPOINT_STAGES.filter((s) => s.id === id)[0]
+);
+
+/** A timepoint label taken apart into the three parts it is composed of. */
+export interface TimepointParts {
+  /** The series token — `"T1"`, `"T2"` — or `''` when the label carries none. */
+  series: string;
+  /** Id of the stage the label names, or `''` when it names none. */
+  stage: string;
+  /** Whatever the label says beyond its series and its stage. */
+  note: string;
+}
+
+/** A series token as this app writes one: T1 … T9999. */
+const SERIES_TOKEN = /^T\s?(\d{1,4})$/i;
+
+/**
+ * The words that make the token after a stage word a *continuation of the same
+ * sentence* rather than a clause of its own.
+ *
+ * This is what decides whether a stage word is being used as a stage. "Debond"
+ * and "Debond retainer fitted" file a visit at the debond; "Debond and bonded
+ * retainer fitted" is one sentence a clinician wrote about a visit, and lifting
+ * its first word out as the controlled stage left the record's own words reading
+ * "Debond · and bonded retainer fitted" on the case timeline — a mid-dot between
+ * a sentence and its own conjunction. Round-tripping was lossless either way;
+ * the display was not.
+ */
+const STAGE_CONTINUATION = /^(and|with|plus|&|\+|then)$/i;
+
+/**
+ * A bare visit number as the Visit field normalises it: `"2"` → `"T2"`, `"t 3"`
+ * → `"T3"`.
+ *
+ * The field is free text and stays so — but a record filed as "2" is a record no
+ * surface of this app can read as a visit: `getTimepointToken` hands the rail a
+ * pill reading "2", `getNextTimepointLabel` counts no number from it, and the
+ * series it belongs to is broken from that visit on. Normalised on blur (never
+ * mid-keystroke, which would fight the person typing "T2"), so what the record
+ * stores is the convention the whole app reads.
+ */
+export const normalizeSeriesToken = (value: string): string => {
+  const text = value.trim();
+  const match = /^[Tt]?\s?(\d{1,4})$/.exec(text);
+  return match !== null ? `T${parseInt(match[1], 10)}` : text;
+};
+
+/**
+ * A stored timepoint label, read back as the parts the record form edits.
+ *
+ * **This is the migration, and it is lossless in both directions.** Nothing
+ * stored is rewritten: a label that predates the vocabulary opens with whatever
+ * of it the vocabulary recognises (its `T<n>` series, and a stage where the label
+ * happens to name one) and the remainder intact in `note`, so re-composing it
+ * yields the label the project already holds — `"T2 post-treatment"` round-trips
+ * as series `T2` + note `post-treatment`, `"Pre-treatment records"` as note
+ * alone. A clinician who never touches the new controls sees their own words.
+ */
+export const parseTimepointLabel = (
+  timepoint: string | null | undefined,
+): TimepointParts => {
+  const label = (timepoint || '').trim();
+  if (label === '') {
+    return { series: '', stage: '', note: '' };
+  }
+  const tokens = label.split(/\s+/).filter((t) => t !== '');
+  const rest = tokens.slice();
+  let series = '';
+  if (rest.length > 0 && SERIES_TOKEN.test(rest[0])) {
+    series = rest[0].toUpperCase().replace(/\s+/g, '');
+    rest.shift();
+  }
+  let stage = '';
+  if (rest.length > 0) {
+    // Punctuation a clinician may have separated the parts with ("T2 · Progress")
+    // is not part of the word being matched, and must not be left in the note.
+    const word = rest[0].toLowerCase().replace(/^[·,\-–—]+|[·,]+$/g, '');
+    const match = TIMEPOINT_STAGES.filter(
+      (s) => s.label.toLowerCase() === word,
+    )[0];
+    // …and it is only *lifted* where it is being used as a stage: standing alone,
+    // or heading a phrase that reads as its own clause. A stage word followed by a
+    // continuation is part of the clinician's sentence, and the surfaces that set
+    // the stage and the note as two facts would print half a sentence in each (see
+    // `STAGE_CONTINUATION`).
+    const continues = rest.length > 1 && STAGE_CONTINUATION.test(rest[1]);
+    if (match !== undefined && !continues) {
+      stage = match.id;
+      rest.shift();
+    }
+  }
+  return { series, stage, note: rest.join(' ') };
+};
+
+/**
+ * The three parts written back as the one string the record stores — the form the
+ * whole app already reads (`getTimepointToken` takes the series off the front).
+ *
+ * Empty parts contribute nothing, so no label is ever padded with a stray space
+ * or composed out of a stage the clinician cleared.
+ */
+export const composeTimepointLabel = (parts: TimepointParts): string => {
+  const stage = findTimepointStage(parts.stage);
+  return [
+    parts.series.trim(),
+    stage !== undefined ? stage.label : '',
+    parts.note.trim(),
+  ].filter((part) => part !== '').join(' ');
+};
+
 /**
  * The rail-sized form of a free-text timepoint: its first whitespace-separated
  * token, so "T3 pre-treatment" reads as "T3" in a 64px rail instead of
@@ -297,6 +831,69 @@ export const getTimepointToken = (
   }
   const tokens = timepoint.trim().split(/\s+/).filter((t) => t.length > 0);
   return tokens.length > 0 ? tokens[0] : null;
+};
+
+/**
+ * How a visit is named in a **pill** — the badge the timeline's stops and the
+ * imaging-records stamps both carry — and whether that name is a fallback.
+ *
+ * Read through the timepoint vocabulary and not off the raw string: the pill's job
+ * is the visit's *handle*, which is its series token ("T2" out of "T2 Progress
+ * mid-treatment") or, for a visit filed at a stage without a number, the stage
+ * word. Taken as the label's first whitespace token, a visit stored as "Debond and
+ * bonded retainer fitted" put "Debond" in the pill and "Debond · and bonded
+ * retainer fitted" on the line 15px under it — one word twice, and half a sentence
+ * beside the other half.
+ *
+ * Where the label carries neither a series nor a stage, `isUnset` is true and the
+ * pill says so rather than promoting the first word of a sentence to a visit
+ * number: what the label *does* say is written out in full beside it
+ * (`getVisitRest`), and the pill's `title` carries the whole of it.
+ */
+export const getVisitPill = (
+  timepoint: string | null | undefined,
+): { token: string; isUnset: boolean } => {
+  const parts = parseTimepointLabel(timepoint);
+  if (parts.series !== '') {
+    return { token: parts.series, isUnset: false };
+  }
+  const stage = findTimepointStage(parts.stage);
+  if (stage !== undefined) {
+    return { token: stage.label, isUnset: false };
+  }
+  return { token: 'No timepoint', isUnset: true };
+};
+
+/**
+ * …and everything the label says that the pill is not already showing: the stage
+ * word where the pill carries a series instead, then the clinician's own note.
+ *
+ * Joined by a space where the note continues the stage's sentence ("Progress
+ * mid-treatment") and by the app's mid-dot where it is a fact of its own
+ * ("Progress · Second opinion"). `leadsWithStage` says which of the two the line
+ * opens with, so a surface can set a controlled stage word and a free-text remark
+ * in their own registers.
+ */
+export const getVisitRest = (
+  timepoint: string | null | undefined,
+): { text: string; leadsWithStage: boolean } => {
+  const parts = parseTimepointLabel(timepoint);
+  const pill = getVisitPill(timepoint);
+  const stage = findTimepointStage(parts.stage);
+  const stageWord = stage !== undefined && stage.label !== pill.token
+    ? stage.label : '';
+  const note = parts.note.trim();
+  if (stageWord === '') {
+    return { text: note, leadsWithStage: false };
+  }
+  if (note === '') {
+    return { text: stageWord, leadsWithStage: true };
+  }
+  return {
+    text: /^[a-z&+]/.test(note)
+      ? `${stageWord} ${note}` : `${stageWord} · ${note}`,
+    leadsWithStage: true,
+  };
 };
 
 /**
@@ -556,4 +1153,64 @@ export const getImpliedFilmSize = (
     label: `${Math.round(widthMm)} × ${Math.round(heightMm)} mm`,
     isPlausible,
   };
+};
+
+// ---- Carrying one calibration to the films it is also true of ---------------
+
+/**
+ * The minimum a record has to state before a scale can be carried to it. Declared
+ * structurally for the same reason `TimepointGroupable` is: `PatientRecord` lives
+ * in the workspace reducer, which imports this module.
+ */
+export interface CalibratableRecord {
+  imageId: string;
+  type: ImageType | null;
+  width: number | null;
+  height: number | null;
+  scaleFactor: number | null;
+  isTraceable: boolean;
+}
+
+/**
+ * The other films of a patient's record that a given film's calibration is
+ * **also** a claim about: same image type, same pixel dimensions, and carrying no
+ * scale of their own yet.
+ *
+ * Why those three and nothing looser. A mm/px scale is a property of the machine
+ * and the export, not of the patient: three lateral cephalograms exported from
+ * one cephalostat at one resolution have one scale, and calibrating each of them
+ * against the same ruler by hand is three chances to mis-mark it (the case that
+ * produced "3 scales need checking" three times over). But a film of a different
+ * type came off a different geometry, and a film of a different pixel size was
+ * exported or cropped differently — for either, this film's factor is a guess,
+ * and the app must not make it.
+ *
+ * A film that already carries a scale is never a target: an existing calibration
+ * is a measurement someone made, and overwriting it silently — or at all, from a
+ * control offered about a *different* film — would be the app quietly changing
+ * every millimetre already reported from it. Re-calibrating one is its own act,
+ * in its own dialog, on its own film.
+ *
+ * The caller decides what to do with the list; nothing here writes anything. See
+ * `RecordsDashboard#renderCardCalibration`, which offers it as an explicit,
+ * reviewable action naming every film it would change.
+ */
+export const getScalePropagationTargets = <T extends CalibratableRecord>(
+  records: T[], source: T,
+): T[] => {
+  const { scaleFactor, type, width, height } = source;
+  if (
+    scaleFactor === null || !isFinite(scaleFactor) || scaleFactor <= 0 ||
+    width === null || height === null || !source.isTraceable
+  ) {
+    return [];
+  }
+  return records.filter((record) => (
+    record.imageId !== source.imageId &&
+    record.isTraceable &&
+    record.scaleFactor === null &&
+    record.type === type &&
+    record.width === width &&
+    record.height === height
+  ));
 };

@@ -54,6 +54,37 @@ export interface DispatchProps {
   /** Correct a record's type / timepoint / capture date. */
   onSaveRecordMeta(record: PatientRecord, meta: ImageRecordMeta): any;
   /**
+   * Write one film's mm/px calibration onto other films of the same record — the
+   * reviewed half of `ApplyScaleDialog`, which is the only thing that calls it.
+   *
+   * A scale is a property of the machine and the export, so three cephs from one
+   * cephalostat share one; calibrating each by hand was three chances to mis-mark
+   * the ruler. The dialog names every film and the exact factor before this runs,
+   * and only films carrying **no** scale are ever offered — an existing
+   * calibration is a measurement someone made, and this must not overwrite one.
+   *
+   * `sourceImageId` is the film the number was measured on, and it is stored with
+   * the number on every film it lands on (`SET_SCALE_FACTOR_REQUESTED`): it is what
+   * lets the record itself say which of its scales were measured and which were
+   * copied, and what lets the batched reversal be offered for as long as the copies
+   * are on file rather than until the next navigation.
+   */
+  onApplyScale(
+    imageIds: string[], scaleFactor: number, sourceImageId: string,
+  ): any;
+  /**
+   * Take a batched calibration back off the films it was written onto — the same
+   * dispatch the tracing toolbar's own "Remove calibration" makes, once per film.
+   *
+   * The mirror of `onApplyScale`, and it exists for the same reason: one press
+   * writes a scale onto N films, and until now the only way back was N trips into
+   * N editors. Reviewed through the same list before anything is cleared, and only
+   * ever offered for the films that press wrote to (see
+   * `RecordsDashboard#appliedFrom`) — this never touches a calibration someone
+   * made on the film itself.
+   */
+  onRemoveScale(imageIds: string[]): any;
+  /**
    * Drop an image from the record. `fallbackWorkspaceId` is another record's
    * rail tile to land on when the removed image's tile goes away with it; null
    * keeps the (now empty) tile as the upload surface.

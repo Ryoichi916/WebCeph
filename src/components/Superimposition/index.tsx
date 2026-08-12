@@ -143,32 +143,56 @@ const describeOption = (t: TimepointRecord): string => {
 };
 
 /**
- * Legend/PNG label for a film in a slot. The slot name (T1 = earlier, T2 =
- * later) always leads, because that is what the change columns are named after.
- * A film whose own label already begins with that slot name ("T2
- * post-treatment") is printed as it stands — nesting it inside its own tag
- * would read as the stutter "T2 (T2 post-treatment)". Any other label is added
- * in brackets, so a film filed as "T2" but placed in the T1 slot cannot be
- * misread.
+ * Legend/PNG label for a film in a slot: **the film's own timepoint label**, and
+ * the slot name only for a film that carries none.
+ *
+ * The slot name used to lead — a film filed "T3 Debond" in the later slot was
+ * legended "T2 (T3 Debond)" — which was defensible while every comparison this
+ * view opened was between adjacent visits. It is not defensible now that a
+ * non-adjacent pair is a first-class action (the records dashboard's whole-case
+ * bracket opens T1 → T3 directly): the legend named the second film T2, the change
+ * columns were headed T1/T2 and the difference read "T2 − T1", so a filed sheet
+ * comparing T1 with T3 stated T2 three times and T3 once, in brackets. The record's
+ * own vocabulary leads everywhere the numbers are named (see `slotToken`).
  */
 const shortLabel = (t: TimepointRecord, slot: 'T1' | 'T2'): string => {
   const own = t.timepoint !== null ? t.timepoint.trim() : '';
-  const token = getTimepointToken(own);
-  const head = own === ''
-    ? slot
-    : (token === slot ? own : `${slot} (${own})`);
+  const head = own === '' ? slot : own;
   const date = formatCaptureDate(t.captureDate);
   return date !== null ? `${head} · ${date}` : head;
+};
+
+/**
+ * What this view *calls* a film in a column head, a difference or an audit line:
+ * the film's own series token where it has one, and the slot name only where it
+ * has none.
+ *
+ * The slot names used to lead everywhere — a film filed "T3 Debond" placed in the
+ * later slot was legended "T2 (T3 Debond)", the change columns were headed T1 and
+ * T2, and the panel's own subtitle read "T2 − T1". Opened on a T1-against-T3
+ * comparison — which the records dashboard's whole-case bracket now makes a
+ * first-class action — that sheet stated "T2 − T1" for a difference between T1 and
+ * T3, and it stated it in the two places a reader takes a number from: the column
+ * it is under and the heading above it. Exported as a PNG or filed on paper, the
+ * slot vocabulary is not recoverable from anything else on the sheet.
+ *
+ * So the record's own vocabulary heads the numbers, and the slot name survives
+ * only as the fallback for a film that carries no timepoint at all — where it is
+ * the only name there is.
+ */
+const slotToken = (t: TimepointRecord, slot: 'T1' | 'T2'): string => {
+  const token = getTimepointToken(t.timepoint);
+  return token !== null ? token : slot;
 };
 
 /** Which of the two films lack a mm/px calibration, named as prose. */
 const uncalibratedFilms = (t1: TimepointRecord, t2: TimepointRecord): string => {
   const missing: string[] = [];
   if (t1.scaleFactor === null) {
-    missing.push('T1');
+    missing.push(slotToken(t1, 'T1'));
   }
   if (t2.scaleFactor === null) {
-    missing.push('T2');
+    missing.push(slotToken(t2, 'T2'));
   }
   if (missing.length === 2) {
     return 'neither film is calibrated';
@@ -236,7 +260,7 @@ const formatDisplacement = (
     return `registration point moved ${(translationPx * scaleFactor).toFixed(2)} mm`;
   }
   return `registration point moved ${printNumber(translationPx)} px ` +
-    '(T1 is not calibrated)';
+    '(the earlier film is not calibrated)';
 };
 
 /**
@@ -681,7 +705,16 @@ export default class Superimposition extends React.PureComponent<Props, State> {
       <div className={classes.controls}>
         <div className={classes.pickers}>
           <label className={classes.picker}>
-            <span className={cx(classes.picker_tag, classes.picker_tag__t1)}>T1</span>
+            {/* The tag is the film's own token, in the colour its tracing is drawn
+                in — the same swap the legend and the change columns make (see
+                `slotToken`). Left as the slot name, the chip over a picker holding
+                T3 read "T2" while the table beside it headed the same film T3. */}
+            <span
+              className={cx(classes.picker_tag, classes.picker_tag__t1)}
+              title="The earlier of the two films"
+            >
+              {slotToken(t1, 'T1')}
+            </span>
             <select
               className={classes.select}
               value={t1.imageId}
@@ -693,7 +726,12 @@ export default class Superimposition extends React.PureComponent<Props, State> {
           </label>
           <span className={classes.picker_arrow} aria-hidden="true">→</span>
           <label className={classes.picker}>
-            <span className={cx(classes.picker_tag, classes.picker_tag__t2)}>T2</span>
+            <span
+              className={cx(classes.picker_tag, classes.picker_tag__t2)}
+              title="The later of the two films"
+            >
+              {slotToken(t2, 'T2')}
+            </span>
             <select
               className={classes.select}
               value={t2.imageId}
@@ -982,10 +1020,11 @@ export default class Superimposition extends React.PureComponent<Props, State> {
         <div className={classes.legend_registration}>
           <span className={classes.legend_basis}>{basis.name}</span>
           <span className={classes.legend_numbers}>
-            T2 rotated {rotation}° ·{' '}
+            {slotToken(t2, 'T2')} rotated {rotation}° ·{' '}
             {formatDisplacement(registration.translationPx, t1.scaleFactor)}
             {registration.magnification !== 1
-              ? ` · T2 rescaled ×${registration.magnification.toFixed(3)}`
+              ? ` · ${slotToken(t2, 'T2')} rescaled ` +
+                `×${registration.magnification.toFixed(3)}`
               : ''}
           </span>
         </div>
@@ -997,7 +1036,8 @@ export default class Superimposition extends React.PureComponent<Props, State> {
             The two films are assumed to be at the same magnification:{' '}
             {t1.scaleFactor === null && t2.scaleFactor === null
               ? 'neither carries an mm/px calibration'
-              : `only ${t1.scaleFactor === null ? 'T2' : 'T1'} is calibrated ` +
+              : `only ${t1.scaleFactor === null
+                ? slotToken(t2, 'T2') : slotToken(t1, 'T1')} is calibrated ` +
                 `(${formatScale((t1.scaleFactor !== null
                   ? t1.scaleFactor
                   : t2.scaleFactor) as number)})`}
@@ -1114,7 +1154,10 @@ export default class Superimposition extends React.PureComponent<Props, State> {
               two are the same number on this pair of films, and an unqualified
               "32 measurements" in both places read as a contradiction. */}
           <span className={classes.panel_sub}>
-            T2 − T1 · {changes.rowCount}{' '}
+            {/* The two films' own names, not the slots they were dropped into:
+                this line is the one place a reader learns which way the
+                difference runs (see `slotToken`). */}
+            {slotToken(t2, 'T2')} − {slotToken(t1, 'T1')} · {changes.rowCount}{' '}
             {changes.rowCount === 1
               ? 'comparable measurement'
               : 'comparable measurements'}
@@ -1136,8 +1179,24 @@ export default class Superimposition extends React.PureComponent<Props, State> {
               <thead>
                 <tr>
                   <th className={classes.col_name}>Measurement</th>
-                  <th className={classes.col_num}>T1</th>
-                  <th className={classes.col_num}>T2</th>
+                  {/* Which slot each film is in, under its own name. The record's
+                      vocabulary leads the numbers (see `slotToken`) — but with the
+                      slot names gone from the heads entirely, the guarantee that the
+                      left column is the *earlier* film was carried only by a
+                      tooltip on a picker chip: a film filed T3 dropped into the
+                      earlier slot heads these columns "T3 | T2" over a subtitle
+                      reading "T2 − T3", and nothing on an exported PNG or a filed
+                      sheet said which way round the pair was. Two words, in the
+                      head's own quiet register, and the columns state it
+                      themselves. */}
+                  <th className={classes.col_num}>
+                    {slotToken(t1, 'T1')}
+                    <span className={classes.col_slot}>earlier</span>
+                  </th>
+                  <th className={classes.col_num}>
+                    {slotToken(t2, 'T2')}
+                    <span className={classes.col_slot}>later</span>
+                  </th>
                   <th className={classes.col_num}>Change</th>
                   <th
                     className={classes.col_bar}
@@ -1320,10 +1379,12 @@ export default class Superimposition extends React.PureComponent<Props, State> {
       interval: formatInterval(
         parseCaptureDate(t1.captureDate), parseCaptureDate(t2.captureDate),
       ),
-      auditLabel: `T2 rotated ${printSigned(registration.rotationDeg)}° · ` +
+      auditLabel: `${slotToken(t2, 'T2')} rotated ` +
+        `${printSigned(registration.rotationDeg)}° · ` +
         formatDisplacement(registration.translationPx, t1.scaleFactor) +
         (registration.magnification !== 1
-          ? ` · T2 rescaled ×${registration.magnification.toFixed(3)}`
+          ? ` · ${slotToken(t2, 'T2')} rescaled ` +
+            `×${registration.magnification.toFixed(3)}`
           : ''),
       patientLabel: identity,
       caveat: registration.isMagnificationAssumed

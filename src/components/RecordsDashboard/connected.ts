@@ -35,6 +35,8 @@ import {
   addNewWorkspace,
   removeWorkspace,
   setImageProps,
+  setScaleFactor,
+  unsetScaleFactor,
   updatePatient,
   setPatientTrendPlot,
   closeImage,
@@ -132,7 +134,42 @@ const mapDispatchToProps = (dispatch: GenericDispatch): DispatchProps => ({
       type: meta.type,
       timepoint: meta.timepoint,
       captureDate: meta.captureDate,
+      // Which frame of the photographic series a photograph is. Written with the
+      // type, because the two are one fact: the image reducer drops a position
+      // that does not belong to the type it is stored against, so a photograph
+      // re-filed as a cephalogram cannot keep "Right buccal" on it.
+      photoView: meta.photoView,
     }));
+  },
+  // Carrying one film's calibration to the record's other films of the same type
+  // and pixel size. It is the *same action the calibration dialog dispatches*
+  // (`setScaleFactor`), once per film — so a scale applied here is stored,
+  // persisted and undone exactly like one typed into that dialog, and every
+  // surface that reads a scale reads these the same way. The choice of films and
+  // the review of them belong to `ApplyScaleDialog`; this only writes what was
+  // reviewed.
+  //
+  // The source film travels with the number in the same payload, so the record
+  // itself carries which of its scales were measured and which were copied — and
+  // the reversal is derived from that rather than remembered by the component,
+  // which is what makes the offer survive a trip into the tracing editor.
+  onApplyScale: (
+    imageIds: string[], scaleFactor: number, sourceImageId: string,
+  ) => {
+    imageIds.forEach((imageId) => {
+      dispatch(setScaleFactor({ imageId, value: scaleFactor, sourceImageId }));
+    });
+  },
+  // …and taking that batch back off again, which is the *same action the tracing
+  // toolbar's own "Remove calibration" dispatches* (`unsetScaleFactor`), once per
+  // film. A batched write needs a batched reversal: the offer to spread a scale
+  // over three films was one press, and undoing it was three trips into three
+  // editors. The films are reviewed first and only ever the ones that press wrote
+  // to (see `RecordsDashboard#appliedFrom`).
+  onRemoveScale: (imageIds: string[]) => {
+    imageIds.forEach((imageId) => {
+      dispatch(unsetScaleFactor({ imageId }));
+    });
   },
   // The trend board is a per-patient clinical setting, not a view state, so it
   // is dispatched to the store the demographics live in and persisted with them.

@@ -16,6 +16,10 @@ import {
   getImageTypeLabelWithArticle,
   isTraceableImageType,
   formatCaptureDate,
+  // The photographic series: the frame a slot files into (see `getStartingMeta`).
+  getDefaultPhotoView,
+  getPhotoViewLabel,
+  reconcilePhotoView,
 } from 'utils/records';
 
 type InjectedIntlProps = {
@@ -325,19 +329,30 @@ type State = ImageRecordMeta;
 const getStartingMeta = (props: Props): ImageRecordMeta => {
   const { filingIntent, defaultTimepoint } = props;
   if (filingIntent !== null) {
+    const type = filingIntent.type !== null
+      ? filingIntent.type : DEFAULT_IMAGE_TYPE;
     return {
-      type: filingIntent.type !== null ? filingIntent.type : DEFAULT_IMAGE_TYPE,
+      type,
       timepoint: filingIntent.timepoint,
       // The visit's own day when the slot came from a dated timepoint (the films
       // and photographs of one visit share it), today when it did not.
       captureDate: filingIntent.captureDate !== null
         ? filingIntent.captureDate : getTodayISO(),
+      // The frame the slot named, where it named one: an empty cell of a visit's
+      // photographic series files at *that* position ("Add the upper occlusal
+      // photograph to T2"), so the form opens on it. A slot that named only a type
+      // proposes that type's usual frame, and every one of these is on screen and
+      // editable before a file is chosen.
+      photoView: reconcilePhotoView(type, filingIntent.photoView) !== null
+        ? filingIntent.photoView : getDefaultPhotoView(type),
     };
   }
   return {
     type: DEFAULT_IMAGE_TYPE,
     timepoint: defaultTimepoint,
     captureDate: getTodayISO(),
+    // The default type is a lateral cephalogram, which holds no series position.
+    photoView: getDefaultPhotoView(DEFAULT_IMAGE_TYPE),
   };
 };
 
@@ -367,7 +382,12 @@ class CephDropzone extends React.PureComponent<Props & InjectedIntlProps, State>
     if (
       before.type !== after.type ||
       before.timepoint !== after.timepoint ||
-      before.captureDate !== after.captureDate
+      before.captureDate !== after.captureDate ||
+      // …and the frame, which is what distinguishes one photograph slot of a
+      // visit from the next: without it, pressing "Add the left buccal
+      // photograph" while the form was already open on the right buccal left the
+      // form — and therefore the record — on the position that was not asked for.
+      before.photoView !== after.photoView
     ) {
       this.setState(after);
     }
@@ -391,7 +411,12 @@ class CephDropzone extends React.PureComponent<Props & InjectedIntlProps, State>
     // this line would otherwise be describing something else.
     const slotNote = filingIntent !== null
       ? [
-        getImageTypeLabel(filingIntent.type),
+        // A photographic slot names its *frame*, which is what the clinician
+        // pressed: "Frontal at rest at T2" and not "Frontal photograph at T2",
+        // which is true of three of the four extraoral cells at once.
+        filingIntent.photoView !== null
+          ? getPhotoViewLabel(filingIntent.photoView)
+          : getImageTypeLabel(filingIntent.type),
         filingIntent.timepoint !== null ? `at ${filingIntent.timepoint}` : null,
         formatCaptureDate(filingIntent.captureDate) !== null
           ? `· ${formatCaptureDate(filingIntent.captureDate)}` : null,

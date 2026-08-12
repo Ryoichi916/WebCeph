@@ -18,6 +18,8 @@ import IconTrace from 'material-ui/svg-icons/image/crop-original';
 import IconReport from 'material-ui/svg-icons/action/description';
 import IconSuperimpose from 'material-ui/svg-icons/maps/layers';
 import IconSimulate from 'material-ui/svg-icons/image/tune';
+// The ruler: the mark the app already associates with a mm/px scale.
+import IconScale from 'material-ui/svg-icons/image/straighten';
 
 import Props from './props';
 
@@ -26,6 +28,11 @@ import { PatientRecord } from 'store/reducers/workspace';
 import EditRecordDialog from 'components/RecordMetaFields/EditRecordDialog';
 import RemoveRecordDialog from 'components/RecordMetaFields/RemoveRecordDialog';
 import EditPatientDialog, { PatientEditField } from './EditPatientDialog';
+import ApplyScaleDialog from './ApplyScaleDialog';
+// The photographs' own two surfaces: a visit's composite series, and the viewer
+// that enlarges one photograph or compares them across visits.
+import PhotoSeries from './PhotoSeries';
+import PhotoViewer, { PhotoViewerTarget } from './PhotoViewer';
 import AnalysisFindings, { FilmFindings } from './AnalysisFindings';
 import TrendChart from './TrendChart';
 
@@ -91,10 +98,23 @@ import {
   parseCaptureDate,
   formatInterval,
   getImpliedFilmSize,
+  getScalePropagationTargets,
   FILM_SIZE_BAND,
   getTimepointToken,
+  // The controlled half of the timepoint vocabulary, read back through its own
+  // parser — the case timeline names a visit's stage with the word the record
+  // stores, never with one this surface infers (see `bandStageOf`).
   groupRecordsByTimepoint,
+  getVisitPill,
+  getVisitRest,
   TimepointGroup,
+  // The photographic series (see `utils/records#PHOTO_VIEW_OPTIONS`): which
+  // records are photographs, the frame each one is, and the frame an empty cell
+  // of a visit's series files an upload at.
+  isPhotographType,
+  getDefaultPhotoView,
+  findPhotoView,
+  PhotoViewOption,
 } from 'utils/records';
 
 import { getNameForAnalysis } from 'components/AnalysisSelector/strings';
@@ -180,6 +200,18 @@ const bandName = (group: TimepointGroup<PatientRecord>): string => {
   const token = getTimepointToken(group.label);
   return token !== null ? token : 'the unlabelled images';
 };
+
+/*
+ * (The stage a visit is filed at, and the rest of what its label says, are read
+ * through `utils/records#getVisitPill` / `#getVisitRest` — one reading shared by
+ * the case timeline's stops and the imaging-records stamps below them, so one visit
+ * cannot be named two ways 300px apart. The rail is the one surface whose whole job
+ * is the chronology, and the stage used to be the one fact it did not carry: the
+ * records below it stamp "T1 / Initial", the printed sheet prints "T1 Initial", the
+ * report heads its page "TIMEPOINT T1 Initial" and the superimposition's pickers
+ * name "T3 Debond" — while the stop above them all read "T1 / 2025-04-14 / AGE 14 y
+ * 1 mo".)
+ */
 
 /**
  * One launch control: an action that leaves this surface for a view of one film.
@@ -404,6 +436,21 @@ const StatusChip = (
  * image's natural size), which is what keeps a dot on the point it was placed
  * on for a portrait film and a landscape one alike.
  */
+/**
+ * The image types whose card thumbnail is *normalised* for viewing (see
+ * `.thumb_img__film`): the radiographs. A photograph arrives exposed for the eye
+ * already; a cephalogram exported for tracing does not, and shrunk to a card it
+ * was a near-black rectangle nobody could assess a film from.
+ *
+ * An image filed before the records layer existed carries no type at all and was
+ * loaded through the lateral-ceph flow (`utils/records#isTraceableImageType`
+ * keeps the same assumption), so it is treated as the radiograph it is.
+ */
+const RADIOGRAPH_TYPES: ImageType[] = ['ceph_lateral', 'ceph_pa', 'panoramic'];
+
+const isRadiograph = (type: ImageType | null): boolean =>
+  type === null || RADIOGRAPH_TYPES.indexOf(type) >= 0;
+
 const FilmThumb = ({ record }: { record: PatientRecord }) => {
   const { width, height, landmarkPoints } = record;
   const marks = (
@@ -421,7 +468,12 @@ const FilmThumb = ({ record }: { record: PatientRecord }) => {
     <span className={classes.thumb}>
       {record.thumbnail !== null ? (
         <img
-          className={classes.thumb_img}
+          className={cx(classes.thumb_img, {
+            // Display normalisation, on the radiographs only and on this card
+            // only: the tracing canvas, the printed report and every measurement
+            // read the stored pixels untouched (see `.thumb_img__film`).
+            [classes.thumb_img__film]: isRadiograph(record.type),
+          })}
           src={record.thumbnail}
           alt=""
           draggable={false}
@@ -470,6 +522,13 @@ interface State {
   editingImageId: string | null;
   /** Image id queued for removal (awaiting confirmation), or null. */
   removingImageId: string | null;
+  /**
+   * The calibrated film whose scale is being carried to the record's other films,
+   * or null. Held as an image id for the same reason the launched views are: the
+   * offer is about *that* film's calibration, and this surface lists every film of
+   * the case (see `ApplyScaleDialog`).
+   */
+  applyScaleImageId: string | null;
   /** Whether the patient's own details are being corrected. */
   isEditingPatient: boolean;
   /**
@@ -497,6 +556,34 @@ interface State {
   hasBandStart: boolean;
   hasBandEnd: boolean;
   /**
+   * How far the whole-case bracket is held in from the rail's own two edges, in
+   * pixels — so its end ticks fall *on* the first and the last stop of the rail
+   * instead of on the panel's inner edges.
+   *
+   * Measured off the track's own cells rather than assumed (see
+   * `updateBandScrollState`): a stop is sized to its content, and the widest stop
+   * of a case whose labels are "T1" and "T3 post-surgical bimaxillary" differs
+   * from its neighbour by 90px. Null until the rail has been measured once, which
+   * is the one state in which the bracket keeps its old full-width geometry.
+   */
+  bandSpanInset: { start: number; end: number } | null;
+  /*
+   * (There is no `appliedScale` here any more, and that is the point. The batched
+   * calibration this surface writes is remembered **on the record** — each copy
+   * carries the film it came from (`PatientRecord#scaleSourceId`) — because held in
+   * component state the reversal died on the first navigation: after applying, the
+   * card offered "remove … from 2 films", and one trip into the tracing editor and
+   * back left neither the control nor the CALIBRATION row, while the dialog's own
+   * effect line promises the reversal unconditionally. The only route back was then
+   * N trips into N tracing toolbars — exactly the work the feature removes.)
+   */
+  /**
+   * The film whose batched calibration is being taken back off the record's other
+   * films, or null — the mirror of `applyScaleImageId`, reviewed through the same
+   * dialog in its removal mode.
+   */
+  removeScaleImageId: string | null;
+  /**
    * The film whose printable clinical report is open, or null. Held as an image
    * id rather than a boolean because the report is *of a film*, and this surface
    * lists every film of the case: opening it from T2's card must report T2 even
@@ -512,6 +599,16 @@ interface State {
    * starting point and not a second picker.
    */
   superimposePair: { t1Id: string; t2Id: string } | null;
+  /**
+   * What the photograph viewer is open on, or null — one photograph enlarged, one
+   * series position across the visits, or two visits' whole series (see
+   * `PhotoViewer`).
+   *
+   * Held as the *target* that was pressed rather than as the viewer's own reading:
+   * the reading is the viewer's to change (a clinician enlarges a frame, then walks
+   * it along the case), and this surface only says what was pressed.
+   */
+  photoViewer: PhotoViewerTarget | null;
 }
 
 /**
@@ -547,15 +644,19 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
   state: State = {
     editingImageId: null,
     removingImageId: null,
+    applyScaleImageId: null,
     isEditingPatient: false,
     patientFocusField: null,
     isHeadFloating: false,
     isFootFloating: false,
     hasBandStart: false,
     hasBandEnd: false,
+    bandSpanInset: null,
+    removeScaleImageId: null,
     reportImageId: null,
     simulationImageId: null,
     superimposePair: null,
+    photoViewer: null,
   };
 
   private root: HTMLElement | null = null;
@@ -981,12 +1082,88 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
     const hasBandStart = track !== null && track.scrollLeft > 1;
     const hasBandEnd = track !== null &&
       track.scrollLeft + track.clientWidth < track.scrollWidth - 1;
+    const bandSpanInset = this.measureBandSpanInset(track);
+    const previous = this.state.bandSpanInset;
+    const insetChanged = (previous === null) !== (bandSpanInset === null) ||
+      (previous !== null && bandSpanInset !== null &&
+        (previous.start !== bandSpanInset.start ||
+          previous.end !== bandSpanInset.end));
     if (
       hasBandStart !== this.state.hasBandStart ||
-      hasBandEnd !== this.state.hasBandEnd
+      hasBandEnd !== this.state.hasBandEnd ||
+      insetChanged
     ) {
-      this.setState({ hasBandStart, hasBandEnd });
+      this.setState({ hasBandStart, hasBandEnd, bandSpanInset });
     }
+  };
+
+  /**
+   * Where the whole-case bracket's two end ticks belong: under the **centre of the
+   * two stops the bracket actually names**, which is where those visits are drawn.
+   *
+   * Not the rail's outermost stops. The bracket compares the first *traced* visit
+   * with the latest, and on a case whose newest visit is not yet traced it says so —
+   * "WIDEST ON FILE · T1 → T4" on a five-visit rail. Measured from the track's first
+   * and last children, its right tick then landed under T5, 340px past the visit its
+   * own label names: the geometry claimed a span the label denied, which is the exact
+   * failure this measurement was introduced to prevent, arriving from the other side.
+   *
+   * It has to be measured. A stop is sized to its own content between a 116px
+   * floor and a 240px cap, so the half-width the bracket must be held in by is a
+   * property of this case's labels and nothing a stylesheet can know: left at the
+   * section's inner edges the start tick sat 103px left of T1's node and the end
+   * tick 58px right of T3's, and a bracket whose ticks land in empty space reads
+   * as a rule under the whole panel rather than as a span of T1 → T3.
+   *
+   * Read in the track's *layout* coordinates and then shifted by its scroll
+   * offset, so the ticks stay on their stops while the rail is scrolled; both
+   * insets are clamped so a stop scrolled out of the port leaves the tick at the
+   * rail's edge rather than outside it, and rounded, because a sub-pixel
+   * re-measure on every scroll event is a `setState` loop.
+   */
+  private measureBandSpanInset = (
+    track: HTMLElement | null,
+  ): State['bandSpanInset'] => {
+    if (track === null) {
+      return null;
+    }
+    // The track interleaves stops and intervals; only the stops are visits.
+    const stops: HTMLElement[] = [];
+    for (let i = 0; i < track.children.length; i += 1) {
+      const cell = track.children[i] as HTMLElement;
+      if (cell.classList.contains(classes.stop)) {
+        stops.push(cell);
+      }
+    }
+    if (stops.length < 2) {
+      return null;
+    }
+    // Which two visits the bracket names — resolved by the same helper the bracket
+    // itself is rendered from, so the ticks and the label can never disagree.
+    const groups = groupRecordsByTimepoint(this.props.records);
+    const ends = this.bandSpanEnds(groups);
+    const clampIndex = (index: number) =>
+      Math.max(0, Math.min(stops.length - 1, index));
+    const first = stops[clampIndex(
+      ends !== null ? groups.indexOf(ends.first) : 0,
+    )];
+    const last = stops[clampIndex(
+      ends !== null ? groups.indexOf(ends.last) : stops.length - 1,
+    )];
+    const width = track.clientWidth;
+    if (width <= 0 || first.offsetWidth <= 0) {
+      return null;
+    }
+    // Half the widest a tick may be held in by: the arms must still be drawn, and
+    // the label group between them is what the surface is for.
+    const cap = Math.max(0, width / 2 - 48);
+    const start = first.offsetLeft + first.offsetWidth / 2 - track.scrollLeft;
+    const end = width -
+      (last.offsetLeft + last.offsetWidth / 2 - track.scrollLeft);
+    return {
+      start: Math.round(Math.max(0, Math.min(cap, start))),
+      end: Math.round(Math.max(0, Math.min(cap, end))),
+    };
   };
 
   /**
@@ -1054,10 +1231,19 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
       return;
     }
     const {
-      editingImageId, removingImageId, isEditingPatient,
-      reportImageId, simulationImageId, superimposePair,
+      editingImageId, removingImageId, isEditingPatient, applyScaleImageId,
+      reportImageId, simulationImageId, superimposePair, photoViewer,
     } = this.state;
-    if (editingImageId !== null || removingImageId !== null || isEditingPatient) {
+    if (
+      editingImageId !== null || removingImageId !== null || isEditingPatient ||
+      applyScaleImageId !== null ||
+      // …including the photograph viewer, which closes on Escape itself: without
+      // it in this list one Escape shut the viewer *and* left the records surface,
+      // landing the clinician on whichever photograph happened to be open in the
+      // read-only viewer behind it — exactly the fault the guard below documents
+      // for the three launched views.
+      photoViewer !== null
+    ) {
       return;
     }
     // …nor while one of the views this surface launches is over it. Each of the
@@ -1475,6 +1661,19 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
         const size = getImpliedFilmSize(r.width, r.height, r.scaleFactor);
         return r.isCalibrated && size !== null && !size.isPlausible;
       }).length,
+      // …and how many of those calibrations were *copied* from another film of the
+      // record rather than measured on their own. "3 of 3 lateral cephs calibrated"
+      // counted a film measured against a ruler and two films carrying a copy of
+      // that measurement as the same thing, which on a chart a practice keeps for
+      // years is the difference between three calibrations and one.
+      // Counted through `scaleCopiedFrom`, so the figure only ever counts films
+      // whose source is a film of *this* record: a provenance whose id no longer
+      // resolves (a project imported from a .wceph, whose image ids are re-minted)
+      // names nothing on any card, and a tally is not the place to assert what no
+      // card can show.
+      copied: traceable.filter(
+        (r) => r.isCalibrated && this.scaleCopiedFrom(r) !== null,
+      ).length,
       // Traceability is a property of the *type*, and an image filed before the
       // records layer existed carries no type at all — those are traceable too,
       // so the tally cannot call them lateral cephalograms.
@@ -1485,7 +1684,9 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
 
   /** The tallies themselves, in the one wording both media state them in. */
   private renderTallyItems = () => {
-    const { total, traced, calibrated, suspect, noun } = this.getRecordsTally();
+    const {
+      total, traced, calibrated, suspect, copied, noun,
+    } = this.getRecordsTally();
     return [
       /* The base is named. Counted over the traceable films but printed as a
          bare "3 of 3", these two figures read as "the whole record is done"
@@ -1495,6 +1696,21 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
       </span>,
       <span key="calibrated" className={classes.records_foot_item}>
         {calibrated} of {total} {noun} calibrated
+        {/* The copies are named on the same line as the count that includes them,
+            in the quiet register the cards' own "copied from T1 · 2024-04-10"
+            uses: a tally that says three films are calibrated when one scale was
+            ever measured is a true count of a fact nobody meant to state. */}
+        {copied > 0 ? (
+          <span
+            className={classes.records_foot_note}
+            title={'These films carry a scale copied from another film of this ' +
+              'record — same image type, same pixel size — rather than one ' +
+              'measured on the film itself. Each card names the film its scale ' +
+              'came from.'}
+          >
+            {copied === 1 ? ' · 1 copied' : ` · ${copied} copied`}
+          </span>
+        ) : null}
       </span>,
       suspect > 0 ? (
         <span
@@ -1543,7 +1759,7 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
    * panel's rounded box, torn from the films it counts at the foot of the sheet
    * before — and no break rule can prevent it: Chrome honours `break-inside:
    * avoid` and ignores `break-before: avoid` entirely (measured; see
-   * `.findings_lede`). A visit's group is already an unbreakable box, so a tally
+   * `.fb_core`). A visit's group is already an unbreakable box, so a tally
    * printed inside the last one cannot be separated from it.
    */
   private renderPrintRecordsTail = (
@@ -1692,7 +1908,15 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
         </div>
       );
     }
-    const missing = getMissingImageTypes(group.records);
+    // What the visit has not got — minus the photographs, once the visit holds a
+    // photographic series: the series tile's own empty cells are the affordance
+    // for those, and they name a *frame* ("Add the left buccal photograph")
+    // where a type pill can only name a type. Two rows offering to add a photo
+    // to one visit, one of them unable to say which frame, is one row too many.
+    const hasSeries = group.records.some(({ type }) => isPhotographType(type));
+    const missing = getMissingImageTypes(group.records).filter(
+      ({ id }) => !(hasSeries && isPhotographType(id)),
+    );
     if (missing.length === 0) {
       return null;
     }
@@ -1820,6 +2044,8 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
       type: DEFAULT_IMAGE_TYPE,
       timepoint,
       captureDate: null,
+      // A lateral cephalogram holds no position in a photographic series.
+      photoView: null,
     });
 
   /**
@@ -2105,6 +2331,11 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
     const hasAnySpan = groups.some(
       (g) => g.lastDate !== null && g.lastDate !== g.firstDate,
     );
+    // …and the same rule for the stage line: where any visit of the case is filed
+    // at a stage, every stop reserves the line it is written on (see
+    // `renderBandStop`), so a case whose T2 is the only labelled visit does not
+    // step its own dates, ages and chip rows out of true.
+    const hasAnyStage = groups.some((g) => getVisitRest(g.label).text !== '');
     // Stops and intervals, interleaved: stop, gap, stop, gap, … stop. The first
     // and last child are always stops, which is what lets the rail stop at the
     // outermost nodes instead of running off both ends of the band.
@@ -2113,17 +2344,28 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
       if (index > 0) {
         cells.push(this.renderBandGap(groups[index - 1], group));
       }
-      cells.push(this.renderBandStop(group, index, groups.length, hasAnySpan));
+      cells.push(this.renderBandStop(
+        group, index, groups.length, hasAnySpan, hasAnyStage,
+      ));
     });
     const { hasBandStart, hasBandEnd } = this.state;
     const scrolls = hasBandStart || hasBandEnd;
+    // The bracket is resolved before the caption is written, because the caption
+    // names it: it stands down where the widest traced pair is one of the rail's
+    // own intervals (see `renderBandSpan`), and a caption offering "the whole case
+    // from the bracket below" over a rail with no bracket on it is the one false
+    // sentence on the band.
+    const span = this.renderBandSpan(groups);
     return (
       <section className={classes.band} aria-label="Case timeline">
         <div className={classes.band_head}>
           <h3 className={classes.band_title}>Case timeline</h3>
           <span className={classes.band_caption}>
             Every visit in order. Open a record from its chip; superimpose two
-            visits from the interval between them.
+            visits from the interval between them
+            {span !== null
+              ? ', or the whole case from the bracket below.'
+              : '.'}
           </span>
           {/* The rail is scrolled by a control, not only by a gesture. A styled
               `::-webkit-scrollbar` reserves no layout space and this browser
@@ -2192,7 +2434,197 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
             {cells}
           </div>
         </div>
+        {/* …and the comparison that belongs to the whole rail rather than to one
+            of its intervals (see `renderBandSpan`). */}
+        {span}
       </section>
+    );
+  };
+
+  /** The films of a visit whose tracing can be registered, in the record's order. */
+  private registrableIn = (
+    group: TimepointGroup<PatientRecord>,
+  ): PatientRecord[] => {
+    const { launch } = this.props;
+    return group.records.filter((record) => {
+      const entry = launch[record.imageId];
+      return entry !== undefined && entry.isRegistrable;
+    });
+  };
+
+  /**
+   * The whole case as one comparison: a bracket under the rail, spanning it end to
+   * end, carrying the superimposition of the **first traced visit against the
+   * latest**.
+   *
+   * This is the comparison a course of treatment is judged on — start against
+   * finish — and until now it was the one comparison the timeline did not offer:
+   * every control sat on an *adjacent* interval, so getting T1 → T3 meant opening
+   * T1 → T2 and then changing a dropdown inside the superimposition view. The pair
+   * is preselected exactly as an interval's is (`handleSuperimpose`), so the view
+   * opens on the two films this bracket names.
+   *
+   * The pair is the outermost registrable films of the record — the earliest film
+   * of the earliest visit that carries a registrable tracing, against the latest
+   * film of the latest one — and it is *named*, never implied: where the record's
+   * first visit is not yet traced the bracket says "T2 → T4" and its tooltip says
+   * which visit was skipped and why, rather than quietly calling the second visit
+   * the start of the case.
+   *
+   * Rendered from three visits on. With two, the single interval control between
+   * them already **is** the full range, and a second control repeating it would be
+   * two ways to do one thing 40px apart.
+   */
+  /**
+   * The two visits the whole-case bracket names, or null where no bracket is drawn
+   * — the first *traced* visit against the latest, falling back to the record's own
+   * two ends where there is no traced pair to compare.
+   *
+   * One helper and not two readings, because the bracket's **label and its geometry
+   * are the same claim**: its ticks are measured onto the stops of the visits it
+   * names (see `measureBandSpanInset`), and computed separately the two drifted apart
+   * — a bracket reading "T1 → T4" with its right tick under T5.
+   */
+  private bandSpanEnds = (
+    groups: TimepointGroup<PatientRecord>[],
+  ): {
+    first: TimepointGroup<PatientRecord>;
+    last: TimepointGroup<PatientRecord>;
+    canSuperimpose: boolean;
+  } | null => {
+    if (groups.length < 3) {
+      return null;
+    }
+    const traced = groups.filter((group) => this.registrableIn(group).length > 0);
+    const canSuperimpose = traced.length >= 2;
+    const first = canSuperimpose ? traced[0] : groups[0];
+    const last = canSuperimpose
+      ? traced[traced.length - 1] : groups[groups.length - 1];
+    // …and the same suppression, arriving by the other route. The bracket stands
+    // down at two visits because the single interval control between them already
+    // *is* the full range; on a longer case the widest traced pair can turn out to
+    // be adjacent anyway — three visits with T1 untraced leaves T2 → T3, which the
+    // interval control 90px above this one opens exactly. Two ways to do one thing,
+    // 90px apart, is the defect that rule exists to prevent, and it does not stop
+    // being one because the case has a third visit on it.
+    if (
+      canSuperimpose &&
+      groups.indexOf(last) - groups.indexOf(first) === 1
+    ) {
+      return null;
+    }
+    return { first, last, canSuperimpose };
+  };
+
+  private renderBandSpan = (groups: TimepointGroup<PatientRecord>[]) => {
+    const ends = this.bandSpanEnds(groups);
+    if (ends === null) {
+      return null;
+    }
+    const { first, last, canSuperimpose } = ends;
+    const traced = groups.filter((group) => this.registrableIn(group).length > 0);
+    const t1 = canSuperimpose ? this.registrableIn(first)[0] : undefined;
+    const lastFilms = canSuperimpose ? this.registrableIn(last) : [];
+    const t2 = lastFilms[lastFilms.length - 1];
+    // The figure is measured between the very two films the control opens, exactly
+    // as an interval's is (see `renderBandGap`) — and, where there is no pair to
+    // measure, between the ends of the record itself, which is what the identity
+    // band's own span states.
+    const fromDay = t1 !== undefined
+      ? formatCaptureDate(t1.captureDate) : groups[0].firstDate;
+    const toDay = t2 !== undefined
+      ? formatCaptureDate(t2.captureDate) : groups[groups.length - 1].lastDate;
+    const interval = formatInterval(
+      parseCaptureDate(fromDay), parseCaptureDate(toDay),
+    );
+    const pair = `${bandName(first)} → ${bandName(last)}`;
+    // Whether the bracket's pair is in fact the record's own two ends. Where it is
+    // not, the reader is told which visits fall outside it rather than being left
+    // to notice that the "whole case" control names T2.
+    const skipped = canSuperimpose
+      ? groups.filter((group) => (
+        this.registrableIn(group).length === 0 &&
+        (groups.indexOf(group) < groups.indexOf(first) ||
+          groups.indexOf(group) > groups.indexOf(last))
+      )).map(bandName)
+      : [];
+    const untracedNote = skipped.length > 0
+      ? ` ${skipped.join(' and ')} ${skipped.length === 1 ? 'carries' : 'carry'} ` +
+        'no tracing that can be registered, so the widest comparison on file is ' +
+        `${pair}.`
+      : '';
+    const reason = canSuperimpose
+      ? `Superimpose ${pair} — the first and the latest traced visit of this ` +
+        `record${interval !== null ? `, ${interval} apart` : ''}.` +
+        untracedNote +
+        ' Opens with these two timepoints already selected; the registration and ' +
+        'the pair can be changed there.'
+      : `Needs two traced films at two different visits. A registration needs ` +
+        `${registrationRequirement()}.`;
+    const shortReason = canSuperimpose ? null
+      : (traced.length === 1
+        ? `only ${bandName(traced[0])} is traced`
+        : 'no visit is traced yet');
+    // Held in to the rail's own two ends, so the bracket's ticks fall on the stops
+    // it brackets rather than on the panel's inner edges (see
+    // `measureBandSpanInset`).
+    const inset = this.state.bandSpanInset;
+    return (
+      <div
+        className={classes.band_span}
+        style={inset !== null
+          ? { paddingLeft: inset.start, paddingRight: inset.end }
+          : undefined}
+      >
+        <span
+          className={cx(classes.band_span_arm, classes.band_span_arm__start)}
+          aria-hidden="true"
+        />
+        <span className={classes.band_span_body}>
+          {/* The label follows the pair, and not the intention: with the record's
+              last visit untraced the bracket compares T1 → T2, and heading *that*
+              "whole case" would be the one false statement on the rail. */}
+          <span className={classes.band_span_label}>
+            {skipped.length > 0 ? 'Widest on file' : 'Whole case'}
+          </span>
+          <span className={classes.band_span_pair}>{pair}</span>
+          {interval !== null ? (
+            <span
+              className={classes.band_span_interval}
+              title={`${fromDay} → ${toDay}`}
+            >
+              {interval}
+            </span>
+          ) : null}
+          <span className={classes.gap_action} title={reason}>
+            <button
+              type="button"
+              className={cx(classes.superimpose, {
+                [classes.superimpose__off]: !canSuperimpose,
+              })}
+              aria-disabled={!canSuperimpose}
+              aria-label={canSuperimpose
+                ? `Superimpose ${pair} — first to latest`
+                : `Superimpose first to latest — ${shortReason}`}
+              onClick={canSuperimpose && t1 !== undefined && t2 !== undefined
+                ? this.handleSuperimpose(t1.imageId, t2.imageId) : undefined}
+            >
+              <IconSuperimpose
+                color={canSuperimpose ? SUPERIMPOSE_ICON : LAUNCH_ICON_OFF}
+                style={launchIconStyle}
+              />
+              <span>Superimpose first ↔ latest</span>
+            </button>
+            {!canSuperimpose ? (
+              <span className={classes.gap_reason}>{shortReason}</span>
+            ) : null}
+          </span>
+        </span>
+        <span
+          className={cx(classes.band_span_arm, classes.band_span_arm__end)}
+          aria-hidden="true"
+        />
+      </div>
     );
   };
 
@@ -2222,7 +2654,7 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
    */
   private renderBandStop = (
     group: TimepointGroup<PatientRecord>, index: number, total: number,
-    hasAnySpan: boolean = false,
+    hasAnySpan: boolean = false, hasAnyStage: boolean = false,
   ) => {
     const hasDate = group.firstDate !== null;
     const spansDays = group.lastDate !== null && group.lastDate !== group.firstDate;
@@ -2238,7 +2670,16 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
       )
       : null;
     const label = group.label;
-    const token = getTimepointToken(label);
+    // The pill carries the visit's *handle* — its series token, or the stage word
+    // where the visit is filed at a stage without a number — and the line under it
+    // carries everything the label says that the pill is not already showing (see
+    // `utils/records#getVisitPill`). Taken as the label's first whitespace token,
+    // a visit stored as "Debond and bonded retainer fitted" put "Debond" in the pill
+    // and "Debond · and bonded retainer fitted" on the line 15px below it: one word
+    // twice, and a mid-dot between a sentence and its own conjunction.
+    const pill = getVisitPill(label);
+    const rest = getVisitRest(label);
+    const stageLine = rest.text;
     const isSolo = total === 1;
     return (
       <div
@@ -2270,14 +2711,41 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
         ) : null}
         <span
           className={cx(classes.timepoint, {
-            [classes.timepoint__unset]: label === null,
+            // Muted where the pill is a fallback rather than the visit's own handle:
+            // a label that carries neither a series nor a stage is not promoted to a
+            // visit number here — what it *does* say is written out in full on the
+            // line below, and the whole of it is in this element's tooltip.
+            [classes.timepoint__unset]: pill.isUnset,
           })}
           title={label !== null ? label : 'These images carry no timepoint label'}
         >
-          <span className={classes.timepoint_label}>
-            {token !== null ? token : 'No timepoint'}
-          </span>
+          <span className={classes.timepoint_label}>{pill.token}</span>
         </span>
+        {/* Which visit of the course of treatment this is — the fact the rail
+            was missing. Every other surface of the app already carries it; the
+            chronology did not. */}
+        {stageLine !== '' ? (
+          <span
+            className={cx(classes.stop_stage, {
+              [classes.stop_stage__staged]: rest.leadsWithStage,
+            })}
+            title={label !== null ? label : undefined}
+          >
+            {stageLine}
+          </span>
+        ) : (
+          // Held open where a sibling visit is saying it, for the reason the span
+          // line is (see `hasAnySpan`): a line only some stops carry knocks every
+          // row below it out of true.
+          hasAnyStage && !isSolo ? (
+            <span
+              className={cx(classes.stop_stage, classes.stop_stage__ghost)}
+              aria-hidden="true"
+            >
+              &nbsp;
+            </span>
+          ) : null
+        )}
         <span className={classes.stop_date}>
           {hasDate ? (
             spansDays ? `${group.firstDate} – ${group.lastDate}` : group.firstDate
@@ -2296,7 +2764,7 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
           <span
             className={classes.stop_span}
             title={`The first and last image of this visit are ${innerSpan} ` +
-              `apart — the label ${token !== null ? token : 'here'} covers more ` +
+              `apart — the label ${!pill.isUnset ? pill.token : 'here'} covers more ` +
               'than one day.'}
           >
             images {innerSpan} apart
@@ -2346,11 +2814,18 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
   private renderBandChip = (record: PatientRecord) => {
     const { tone, phrase } = getTracingTone(record);
     const date = formatCaptureDate(record.captureDate);
+    // A photograph is named by its *frame* where the record states one. Named by
+    // its type, a visit that had its whole series taken read "Frontal · Frontal ·
+    // Frontal · Profile · Intraoral · Intraoral · Intraoral" on the rail — seven
+    // chips, three distinct words, and no way to tell which photograph a chip
+    // opens. The type is still the first thing the tooltip says.
+    const view = findPhotoView(record.photoView);
     const title = [
       getImageTypeLabel(record.type),
+      view !== undefined ? view.label : null,
       date !== null ? date : 'no capture date',
       phrase,
-    ].join(' · ') + (record.isActive
+    ].filter((part) => part !== null).join(' · ') + (record.isActive
       ? ' — shown on the surface behind this one'
       : (record.isTraceable
         ? ' — open in the tracing editor'
@@ -2373,7 +2848,8 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
         aria-current={record.isActive ? 'true' : undefined}
         onClick={this.handleOpen(record)}
       >
-        {getImageTypeShortLabel(record.type)}
+        {view !== undefined
+          ? view.shortLabel : getImageTypeShortLabel(record.type)}
         {record.isActive ? (
           <span className={classes.bchip_shown}>shown</span>
         ) : null}
@@ -2417,14 +2893,8 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
   private renderBandGap = (
     before: TimepointGroup<PatientRecord>, after: TimepointGroup<PatientRecord>,
   ) => {
-    const { launch } = this.props;
-    const registrable = (group: TimepointGroup<PatientRecord>) =>
-      group.records.filter((r) => {
-        const entry = launch[r.imageId];
-        return entry !== undefined && entry.isRegistrable;
-      });
-    const earlier = registrable(before);
-    const later = registrable(after);
+    const earlier = this.registrableIn(before);
+    const later = this.registrableIn(after);
     const t1 = earlier[earlier.length - 1];
     const t2 = later[0];
     const canSuperimpose = t1 !== undefined && t2 !== undefined;
@@ -2591,6 +3061,177 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
   };
 
   /**
+   * The offer to carry this film's calibration to the record's other films.
+   *
+   * Only where there is something to carry and somewhere to carry it: a calibrated
+   * film, and at least one *uncalibrated* film of the same type at the same pixel
+   * size (`getScalePropagationTargets` owns that rule and states why). So a
+   * single-film record, a record already fully calibrated, and a record whose other
+   * films came off a different export never see this row at all.
+   *
+   * It is an offer and nothing more — pressing it opens a dialog that names every
+   * film it would change and the exact factor it would write (see
+   * `ApplyScaleDialog`). Nothing here writes anything, and no scale is ever copied
+   * without a clinician reading that list.
+   */
+  private renderCardCalibration = (record: PatientRecord) => {
+    const targets = getScalePropagationTargets(this.props.records, record);
+    // …and the films this card's own press has already written that scale onto,
+    // for as long as they still carry it (see `appliedFrom`).
+    const applied = this.appliedFrom(record);
+    if (targets.length === 0 && applied.length === 0) {
+      return null;
+    }
+    const scale = formatScale(record.scaleFactor as number);
+    const count = targets.length === 1
+      ? '1 film' : `${targets.length} films`;
+    const appliedCount = applied.length === 1
+      ? '1 film' : `${applied.length} films`;
+    return (
+      <div className={classes.propagate}>
+        <span className={classes.slots_label}>Calibration</span>
+        {targets.length > 0 ? (
+          <button
+            type="button"
+            className={classes.propagate_action}
+            title={`Apply ${scale} to the ${count} of this record that carry no ` +
+              'scale and were exported at the same pixel size as the same type of ' +
+              'image. Opens a list of them first — nothing is changed until you ' +
+              'apply it, and a film that is already calibrated is never overwritten.'}
+            onClick={this.openApplyScale(record)}
+          >
+            <IconScale color={SUPERIMPOSE_ICON} style={launchIconStyle} />
+            <span>Apply {scale} to {count}</span>
+          </button>
+        ) : null}
+        {/* The mirror of the press above, and the reason it exists: one press
+            writes the scale onto N films, and the only way back was N trips into
+            N tracing editors to press "Remove calibration" in each. It stands
+            here for as long as those films carry this film's scale *as a copy of
+            it* — read off the record itself (see `appliedFrom`), so it survives a
+            trip into the editor and a reload of the project — and it goes through
+            the same reviewable list: a batched write with no batched reversal is a
+            one-way door. */}
+        {applied.length > 0 ? (
+          <button
+            type="button"
+            className={cx(classes.propagate_action, classes.propagate_action__undo)}
+            title={`Take ${scale} back off the ${appliedCount} of this record ` +
+              'that carry it as a copy of this film\u2019s calibration, putting ' +
+              'each of them back to carrying no scale of its own. Opens the same ' +
+              'list first, so a film you want to keep calibrated can be left ' +
+              'ticked out of it. This film keeps its own calibration.'}
+            onClick={this.openRemoveScale(record)}
+          >
+            <IconScale color={LAUNCH_ICON_OFF} style={launchIconStyle} />
+            <span>Remove {scale} from {appliedCount}</span>
+          </button>
+        ) : null}
+        <span className={classes.propagate_note}>
+          {targets.length > 0
+            ? 'same type, same pixel size, no scale of their own'
+            : `copied from this film — ${appliedCount} still carrying it`}
+        </span>
+      </div>
+    );
+  };
+
+  /**
+   * The films that carry this film's scale **as a copy of it**, and which still
+   * carry exactly that factor.
+   *
+   * Read off the record, not off this component's memory. Each copy stores the film
+   * it came from in the same store entry as the number
+   * (`PatientRecord#scaleSourceId`), so the offer to take the batch back is on the
+   * card for as long as the copies are on file — through a trip into the tracing
+   * editor, a superimposition, a print, a reload of the persisted project — instead
+   * of until the next navigation, which is where it used to end while the dialog was
+   * promising it unconditionally.
+   *
+   * Every clause of that sentence is still a guard. It is *this* film's scale (the
+   * copies name it), it is that one factor (a film re-calibrated in the editor since
+   * carries its own measurement and its provenance is cleared with it, so it drops
+   * out of the offer), and the source itself must still hold a scale — take the
+   * source's calibration off and there is nothing on this card for the control to
+   * name.
+   */
+  private appliedFrom = (record: PatientRecord): PatientRecord[] => {
+    const scale = record.scaleFactor;
+    if (scale === null) {
+      return [];
+    }
+    return this.props.records.filter(
+      (r) => r.scaleSourceId === record.imageId && r.scaleFactor === scale,
+    );
+  };
+
+  /**
+   * The other way round: the film **this** film's scale was copied from, where it
+   * was copied rather than measured — what the card's SCALE row is qualified by.
+   *
+   * Null where the copy's factor no longer matches the source's, because then the
+   * two numbers are no longer one claim: a source re-calibrated since is a
+   * measurement of its own film, and naming it beside a different figure here would
+   * invite the reading that they agree. The record still holds the provenance; this
+   * surface simply stops asserting a link between two numbers that differ.
+   */
+  private scaleCopiedFrom = (record: PatientRecord): PatientRecord | null => {
+    if (record.scaleSourceId === null || record.scaleFactor === null) {
+      return null;
+    }
+    const source = this.props.records.filter(
+      (r) => r.imageId === record.scaleSourceId,
+    )[0];
+    return source !== undefined && source.scaleFactor === record.scaleFactor
+      ? source : null;
+  };
+
+  private openApplyScale = (record: PatientRecord) => () =>
+    this.setState({ applyScaleImageId: record.imageId });
+
+  private closeApplyScale = () => this.setState({ applyScaleImageId: null });
+
+  private openRemoveScale = (record: PatientRecord) => () =>
+    this.setState({ removeScaleImageId: record.imageId });
+
+  private closeRemoveScale = () => this.setState({ removeScaleImageId: null });
+
+  /**
+   * Write the reviewed scale onto the films that were ticked, then close. The
+   * dashboard stays where it is: the cards the scale landed on re-read their own
+   * chips from the store, so the change is visible on the surface that asked for
+   * it rather than in an editor the clinician has to go and find.
+   *
+   * What was written is remembered **on each film it was written to** — the source's
+   * image id goes into the same store entry as the number — which is what lets the
+   * same gesture be taken back from the card that made it for as long as the copies
+   * are on file, rather than until the next navigation.
+   */
+  private handleApplyScale = (
+    imageIds: string[], scaleFactor: number, sourceImageId: string,
+  ) => {
+    this.props.onApplyScale(imageIds, scaleFactor, sourceImageId);
+    this.setState({ applyScaleImageId: null });
+  };
+
+  /**
+   * Take the reviewed scale back off the films that were ticked — the same
+   * dispatch the tracing toolbar's own "Remove calibration" makes, once per film,
+   * through the list the clinician has just read.
+   *
+   * Films left unticked keep the scale, so the offer is narrowed to what is still
+   * on file rather than dropped: a clinician who takes it off two of three films
+   * can still take it off the third.
+   */
+  private handleRemoveScale = (imageIds: string[]) => {
+    this.props.onRemoveScale(imageIds);
+    // Nothing to narrow by hand: clearing a film's scale clears its provenance with
+    // it, so the offer is re-derived from what is still on file and a clinician who
+    // takes the scale off two of three films is still offered the third.
+    this.setState({ removeScaleImageId: null });
+  };
+
+  /**
    * The three views this surface launches, each opened on the record the
    * dashboard was pointing at rather than on whatever the editor behind it holds
    * — which is the whole reason they are rendered here: opening T2's report from
@@ -2674,14 +3315,16 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
     const showAgeGap = ageLabel === null && hasDate &&
       patient !== null && index === 0;
     const label = group.label;
-    // The pill carries the label's first token — "T2" out of
-    // "T2 mid-treatment" — exactly as the image rail's tile does, and the rest
-    // of the label is written underneath it. Set whole in the pill, a free-text
-    // label pushed the timepoint's node off the timeline's rail; ellipsised in
-    // the pill, half of what the clinician typed was simply not on the page.
-    const token = getTimepointToken(label);
-    const rest = (label !== null && token !== null)
-      ? label.trim().slice(token.length).trim() : '';
+    // The pill carries the visit's handle — its series token ("T2" out of "T2
+    // mid-treatment"), or the stage word where the visit is filed at a stage
+    // without a number — and the rest of the label is written beside it. Read
+    // through the same helper the case timeline's stops use
+    // (`utils/records#getVisitPill`), so one visit is named one way on both
+    // surfaces. Set whole in the pill, a free-text label pushed the timepoint's
+    // node off the timeline's rail; ellipsised in the pill, half of what the
+    // clinician typed was simply not on the page.
+    const pill = getVisitPill(label);
+    const rest = getVisitRest(label).text;
     // On paper the visit's name is *one* run of text at one weight. Split into a
     // reversed-out pill and a grey note beside it, a free-text label printed as
     // two severed facts — a blue "Pre-treatment" with "records, orthognathic
@@ -2703,6 +3346,27 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
       )
       : null;
     const sinceFrom = previous !== undefined ? bandName(previous) : null;
+    // The visit's photographs are laid out as the composite series a clinic
+    // shoots; its films stay cards, because a cephalogram is read one at a time
+    // and carries a scale, a tracing and its own launch actions.
+    //
+    // Only a *labelled* visit gets the tile. An untimepointed photograph's problem
+    // is not which frame of the series it is — it is that it belongs to no visit,
+    // and the card is what carries the one control that fixes that ("File this
+    // at", see `renderRecord`). A composite of images that are not a visit would
+    // be a series with no place in the chronology.
+    const isSeries = group.label !== null;
+    const photos = isSeries
+      ? group.records.filter(({ type }) => isPhotographType(type)) : [];
+    const cards = isSeries
+      ? group.records.filter(({ type }) => !isPhotographType(type))
+      : group.records;
+    // Something to compare against: another visit of this record with
+    // photographs on file. Offered on the tile, never on a case of one visit.
+    const canCompare = groups.some(
+      (other) => other.key !== group.key &&
+        other.records.some(({ type }) => isPhotographType(type)),
+    );
     return (
       <li key={group.key !== '' ? group.key : '__untimepointed'} className={classes.group}>
         <div className={classes.group_when}>
@@ -2715,13 +3379,11 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
               would otherwise be cut mid-word with nothing to say it had been. */}
           <span
             className={cx(classes.timepoint, classes.timepoint__group, {
-              [classes.timepoint__unset]: label === null,
+              [classes.timepoint__unset]: pill.isUnset,
             })}
             title={label !== null ? label : 'These images carry no timepoint label'}
           >
-            <span className={classes.timepoint_label}>
-              {token !== null ? token : 'No timepoint'}
-            </span>
+            <span className={classes.timepoint_label}>{pill.token}</span>
           </span>
           {rest !== '' ? (
             <span className={classes.group_note} title={label !== null ? label : undefined}>
@@ -2799,9 +3461,24 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
         <div className={classes.group_cards}>
           {/* The card is handed its group: what the stamp beside it already
               states, the card does not repeat. */}
-          {group.records.map(
+          {cards.map(
             (record) => this.renderRecord(record, group, groups),
           )}
+          {/* …the visit's photographs, as the composite series they are shot as
+              rather than as one row per file (see `PhotoSeries`). */}
+          {photos.length > 0 ? (
+            <div className={classes.photos}>
+              <PhotoSeries
+                group={group}
+                records={photos}
+                canCompare={canCompare}
+                onOpenPhoto={this.handleOpenPhoto(group)}
+                onFill={this.handleFillPhotoSlot(group)}
+                onCompare={this.handleComparePhotos(group)}
+                onEdit={this.handleEditRecord}
+              />
+            </div>
+          ) : null}
           {/* …and the visit closes with what it has not got. */}
           {this.renderGroupSlots(group, groups)}
         </div>
@@ -2848,6 +3525,25 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
       record.width, record.height, record.scaleFactor,
     );
     const isScaleSuspect = filmSize !== null && !filmSize.isPlausible;
+    // Whether this film's scale was measured on it or copied from another film of
+    // the record, and from which (see `scaleCopiedFrom`).
+    const copiedFrom = this.scaleCopiedFrom(record);
+    const copiedName = copiedFrom !== null
+      ? (getTimepointToken(copiedFrom.timepoint) ||
+        getImageTypeShortLabel(copiedFrom.type))
+      : null;
+    const copiedDay = copiedFrom !== null
+      ? formatCaptureDate(copiedFrom.captureDate) : null;
+    const copiedLabel = copiedName !== null
+      ? `copied from ${copiedName}${copiedDay !== null ? ` · ${copiedDay}` : ''}`
+      : undefined;
+    const copiedTitle = copiedName !== null
+      ? `This film was not calibrated against a distance measured on it: the ` +
+        `scale was copied from ${copiedName}` +
+        `${copiedDay !== null ? ` (${copiedDay})` : ''}, which was — same image ` +
+        'type, same pixel size, so the same millimetres per pixel. Calibrate this ' +
+        'film from its own tracing toolbar to measure it independently.'
+      : undefined;
     // An image that carries no timepoint can be filed onto a visit from here.
     // Until now the only way was Edit details, re-typing by hand the label and
     // the day this surface already knows — one row under the slots that offer
@@ -2973,12 +3669,12 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
               film's name and its date to 700px. Every value is read off the
               store; an item is omitted, not guessed. */}
           <span className={classes.card_tech}>
-            <FactRow
-              label="Pixels"
-              value={record.width !== null && record.height !== null
-                ? `${record.width} × ${record.height}`
-                : null}
-            />
+            {/* The scale leads this column, and the pixel size follows it quietly.
+                Set the other way round and at one weight, the *file's* dimensions
+                were the first and boldest thing in the card's right-hand column —
+                above the one reading in it that decides whether a millimetre on
+                this film is real. A clinician assessing a record does not read
+                800 × 960 first. */}
             {/* Only the scale that exists. "Not calibrated" is the chip
                 20px above this line — printed here as well, the card stated
                 one fact twice in two visual languages.
@@ -2992,15 +3688,33 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
                 film 83 × 100 mm" on a card that says the image is not analysable
                 and calls a portrait a film. Nothing measures it, so nothing
                 states its scale. */}
+            {/* …and where the number came from, where it did not come from this
+                film. A calibration marked against a ruler on this radiograph and one
+                carried over from a sibling film are not the same claim, and without
+                this the record could not tell them apart: after propagating, T2's
+                card read "SCALE 0.25 mm/px" exactly as T1's did — the film that was
+                actually measured — on screen, in the closing tally and on the
+                printed sheet, for the life of the record. It is stated the way
+                "film 83 × 100 mm" already qualifies the number: quietly, on the
+                SCALE row, in the same words the CALIBRATION row above uses. */}
             {record.isTraceable ? (
               <FactRow
                 label="Scale"
                 value={record.scaleFactor !== null
                   ? formatScale(record.scaleFactor) : null}
                 note={filmSize !== null ? `film ${filmSize.label}` : undefined}
+                origin={copiedFrom !== null ? copiedLabel : undefined}
+                originTitle={copiedFrom !== null ? copiedTitle : undefined}
                 isNoteWarn={isScaleSuspect}
               />
             ) : null}
+            <FactRow
+              label="Pixels"
+              value={record.width !== null && record.height !== null
+                ? `${record.width} × ${record.height}`
+                : null}
+              isQuiet
+            />
             {record.name !== null ? (
               <span className={classes.card_file} title={record.name}>
                 {record.name}
@@ -3036,6 +3750,10 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
             clinical report, its treatment simulation. Traceable films only, and
             every control that is off explains itself. */}
         {this.renderCardLaunch(record, identity)}
+        {/* …and the one act that belongs to this film's *scale* rather than to
+            the film: carrying it to the record's other uncalibrated films of the
+            same type and pixel size. */}
+        {this.renderCardCalibration(record)}
         {/* One chip per visit already on file: pressing it writes that visit's
             label and its earliest capture date onto this image — the slots' own
             data path (`handleFileAt`), applied to a record that already exists.
@@ -3084,9 +3802,16 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
     const { records, patient, otherChartIds } = this.props;
     const {
       editingImageId, removingImageId, isEditingPatient, patientFocusField,
+      applyScaleImageId, removeScaleImageId, photoViewer,
     } = this.state;
     const editing = records.filter((r) => r.imageId === editingImageId)[0];
     const removing = records.filter((r) => r.imageId === removingImageId)[0];
+    const scaleSource = records.filter(
+      (r) => r.imageId === applyScaleImageId,
+    )[0];
+    const unscaleSource = records.filter(
+      (r) => r.imageId === removeScaleImageId,
+    )[0];
     return (
       <div>
         <EditPatientDialog
@@ -3103,7 +3828,10 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
             type: editing.type,
             timepoint: editing.timepoint,
             captureDate: editing.captureDate,
-          } : { type: null, timepoint: null, captureDate: null }}
+            photoView: editing.photoView,
+          } : {
+            type: null, timepoint: null, captureDate: null, photoView: null,
+          }}
           fileName={editing !== undefined ? editing.name : null}
           onSave={this.handleSaveMeta}
           onCancel={this.closeEdit}
@@ -3121,6 +3849,46 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
           landmarksPlaced={removing !== undefined ? removing.landmarksPlaced : 0}
           onConfirm={this.handleConfirmRemove}
           onCancel={this.closeRemove}
+        />
+        {/* Carrying one film's scale to the record's other films — the reviewable
+            list of exactly what would change (see `ApplyScaleDialog`). The targets
+            are re-derived from the store on every render, so a film calibrated in
+            the meantime drops off the list rather than being written over. */}
+        <ApplyScaleDialog
+          open={scaleSource !== undefined}
+          source={scaleSource !== undefined ? scaleSource : null}
+          targets={scaleSource !== undefined
+            ? getScalePropagationTargets(records, scaleSource) : []}
+          onApply={this.handleApplyScale}
+          onCancel={this.closeApplyScale}
+        />
+        {/* …and the mirror of it: the same list, the same review, the reverse
+            write. The set is re-derived from the store on every render, so a film
+            re-calibrated in the meantime is not offered for clearing. */}
+        {/* The photographs' viewer: one photograph enlarged, one position across
+            the visits, or two visits' whole series. It is handed the record's
+            grouping (the same reading the page itself is drawn from) and this
+            surface's own age derivation, so a caption in it and a visit stamp
+            behind it cannot state two ages for one day. */}
+        <PhotoViewer
+          open={photoViewer !== null}
+          target={photoViewer}
+          groups={groupRecordsByTimepoint(records)}
+          getAgeOn={this.getAgeOn}
+          onClose={this.closePhotoViewer}
+          onOpenRecord={this.handleOpenPhotoRecord}
+          onEdit={this.handleEditPhoto}
+          onRemove={this.handleRemovePhoto}
+        />
+        <ApplyScaleDialog
+          mode="remove"
+          open={unscaleSource !== undefined}
+          source={unscaleSource !== undefined ? unscaleSource : null}
+          targets={unscaleSource !== undefined
+            ? this.appliedFrom(unscaleSource) : []}
+          onApply={this.handleApplyScale}
+          onRemove={this.handleRemoveScale}
+          onCancel={this.closeRemoveScale}
         />
       </div>
     );
@@ -3169,6 +3937,11 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
     type,
     timepoint: group.label,
     captureDate: group.firstDate,
+    // A type slot names a type, so the frame it proposes is that type's usual one
+    // (a profile photograph *is* the profile frame); the series tile's cells name
+    // the frame itself. Either way it is on screen in the upload form, editable
+    // before anything is filed.
+    photoView: getDefaultPhotoView(type),
   });
 
   /**
@@ -3182,6 +3955,7 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
       type,
       timepoint: getDefaultTimepoint(0),
       captureDate: null,
+      photoView: getDefaultPhotoView(type),
     });
 
   /**
@@ -3203,6 +3977,9 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
     type: record.type,
     timepoint: target.label,
     captureDate: target.date !== null ? target.date : record.captureDate,
+    // Filing an image onto a visit changes *when* it was taken, not what it is:
+    // its series position is carried over untouched.
+    photoView: record.photoView,
   });
 
   /** The band's own button: the whole form, no field singled out. */
@@ -3227,6 +4004,81 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
     }
     this.setState({ isEditingPatient: false, patientFocusField: null });
   };
+
+  // ---- The photographic series ----------------------------------------------
+
+  /**
+   * Enlarge one photograph of a visit — in the photograph viewer, which is a way
+   * of *looking*: it opens on the frame that was pressed and offers the two
+   * comparisons beside it. Nothing about it offers tracing or an analysis; a
+   * photograph is not traced by this app, and the viewer says so on every reading.
+   */
+  private handleOpenPhoto = (group: TimepointGroup<PatientRecord>) =>
+    (record: PatientRecord) => this.setState({
+      photoViewer: {
+        mode: 'single',
+        imageId: record.imageId,
+        view: record.photoView,
+        groupKey: group.key,
+      },
+    });
+
+  /**
+   * File an upload at exactly one position of one visit's series — the empty
+   * cell's own act, on the very path the type slots use (`handleFillSlot`): the
+   * upload form opens already stating the frame, the type that frame belongs to,
+   * the visit and the visit's day, all of them editable before a file is chosen.
+   */
+  private handleFillPhotoSlot = (group: TimepointGroup<PatientRecord>) =>
+    (view: PhotoViewOption) =>
+      this.props.onAddImage(this.props.emptyWorkspaceId, {
+        type: view.imageType,
+        timepoint: group.label,
+        captureDate: group.firstDate,
+        photoView: view.id,
+      });
+
+  /**
+   * Compare this visit's photographs with the record's others. `view` is the
+   * position to open on, or null for "whichever position this record actually
+   * holds" (see `PhotoViewer#seed`) — the tile's own "Compare visits" passes null.
+   */
+  private handleComparePhotos = (group: TimepointGroup<PatientRecord>) =>
+    (view: PhotoView | null) => this.setState({
+      photoViewer: {
+        mode: 'position',
+        imageId: null,
+        view,
+        groupKey: group.key,
+      },
+    });
+
+  private closePhotoViewer = () => this.setState({ photoViewer: null });
+
+  /**
+   * Open a photograph in the app's read-only record viewer — the same path a
+   * card's own press takes, with the photograph viewer closed behind it so the
+   * clinician does not land back inside a dialog on the way out.
+   */
+  private handleOpenPhotoRecord = (record: PatientRecord) => {
+    this.setState({ photoViewer: null });
+    this.props.onOpenRecord(record);
+  };
+
+  /**
+   * Correct / drop a photograph from the viewer: the record's own dialogs, which
+   * this surface already owns. The viewer closes first — two stacked modals over a
+   * records chart is not a review, it is a pile.
+   */
+  private handleEditPhoto = (record: PatientRecord) =>
+    this.setState({ photoViewer: null, editingImageId: record.imageId });
+
+  private handleRemovePhoto = (record: PatientRecord) =>
+    this.setState({ photoViewer: null, removingImageId: record.imageId });
+
+  /** The same dialog a card's pencil opens, taken by record rather than curried. */
+  private handleEditRecord = (record: PatientRecord) =>
+    this.setState({ editingImageId: record.imageId });
 
   private handleEditClick = (record: PatientRecord) => () =>
     this.setState({ editingImageId: record.imageId });
@@ -3344,18 +4196,38 @@ const getRecordSpan = (
  * the reason the record needs a second look.
  */
 const FactRow = (
-  { label, value, note, isNoteWarn = false }: {
+  { label, value, note, origin, originTitle, isNoteWarn = false,
+    isQuiet = false }: {
     label: string;
     value: string | null;
     note?: string;
+    /**
+     * Where the value came from, where that is not this film — "copied from T1 ·
+     * 2024-04-10" under a scale carried over from another film of the record.
+     *
+     * Its own line inside the row rather than a third clause on it: the technicals
+     * column is one width for the whole page (see `.card_tech`), and a second
+     * qualifier on the SCALE line would have widened one card's column and left the
+     * panel with a ragged rule down its middle.
+     */
+    origin?: string;
+    originTitle?: string;
     isNoteWarn?: boolean;
+    /**
+     * Secondary metadata: a fact about the *file* rather than about the film.
+     * The pixel size is the only one — it belongs on the card (a 400 × 480 export
+     * is worth knowing about) and it is not a clinical reading, so it must not be
+     * set at the weight of the mm/px scale beside it, let alone at the weight of
+     * the radiograph itself.
+     */
+    isQuiet?: boolean;
   },
 ) => {
   if (value === null) {
     return null;
   }
   return (
-    <span className={classes.fact}>
+    <span className={cx(classes.fact, { [classes.fact__quiet]: isQuiet })}>
       <span className={classes.fact_key}>{label}</span>
       <span className={classes.fact_value}>{value}</span>
       {note !== undefined ? (
@@ -3365,6 +4237,11 @@ const FactRow = (
           })}
         >
           {note}
+        </span>
+      ) : null}
+      {origin !== undefined ? (
+        <span className={classes.fact_origin} title={originTitle}>
+          {origin}
         </span>
       ) : null}
     </span>

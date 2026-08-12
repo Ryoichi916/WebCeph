@@ -7,7 +7,7 @@ import { createSelector } from 'reselect';
 import { getTracingImageId } from './settings';
 import { getActiveWorkspaceId } from './activeId';
 
-import { isTraceableImageType } from 'utils/records';
+import { isTraceableImageType, reconcilePhotoView } from 'utils/records';
 
 const KEY_IMAGES: StoreKey = 'images.props';
 const KEY_IMAGES_LOAD_STATUS: StoreKey = 'images.status';
@@ -23,12 +23,21 @@ const defaultImageProps = {
   // invents a timepoint or a capture date on the user's behalf.
   timepoint: null as string | null,
   captureDate: null as string | null,
+  // Which frame of the photographic series a photograph is (see
+  // utils/records#PHOTO_VIEW_OPTIONS). Null for every radiograph and for a
+  // photograph whose frame was not stated — never inferred from the type.
+  photoView: null as PhotoView | null,
   // Natural pixel dimensions of the loaded image; filled from the
   // LOAD_IMAGE_SUCCEEDED payload. Used to render the tracing canvas at the right
   // aspect ratio and to auto-fit the zoom.
   width: null as number | null,
   height: null as number | null,
   scaleFactor: null as number | null,
+  // Where that scale came from, when it was not measured on this film: the
+  // imageId it was copied from by the records dashboard's batched "apply this
+  // scale to the record's other films". Null for a calibration marked on this
+  // film — the only kind the tracing toolbar makes. @see SET_SCALE_FACTOR_REQUESTED
+  scaleSourceId: null as string | null,
   flipX: false,
   flipY: false,
   brightness: 0.5,
@@ -74,25 +83,41 @@ const reconcileAnalysisWithType = (entry: ImageEntry): ImageEntry => {
   return { ...entry, analysis: { ...entry.analysis, activeId: null } };
 };
 
+/**
+ * Keeps a photograph's series position consistent with its type: a position
+ * belongs to exactly one image type, so re-filing a photograph as a cephalogram —
+ * or as a different kind of photograph — cannot leave "Right buccal" stored on it.
+ *
+ * It drops the position rather than translating it (see
+ * `utils/records#reconcilePhotoView`): nothing knows which intraoral frame a
+ * photograph re-filed from "Frontal photograph" is, so nothing claims one. The
+ * record form writes the pair together, so this only ever fires on the paths that
+ * write a type alone.
+ */
+const reconcileViewWithType = (entry: ImageEntry): ImageEntry => {
+  const photoView = reconcilePhotoView(entry.type, entry.photoView);
+  return photoView === entry.photoView ? entry : { ...entry, photoView };
+};
+
 const imagesReducer = handleActions<typeof KEY_IMAGES>(
   {
     SET_IMAGE_PROPS: (state, { payload }) => {
       return {
         ...state,
-        [payload.id]: reconcileAnalysisWithType({
+        [payload.id]: reconcileViewWithType(reconcileAnalysisWithType({
           ...state[payload.id],
           ...payload,
-        } as ImageEntry),
+        } as ImageEntry)),
       };
     },
     LOAD_IMAGE_SUCCEEDED: (state, { payload }) => {
       return {
         ...state,
-        [payload.id]: reconcileAnalysisWithType({
+        [payload.id]: reconcileViewWithType(reconcileAnalysisWithType({
           ...defaultImageProps,
           ...state[payload.id],
           ...payload,
-        } as ImageEntry),
+        } as ImageEntry)),
       };
     },
     CLOSE_IMAGE_REQUESTED: (state, { payload: { imageId } }) => {
@@ -110,12 +135,22 @@ const imagesReducer = handleActions<typeof KEY_IMAGES>(
         },
       };
     },
-    SET_SCALE_FACTOR_REQUESTED: (state, { payload: { imageId, value } }) => {
+    SET_SCALE_FACTOR_REQUESTED: (
+      state, { payload: { imageId, value, sourceImageId } },
+    ) => {
       return {
         ...state,
         [imageId]: {
           ...state[imageId],
           scaleFactor: value,
+          // Provenance travels with the number, and it is *replaced* by every
+          // write: re-calibrating a film in the tracing editor dispatches this
+          // action without a source, which is exactly what has happened — the
+          // scale is now a measurement made on this film, so the record must stop
+          // saying it was copied from another one.
+          scaleSourceId: typeof sourceImageId === 'string' &&
+            sourceImageId !== imageId
+            ? sourceImageId : null,
         },
       };
     },
@@ -125,6 +160,8 @@ const imagesReducer = handleActions<typeof KEY_IMAGES>(
         [imageId]: {
           ...state[imageId],
           scaleFactor: null,
+          // No scale, nothing to have a provenance.
+          scaleSourceId: null,
         },
       };
     },
@@ -369,6 +406,24 @@ export const getImageCaptureDate = createSelector(
 );
 
 /**
+ * Which position of the photographic series this photograph is, or null.
+ *
+ * Read through `reconcilePhotoView`, so a stored position that does not belong to
+ * the stored type is reported as *no* position rather than translated into one:
+ * the pair is written together by the record form, and the one path that can put
+ * them out of step (a legacy project, an older import, a surface that edits only
+ * the type) must not have the record claim a frame nobody chose.
+ */
+export const getImagePhotoView = createSelector(
+  getImageProps,
+  (getProps) => (id: string): PhotoView | null => {
+    const props = getProps(id);
+    return props !== undefined
+      ? reconcilePhotoView(props.type, props.photoView) : null;
+  },
+);
+
+/**
  * Whether this image can be traced and analysed. The single predicate the
  * editor, the rail and the dashboard share, so a panoramic film is never
  * offered a cephalometric stepper.
@@ -419,6 +474,19 @@ export const getScaleFactor = createSelector(
   (getProps) => (id: string): number | null => {
     const props = getProps(id);
     return (props && typeof props.scaleFactor === 'number') ? props.scaleFactor : null;
+  },
+);
+
+/**
+ * The film this image's scale was copied from, or null when it was measured here.
+ * @see SET_SCALE_FACTOR_REQUESTED
+ */
+export const getScaleSourceId = createSelector(
+  getImageProps,
+  (getProps) => (id: string): string | null => {
+    const props = getProps(id);
+    return (props && typeof props.scaleSourceId === 'string')
+      ? props.scaleSourceId : null;
   },
 );
 

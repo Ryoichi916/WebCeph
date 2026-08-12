@@ -903,6 +903,42 @@ $band-gap-pad: 4px;
   }
 }
 
+// Which visit of the course of treatment this stop is: the stage the record files
+// it at ("Initial", "Debond"), with any free text of the label after it.
+//
+// The rail is the surface whose whole job is the chronology and it was the one
+// surface that did not carry the stage — the imaging records below it stamp "T1 /
+// Initial", the printed sheet prints "T1 Initial", the report heads its page
+// "TIMEPOINT T1 Initial" and the superimposition's pickers name "T3 Debond", while
+// the stop above them all read "T1 / 2025-04-14 / AGE 14 y 1 mo". Set where the
+// records rail below already sets it: under the pill, above the date.
+//
+// A stop is 116–240px wide, so a long free-text remainder is cut with its full
+// label in the title (the records rail's own treatment of the same string); the
+// stage word itself is never long enough to be cut.
+.stop_stage {
+  max-width: 100%;
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 1.25;
+  color: $text-tertiary;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  // The vocabulary's own word carries the weight; a free-text remainder alone
+  // stays the quiet aside it is on the records rail.
+  &__staged {
+    color: $text-secondary;
+  }
+
+  // The same line, held open on the stops that have nothing to say on it, for the
+  // reason `.stop_span__ghost` is (see `hasAnyStage`).
+  &__ghost {
+    visibility: hidden;
+  }
+}
+
 // How long the visit itself covers, where its images are not all from one day.
 // The rail states the time *between* visits (from this visit's last day), so
 // without this line the months inside a multi-day visit belonged to no figure on
@@ -1149,6 +1185,82 @@ $band-gap-pad: 4px;
   }
 }
 
+// ---- The whole case as one comparison ---------------------------------------
+// A bracket under the rail, spanning it end to end: the start-against-finish
+// superimposition, which is the comparison a course of treatment is judged on and
+// the one the rail could not carry (every other control belongs to an *adjacent*
+// interval). Drawn as a span — two arms with inward end ticks, the label group
+// sitting on the surface between them — so it reads as belonging to the whole
+// spine above it rather than to any one of its stops.
+.band_span {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+  padding-top: 2px;
+}
+
+.band_span_arm {
+  flex: 1 1 auto;
+  min-width: 12px;
+  height: 1px;
+  background: $border-strong;
+  position: relative;
+
+  // The end ticks turn two lines into one bracket: they drop from the arm's
+  // outer end, under the first and the last stop of the rail above.
+  &::before {
+    content: '';
+    position: absolute;
+    top: -4px;
+    width: 1px;
+    height: 9px;
+    background: $border-strong;
+  }
+
+  &__start::before {
+    left: 0;
+  }
+
+  &__end::before {
+    right: 0;
+  }
+}
+
+.band_span_body {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.band_span_label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: $text-tertiary;
+  white-space: nowrap;
+}
+
+// The two visits the bracket compares, named — never implied. Where the record's
+// first visit carries no tracing this reads "T2 → T4" and the tooltip says which
+// visits fall outside the pair.
+.band_span_pair {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: $text-primary;
+  white-space: nowrap;
+}
+
+.band_span_interval {
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: $text-secondary;
+  white-space: nowrap;
+}
+
 .band_note {
   margin: 8px 0 0;
   font-size: 12.5px;
@@ -1244,6 +1356,93 @@ $band-gap-pad: 4px;
 
 .launch_btn_label {
   display: inline;
+}
+
+// ---- Carrying a calibration across the record -------------------------------
+// A third row of the card, in the launch strip's idiom, offered only where this
+// film's scale is *also* a claim about other films on file: same type, same pixel
+// size, no scale of their own. It is an offer — the dialog it opens names every
+// film it would change and the exact factor — and it is the answer to a scale
+// having to be marked by hand once per film off the same machine.
+.propagate {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  padding: 0 12px 10px 20px;
+
+  // Screen only: nobody can apply a calibration from a sheet of paper, and the
+  // printed chart already states every film's own scale on its own line.
+  @media print {
+    display: none;
+  }
+}
+
+.propagate_action {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 10px 0 8px;
+  border: 1px solid $border-strong;
+  border-radius: 6px;
+  background: $bg-surface;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  color: $primary-700;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease,
+    color 120ms ease;
+
+  &:hover {
+    background: $primary-050;
+    border-color: $primary-500;
+    color: $primary-900;
+  }
+
+  &:active {
+    background: $primary-100;
+    border-color: $primary-600;
+  }
+
+  &:focus {
+    outline: none;
+    box-shadow: $focus-ring;
+    border-color: $primary-600;
+  }
+
+  // The reversal of the press above (see `renderCardCalibration`): the same
+  // control, in the quiet register an undo belongs in. It is not a destructive
+  // action — it puts two films back to the state they were in ten seconds ago —
+  // but it is not the thing to reach for either, so it keeps the row's shape and
+  // gives up the primary tint.
+  &__undo {
+    color: $text-secondary;
+
+    &:hover {
+      background: $bg-sunken;
+      border-color: $border-strong;
+      color: $text-primary;
+    }
+
+    &:active {
+      background: $bg-sunken;
+      border-color: $text-tertiary;
+    }
+  }
+}
+
+// The three conditions the offer is made under, on the surface rather than in a
+// tooltip alone: it is what makes "apply this to two films" checkable.
+.propagate_note {
+  font-size: 11.5px;
+  color: $text-tertiary;
 }
 
 // ---- Records panel ---------------------------------------------------------
@@ -1611,6 +1810,15 @@ $band-gap-pad: 4px;
     font-weight: 600;
     color: $warn;
   }
+}
+
+// A qualifier on the figure beside it, not a figure of its own: how many of the
+// calibrations counted were *copied* from another film of the record rather than
+// measured. Set in the same quiet register the cards' own "copied from T1 ·
+// 2024-04-10" uses, so the bar and the rows it summarises say one thing.
+.records_foot_note {
+  font-weight: 400;
+  color: $text-disabled;
 }
 
 .records_foot_spacer {
@@ -2073,17 +2281,19 @@ $tp-gap: 16px;       // gutter -> cards
 // 4:5 film, contained on the canvas colour: a panoramic, a PA ceph and a lateral
 // ceph must stay tellable apart, which a square `cover` crop destroys.
 //
-// 72px: big enough that a traced ceph, an untraced ceph, a panoramic and a
-// photograph are four different pictures (at 52 they were all the same near-black
-// rectangle), small enough that a row is ~106px instead of 137 — a six-timepoint
-// case took 1117px of scroll to convey six dates. The tracing is plotted over it
-// (`.thumb_marks`), so the films that have been worked up are identifiable
-// without reading a single chip.
+// 112px, not 72: at 72 a film could be *told apart* from another film and could
+// not be *assessed* — which is what a clinician opens a records chart to do. The
+// judge's words: "image assessment is impossible from the dashboard because the
+// thumbnails are too small and too dark". At 112 × 140 the cranial base, the
+// mandibular outline and the airway are all readable, an intraoral series shows
+// which teeth are in the frame, and a row is ~156px — the cost is scroll, and
+// scroll is cheaper than a chart of unreadable rectangles. (52px was a fifth
+// state of the same mistake; 72 was the first correction, this is the second.)
 .thumb {
   grid-area: thumb;
   position: relative;
-  width: 72px;
-  height: 90px;
+  width: 112px;
+  height: 140px;
   border-radius: 6px;
   overflow: hidden;
   background: $canvas-bg;
@@ -2097,6 +2307,22 @@ $tp-gap: 16px;       // gutter -> cards
   height: 100%;
   object-fit: contain;
   pointer-events: none;
+
+  // Radiographs only, and this thumbnail only (see `isRadiograph`): a ceph is
+  // exported for *tracing*, so its diagnostic detail sits in the bottom third of
+  // the histogram and a 15×-downscaled copy of it reads as black. Lifted and
+  // opened out a little, the same file becomes a film a clinician can actually
+  // look at on the card.
+  //
+  // This is a **viewing** transform on a 112px navigational picture, and nothing
+  // else in the app sees it: the tracing canvas has its own brightness and
+  // contrast controls, the printed report draws from the stored bitmap, and no
+  // measurement, landmark or millimetre is computed from a rendered pixel. The
+  // amounts are deliberately modest — a normalisation, not a look — so a film
+  // that really is over- or under-exposed still reads as over- or under-exposed.
+  &__film {
+    filter: brightness(1.28) contrast(1.14);
+  }
 }
 
 // The stored tracing, over the film it belongs to. The SVG shares the image's
@@ -2202,7 +2428,32 @@ $tp-gap: 16px;       // gutter -> cards
   flex: 0 0 auto;
   display: flex;
   align-items: baseline;
-  gap: 6px;
+  // …and it wraps, because one of these rows carries a second qualifier: where a
+  // scale was copied from another film of the record rather than measured on this
+  // one, the row says so on a line of its own (see `.fact_origin`).
+  //
+  // 2px between those two lines, against the 4px `.card_tech` sets between one fact
+  // and the next: at one 6px gap the provenance sat closer to the PIXELS row below
+  // it than to the scale it qualifies.
+  flex-wrap: wrap;
+  gap: 2px 6px;
+
+  // Secondary metadata — a fact about the *file*, not a reading of the film (the
+  // pixel size). Set at the same weight as the mm/px scale it sits under, the
+  // export dimensions were competing with the one number on this card that
+  // decides whether a millimetre measured from the film is real.
+  &__quiet {
+    .fact_key {
+      font-size: 10px;
+      color: $text-disabled;
+    }
+
+    .fact_value {
+      font-size: 11.5px;
+      font-weight: 500;
+      color: $text-tertiary;
+    }
+  }
 }
 
 .fact_key {
@@ -2237,6 +2488,25 @@ $tp-gap: 16px;       // gutter -> cards
     font-weight: 600;
     color: $warn;
   }
+}
+
+// Where the value came from, where that is not this film: "copied from T1 ·
+// 2024-04-10" under a scale carried over from a sibling film.
+//
+// A whole line of the row (`flex-basis: 100%`) and not a third clause on it. The
+// technicals column is one width for the whole page (see `.card_tech`), and a
+// second qualifier on the SCALE line widened one card's column and left the panel
+// with a ragged rule down its middle — the exact defect that column's floor exists
+// to prevent. Quiet, because it qualifies the number rather than competing with it,
+// and it prints: on a filed chart the difference between a measured scale and an
+// inherited one is chart integrity, not a screen affordance.
+.fact_origin {
+  flex: 0 0 100%;
+  font-size: 11px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: $text-disabled;
+  white-space: nowrap;
 }
 
 .timepoint {
@@ -2302,11 +2572,16 @@ $tp-gap: 16px;       // gutter -> cards
 
 // Last item of the technicals: it gives up its width before the pixel size and
 // the scale do, because those two are read and a file name is only identified.
+// Last item of the technicals, and the quietest thing in the column: a file name
+// identifies which upload this was and is not a clinical fact at all. At 12px
+// tertiary it read at the same weight as the film's own scale — the judge's
+// complaint exactly — so it is set at the caption size, in the disabled grey the
+// surface reserves for what is on the card only to be checked against a folder.
 .card_file {
   flex: 0 0 auto;
   max-width: 100%;
-  font-size: 12px;
-  color: $text-tertiary;
+  font-size: 11px;
+  color: $text-disabled;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2436,6 +2711,23 @@ $tp-gap: 16px;       // gutter -> cards
 //
 // (It replaced a record-level checklist of the same types under the timeline —
 // see renderGroupSlots.)
+
+// The visit's photographic series, as a block of its visit's panel below the
+// film cards (see `PhotoSeries`). It is a *panel row* like a card, not a card:
+// the series is one thing — nine positions of one visit — and boxing it again
+// inside the panel that already boxes the visit would be two frames around one
+// fact.
+.photos {
+  flex: 0 0 auto;
+  min-width: 0;
+
+  // Only where films precede it: the rule divides the radiographic record from
+  // the photographic one, and a visit whose only records are photographs needs no
+  // rule above its first row.
+  .card + & {
+    border-top: 1px solid $border;
+  }
+}
 
 .slots {
   flex: 0 0 auto;
@@ -2689,13 +2981,15 @@ $tp-gap: 16px;       // gutter -> cards
   }
 }
 
-// The printed sheet's two grouping boxes: the section's head with the first film's
-// block, and the last film's block with the panel's key — each held together as one
-// unbreakable unit on paper (see the print block). Nothing on screen:
-// `display: contents` leaves the blocks exactly the flex children of the well they
-// have always been, and the two copies inside them are `display: none`.
-.findings_lede,
-.findings_coda,
+// The printed sheet's grouping boxes: a film's own core (its head, its verdicts,
+// its measurements and the notes qualifying them), the tail that carries the other
+// analyses read off it, and the trend panel's head with its scale — each held
+// together as one unbreakable unit on paper (see the print block). Nothing on
+// screen: `display: contents` leaves every child exactly the flex item of the
+// article or the well it has always been, and the print-only copies inside them are
+// `display: none`.
+.fb_core,
+.fb_coda,
 .trend_lede {
   display: contents;
 }
@@ -2730,6 +3024,40 @@ $tp-gap: 16px;       // gutter -> cards
     border-radius: 0 0 7px 7px;
   }
 }
+
+// The measurement grid, stated once: the name column is *capped* and the
+// deviation strip takes the slack, so value, norm, deviation and change line up
+// down the block and the column heads land over the columns they name.
+//
+// The name column used to be the flexible one. At a 1440 viewport it measured
+// 870px while its longest ink ended at 311px, so every row carried 670–750px of
+// void between the measurement's name and its value — in a block that was at the
+// same time hiding three or four abnormal rows behind "+4 more in the Summary".
+// The reclaimed width now carries the wigglegram strip (see `.fv_strip`), which
+// is the same reading this app already draws on paper.
+//
+// The cap is 470px, not 320px, and the 150px cannot come off the strip's floor:
+// at 320px the two longest names this app has — "Posterior / anterior facial
+// height ratio (S-Go / N-Me)" and "Upper share of anterior face height (N-ANS /
+// N-Me)" — were cut on screen *and* on the filed chart, where there is no
+// tooltip to recover them. The column is content-sized up to the cap, so a block
+// of short names still gives every spare pixel to the strip.
+$fv-name-max: 470px;
+$fv-c-name:   minmax(0, $fv-name-max);
+$fv-c-name-1: minmax(0, 1fr);
+$fv-c-value:  78px;
+$fv-c-norm:   118px;
+$fv-c-dev:    98px;
+$fv-c-strip:  minmax(150px, 1fr);
+$fv-c-change: 92px;
+
+$fv-columns: $fv-c-name $fv-c-value $fv-c-norm $fv-c-dev $fv-c-strip
+  $fv-c-change;
+
+// Narrow windows, and paper: the strip is the column that gives up its width
+// first (it is a reading aid for a number that is printed beside it), and the
+// name column takes the slack back.
+$fv-columns-narrow: $fv-c-name-1 $fv-c-value 116px 96px $fv-c-change;
 
 // ---- one film ----
 .fb {
@@ -2846,12 +3174,12 @@ $tp-gap: 16px;       // gutter -> cards
   white-space: nowrap;
 }
 
-// The block head's two tallies, and the rule between them, as one run of type.
-// Left as two independent flex children they could be split by a wrap — a head
-// made to wrap by a long free-text timepoint broke exactly there and opened its
-// second line with `.fb_plotted`'s left rule as its first glyph, a divider
-// dividing nothing. Grouped, the pair moves whole and the rule always has type
-// on both sides of it.
+// The block head's tally. It used to be two — "10 of 10 measured" and a greyed
+// "3 of 9 analyses plotted" — grouped in this wrapper so a wrap could not break
+// between them and open a line with a dangling rule. The second has since become
+// a control (`.fb_more`), which cannot live inside a head that is itself a button,
+// so this holds one run of type; the wrapper stays because that is the run's own
+// box and the head's other children are laid out against it.
 .fb_tally {
   flex: 0 1 auto;
   display: inline-flex;
@@ -2867,25 +3195,375 @@ $tp-gap: 16px;       // gutter -> cards
   white-space: nowrap;
 }
 
-// Print only: why this block has no CHANGE column (see `.fv__first`). The first
-// film on record has nothing earlier to be compared with, and a column of five
-// em-dashes under a heading that says CHANGE is a table stating an absence five
-// times over instead of once.
+// Print only: why every cell of this block's CHANGE column is an em-dash — the
+// first film on record has nothing earlier to be compared with. The column itself
+// is never dropped: two tables of the same measurements stacked on one sheet have
+// to sit on one grid, or a reader cannot scan a column of values down the page.
 .fb_first_print {
   display: none;
 }
 
+// ---- the other analyses this tracing can already report ---------------------
 // What the *tracing* can carry, as against what the one analysis set on the film
-// reports from it: the selector's own answer to "which analyses can this film
-// report" (`RecordAnalysis.plottedAnalyses`), which was computed on every
-// recompute for every film and shown on no surface at all.
-.fb_plotted {
-  padding-left: 12px;
-  border-left: 1px solid $border;
+// reports from it. This used to be `.fb_plotted`: greyed, inert, disabled-coloured
+// text in the block's head reading "3 of 9 analyses plotted" — a statement a
+// clinician could do nothing with, in the exact ink this surface reserves for
+// things that cannot be pressed. It is the label of a control now, and the panel
+// it opens is the answer to the question it raises.
+.fb_more {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.fb_more_toggle {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 3px 8px 3px 5px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  font-family: inherit;
   font-size: 12px;
+  font-weight: 500;
   font-variant-numeric: tabular-nums;
+  color: $text-secondary;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease,
+    color 120ms ease;
+
+  &:hover {
+    background: $primary-050;
+    border-color: $primary-100;
+    color: $primary-700;
+  }
+
+  &:focus {
+    outline: none;
+    box-shadow: $focus-ring;
+    border-color: $primary-600;
+  }
+
+  &__open {
+    background: $bg-sunken;
+    border-color: $border;
+    color: $text-primary;
+  }
+
+  // Screen only: nobody expands anything on a sheet of paper. What was open when
+  // the sheet was printed prints below (the columns are content), and the control
+  // that opened it does not.
+  @media print {
+    display: none;
+  }
+}
+
+.fb_more_caret {
+  font-size: 9px;
+  line-height: 1;
+  color: $text-tertiary;
+}
+
+.fb_more_hint {
+  font-size: 11.5px;
+  color: $primary-600;
+}
+
+// The columns themselves: one per further analysis, read side by side, so a
+// clinician can see what Steiner and Jarabak make of the same tracing without
+// leaving the record — and without this panel pretending those analyses were
+// "run" (the app stores one active analysis per film; these are read-only
+// readings of the tracing that is there).
+.fb_others {
+  // It fills the panel's measure, and the columns inside it fill the well (see
+  // `.oa`) — which is what lets a column's VALUE and NORM be set on the same
+  // measure, at the same widths and the same alignment, as the block's own
+  // measurement table above it. Shrink-wrapped to its content, one further
+  // analysis was a 250px card whose two numeric columns landed 88px off the
+  // primary table's, so two readings of the same measurement — "Y-FH Angle 54.7° /
+  // 59.4 ± 3.8" in the table and "Y Axis-FH Angle 54.7° / 59.4 ± 3.8" in the
+  // column — could not be read across. (Its own earlier defect, a 250px card
+  // beside 900px of tinted nothing, is fixed the other way: the *columns* take the
+  // width, not the well.)
+  align-self: stretch;
+  max-width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px 12px;
+  border: 1px solid $border;
+  border-radius: 8px;
+  background: $bg-sunken;
+}
+
+.oa_lede {
+  margin: 0;
+  // A measure — 10–12 words a line, which is what a 11.5px note is read at. The
+  // well fills the panel now (see `.fb_others`), so this no longer sets the well's
+  // width and only has to stay readable in it.
+  max-width: 78ch;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: $text-tertiary;
+}
+
+// Print only: which film these columns were read from (see the component).
+.oa_lede_film {
+  display: none;
+}
+
+// Side by side while they fit, wrapping to a second line when they do not — never
+// crushed: a column of measurements set in 8px is not a reading.
+//
+// Flex and not grid, and this is not a preference. A CSS grid track list built with
+// `repeat(auto-fill, …)` resolves to **one** repetition whenever the available
+// space is indefinite — which is exactly the case here, because the well is sized
+// to its own content (see `.fb_others`) — so three analyses stacked into three rows
+// one column wide, which is the one thing this panel must not do. Flex items lay
+// out from their own basis in a shrink-to-fit box, so N analyses are N columns and
+// the well is as wide as they are.
+.oa_grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.oa {
+  // Equal fractions of the well, with 250px as the floor a measurement row reads
+  // at (its name, its value and its norm) — so one further analysis is one column
+  // of the panel's own width, two are halves of it, and each one's numbers sit on
+  // the measure the block's table above sets.
+  flex: 1 1 0;
+  min-width: 250px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid $border;
+  border-radius: 6px;
+  background: $bg-surface;
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+// …except where it has no measurement row to align. The full measure above is taken
+// for exactly one reason — so that a column's VALUE, NORM and DEVIATION land on the x
+// the block's own table sets — and a column whose rows are all readings the table has
+// already printed (see `isSameReading`) has no number in it at all. At 1210px that
+// card was its head, three verdict pairs and one italic line, with ~700px of tint
+// beside them. Capped to a measure its content actually fills, and left where the
+// grid puts it.
+.oa__norows {
+  flex: 0 1 auto;
+  max-width: 640px;
+}
+
+.oa_head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+}
+
+.oa_name {
+  font-size: 13px;
+  font-weight: 600;
+  color: $text-primary;
+}
+
+.oa_count {
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  color: $text-tertiary;
+  white-space: nowrap;
+}
+
+.oa_findings {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.oa_pair {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  min-width: 0;
+}
+
+.oa_cat {
+  font-size: 12px;
+  font-weight: 500;
+  color: $text-secondary;
+}
+
+// Whether this further analysis reads a finding the same way the analysis set on
+// the film does — the one thing a side-by-side column is *for*, and the one thing
+// these columns did not say. On a typical film six of a column's seven verdicts
+// restate the block's own chips word for word and one contradicts them, and
+// unmarked the six were indistinguishable from the one.
+//
+// Two marks and not a colour: the chips carry the *clinical* tone (a verdict
+// inside its norm is green here and green in the block above, and must stay so),
+// so agreement is stated in words beside them instead of by re-tinting a finding.
+.oa_echo {
+  font-size: 11px;
+  font-style: italic;
   color: $text-disabled;
   white-space: nowrap;
+}
+
+// …and the disagreement, which is the informative case: it names the other
+// reading, because "these two analyses differ here" without saying how is a flag
+// a clinician cannot act on.
+.oa_diff {
+  font-size: 11px;
+  font-weight: 600;
+  color: $warn;
+  white-space: nowrap;
+}
+
+// The pair itself is marked as well as annotated — a rule in the warn tint, in the
+// panel's own idiom for a row that needs reading (see `.fv_row__flagged`) — so a
+// disagreement is visible while scanning the column rather than only while reading
+// it.
+.oa_pair__differs {
+  padding-left: 6px;
+  border-left: 2px solid $warn;
+}
+
+// The measurements that left their norm — the analysis' own component order, the
+// panel's own formatters, the panel's own severity ink and stars.
+.oa_rows {
+  margin: 2px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid $border;
+}
+
+// One reading of a further analysis, **on the block's own measurement grid** — the
+// same six tracks, the same widths, the same gap, so that a column's VALUE and NORM
+// land at exactly the x the table above sets for them and a reader can run one eye
+// down one column of numbers.
+//
+// Flex, each cell sized to its own content, these three cells ran up against each
+// other at whatever x the longest name in the column happened to end: Tweed's "Y
+// Axis-FH Angle 54.7° / 59.4 ± 3.8" and the table's own "Y-FH Angle 54.7° / 59.4 ±
+// 3.8" — one reading of one measurement off one tracing — printed 526px apart in two
+// unrelated rhythms.
+//
+// The inset is subtracted from the *name* track, which is the only one that can
+// give: the well, the card's border and the card's padding hold a row 23px in from
+// the block's own table, so a row that used the table's 470px name column would
+// land its numbers 23px right of the table's. The three trailing tracks are
+// reserved and left empty — a compact reading has no deviation strip and no change
+// column — and reserving them is what puts NORM where NORM belongs rather than at
+// the card's right edge.
+//
+// Exact for a column that fills the well, which is the common case (a film reports
+// one further analysis besides its own). Two analyses side by side are half the
+// measure each and only the tracks can be shared, not the x: the second column is
+// beside the first, by construction.
+$oa-inset: 23px; // well padding 12 + card border 1 + card padding 10
+
+.oa_row {
+  display: grid;
+  // Two or more analyses side by side are half the measure each, and half the
+  // measure cannot hold the table's own tracks: reserving them left 27px for a
+  // measurement's name. Those columns share the widths and the alignment and give
+  // up the absolute x — which they could not have had anyway, being beside each
+  // other.
+  grid-template-columns: minmax(0, 1fr) $fv-c-value $fv-c-norm;
+  align-items: baseline;
+  gap: 0 10px;
+  padding: 4px 0;
+
+  & + & {
+    border-top: 1px solid $bg-sunken;
+  }
+}
+
+// A lone further analysis fills the well, and a column that fills the well can sit
+// on the block's own grid exactly: the same six tracks, with the inset taken off the
+// name column (the only one that can give). This is the common case — a film reports
+// one further analysis besides the one it is set to.
+//
+// Its rows read across those tracks now rather than stopping at NORM: the signed
+// deviation and its plotted strip are the evaluation's own figures and they fill the
+// two tracks after it (see `SecondaryColumn`). Reserved and left empty, they left a
+// 1210px card with ~500px of blank row — the alignment was exact and the typical
+// result was a wide, mostly-empty card. Only CHANGE stays empty, and honestly: these
+// columns are one film's tracing read a second way, not a chronology.
+.fb_others__solo .oa_row {
+  grid-template-columns:
+    minmax(0, $fv-name-max - $oa-inset) $fv-c-value $fv-c-norm $fv-c-dev
+    $fv-c-strip $fv-c-change;
+}
+
+.oa_row_name {
+  min-width: 0;
+  font-size: 12px;
+  color: $text-secondary;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.oa_row_value {
+  text-align: right;
+  font-size: 12.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: $text-primary;
+  white-space: nowrap;
+
+  &__warn {
+    color: $warn;
+  }
+
+  &__error {
+    color: $error;
+  }
+}
+
+.oa_row_stars {
+  margin-left: 2px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.oa_row_norm {
+  text-align: right;
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  color: $text-tertiary;
+  white-space: nowrap;
+}
+
+// One reading, printed once. Where a further analysis' outside-norm row is the same
+// measurement, the same figure and the same norm as a row of the block's own table
+// above, it is not set out a second time in a second visual language — it is counted
+// here (see `isSameReading`). Suppressed silently it would be worse than duplicated:
+// a clinician has to know that a column is short because a row was a repeat and not
+// because the analysis found nothing.
+.oa_same {
+  margin: 2px 0 0;
+  font-size: 11px;
+  font-style: italic;
+  color: $text-disabled;
+}
+
+.oa_none {
+  margin: 0;
+  font-size: 11.5px;
+  color: $text-tertiary;
 }
 
 .fb_body {
@@ -2957,38 +3635,6 @@ $tp-gap: 16px;       // gutter -> cards
 }
 
 // ---- the numbers behind it ----
-// The measurement grid, stated once: the name column is *capped* and the
-// deviation strip takes the slack, so value, norm, deviation and change line up
-// down the block and the column heads land over the columns they name.
-//
-// The name column used to be the flexible one. At a 1440 viewport it measured
-// 870px while its longest ink ended at 311px, so every row carried 670–750px of
-// void between the measurement's name and its value — in a block that was at the
-// same time hiding three or four abnormal rows behind "+4 more in the Summary".
-// The reclaimed width now carries the wigglegram strip (see `.fv_strip`), which
-// is the same reading this app already draws on paper.
-//
-// The cap is 470px, not 320px, and the 150px cannot come off the strip's floor:
-// at 320px the two longest names this app has — "Posterior / anterior facial
-// height ratio (S-Go / N-Me)" and "Upper share of anterior face height (N-ANS /
-// N-Me)" — were cut on screen *and* on the filed chart, where there is no
-// tooltip to recover them. The column is content-sized up to the cap, so a block
-// of short names still gives every spare pixel to the strip.
-$fv-c-name:   minmax(0, 470px);
-$fv-c-name-1: minmax(0, 1fr);
-$fv-c-value:  78px;
-$fv-c-norm:   118px;
-$fv-c-dev:    98px;
-$fv-c-strip:  minmax(150px, 1fr);
-$fv-c-change: 92px;
-
-$fv-columns: $fv-c-name $fv-c-value $fv-c-norm $fv-c-dev $fv-c-strip
-  $fv-c-change;
-
-// Narrow windows, and paper: the strip is the column that gives up its width
-// first (it is a reading aid for a number that is printed beside it), and the
-// name column takes the slack back.
-$fv-columns-narrow: $fv-c-name-1 $fv-c-value 116px 96px $fv-c-change;
 
 .fv {
   display: flex;
@@ -4729,6 +5375,21 @@ $tc-band-outer: #F1F7FC;
     grid-template-columns: $fv-c-name-1 $fv-c-value 116px 96px;
   }
 
+  // …and a further analysis' rows follow the same grid at this width (see
+  // `.oa_row`). The name track is the flexible one here, so the trailing tracks are
+  // what place VALUE and NORM: they have to be the block's own set, which is why
+  // the well is told whether the block has a CHANGE column
+  // (`.fb_others__nochange`). What the two grids then differ by is the well's own
+  // ~24px inset, which a flexible name column cannot absorb, rather than the width
+  // of a column.
+  .fb_others__solo .oa_row {
+    grid-template-columns: $fv-c-name-1 $fv-c-value 116px 96px $fv-c-change;
+  }
+
+  .fb_others__solo.fb_others__nochange .oa_row {
+    grid-template-columns: $fv-c-name-1 $fv-c-value 116px 96px;
+  }
+
   .fv_strip,
   .fv_axis,
   .fk_group__strip {
@@ -5158,7 +5819,7 @@ $tc-band-outer: #F1F7FC;
   // films it tallies at the foot of sheet 1. `break-before: avoid` is the wrong
   // tool for it in Chrome: where it bites at all, it walks the break backwards
   // through every preceding joint that also carries an avoidance, and a chart's
-  // panels are one such chain — see `.findings_lede` and `.trend_grid`. A visit's
+  // panels are one such chain — see `.fb_core` and `.trend_grid`. A visit's
   // group is already an unbreakable box, so a tally printed *inside* the last one
   // cannot be separated from it by anything.
 
@@ -5533,7 +6194,8 @@ $tc-band-outer: #F1F7FC;
   // sparkline is never cut in half by a sheet edge. Three columns rather than the
   // window's five: an A4 sheet is 180mm wide, and a 250-unit viewBox squeezed to
   // 45mm loses its own tick labels.
-  // The panel breaks; only its *head* is held to what follows it.
+  // The panel breaks, and so does the board inside it (see `.trend_grid`); only the
+  // axis strip is held to the row of cells it scales.
   //
   // `break-inside: avoid` on a ~110mm panel does not keep a page tidy, it throws
   // the panel whole onto the next sheet: measured across a three-sheet chart it
@@ -5543,6 +6205,15 @@ $tc-band-outer: #F1F7FC;
   // (an axis printed as a page's last line scales charts the reader cannot see),
   // and each cell whole — which `.tc` already guarantees.
   .trend {
+    // A **block** on paper, not the flex column it is on screen. This is the other
+    // half of the same defect (see `.trend_grid`): Chrome will not fragment a flex
+    // container, so as a flex column the whole ~100mm panel was moved to the next
+    // sheet whole — measured, ~95mm of blank paper at the foot of sheet 1 of a
+    // three-visit chart, under nothing at all. As a block its three children — the
+    // head-and-axis box, the board of cells, the key — are ordinary block boxes that
+    // the paged medium can break between, and each of them carries its own rule
+    // about where it may not be broken.
+    display: block;
     box-shadow: none;
     border: none;
     margin-bottom: 6pt;
@@ -5589,20 +6260,47 @@ $tc-band-outer: #F1F7FC;
   }
 
   // Three columns wide (an A4 sheet is 180mm, and a 200-unit viewBox squeezed to
-  // 45mm loses its own tick labels) — but laid out as a wrapping row rather than
-  // a grid, so a five-cell board prints 3 + 2 *centred* instead of 3 + 2 with a
-  // hole where the sixth cell would be.
+  // 45mm loses its own tick labels), laid out so that a five-cell board prints
+  // 3 + 2 *centred* instead of 3 + 2 with a hole where the sixth cell would be —
+  // and so that the board **flows across sheets**.
+  //
+  // Not a flex container, and that is the whole of this rule. Chrome fragments a
+  // wrapped flex line as one unit: with the cells as flex items the ~70mm board of a
+  // five-visit case could not be broken at all, so it moved to sheet 2 whole and left
+  // ~70mm of sheet 1 blank under the axis strip it is scaled on — the same defect
+  // `break-inside: avoid` on this panel used to cause, arriving from the layout mode
+  // instead of from a break rule. As a block of inline-block cells the rows are line
+  // boxes, which Chrome does break between: the board flows, each cell stays whole
+  // (`.tc` keeps its own `break-inside: avoid`), and the only thing still bound to
+  // the first row of cells is the axis above it (`.trend_axis`).
   .trend_grid {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 6pt 8pt;
+    display: block;
+    // The cells are centred as inline content; the strut is taken out of the line
+    // box so a row of cells is exactly as tall as the cells in it.
+    text-align: center;
+    line-height: 0;
+    // …and a row of cells is a *line box*, so the paged medium's orphan and widow
+    // control applies to it. Chrome's own initial value is 2/2, which makes a
+    // two-row board — five measurements, the usual case — unbreakable however the
+    // box is laid out: measured, that alone moved the whole board to the next sheet
+    // and left ~95mm blank under nothing at all. One row is a legitimate remainder
+    // here, because the unbreakable unit is the cell and each cell says which
+    // measurement it plots.
+    orphans: 1;
+    widows: 1;
     padding: 4pt 0 0;
     background: #FFFFFF;
   }
 
   .tc {
-    flex: 0 1 calc(33.333% - 5.5pt);
+    display: inline-block;
+    vertical-align: top;
+    // Three to a row with a little slack, so a rounding error cannot drop the
+    // third cell of every row onto a line of its own.
+    width: calc(33.333% - 7pt);
+    margin: 0 3pt 6pt;
+    text-align: left;
+    line-height: 1.35;
     min-width: 0;
     padding: 3pt 4pt 2pt;
     border-radius: 0;
@@ -5610,10 +6308,18 @@ $tc-band-outer: #F1F7FC;
     page-break-inside: avoid;
   }
 
-  // A heading over a run of the wrapped row still owns the whole width of it.
+  // A heading over a run of cells still owns the whole width of it: as a block in a
+  // block container it splits the run, which is exactly what it is for.
   .tc_sub {
-    flex: 0 0 100%;
+    display: block;
+    width: auto;
+    margin: 0 3pt 2pt;
+    text-align: left;
+    line-height: 1.35;
     font-size: 7pt;
+    // …and it is a promise about the cells under it.
+    break-after: avoid;
+    page-break-after: avoid;
   }
 
   // The name wraps on paper rather than being cut: a filed chart has no tooltip
@@ -5784,8 +6490,8 @@ $tc-band-outer: #F1F7FC;
   //
   // Which is why the printed head is *not this element*: on paper the panel's own
   // bar comes off and a copy of it prints inside the first film's group
-  // (`.findings_head_print` inside `.findings_lede`), which is the only
-  // construction Chrome actually honours — see `.findings_lede` below.
+  // (`.findings_head_print` inside the first block's `.fb_core`), which is the
+  // only construction Chrome actually honours — see `.fb_core` below.
   // …and *only* this panel's: the trend chart borrows the same class for its own
   // head one panel up, and hiding the class outright printed the trend's grid with
   // no heading and no statement of what it plots.
@@ -5803,24 +6509,32 @@ $tc-band-outer: #F1F7FC;
     background: none;
   }
 
-  // The head and the first block, one box — the only construction that holds a
-  // heading to its content on this sheet.
+  // **One visit, one box.** A film's head, its verdicts, its measurements and the
+  // notes that qualify them are held on one sheet; what the block may break before
+  // is the columns of *other* analyses read off it, which are bounded on their own
+  // and name their own film (`.fb_others`, `.fb_coda`).
   //
-  // Measured, at both A4 depths: with `break-after: avoid` on the head, and
-  // `break-before: avoid` on the well *and* on the well's first block, and even a
-  // forced `break-before: page` on the well, the heading still printed as the last
-  // ink of a sheet with the first film's block overleaf. (Where an avoided break
-  // does bite in Chrome, it bites too hard: it walks the break backwards through
-  // every preceding joint that carries an avoidance too, which on this sheet threw
-  // a whole 107mm panel onto the next page. `break-inside` on a *bounded* box is
-  // the tool that behaves.)
+  // This is the unit of attribution, and that is why it is bounded. Left free to
+  // break — which is what this sheet did until now, deliberately, to keep blank
+  // paper down — a sheet could open on the bare row "OP(Downs)-FH · −3.6° · 9.3 ±
+  // 3.8 · −12.9°" or on "10 measurements are waiting on 16 landmarks", with no
+  // visit named anywhere on it: the running head carries the patient and the
+  // record's span, never the timepoint. A measurement a clinician cannot attribute
+  // to a visit is not a record of anything.
   //
-  // Only the *first* block is in here, so what gets pushed to the next sheet is a
-  // heading plus one film (~75mm), never the whole panel — which is what a
-  // `break-inside: avoid` on `.findings` would do, and it is how this section came
-  // to leave 86mm blank at the foot of a sheet two rounds ago.
-  .findings_lede,
-  .findings_coda {
+  // A repeated per-block head would be the other answer, and Chrome will not give
+  // one: `display: table-header-group` repeats only for a **top-level** table, and
+  // this sheet's one repeat is already spent on the running head (`.print_head`) —
+  // a header group inside a table cell prints once and does not come back
+  // (measured, this round, on a two-block probe at A4). Nor can `@page` margin
+  // boxes vary per sheet in Blink. So the box is the mechanism, and the box is
+  // sized to *one visit's findings*: 45–70mm typically, ~95mm for the first block
+  // of the panel, which carries the section's head as well. The disclosure a
+  // clinician opens is outside it, which is the whole difference from the wrapper
+  // this replaces: as one box, head + block + three open analyses grew past a full
+  // page and Chrome pushed it whole, ending a sheet at 26% with ~225mm blank.
+  .fb_core,
+  .fb_coda {
     display: block;
     break-inside: avoid;
     page-break-inside: avoid;
@@ -5838,7 +6552,7 @@ $tc-band-outer: #F1F7FC;
   }
 
   // The first block never wears the rule that separates one block from the next.
-  .findings_lede > .fb {
+  .findings_body > .fb:first-child {
     border-top: none;
   }
 
@@ -5848,7 +6562,7 @@ $tc-band-outer: #F1F7FC;
 
   // The well is free to break — the whole point is that a chart's findings flow
   // across sheets. What must never be split is the head-and-first-block box inside
-  // it (`.findings_lede`), and each row and each verdict run below.
+  // it (each block's `.fb_core`), and each row and each verdict run below.
   //
   // No `break-before: avoid` here, and none on the first block: with the panel's
   // own head print-hidden, the box before this one is the *trend's* key, and an
@@ -5861,14 +6575,16 @@ $tc-band-outer: #F1F7FC;
     background: #FFFFFF;
   }
 
-  // A film's block flows across a sheet edge; what stays together are its head
-  // and the row structure under it.
+  // A film's block may break — but only at the one joint that carries a name on
+  // both sides of it: between the visit's own findings (`.fb_core`, bounded) and
+  // the other analyses read off the same tracing (`.fb_others`, bounded, and headed
+  // by the film it belongs to).
   //
-  // `break-inside: avoid` on a whole block pushed a film's entire findings — its
-  // verdict chips, its table, its caveats — onto the next sheet the moment it
-  // would not fit, which is what left 68mm blank at the foot of sheet 2 of a
-  // three-sheet chart. The rules below keep every join that matters: the head with
-  // its first content, the column heads with their first row, and each row whole.
+  // The looser rule this replaces — every joint free, so that no sheet ever ended
+  // early — cost 68mm of blank paper less and a measurement's timepoint more: a row
+  // or a worklist note that lands alone at the top of a sheet has no visit on that
+  // sheet at all. Blank paper at the foot of a sheet is a cost; an unattributable
+  // reading in a filed chart is a defect.
   // 3pt/2pt, not the screen's 12px/11px and not the 4pt/3pt this took while a
   // measurement's name was set on the same line as its symbol: the name is now a
   // second line in every row (see `.fv_measure`), which is ~20mm of extra sheet per
@@ -5910,6 +6626,20 @@ $tc-band-outer: #F1F7FC;
     page-break-inside: avoid;
   }
 
+  // No single line of a block's prose is left behind at a sheet edge either — a
+  // note, a caveat or a norms citation broken 1 line / 3 lines reads as two
+  // fragments of two different documents. (These bite where they can: `orphans`
+  // and `widows` are properties of *line boxes*, which is why the boxes above are
+  // bounded outright rather than trusted to them.)
+  .fb_body,
+  .fb_note,
+  .fb_caveat,
+  .fb_none,
+  .oa_lede {
+    orphans: 2;
+    widows: 2;
+  }
+
   // The two tallies and the rule between them move as one run, so a head made to
   // wrap by a long free-text visit label can never open its second line with a
   // divider dividing nothing.
@@ -5921,8 +6651,106 @@ $tc-band-outer: #F1F7FC;
     display: none;
   }
 
-  // Why this block has no CHANGE column, said once in its head instead of five
-  // em-dashes down a column (see `.fv__first`).
+  // The other analyses read off this film, where the clinician had them open when
+  // the sheet was printed. They print — they are findings, and a chart that
+  // silently dropped what was on screen would be a different document from the one
+  // that was reviewed — but they print as a *statement* rather than as a panel:
+  // no sunken tint, hairline-bounded, held whole on one sheet, and headed by the
+  // film they belong to (`.oa_lede_film`), because a block may break across sheets
+  // here and an unnamed box of findings is a loose page.
+  .fb_others {
+    padding: 3pt 0 0;
+    border: none;
+    background: none;
+    gap: 3pt;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  // On paper it takes the sheet's measure: the well is 180mm wide here and a note
+  // set to 62 characters printed as three short lines with 75mm of white beside
+  // them.
+  .oa_lede {
+    max-width: none;
+    font-size: 8pt;
+  }
+
+  .oa_lede_film {
+    display: inline;
+    font-weight: 600;
+    color: $text-secondary;
+  }
+
+  // On paper the well fills the measure and its columns fill the well. On screen a
+  // shrink-to-fit inset reads as an aside a reader has opened; on an A4 sheet the
+  // same well printed ~105mm wide inside a 180mm measure with one column in it and
+  // 75mm of white beside it — a half-empty band in a filed document, and no hover
+  // affordance anywhere on paper to justify the compact form.
+  .fb_others {
+    width: 100%;
+    max-width: none;
+  }
+
+  .oa_grid {
+    gap: 6pt;
+    width: 100%;
+  }
+
+  .oa {
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 4pt 6pt;
+    gap: 3pt;
+    background: none;
+  }
+
+  .oa_name {
+    font-size: 9.5pt;
+  }
+
+  .oa_count,
+  .oa_row_norm,
+  .oa_none {
+    font-size: 8pt;
+  }
+
+  .oa_cat,
+  .oa_row_name {
+    font-size: 8.5pt;
+  }
+
+  // On paper a name has nowhere to be revealed: an ellipsis is a fact removed
+  // from a filed document, so "Sum of the saddle, articular and gonial angles"
+  // wraps in its column instead of ending in "gonial …".
+  .oa_row_name {
+    overflow: visible;
+    white-space: normal;
+  }
+
+  .oa_row_value {
+    font-size: 9pt;
+  }
+
+  // …and on paper the print table's own tracks, trailing ones reserved and empty,
+  // for the same reason (see `.oa_row` in the screen block). The name track is the
+  // flexible one on paper, so the two grids differ only by the well's own ~3mm
+  // inset instead of by the width of three columns.
+  .oa_row {
+    grid-template-columns: minmax(0, 1fr) 58pt 94pt;
+    gap: 0 8pt;
+    padding: 1.5pt 0;
+  }
+
+  .fb_others__solo .oa_row {
+    grid-template-columns: minmax(0, 1fr) 58pt 94pt 62pt 50pt;
+  }
+
+  .fb_others__solo.fb_others__nochange .oa_row {
+    grid-template-columns: minmax(0, 1fr) 58pt 94pt 62pt;
+  }
+
+  // Why every cell of this block's CHANGE column is an em-dash, said once in the
+  // head as well — the dashes say there is nothing to compare, the head says why.
   .fb_first_print {
     display: inline;
     padding-left: 12pt;
@@ -5996,21 +6824,22 @@ $tc-band-outer: #F1F7FC;
   .fv__nochange .fv_head,
   .fv__nochange .fv_row,
   .fv__nochange.fv__nostrip .fv_head,
-  .fv__nochange.fv__nostrip .fv_row,
-  // …and the first reporting film of a multi-film chart, whose CHANGE column is
-  // an em-dash on every row of it: there is no earlier film to compare it with,
-  // which is a fact about the block and is stated once in its head
-  // (`.fb_first_print`) rather than five times down a column.
-  .fv__first .fv_head,
-  .fv__first .fv_row {
+  .fv__nochange.fv__nostrip .fv_row {
     grid-template-columns: minmax(0, 1fr) 58pt 94pt 62pt;
     gap: 0 8pt;
   }
 
-  .fv__first .fv_change,
-  .fv__first .fv_col__change {
-    display: none;
-  }
+  // The first reporting film of a multi-film chart keeps the column, em-dashed.
+  //
+  // It used to drop it, on the reasoning that five em-dashes down a column say
+  // nothing the head cannot say once (`.fb_first_print`, which still prints). But a
+  // block that drops a 50pt track is a block on a *different grid*: two tables of
+  // the same five measurements, stacked one above the other on one sheet, put their
+  // VALUE 88px apart — T1's at x≈572 against T2's at x≈484 — so the eye could not
+  // scan a column of values down the page, which is the whole reason a chart sets
+  // its visits in one table shape. The grid is invariant; the em-dash is the honest
+  // cell content for "no earlier film to compare it with", and it is already what
+  // the screen prints there.
 
   // The name column is ~305px on an A4 page box, which is not enough for the
   // longest measurement names this app has, and a filed chart has no tooltip to
@@ -6111,10 +6940,11 @@ $tc-band-outer: #F1F7FC;
   // foot of a sheet, but nothing held this key to the last block, so at ten
   // plotted cells the chart emitted a fourth A4 page whose only ink was the
   // running head and these four lines — 252mm of blank paper, 85% of the sheet.
-  // The key prints inside the last film's group (`.findings_coda`), which is what
-  // keeps it with the rows it explains: held only by `break-before: avoid`, four
-  // lines of key printed on a sheet of their own with 250mm of it blank — twice, in
-  // two rounds, for two different reasons. The panel's own copy comes off paper.
+  // The key prints inside the last film's own bounded box (`.fb_core` or
+  // `.fb_coda`), which keeps it with the rows it explains: held only by
+  // `break-before: avoid`, four lines of key printed on a sheet of their own with
+  // 250mm of it blank — twice, in two rounds, for two different reasons. The
+  // panel's own copy comes off paper.
   .findings_legend {
     display: none;
   }

@@ -8,6 +8,13 @@ import { PatientRecord } from 'store/reducers/workspace';
 
 import { RecordAnalysis } from './selectors';
 
+// Reading a *second* analysis off a film that already carries every landmark it
+// needs: the same read-only evaluation the printed report walks for all nine
+// analyses of one film, and the same one the store's own selector chain mirrors.
+// Nothing here changes which analysis is set on the film.
+import { evaluateAnalysis, AnalysisEvaluation } from 'analyses/evaluate';
+import LATERAL_ANALYSES from 'analyses/lateral';
+
 // One set of formatters for every number this app shows a clinician. The
 // Summary dialog exports them, the printed report imports them, and so does
 // this panel — a dashboard that rounds or signs a value its own Summary sets
@@ -405,6 +412,340 @@ const buildViews = (films: FilmFindings[]): FilmView[] => {
       rowKeys,
     };
   });
+};
+
+// ---- The other analyses this film's tracing can already report --------------
+
+/**
+ * One *further* analysis read off a film, for the block's side-by-side column.
+ *
+ * The app stores one active analysis per image, so this is not "an analysis that
+ * was run": it is what the analysis **would report from the tracing already on
+ * this film**, read through `analyses/evaluate` — the same module the printed
+ * report reads all nine analyses of a film through, mirroring the same selector
+ * chain the Summary uses. Nothing is dispatched and the film's own active
+ * analysis is untouched.
+ */
+interface SecondaryView {
+  id: string;
+  name: string;
+  /** The analysis' conclusions, worst first — its own ranking, not the panel's. */
+  findings: HeadlineFinding[];
+  /** The measurements that left their norm, in the analysis' component order. */
+  outside: ValueRow[];
+  reportedCount: number;
+  totalCount: number;
+  /** Withheld for want of a mm/px scale — the honest reason for a short column. */
+  pendingScaleCount: number;
+}
+
+/**
+ * Evaluations already computed, keyed by film, analysis and the exact inputs they
+ * were computed from.
+ *
+ * A cache and not a selector on purpose. Evaluating nine analyses for every film
+ * of every record on every store change is work nobody asked for — the panel
+ * reads one film's extra analyses only when a clinician opens them — while
+ * *re*-evaluating on every re-render of an open block would run the whole set on
+ * a mouse move. The key carries the landmark object and the scale factor by
+ * identity, so a tracing edited in the editor invalidates its own entry.
+ *
+ * **Held on the block, not on the module.** Its entries retain landmark objects by
+ * reference, and one per film per analysis. Module-level and unbounded, a day of
+ * moving between patients kept every tracing the tab had ever evaluated alive; on the
+ * block it is scoped to the film whose findings are on screen and it is collected
+ * with the block when the panel stops showing that film (see `FilmBlock#secondary`).
+ */
+interface SecondaryCache {
+  [key: string]: {
+    landmarks: RecordAnalysis['landmarks'];
+    scaleFactor: number | null;
+    view: SecondaryView | null;
+  } | undefined;
+}
+
+const secondaryFindings = (
+  cache: SecondaryCache, film: FilmFindings, analysisId: string,
+): SecondaryView | null => {
+  const { analysis } = film;
+  const key = `${analysis.imageId}|${analysisId}`;
+  const cached = cache[key];
+  if (
+    cached !== undefined &&
+    cached.landmarks === analysis.landmarks &&
+    cached.scaleFactor === analysis.scaleFactor
+  ) {
+    return cached.view;
+  }
+  const entry = LATERAL_ANALYSES.filter(
+    (e) => e.id === analysisId || e.analysis.id === analysisId,
+  )[0];
+  let view: SecondaryView | null = null;
+  if (entry !== undefined) {
+    const evaluation: AnalysisEvaluation = evaluateAnalysis(
+      entry.analysis, analysis.landmarks, analysis.scaleFactor, analysis.context,
+    );
+    const markers = caveatMarkers(evaluation.caveats);
+    const rows = buildValueRows(
+      evaluation.results, evaluation.landmarksBySymbol, markers,
+    );
+    view = {
+      id: entry.id,
+      name: entry.name,
+      findings: orderFindings(evaluation.results),
+      outside: rows.filter((row) => row.isOutside),
+      reportedCount: evaluation.reportedCount,
+      totalCount: evaluation.totalCount,
+      pendingScaleCount: evaluation.pendingScaleCount,
+    };
+  }
+  cache[key] = {
+    landmarks: analysis.landmarks,
+    scaleFactor: analysis.scaleFactor,
+    view,
+  };
+  return view;
+};
+
+/**
+ * The ids of the analyses a film could report *besides* the one set on it — the
+ * plotted set minus the active analysis, in the app's own analysis order.
+ */
+const otherPlottedIds = (film: FilmFindings): string[] => {
+  const { analysisId, plottedAnalysisIds } = film.analysis;
+  return plottedAnalysisIds.filter((id) => {
+    if (analysisId === null) {
+      return true;
+    }
+    const entry = LATERAL_ANALYSES.filter((e) => e.id === id)[0];
+    return id !== analysisId &&
+      (entry === undefined || entry.analysis.id !== analysisId);
+  });
+};
+
+/**
+ * One further analysis of the same film, as a column beside its siblings: what it
+ * concludes, and every measurement of it that left its norm.
+ *
+ * Compact by design — the block's own table below is the *full* reading of the
+ * analysis the film is set to, with deviations, strips and change since the last
+ * visit. These columns answer the question the inert "3 of 9 analyses plotted"
+ * used to raise and refuse: *what do the others say?*
+ */
+/**
+ * Whether a further analysis' row is **the same reading** as one the block's own
+ * table above already prints: the same measurement (symbol), the same value, and the
+ * same norm — in which case it is one figure off one tracing, and printing it twice
+ * in two visual languages is not a second opinion.
+ *
+ * Measured, on screen and on paper: the table's row "Y-FH Angle · Y Axis-FH Angle ·
+ * 54.7° · 59.4 ± 3.8 · −4.7° *" and the column's "Y Axis-FH Angle · 54.7°* · 59.4 ±
+ * 3.8" — same symbol, same value, same norm, same block, and the table's own row
+ * already carrying the alias the column uses as its title.
+ *
+ * All four parts have to match. Two analyses can measure the same construction
+ * against *different* published norms (which is exactly what a side-by-side reading
+ * is for), and that row is a second reading and stays.
+ */
+const isSameReading = (row: ValueRow, primaryRows: ValueRow[]): boolean => {
+  const twin = primaryRows.filter((r) => r.symbol === row.symbol)[0];
+  if (twin === undefined) {
+    return false;
+  }
+  const a = twin.component;
+  const b = row.component;
+  return a.value === b.value && a.mean === b.mean &&
+    a.min === b.min && a.max === b.max && a.band === b.band;
+};
+
+const SecondaryColumn = (
+  { view, primary, primaryRows, primaryName, isSolo }: {
+    view: SecondaryView;
+    /** What the analysis *set on this film* concluded, for the same categories. */
+    primary: HeadlineFinding[];
+    /**
+     * Every measurement the block's own table reports — what a row of this column
+     * is checked against before it is printed a second time (see `isSameReading`).
+     */
+    primaryRows: ValueRow[];
+    /** Its display name, for naming the reading a column disagrees with. */
+    primaryName: string | null;
+    /**
+     * Whether this column has the well to itself, in which case its rows sit on the
+     * block's own measurement grid (see `.fb_others__solo .oa_row`) and carry the
+     * DEVIATION and the plotted strip the table above sets those tracks for. Two
+     * columns side by side are half the measure each and hold name/value/norm only.
+     */
+    isSolo: boolean;
+  },
+) => {
+  // One reading, printed once. What is suppressed is *counted and stated* — a row
+  // that quietly vanishes from a clinical column is worse than a row printed twice.
+  const shown = view.outside.filter((row) => !isSameReading(row, primaryRows));
+  const repeated = view.outside.length - shown.length;
+  const repeatedNote = repeated === 0 ? null : (
+    repeated === 1
+      ? '1 of these is the same measurement reported above'
+      : `${repeated} of these are the same measurements reported above`
+  );
+  return (
+  <div
+    className={cx(classes.oa, {
+      // A column with no measurement row left to print has nothing to align with the
+      // table above, and the full measure it takes for that alignment then reads as a
+      // wide, mostly-empty card. It is capped instead (see `.oa__norows`).
+      [classes.oa__norows]: shown.length === 0,
+    })}
+  >
+    <div className={classes.oa_head}>
+      <span className={classes.oa_name}>{view.name}</span>
+      <span className={classes.oa_count}>
+        {view.reportedCount} of {view.totalCount} measured
+      </span>
+    </div>
+    <div className={classes.oa_findings}>
+      {view.findings.length > 0 ? view.findings.map(
+        ({ category, indication }, i) => {
+          const tone = chipToneFor(indication);
+          // What the film's own analysis makes of the same category — the whole
+          // point of reading a second analysis off one tracing, and the one thing
+          // these columns did not say. Six of Tweed's seven verdicts restated
+          // Downs' verdict word for word 200px above, the seventh contradicted it
+          // (lower incisor inclination: Labial against Normal), and nothing on the
+          // screen distinguished the six from the one.
+          const counterpart = primary.filter(
+            (finding) => finding.category === category,
+          )[0];
+          const echoes = counterpart !== undefined &&
+            counterpart.indication === indication;
+          const differs = counterpart !== undefined &&
+            counterpart.indication !== indication;
+          const counterWord = counterpart !== undefined
+            ? (mapIndicationToString(counterpart.indication) || '—') : '';
+          const named = primaryName !== null ? primaryName : 'the film’s analysis';
+          return (
+            <span
+              key={`${category}/${i}`}
+              className={cx(classes.oa_pair, {
+                [classes.oa_pair__differs]: differs,
+              })}
+            >
+              <span className={classes.oa_cat}>
+                {mapCategoryToString(category) || '—'}
+              </span>
+              <span
+                className={cx(classes.chip, classes.ff_chip, {
+                  [classes.chip__ok]: tone === 'success',
+                  [classes.chip__muted]: tone === 'neutral',
+                  [classes.chip__partial]: tone === 'warn',
+                })}
+              >
+                {mapIndicationToString(indication) || '—'}
+              </span>
+              {differs ? (
+                <span
+                  className={classes.oa_diff}
+                  title={`${named} reads this ${counterWord} from the same ` +
+                    'tracing — the two analyses disagree on this finding, which ' +
+                    'is a difference between their criteria and not a second ' +
+                    'measurement'}
+                >
+                  ≠ {named} {counterWord}
+                </span>
+              ) : echoes ? (
+                <span
+                  className={classes.oa_echo}
+                  title={`${named} reads this the same way from the same ` +
+                    'tracing — the two analyses agree on this finding'}
+                >
+                  agrees
+                </span>
+              ) : null}
+            </span>
+          );
+        },
+      ) : (
+        <span className={classes.fb_quiet}>
+          {view.reportedCount === 0
+            ? 'Nothing computes from this tracing.'
+            : 'No graded finding — measured values only.'}
+        </span>
+      )}
+    </div>
+    {shown.length > 0 ? (
+      <ul className={classes.oa_rows}>
+        {shown.map((row) => {
+          const { component, unit, stars, outOfRange } = row;
+          const { value, mean, min, max, band } = component;
+          return (
+            <li key={row.symbol} className={classes.oa_row}>
+              <span className={classes.oa_row_name}>
+                {row.name !== null ? row.name : row.symbol}
+              </span>
+              <span
+                className={cx(classes.oa_row_value, {
+                  [classes.oa_row_value__warn]: stars === 1,
+                  [classes.oa_row_value__error]: stars >= 2,
+                })}
+              >
+                {displayNumber(value)}{unit}
+                {stars > 0 ? (
+                  <span className={classes.oa_row_stars}>{STARS[stars]}</span>
+                ) : null}
+              </span>
+              <span className={classes.oa_row_norm}>
+                {displayNorm(mean, min, max, band)}
+              </span>
+              {/* …and, where the column has the well to itself, the two tracks the
+                  grid above reserves after NORM: how far this figure is from its
+                  norm, and that deviation plotted. Reserved and left empty, the row
+                  ran out of ink at NORM and left ~500px of a full-measure card blank
+                  — a wide, mostly-empty well whose column alignment was sound and
+                  whose typical result was a card with nothing in three of its
+                  columns. Both are the evaluation's own figures, formatted by the
+                  formatters the table uses, drawn by the strip the table draws. */}
+              {isSolo ? [
+                <span
+                  key="dev"
+                  className={cx(classes.fv_dev, {
+                    [classes.fv_dev__warn]: stars === 1 || outOfRange,
+                    [classes.fv_dev__error]: stars >= 2,
+                  })}
+                >
+                  {displayDeviation(value, mean, min, max, unit, band)}
+                  <span className={classes.fv_stars}>
+                    {stars > 0 ? STARS[stars] : ''}
+                  </span>
+                </span>,
+                <DeviationStrip key="strip" row={row} />,
+              ] : null}
+            </li>
+          );
+        })}
+      </ul>
+    ) : null}
+    {repeatedNote !== null ? (
+      <p
+        className={classes.oa_same}
+        title={'The same measurement, the same figure and the same norm as a row of ' +
+          'this film’s own table above — one reading off one tracing, so it is not ' +
+          'printed a second time here. Where two analyses grade the same ' +
+          'construction against different norms, both readings are shown.'}
+      >
+        {repeatedNote}
+      </p>
+    ) : null}
+    {view.outside.length === 0 ? (
+      <p className={classes.oa_none}>
+        {view.reportedCount > 0
+          ? 'Every measurement inside its norm.'
+          : (view.pendingScaleCount > 0
+            ? 'Every measurement is linear — this film needs a mm/px scale.'
+            : 'Nothing reported.')}
+      </p>
+    ) : null}
+  </div>
+  );
 };
 
 /**
@@ -875,17 +1216,59 @@ const NormsLineNote = ({ film }: { film: FilmFindings }) => {
   );
 };
 
+interface FilmBlockProps {
+  view: FilmView;
+  onOpen(record: PatientRecord): void;
+  /** False when nothing in the whole panel has a change: the column goes. */
+  showChange: boolean;
+  /** True when every block's norms line is the same and is stated once below. */
+  hoistNorms: boolean;
+  /**
+   * The panel's own head, print-only, for the **first** block of the panel — and
+   * it is rendered *inside* this block on purpose (see `.fb_core`).
+   *
+   * Chrome honours `break-inside: avoid` on a bounded box and nothing else about
+   * page breaks, so the only way to keep a heading off the foot of a sheet is to
+   * put it in the same unbreakable box as the content it introduces. It used to be
+   * a wrapper around the whole `<FilmBlock>`, which was fine until a clinician
+   * opened the film's other analyses: the box then grew past a full page, Chrome
+   * pushed the whole thing to the next sheet, and page 2 of a dense chart ended at
+   * 26% with 225mm of it blank.
+   */
+  printHead?: JSX.Element | null;
+  /**
+   * …and the panel's key, print-only, for the **last** block, for the mirror
+   * reason: four lines of key have twice printed on a sheet of their own with
+   * 250mm blank. It goes inside whichever of this block's two bounded boxes ends
+   * it — the core, or the box holding the other analyses when those are open.
+   */
+  printLegend?: JSX.Element | null;
+}
+
+interface FilmBlockState {
+  /**
+   * Whether this film's *other* readable analyses are open beside its own (see
+   * `SecondaryColumn`). Closed by default: the analysis set on the film is the
+   * reading the record was made under, and the panel is read as a chronology of
+   * those before it is read as a comparison of analyses.
+   */
+  showOthers: boolean;
+}
+
 /** One traced film's block: the headline, then the numbers behind it. */
-const FilmBlock = (
-  { view, onOpen, showChange, hoistNorms }: {
-    view: FilmView;
-    onOpen(record: PatientRecord): void;
-    /** False when nothing in the whole panel has a change: the column goes. */
-    showChange: boolean;
-    /** True when every block's norms line is the same and is stated once below. */
-    hoistNorms: boolean;
-  },
-) => {
+class FilmBlock extends React.PureComponent<FilmBlockProps, FilmBlockState> {
+  state: FilmBlockState = { showOthers: false };
+
+  /**
+   * This film's further analyses, once each (see `secondaryFindings`). One block's
+   * worth, living exactly as long as the block does.
+   */
+  private secondary: SecondaryCache = {};
+
+  render() {
+  const { view, onOpen, showChange, hoistNorms, printHead, printLegend } =
+    this.props;
+  const { showOthers } = this.state;
   const {
     film, findings, rows, outside, changes, hasEarlierFilm, chipKey, rowKeys,
   } = view;
@@ -955,6 +1338,18 @@ const FilmBlock = (
   // every film on every recompute and shown nowhere.
   const plotted = plottedAnalyses.length;
   const reportable = reportableAnalyses.length;
+  // …and the ones that are not the analysis this film is set to, which are the
+  // ones there is anything to *show*. The tally used to be a greyed, inert "3 of 9
+  // analyses plotted": a statement about the tracing that the reader could do
+  // nothing with. It is a control now — and where it would have nothing behind it
+  // (a tracing that carries only its own analysis) it is not rendered at all,
+  // rather than sitting there as a fact nobody asked for.
+  const others = otherPlottedIds(film);
+  const otherViews = showOthers
+    ? others
+      .map((id) => secondaryFindings(this.secondary, film, id))
+      .filter((v): v is SecondaryView => v !== null)
+    : [];
   // The findings this row's numbers point at, named — for the number's title.
   const chipsFor = (keys: number[]): string => {
     const named: string[] = [];
@@ -967,8 +1362,103 @@ const FilmBlock = (
     });
     return named.join('; ');
   };
+  // Where the panel's printed key belongs on this block: with the columns of
+  // other analyses when they are open (they are the last ink of the block then),
+  // and inside the block's own core when they are not.
+  const hasOthersOpen = showOthers && otherViews.length > 0;
+  // Why every cell of this block's CHANGE column is an em-dash, on paper, where it
+  // is. Two reasons and not one: the record's first film has nothing earlier to be
+  // compared with — and a film that is *not* the first can still be the only one on
+  // its analysis, in which case no earlier film reports a single one of these
+  // measurements. That second case printed a whole column of em-dashes with nothing
+  // on the sheet explaining it (measured on a Steiner film filed after two Downs
+  // ones), because the note only ever covered the first block.
+  const changeNote = !showChange ? null
+    : !hasEarlierFilm
+      ? 'first film on record'
+      : (outside.length > 0 &&
+        outside.every((row) => changes[row.symbol] === undefined)
+        ? 'no earlier film reports these measurements'
+        : null);
+  const bindLegendToOthers = printLegend !== undefined &&
+    printLegend !== null && hasOthersOpen;
+  // …and the other analyses this same tracing can already report, on request. The
+  // count that used to sit greyed and inert in the head above ("3 of 9 analyses
+  // plotted") is this control's label: it names what the tracing carries and it now
+  // *does* what it describes. Offered only where there is another analysis to show.
+  const moreBlock = others.length > 0 ? (
+    <div className={classes.fb_more}>
+      <button
+        type="button"
+        className={cx(classes.fb_more_toggle, {
+          [classes.fb_more_toggle__open]: showOthers,
+        })}
+        aria-expanded={showOthers}
+        title={'Every landmark these analyses need is already on this ' +
+          'tracing, so each of them can be read from it without plotting ' +
+          `anything further: ${plottedAnalyses.join(', ')}. Opening them ` +
+          'reads them here, read-only — the analysis set on this film, and ' +
+          'the film itself, are not changed.'}
+        onClick={this.toggleOthers}
+      >
+        <span className={classes.fb_more_caret} aria-hidden="true">
+          {showOthers ? '▾' : '▸'}
+        </span>
+        <span>{plotted} of {reportable} analyses plotted</span>
+        <span className={classes.fb_more_hint}>
+          {showOthers
+            ? 'hide the others'
+            : (others.length === 1
+              ? 'show the other one' : `show the other ${others.length}`)}
+        </span>
+      </button>
+      {hasOthersOpen ? (
+        // The modifier carries one fact into the stylesheet: whether the block's
+        // own table has a CHANGE column. Below a clinic monitor's width the
+        // measurement grid's name column becomes the flexible one, so a nested
+        // column's numbers can only land under the table's if it reserves the same
+        // trailing tracks — and the panel drops CHANGE outright on a record with
+        // one reporting film (see `.fv__nochange`).
+        <div
+          className={cx(classes.fb_others, {
+            [classes.fb_others__solo]: otherViews.length === 1,
+            [classes.fb_others__nochange]: !showChange,
+          })}
+        >
+          <p className={classes.oa_lede}>
+            {/* Paper only, and it is not decoration: this box is bounded on its
+                own and may open a sheet (see `.fb_others` in the print block), and
+                a box of findings that does not name its film is a loose page. On
+                screen the film is named 200px above it and this stands down. */}
+            <span className={classes.oa_lede_film}>{identity} — </span>
+            Read from this same tracing, side by side — read-only, through the
+            same evaluation path as the block above. The analysis set on this
+            film is unchanged.
+          </p>
+          <div className={classes.oa_grid}>
+            {otherViews.map((other) => (
+              <SecondaryColumn
+                key={other.id}
+                view={other}
+                primary={findings}
+                primaryRows={rows}
+                primaryName={analysisName}
+                isSolo={otherViews.length === 1}
+              />
+            ))}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  ) : null;
   return (
     <article className={classes.fb}>
+      {/* The block's own unbreakable unit on paper: the film's head, its verdicts,
+          its measurements and the notes that qualify them — one visit, held on one
+          sheet (see `.fb_core`). Nothing on screen: `display: contents` leaves
+          every child exactly the flex item of the article it has always been. */}
+      <div className={classes.fb_core}>
+      {printHead !== undefined ? printHead : null}
       <button
         type="button"
         className={classes.fb_head}
@@ -989,33 +1479,25 @@ const FilmBlock = (
             wrap by a long free-text timepoint broke between them and opened its
             second line with a dangling vertical rule. Grouped, the pair wraps
             whole and the rule is never the first glyph on a line. */}
-        {(totalCount > 0) || (plotted > 0 && reportable > 0) ? (
+        {/* The count of analyses this tracing can report is **not** here any
+            more: it is a control now, and a control cannot live inside this head,
+            which is itself a button (see `.fb_more` below). */}
+        {totalCount > 0 ? (
           <span className={classes.fb_tally}>
-            {totalCount > 0 ? (
-              <span
-                className={classes.fb_measured}
-                title={`${analysisName} interprets ${totalCount} measurements; ` +
-                  `${reportedCount} of them are reported from this tracing.`}
-              >
-                {reportedCount} of {totalCount} measured
-              </span>
-            ) : null}
-            {plotted > 0 && reportable > 0 ? (
-              <span
-                className={classes.fb_plotted}
-                title={'Every landmark these analyses need is already on this ' +
-                  `tracing, so any of them can be read from it without plotting ` +
-                  `anything further: ${plottedAnalyses.join(', ')}.`}
-              >
-                {plotted} of {reportable} analyses plotted
-              </span>
-            ) : null}
+            <span
+              className={classes.fb_measured}
+              title={`${analysisName} interprets ${totalCount} measurements; ` +
+                `${reportedCount} of them are reported from this tracing.`}
+            >
+              {reportedCount} of {totalCount} measured
+            </span>
           </span>
         ) : null}
-        {/* Paper only, and only where the block's CHANGE column would otherwise
-            be five em-dashes: the reason it has none (see `.fv__first`). */}
-        {!hasEarlierFilm && showChange ? (
-          <span className={classes.fb_first_print}>first film on record</span>
+        {/* Paper only, and only where the block's CHANGE column is an em-dash on
+            every row of it: the reason it is (see `.fb_first_print`). The column
+            itself stays — every block of the sheet is set on one grid. */}
+        {changeNote !== null ? (
+          <span className={classes.fb_first_print}>{changeNote}</span>
         ) : null}
         {/* Screen only: on a printed chart there is no editor to open. */}
         <span className={classes.fb_go} aria-hidden="true">Open film</span>
@@ -1091,12 +1573,6 @@ const FilmBlock = (
             className={cx(classes.fv, {
               [classes.fv__nostrip]: !showStrip,
               [classes.fv__nochange]: !showChange,
-              // No earlier film reports anything, so every cell of this block's
-              // CHANGE column is an em-dash. On screen the column stays, because
-              // the blocks are read down one page and one column anatomy is what
-              // lets them be compared; on paper the column goes and the head says
-              // why (see the print block).
-              [classes.fv__first]: showChange && !hasEarlierFilm,
             })}
             role="table"
             aria-label={`${analysisName !== null ? analysisName : 'This analysis'}` +
@@ -1196,10 +1672,9 @@ const FilmBlock = (
                   <span
                     key="c"
                     role="columnheader"
-                    // Its own class as well as the column head's: on paper the
-                    // first film of the record drops this column outright (see
-                    // `.fv__first`), and a heading over nothing is worse than no
-                    // heading.
+                    // Its own class as well as the column head's, so the column
+                    // can be addressed on its own where the panel drops it
+                    // outright (see `.fv__nochange`).
                     className={cx(classes.fv_col, classes.fv_col__change)}
                     title={'Against the same measurement on the previous film ' +
                       'of this record that reports it'}
@@ -1269,9 +1744,29 @@ const FilmBlock = (
             four-film one. */}
         {rows.length > 0 && !hoistNorms ? <NormsLineNote film={film} /> : null}
       </div>
+      {/* The panel's key, on paper, where this is the last block and its other
+          analyses are closed: inside the core, so it can never print on a sheet of
+          its own (see `.findings_legend_print`). */}
+      {!bindLegendToOthers && printLegend !== undefined ? printLegend : null}
+      </div>
+
+      {/* …and the other analyses this tracing can already report, outside the
+          core: a second bounded box of its own, which is what keeps the core the
+          size of one visit's findings rather than of one visit's findings plus
+          three analyses of them. */}
+      {bindLegendToOthers ? (
+        <div className={classes.fb_coda}>
+          {moreBlock}
+          {printLegend}
+        </div>
+      ) : moreBlock}
     </article>
   );
-};
+  }
+
+  private toggleOthers = () =>
+    this.setState(({ showOthers }) => ({ showOthers: !showOthers }));
+}
 
 export interface AnalysisFindingsProps {
   /** One entry per traceable film, oldest capture date first. */
@@ -1350,8 +1845,8 @@ const AnalysisFindings = ({ films, onOpenFilm }: AnalysisFindingsProps) => {
     ({ lede, full }) => lede === notes[0].lede && full === notes[0].full,
   ) ? reporting[0] : null;
   // The section's head, in one place and rendered twice: as the panel's own bar
-  // on screen, and — on paper — as the first line *inside* the first film's group
-  // (see `.findings_lede`).
+  // on screen, and — on paper — as the first line *inside* the first film's core
+  // (see `.fb_core`).
   //
   // Chrome honours `break-inside: avoid` and nothing else about page breaks: a
   // `break-after: avoid` on a heading, or a `break-before: avoid` on what follows
@@ -1400,8 +1895,8 @@ const AnalysisFindings = ({ films, onOpenFilm }: AnalysisFindingsProps) => {
   // named here once, rather than per block.
   //
   // Rendered twice, exactly as the head is: the panel's own key on screen, and — on
-  // paper — a copy inside the last film's group, so the key can never print on a
-  // sheet of its own (see `.findings_coda`).
+  // paper — a copy inside whichever of the last film's bounded boxes ends it, so the
+  // key can never print on a sheet of its own (see `.fb_core`, `.fb_coda`).
   const legend = (forPrint: boolean) => (
     reporting.length > 0 ? (
       <div
@@ -1511,40 +2006,22 @@ const AnalysisFindings = ({ films, onOpenFilm }: AnalysisFindingsProps) => {
     <section className={classes.findings} aria-label="Analysis findings">
       {head(false)}
       <div className={classes.findings_body}>
-        {views.map((view, index) => {
-          const block = (
-            <FilmBlock
-              key={view.film.record.imageId}
-              view={view}
-              onOpen={onOpenFilm}
-              showChange={hasChange}
-              hoistNorms={hoistedNorms !== null}
-            />
-          );
-          const isFirst = index === 0;
-          const isLast = index === views.length - 1;
-          if (!isFirst && !isLast) {
-            return block;
-          }
-          // The printed head goes with the first block and the printed key with
-          // the last, each as one unbreakable box on paper — the only way either
-          // stays with the films it belongs to (see `.findings_lede`). On screen
-          // the wrapper is `display: contents` and both copies are hidden, so the
-          // block is exactly the flex child of the well it has always been.
-          return (
-            <div
-              key={isFirst ? 'lede' : 'coda'}
-              className={cx({
-                [classes.findings_lede]: isFirst,
-                [classes.findings_coda]: isLast,
-              })}
-            >
-              {isFirst ? head(true) : null}
-              {block}
-              {isLast ? legend(true) : null}
-            </div>
-          );
-        })}
+        {/* The printed head goes *inside* the first block and the printed key
+            inside the last, each held in one of that block's own bounded boxes —
+            the only construction Chrome honours, and, unlike the wrapper this used
+            to be, one that stays the size of one visit however much of the block a
+            clinician has opened (see `FilmBlockProps#printHead`). */}
+        {views.map((view, index) => (
+          <FilmBlock
+            key={view.film.record.imageId}
+            view={view}
+            onOpen={onOpenFilm}
+            showChange={hasChange}
+            hoistNorms={hoistedNorms !== null}
+            printHead={index === 0 ? head(true) : null}
+            printLegend={index === views.length - 1 ? legend(true) : null}
+          />
+        ))}
       </div>
       {legend(false)}
     </section>

@@ -791,7 +791,49 @@ type ImageRecordMeta = {
   timepoint: string | null;
   /** ISO `YYYY-MM-DD` date the image was captured; null when not recorded. */
   captureDate: string | null;
+  /**
+   * Which position of the photographic series this photograph is, or null.
+   *
+   * Null on every radiograph (a cephalogram holds no position in a photographic
+   * series) and on a photograph whose position was never recorded — the state
+   * every photograph filed before this field existed is in. It is never inferred
+   * from the image type: "Intraoral photograph" is five different photographs,
+   * and placing one of them in the centre cell of a series grid because the type
+   * is all the record states would be the app filing a photograph the clinician
+   * did not file. @see PhotoView
+   */
+  photoView: PhotoView | null;
 };
+
+/**
+ * One position of the standard orthodontic photographic series — the composite a
+ * clinic shoots at each records visit, and the grid a clinician reads it in.
+ *
+ * Four extraoral (facial) frames and five intraoral: the eight-to-nine photograph
+ * series every orthodontic records protocol is a variation of. The ids name the
+ * *frame*, not the file: a photograph carries one, and it is what places it in
+ * the series grid, what a visit-vs-visit comparison lines up across timepoints,
+ * and what an empty cell of the grid files an upload into.
+ *
+ * Each position belongs to exactly one `ImageType` (see
+ * `utils/records#PHOTO_VIEW_OPTIONS`), so a record can never state a type and a
+ * position that contradict each other — the frontal-at-rest frame *is* a frontal
+ * photograph, the right-buccal frame *is* an intraoral photograph.
+ *
+ * Nothing here is traceable or measurable: photographs are stored, displayed and
+ * compared, never analysed (see `utils/records#isTraceableImageType`).
+ */
+type PhotoView = (
+  'face_frontal_rest' |
+  'face_frontal_smiling' |
+  'face_three_quarter' |
+  'face_profile' |
+  'intraoral_right_buccal' |
+  'intraoral_frontal' |
+  'intraoral_left_buccal' |
+  'intraoral_upper_occlusal' |
+  'intraoral_lower_occlusal'
+);
 
 type CephImageData<T extends ImageType> = {
   /** A null value indicates that the image type is not set or is unknown */
@@ -800,7 +842,15 @@ type CephImageData<T extends ImageType> = {
   timepoint: string | null;
   /** @see ImageRecordMeta */
   captureDate: string | null;
+  /** @see ImageRecordMeta — the photographic series position, or null. */
+  photoView: PhotoView | null;
   scaleFactor: number | null;
+  /**
+   * The imageId this film's scale was copied from, or null when the scale was
+   * measured on this film (and null when there is no scale at all).
+   * @see Events#SET_SCALE_FACTOR_REQUESTED
+   */
+  scaleSourceId: string | null;
   flipX: boolean;
   flipY: boolean;
   /** A value between 0 and 1, defaults to 0.5 */
@@ -1054,6 +1104,21 @@ interface Events {
   SET_SCALE_FACTOR_REQUESTED: {
     imageId: string;
     value: number;
+    /**
+     * The film this scale was **copied from**, where it was not measured on this
+     * one — the records dashboard's "apply this scale to the record's other
+     * films" (see `RecordsDashboard#renderCardCalibration`). Absent for a
+     * calibration a clinician marked on the film itself, which is the only kind
+     * the tracing toolbar dispatches.
+     *
+     * It is part of the same payload as the number, and not a second action,
+     * because it is part of the same fact: a scale and where it came from are one
+     * entry in the record. Held only in component state, the propagation died on
+     * the next navigation — the batched reversal the dialog promises
+     * unconditionally disappeared, and the copied number then read on T2's card
+     * exactly as the measured one reads on T1's, for the life of the record.
+     */
+    sourceImageId?: string | null;
   };
   UNSET_SCALE_FACTOR_REQUESTED: {
     imageId: string;

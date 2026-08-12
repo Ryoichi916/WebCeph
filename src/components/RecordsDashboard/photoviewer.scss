@@ -1,0 +1,495 @@
+@import 'src/_variables.scss';
+
+// The record's photographs, read three ways (see `PhotoViewer.tsx`): one
+// photograph enlarged, one position across every visit, two visits' whole series.
+//
+// Every frame in here shows the photograph *contained* — a comparison whose cells
+// crop is a comparison of crops. Where two frames of one row hold photographs of
+// different aspect (a clinic that shot T1 portrait and T2 landscape), the frames
+// stay the same size and the photographs letterbox inside them, because the thing
+// being held constant is the frame.
+
+.no_print {
+  @media print {
+    display: none !important;
+  }
+}
+
+.title {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+  font-family: $font-stack;
+}
+
+.title_main {
+  flex: 1 1 320px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.title_heading {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: $text-primary;
+}
+
+.title_caption {
+  font-size: 12.5px;
+  color: $text-tertiary;
+}
+
+// ---- The reading switch -----------------------------------------------------
+
+.modes {
+  flex: 0 0 auto;
+  display: inline-flex;
+  padding: 2px;
+  border: 1px solid $border-strong;
+  border-radius: 999px;
+  background: $bg-sunken;
+}
+
+.mode {
+  padding: 5px 12px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: $text-secondary;
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease;
+
+  &:hover {
+    color: $primary-600;
+  }
+
+  &__on {
+    background: $primary-600;
+    color: #FFFFFF;
+
+    &:hover {
+      color: #FFFFFF;
+    }
+  }
+
+  // Still focusable and still explains itself (the `title` is on the button, and
+  // the button is not `disabled`): a reading that is unavailable because the
+  // record holds one visit's photographs says so instead of being a dead chip.
+  &__off {
+    color: $text-disabled;
+    cursor: default;
+
+    &:hover {
+      color: $text-disabled;
+    }
+  }
+
+  &:focus {
+    outline: none;
+    box-shadow: $focus-ring;
+  }
+}
+
+// ---- One photograph ---------------------------------------------------------
+
+.single {
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.single_frame {
+  flex: 1 1 420px;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 260px;
+  max-height: 64vh;
+  padding: 8px;
+  box-sizing: border-box;
+  border-radius: 8px;
+  border: 1px solid $border-strong;
+  // A photograph is not a film, and the ground says so: the record viewer draws
+  // photographs on a neutral panel rather than on light-box black, so a studio
+  // grey portrait does not read as a radiograph.
+  background: $canvas-panel;
+}
+
+.single_img {
+  max-width: 100%;
+  max-height: calc(64vh - 16px);
+  object-fit: contain;
+  border-radius: 4px;
+}
+
+.single_none {
+  font-size: 13px;
+  color: $canvas-text;
+}
+
+.facts {
+  flex: 0 1 280px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.fact {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+  padding-bottom: 5px;
+  border-bottom: 1px solid $border;
+}
+
+.fact_key {
+  flex: 0 0 96px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: $text-tertiary;
+}
+
+.fact_value {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: $text-primary;
+
+  &__num {
+    font-variant-numeric: tabular-nums;
+  }
+
+  &__unset {
+    font-weight: 400;
+    color: $text-tertiary;
+  }
+}
+
+.facts_note {
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: $text-secondary;
+}
+
+.facts_actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.action {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border: 1px solid $border-strong;
+  border-radius: 6px;
+  background: $bg-surface;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  color: $text-primary;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease;
+
+  &:hover {
+    background: $primary-050;
+    border-color: $primary-600;
+  }
+
+  &:focus {
+    outline: none;
+    box-shadow: $focus-ring;
+  }
+
+  &__danger:hover {
+    background: $error-bg;
+    border-color: $error;
+  }
+}
+
+// ---- One position across the visits ----------------------------------------
+
+.across {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid $border;
+}
+
+.picker_band {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.picker_label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: $text-tertiary;
+}
+
+.picker_chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid $border-strong;
+  border-radius: 999px;
+  background: $bg-surface;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  color: $text-primary;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease;
+
+  &:hover {
+    background: $primary-050;
+    border-color: $primary-600;
+  }
+
+  &__on {
+    background: $primary-600;
+    border-color: $primary-600;
+    color: #FFFFFF;
+
+    &:hover {
+      background: $primary-600;
+    }
+  }
+
+  // A position no visit holds: shown, so the series' own vocabulary is complete,
+  // and not offered, because the comparison would be a row of empty frames.
+  &__off {
+    background: $bg-sunken;
+    border-color: $border;
+    color: $text-disabled;
+    cursor: default;
+
+    &:hover {
+      background: $bg-sunken;
+      border-color: $border;
+    }
+  }
+
+  &:focus {
+    outline: none;
+    box-shadow: $focus-ring;
+  }
+}
+
+.picker_count {
+  padding: 0 5px;
+  border-radius: 999px;
+  background: rgba(31, 41, 51, .08);
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.picker_chip__on .picker_count {
+  background: rgba(255, 255, 255, .22);
+}
+
+// The chronology itself: one column per visit, in the record's own order, and it
+// scrolls sideways rather than shrinking six visits into stamps.
+.strip {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.strip_col {
+  flex: 0 0 300px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.strip_head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.strip_visit {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: $primary-600;
+  font-size: 12px;
+  font-weight: 600;
+  color: #FFFFFF;
+}
+
+.strip_since {
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  color: $text-tertiary;
+}
+
+// One height for every column whatever the frame's aspect: the comparison holds
+// the frame constant, so the *frames* are one size and the photograph is
+// contained in each. Tall enough that a portrait facial frame is ~285px wide —
+// this is the surface a clinician judges change on, and a 200px column is the
+// small-thumbnail complaint all over again.
+.strip_frame {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 380px;
+  padding: 0;
+  border: 1px solid $border-strong;
+  border-radius: 6px;
+  overflow: hidden;
+  background: $canvas-panel;
+  cursor: pointer;
+
+  &:focus {
+    outline: none;
+    box-shadow: $focus-ring;
+  }
+
+  &__empty {
+    background: $bg-sunken;
+    border-style: dashed;
+    cursor: default;
+  }
+}
+
+.strip_img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+}
+
+.strip_none {
+  font-size: 12px;
+  color: $text-tertiary;
+}
+
+.strip_foot {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+.strip_date {
+  font-size: 12px;
+  color: $text-secondary;
+}
+
+.strip_age {
+  font-size: 12px;
+  color: $text-tertiary;
+}
+
+.strip_more {
+  font-size: 11.5px;
+  color: $text-tertiary;
+}
+
+// ---- Two visits, whole series ----------------------------------------------
+
+.pair {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pair_interval {
+  margin: 0;
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  color: $text-secondary;
+  text-align: center;
+}
+
+.pair_cols {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+
+.pair_col {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pair_head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.pair_select {
+  box-sizing: border-box;
+  height: 32px;
+  max-width: 100%;
+  padding: 0 8px;
+  border: 1px solid $border-strong;
+  border-radius: 6px;
+  background: $bg-surface;
+  font-family: $font-stack;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: $text-primary;
+
+  &:focus {
+    outline: none;
+    box-shadow: $focus-ring;
+  }
+}
+
+.pair_age {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: $text-tertiary;
+}
+
+.empty {
+  margin: 0;
+  padding: 20px 0;
+  font-size: 13px;
+  color: $text-tertiary;
+  text-align: center;
+}

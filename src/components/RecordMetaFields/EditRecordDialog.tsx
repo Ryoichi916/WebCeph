@@ -85,11 +85,11 @@ export default class EditRecordDialog
             onClick={this.handleSave}
           />,
         ]}
-        // 600, not 560: the record fields are laid out on a documented
-        // 186 + 132 + 164 basis (see RecordMetaFields/style.scss), which needs
-        // 506px of well. At 560 the well was 478 and the row wrapped — Capture
-        // date alone on a second line and a ~280px void beside the Timepoint
-        // field — so one component had two layouts, tidy on the upload surface
+        // 600, not 560: the record fields are laid out on a documented basis
+        // (see RecordMetaFields/style.scss) — 186 + 164 for the type and the
+        // capture date, then the timepoint's own row of 74 + 148 + note — which
+        // needs ~506px of well. At 560 the well was 478 and the first row
+        // wrapped, so one component had two layouts, tidy on the upload surface
         // and broken in the dialog.
         contentStyle={{ width: '92%', maxWidth: 600 }}
         bodyStyle={{ padding: '4px 24px 8px', borderTop: '1px solid #DDE3EA' }}

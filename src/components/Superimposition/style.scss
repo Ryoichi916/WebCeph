@@ -675,6 +675,20 @@
 .col_name { width: auto; }
 .col_num { text-align: right; }
 
+// Which of the two slots the film heading this column sits in — the earlier film or
+// the later one. The film's own timepoint leads the head (`slotToken`); this is the
+// one fact the head stopped carrying when the slot names came off it, and it is the
+// fact the whole table is read against: "T3 | T2" with the difference running
+// "T2 − T3" is unreadable without it, on screen and on an exported sheet alike.
+.col_slot {
+  display: block;
+  font-size: 9.5px;
+  font-weight: 500;
+  letter-spacing: .03em;
+  text-transform: none;
+  color: $text-disabled;
+}
+
 .col_bar {
   width: 62px;
   // The bar column is a scale, so it says which scale it is.

@@ -87,6 +87,27 @@ export interface RecordAnalysis {
    */
   plottedAnalyses: string[];
   reportableAnalyses: string[];
+  /**
+   * The same list as `plottedAnalyses`, by registry id rather than by display
+   * name — what the findings panel needs to actually *read* one of those analyses
+   * off this film when the clinician asks for it (see
+   * `AnalysisFindings#secondaryFindings`). Kept beside the names rather than
+   * derived from them, because a display name is a label and an id is a key.
+   */
+  plottedAnalysisIds: string[];
+  /**
+   * The tracing itself and the film's scale — the two inputs
+   * `analyses/evaluate#evaluateAnalysis` needs, carried here so the findings panel
+   * can read a *second* analysis off this film on demand without the store
+   * evaluating all nine on every film of every record up front.
+   *
+   * They are the very objects the store's own selectors hold (identity-stable
+   * between recomputes), which is what lets the panel memoize an evaluation
+   * against them: a landmark moved in the editor changes the reference, and the
+   * cached evaluation goes with it.
+   */
+  landmarks: { [symbol: string]: GeoObject | undefined };
+  scaleFactor: number | null;
   /** The patient the norms were read against, as the store built it. */
   context: AnalysisContext;
   /**
@@ -153,6 +174,14 @@ export const getRecordAnalyses = createSelector(
       const evaluation = entry !== undefined
         ? evaluateAnalysis(entry.analysis, landmarks, scaleFactor, context)
         : null;
+      // The analyses this film's tracing already carries every manual landmark
+      // for — computed once here, and read both as names (the block's tally) and
+      // as ids (the analyses the panel can open side by side).
+      const plotted = reportable.filter(({ analysis: a }) => (
+        getStepsForAnalysis(a, false).every(
+          (step) => !isStepManual(step) || landmarks[step.symbol] !== undefined,
+        )
+      ));
       return {
         imageId,
         analysisId: record.analysisId,
@@ -172,12 +201,11 @@ export const getRecordAnalyses = createSelector(
         missingSymbols: evaluation !== null ? evaluation.missingSymbols : [],
         // Cheap, and it claims nothing about computation: an analysis whose every
         // manual step is on this film needs no further plotting to be reported.
-        plottedAnalyses: reportable.filter(({ analysis: a }) => (
-          getStepsForAnalysis(a, false).every(
-            (step) => !isStepManual(step) || landmarks[step.symbol] !== undefined,
-          )
-        )).map(({ name }) => name),
+        plottedAnalyses: plotted.map(({ name }) => name),
         reportableAnalyses: reportable.map(({ name }) => name),
+        plottedAnalysisIds: plotted.map(({ id }) => id),
+        landmarks,
+        scaleFactor,
         context,
         provenance: entry !== undefined && entry.analysis.provenance !== undefined
           ? entry.analysis.provenance : null,

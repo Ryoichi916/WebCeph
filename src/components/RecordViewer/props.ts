@@ -11,6 +11,12 @@ export interface StateProps {
   timepoint: string | null;
   /** ISO `YYYY-MM-DD`, or null when the capture date was not recorded. */
   captureDate: string | null;
+  /**
+   * Which frame of the photographic series this photograph is, or null — null on
+   * every radiograph and on a photograph whose frame the record does not state.
+   * @see PhotoView
+   */
+  photoView: PhotoView | null;
   /** Natural pixel dimensions of the image. */
   width: number | null;
   height: number | null;

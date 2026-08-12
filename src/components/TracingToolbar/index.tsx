@@ -546,6 +546,12 @@ export default class TracingToolbar extends React.PureComponent<Props, State> {
               type: record.type,
               timepoint: record.timepoint,
               captureDate: record.captureDate,
+              // Carried through even here, where the record is a cephalogram and
+              // therefore holds none: the dialog re-files a record, and a
+              // correction to "Intraoral photograph" made from this toolbar must
+              // arrive with the same photographic frame the records dashboard
+              // would have given it, not with the field silently blanked.
+              photoView: record.photoView,
             }}
             fileName={record.name}
             onSave={this.handleSaveRecordMeta}
