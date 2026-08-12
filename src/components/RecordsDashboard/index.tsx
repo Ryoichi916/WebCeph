@@ -33,6 +33,8 @@ import ApplyScaleDialog from './ApplyScaleDialog';
 // that enlarges one photograph or compares them across visits.
 import PhotoSeries from './PhotoSeries';
 import PhotoViewer, { PhotoViewerTarget } from './PhotoViewer';
+// …and the path that files a whole sitting's photographs into one visit at once.
+import AddPhotoSeries from './AddPhotoSeries';
 import AnalysisFindings, { FilmFindings } from './AnalysisFindings';
 import TrendChart from './TrendChart';
 
@@ -114,6 +116,8 @@ import {
   isPhotographType,
   getDefaultPhotoView,
   findPhotoView,
+  buildPhotoSeries,
+  PHOTO_VIEW_OPTIONS,
   PhotoViewOption,
 } from 'utils/records';
 
@@ -609,6 +613,23 @@ interface State {
    * it along the case), and this surface only says what was pressed.
    */
   photoViewer: PhotoViewerTarget | null;
+  /**
+   * The visit a photographic series is being filed into, or null (see
+   * `AddPhotoSeries`). Carries the visit's label and day — the two facts the batch
+   * is stamped with — plus the files of the drop that opened it, where it was
+   * opened by a drop on a visit's series tile.
+   */
+  photoBatch: {
+    timepoint: string | null;
+    captureDate: string | null;
+    groupKey: string | null;
+    files: File[] | null;
+  } | null;
+  /**
+   * The photographs of a reviewed batch still to be filed, in order — see
+   * `handleFilePhotoBatch` for why a batch is a queue rather than one dispatch.
+   */
+  photoQueue: Array<{ file: File; meta: ImageRecordMeta }>;
 }
 
 /**
@@ -657,6 +678,8 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
     simulationImageId: null,
     superimposePair: null,
     photoViewer: null,
+    photoBatch: null,
+    photoQueue: [],
   };
 
   private root: HTMLElement | null = null;
@@ -672,6 +695,12 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
    * for — the number of cells on the track (see `parkBandAtLatestVisit`).
    */
   private bandParkedFor: string | null = null;
+  /**
+   * The safety net under the batch queue: a photograph whose import fails never
+   * arrives as a record, and the rest of the sitting must not be stranded behind
+   * it (see `pumpPhotoQueue`).
+   */
+  private photoQueueTimer: number | null = null;
 
   componentDidMount() {
     document.addEventListener('keydown', this.handleDocumentKeyDown);
@@ -685,14 +714,22 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
     this.updateStickyState();
   }
 
-  componentDidUpdate() {
+  componentDidUpdate(prev: Props) {
     this.updateStickyState();
+    // One photograph of a batch has landed: file the next (see `photoQueue`).
+    if (this.state.photoQueue.length > 0
+      && prev.records.length !== this.props.records.length) {
+      this.pumpPhotoQueue();
+    }
   }
 
   componentWillUnmount() {
     document.removeEventListener('keydown', this.handleDocumentKeyDown);
     window.removeEventListener('resize', this.updateStickyState);
     document.body.classList.remove(BODY_OPEN_CLASS);
+    if (this.photoQueueTimer !== null) {
+      window.clearTimeout(this.photoQueueTimer);
+    }
   }
 
   render() {
@@ -905,6 +942,13 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
                       <span className={classes.slots_list}>
                         {IMAGE_TYPE_OPTIONS
                           .filter(({ id }) => id !== DEFAULT_IMAGE_TYPE)
+                          // The three photograph types are one slot here — the
+                          // series itself. A type pill cannot name a *frame*, so
+                          // "Add intraoral photo" proposed the centre frame for
+                          // what may well be a buccal segment, and the nine-frame
+                          // vocabulary this module invented was missing at the one
+                          // place a series is started.
+                          .filter(({ id }) => !isPhotographType(id))
                           .map(({ id }) => (
                             <button
                               key={id}
@@ -923,6 +967,7 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
                               <span className={classes.slot_print}>{getImageTypeLabel(id)}</span>
                             </button>
                           ))}
+                        {this.renderSeriesSlot(getDefaultTimepoint(0), null, null)}
                       </span>
                     </div>
                   </div>
@@ -1890,34 +1935,41 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
         >
           <span className={classes.slots_label}>Or file at {first}</span>
           <span className={classes.slots_list}>
-            {IMAGE_TYPE_OPTIONS.map(({ id }) => (
-              <button
-                key={id}
-                type="button"
-                className={classes.slot}
-                title={`Add ${getImageTypeLabelInSentence(id)} at ${first}`}
-                aria-label={`Add ${getImageTypeLabelInSentence(id)} at ${first}`}
-                onClick={this.handleFillFirstSlot(id)}
-              >
-                <SlotPlus />
-                <span className={classes.slot_label}>{getAddSlotLabel(id)}</span>
-                <span className={classes.slot_print}>{getImageTypeLabel(id)}</span>
-              </button>
-            ))}
+            {IMAGE_TYPE_OPTIONS
+              // …and the photographs are one slot, the series itself (see the
+              // empty state's own row).
+              .filter(({ id }) => !isPhotographType(id))
+              .map(({ id }) => (
+                <button
+                  key={id}
+                  type="button"
+                  className={classes.slot}
+                  title={`Add ${getImageTypeLabelInSentence(id)} at ${first}`}
+                  aria-label={`Add ${getImageTypeLabelInSentence(id)} at ${first}`}
+                  onClick={this.handleFillFirstSlot(id)}
+                >
+                  <SlotPlus />
+                  <span className={classes.slot_label}>{getAddSlotLabel(id)}</span>
+                  <span className={classes.slot_print}>{getImageTypeLabel(id)}</span>
+                </button>
+              ))}
+            {this.renderSeriesSlot(first, null, null)}
           </span>
         </div>
       );
     }
-    // What the visit has not got — minus the photographs, once the visit holds a
-    // photographic series: the series tile's own empty cells are the affordance
-    // for those, and they name a *frame* ("Add the left buccal photograph")
-    // where a type pill can only name a type. Two rows offering to add a photo
-    // to one visit, one of them unable to say which frame, is one row too many.
+    // What the visit has not got — never as three photograph *types*. Where the
+    // visit already holds a series, its tile's own empty cells are the affordance
+    // and they name a *frame* ("Add the left buccal photograph"). Where it holds
+    // none, one slot offers the series itself (`renderSeriesSlot`), which opens on
+    // the same nine named frames: a type pill cannot say which of the five
+    // intraoral frames it means, and "Add intraoral photo" silently proposed the
+    // centre for what may well be a buccal segment.
     const hasSeries = group.records.some(({ type }) => isPhotographType(type));
     const missing = getMissingImageTypes(group.records).filter(
-      ({ id }) => !(hasSeries && isPhotographType(id)),
+      ({ id }) => !isPhotographType(id),
     );
-    if (missing.length === 0) {
+    if (missing.length === 0 && hasSeries) {
       return null;
     }
     // The row's micro-label carries the label's *token* — "T2" out of "T2
@@ -1975,8 +2027,45 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
               <span className={classes.slot_print}>{getImageTypeLabel(id)}</span>
             </button>
           ))}
+          {/* …and, where this visit was not photographed at all, the series: the
+              one path that starts a photographic series at a *named frame*. */}
+          {hasSeries
+            ? null
+            : this.renderSeriesSlot(group.label, group.firstDate, group.key)}
         </span>
       </div>
+    );
+  };
+
+  /**
+   * The slot that starts a visit's photographic series — the one photographic
+   * affordance on a visit that has not been photographed yet.
+   *
+   * It opens the series filing dialog (see `AddPhotoSeries`), which is both the
+   * batch path a clinic actually needs (a sitting's nine photographs filed in one
+   * act, each frame proposed in series order and editable first) and the composite
+   * itself, so the *first* photograph of a series is filed at a named frame exactly
+   * as the second through the ninth are.
+   */
+  private renderSeriesSlot = (
+    timepoint: string | null, captureDate: string | null, groupKey: string | null,
+  ) => {
+    const at = timepoint !== null ? timepoint : 'this visit';
+    return (
+      <button
+        key="photo_series"
+        type="button"
+        className={classes.slot}
+        title={`Add this visit's photographic series to ${at}` +
+          `${captureDate !== null ? ` · ${captureDate}` : ''} — the nine named ` +
+          'frames, filed in one act or one at a time'}
+        aria-label={`Add the photographic series to ${at}`}
+        onClick={this.handleOpenSeriesDialog(timepoint, captureDate, groupKey, null)}
+      >
+        <SlotPlus />
+        <span className={classes.slot_label}>Add photographs</span>
+        <span className={classes.slot_print}>Photographic series</span>
+      </button>
     );
   };
 
@@ -2789,7 +2878,16 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
           </span>
         ) : null}
         <span className={classes.stop_chips}>
-          {group.records.map(this.renderBandChip)}
+          {/* One chip per radiograph, and *one* chip for the visit's whole
+              photographic series (see `renderPhotosChip`). Named per frame, a
+              visit that had its series taken carried a five-row cluster of ten
+              chips restating exactly what the composite below the rail already
+              states — and a re-shoot printed "Profile" twice with nothing to
+              tell the two apart, each opening a different record. */}
+          {group.records
+            .filter(({ type }) => !isPhotographType(type))
+            .map(this.renderBandChip)}
+          {this.renderPhotosChip(group)}
         </span>
       </div>
     );
@@ -2811,6 +2909,57 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
    * a reader tabbing the rail unable to tell which film was on screen from which
    * film their cursor was on. The ring now belongs to `:focus-visible` alone.
    */
+  /**
+   * A visit's photographs, as one chip on the band: how much of the nine-frame
+   * series it holds, opening the series itself in the photograph viewer.
+   *
+   * **Why one chip and not one per photograph.** The composite for this visit is
+   * drawn 300px below the rail, cell by cell and frame by frame. Repeating it on
+   * the rail as ten frame-named chips was the same data twice — and because two
+   * photographs can honestly share a position (a re-shoot), two of those chips read
+   * "Profile" and "Profile" side by side, opened different records, and gave a
+   * reader no way to tell which was which. One chip states the count and opens the
+   * reading where every one of them is reachable under ‹ ›.
+   */
+  private renderPhotosChip = (group: TimepointGroup<PatientRecord>) => {
+    const photos = group.records.filter(({ type }) => isPhotographType(type));
+    if (photos.length === 0) {
+      return null;
+    }
+    const series = buildPhotoSeries(photos);
+    const total = PHOTO_VIEW_OPTIONS.length;
+    const isActive = photos.some(({ isActive: on }) => on);
+    const title = [
+      `Photographs · ${series.filled} of the ${total} series positions on file`,
+      series.unplaced.length > 0
+        ? (series.unplaced.length === 1
+          ? '1 with no position recorded'
+          : `${series.unplaced.length} with no position recorded`)
+        : null,
+      'view only, not analysable',
+    ].filter((part) => part !== null).join(' · ') + (isActive
+      ? ' — one of them is shown on the surface behind this one'
+      : ' — open the visit’s photographic series');
+    return (
+      <button
+        key="photos"
+        type="button"
+        className={cx(classes.bchip, classes.bchip__muted, {
+          [classes.bchip__active]: isActive,
+        })}
+        title={title}
+        aria-label={title}
+        aria-current={isActive ? 'true' : undefined}
+        onClick={this.handleOpenSeriesFromBand(group)}
+      >
+        {`Photos ${series.filled}/${total}`}
+        {isActive ? (
+          <span className={classes.bchip_shown}>shown</span>
+        ) : null}
+      </button>
+    );
+  };
+
   private renderBandChip = (record: PatientRecord) => {
     const { tone, phrase } = getTracingTone(record);
     const date = formatCaptureDate(record.captureDate);
@@ -3476,6 +3625,8 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
                 onFill={this.handleFillPhotoSlot(group)}
                 onCompare={this.handleComparePhotos(group)}
                 onEdit={this.handleEditRecord}
+                onOpenStack={this.handleOpenPhotoStack(group)}
+                onAddBatch={this.handleAddPhotoBatch(group)}
               />
             </div>
           ) : null}
@@ -3802,8 +3953,15 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
     const { records, patient, otherChartIds } = this.props;
     const {
       editingImageId, removingImageId, isEditingPatient, patientFocusField,
-      applyScaleImageId, removeScaleImageId, photoViewer,
+      applyScaleImageId, removeScaleImageId, photoViewer, photoBatch,
     } = this.state;
+    // The visit the batch is filed into, as the page itself groups it — so the
+    // dialog reports what is already on file at that visit off the same reading.
+    const batchGroup = photoBatch !== null && photoBatch.groupKey !== null
+      ? groupRecordsByTimepoint(records).filter(
+        (g) => g.key === photoBatch.groupKey,
+      )[0]
+      : undefined;
     const editing = records.filter((r) => r.imageId === editingImageId)[0];
     const removing = records.filter((r) => r.imageId === removingImageId)[0];
     const scaleSource = records.filter(
@@ -3879,6 +4037,22 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
           onOpenRecord={this.handleOpenPhotoRecord}
           onEdit={this.handleEditPhoto}
           onRemove={this.handleRemovePhoto}
+        />
+        {/* Filing a visit's photographic series — one act for the whole sitting,
+            with every frame proposed in series order and editable first. It is
+            also the path that *starts* a series, so the first photograph of a
+            visit is filed at a named frame like the ninth is. */}
+        <AddPhotoSeries
+          open={photoBatch !== null}
+          timepoint={photoBatch !== null ? photoBatch.timepoint : null}
+          captureDate={photoBatch !== null ? photoBatch.captureDate : null}
+          age={photoBatch !== null ? this.getAgeOn(photoBatch.captureDate) : null}
+          group={batchGroup !== undefined ? batchGroup : null}
+          initialFiles={photoBatch !== null ? photoBatch.files : null}
+          onClose={this.closeSeriesDialog}
+          onFile={this.handleFilePhotoBatch}
+          onFillOne={this.handleFillPhotoSlotAt}
+          onOpenPhoto={this.handleOpenPhotoFromDialog}
         />
         <ApplyScaleDialog
           mode="remove"
@@ -4053,7 +4227,166 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
       },
     });
 
+  /**
+   * The band's own photographs chip: the visit's series, opened on its first
+   * photograph with the walk set to that visit — ‹ › then steps through every one
+   * of them, including a re-shoot filed at an occupied position.
+   */
+  private handleOpenSeriesFromBand = (group: TimepointGroup<PatientRecord>) =>
+    () => {
+      const photos = group.records.filter(({ type }) => isPhotographType(type));
+      const layout = buildPhotoSeries(photos);
+      let first: PatientRecord | undefined;
+      layout.rows.forEach(({ cells }) => {
+        cells.forEach(({ record }) => {
+          if (first === undefined && record !== null) {
+            first = record;
+          }
+        });
+      });
+      const open = first !== undefined ? first : layout.unplaced[0];
+      if (open === undefined) {
+        return;
+      }
+      this.setState({
+        photoViewer: {
+          mode: 'single',
+          imageId: open.imageId,
+          view: open.photoView,
+          groupKey: group.key,
+          scope: 'visit',
+        },
+      });
+    };
+
+  /**
+   * The several photographs filed at one position of one visit — what a cell's
+   * `+N` badge opens. The enlarged reading walks the stack, so the count is a way
+   * in rather than a claim that a second photograph exists somewhere unreachable.
+   */
+  private handleOpenPhotoStack = (group: TimepointGroup<PatientRecord>) =>
+    (view: PhotoViewOption, record: PatientRecord) => this.setState({
+      photoViewer: {
+        mode: 'single',
+        imageId: record.imageId,
+        view: view.id,
+        groupKey: group.key,
+        scope: 'stack',
+      },
+    });
+
   private closePhotoViewer = () => this.setState({ photoViewer: null });
+
+  // ---- Filing a whole photographic series ------------------------------------
+
+  /**
+   * Open the series filing dialog on a visit. `files` are the files of a drop that
+   * landed on that visit's series tile, where that is how it was opened.
+   */
+  private handleOpenSeriesDialog = (
+    timepoint: string | null, captureDate: string | null,
+    groupKey: string | null, files: File[] | null,
+  ) => () => this.setState({
+    photoBatch: { timepoint, captureDate, groupKey, files },
+  });
+
+  /** The series tile's own "Add photographs", and a drop anywhere on that tile. */
+  private handleAddPhotoBatch = (group: TimepointGroup<PatientRecord>) =>
+    (files: File[] | null) => this.setState({
+      photoBatch: {
+        timepoint: group.label,
+        captureDate: group.firstDate,
+        groupKey: group.key,
+        files,
+      },
+    });
+
+  private closeSeriesDialog = () => this.setState({ photoBatch: null });
+
+  /**
+   * File the reviewed batch. Each photograph lands on its own rail tile with the
+   * record details the dialog showed — and the dashboard *stays on screen*: a
+   * sitting's photographs are filed without once leaving the surface they were
+   * filed from, which is the whole reason this path exists.
+   *
+   * **One at a time, and why.** The rail refuses to create a second empty tile
+   * while an empty one exists (`store/middleware/workspaceManager`) — that is what
+   * keeps the ghost-tile button from stacking blank tiles. Fired in one tick, the
+   * second and later photographs of a batch therefore asked for tiles that were
+   * never created and their imports landed on nothing. So the batch is a queue: one
+   * photograph is filed, and the next goes as soon as it has arrived as a record
+   * (`componentDidUpdate`), which is also when the tile it needs is free to be
+   * made.
+   */
+  private handleFilePhotoBatch = (
+    entries: Array<{ file: File; meta: ImageRecordMeta }>,
+  ) => {
+    if (entries.length === 0) {
+      return;
+    }
+    this.setState({ photoQueue: entries.slice(1) });
+    this.props.onAddPhotographs(this.props.emptyWorkspaceId, [entries[0]]);
+    this.armPhotoQueue();
+  };
+
+  /** The next photograph of the batch. */
+  private pumpPhotoQueue = () => {
+    const next = this.state.photoQueue[0];
+    if (next === undefined) {
+      return;
+    }
+    this.setState((state) => ({ photoQueue: state.photoQueue.slice(1) }));
+    this.props.onAddPhotographs(this.props.emptyWorkspaceId, [next]);
+    this.armPhotoQueue();
+  };
+
+  /**
+   * …and the timer that keeps the queue moving when a photograph never arrives (an
+   * unreadable file, say): the rest of the sitting is filed rather than silently
+   * dropped, and nothing is ever filed twice — the queue is shortened as each
+   * photograph is dispatched, not as it arrives.
+   */
+  private armPhotoQueue = () => {
+    if (this.photoQueueTimer !== null) {
+      window.clearTimeout(this.photoQueueTimer);
+    }
+    this.photoQueueTimer = window.setTimeout(() => {
+      this.photoQueueTimer = null;
+      if (this.state.photoQueue.length > 0) {
+        this.pumpPhotoQueue();
+      }
+    }, 6000);
+  };
+
+  /**
+   * One named frame the long way, from inside the dialog: the upload form, on the
+   * very path the series tile's own empty cells take (`handleFillPhotoSlot`).
+   */
+  private handleFillPhotoSlotAt = (view: PhotoViewOption) => {
+    const { photoBatch } = this.state;
+    this.setState({ photoBatch: null });
+    this.props.onAddImage(this.props.emptyWorkspaceId, {
+      type: view.imageType,
+      timepoint: photoBatch !== null ? photoBatch.timepoint : null,
+      captureDate: photoBatch !== null ? photoBatch.captureDate : null,
+      photoView: view.id,
+    });
+  };
+
+  /** …and a photograph already on file, enlarged — the dialog closes behind it. */
+  private handleOpenPhotoFromDialog = (record: PatientRecord) => {
+    const { photoBatch } = this.state;
+    this.setState({
+      photoBatch: null,
+      photoViewer: {
+        mode: 'single',
+        imageId: record.imageId,
+        view: record.photoView,
+        groupKey: photoBatch !== null ? photoBatch.groupKey : null,
+        scope: 'visit',
+      },
+    });
+  };
 
   /**
    * Open a photograph in the app's read-only record viewer — the same path a

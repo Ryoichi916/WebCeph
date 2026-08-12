@@ -103,18 +103,44 @@
 .single {
   display: flex;
   align-items: flex-start;
+  // Centred, and the photograph's column is shrink-to-fit: with the frame sized to
+  // the photograph's aspect the facts sit beside the photograph rather than a
+  // dialog's width away from it.
+  justify-content: center;
   gap: 20px;
   flex-wrap: wrap;
+  // The height budget of an enlarged photograph, in one place, as a custom
+  // property so the frame, the image and the frame's *width* are all derived
+  // from the same number.
+  //
+  // `min()` and not a bare `64vh`: on a 1366 × 768 clinic laptop 64vh of image
+  // plus the dialog's own title and actions bars did not fit the window, and the
+  // reading was lost by clipping rather than by shrinking. This shrinks.
+  --photo-h: min(576px, 58vh);
 }
 
+.single_main {
+  flex: 0 1 auto;
+  min-width: 240px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+// The frame's *width* follows the photograph's own aspect (the inline
+// `max-width` the component computes from the record's pixel size, or from the
+// position's frame where the pixels are unknown), so a portrait photograph is
+// not laid on an 830px-wide panel with 210px of dark ground either side of it.
 .single_frame {
-  flex: 1 1 420px;
+  align-self: stretch;
   min-width: 0;
+  margin: 0 auto;
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 260px;
-  max-height: 64vh;
+  min-height: 240px;
+  max-height: var(--photo-h);
   padding: 8px;
   box-sizing: border-box;
   border-radius: 8px;
@@ -127,7 +153,7 @@
 
 .single_img {
   max-width: 100%;
-  max-height: calc(64vh - 16px);
+  max-height: calc(var(--photo-h) - 18px);
   object-fit: contain;
   border-radius: 4px;
 }
@@ -135,6 +161,72 @@
 .single_none {
   font-size: 13px;
   color: $canvas-text;
+}
+
+// ---- Walking the reading (‹ ›) ----------------------------------------------
+// One photograph is never read on its own: a clinician walks a visit's series
+// frame by frame, or one frame along the case, or the several photographs filed
+// at one position. The enlarged reading carries that walk instead of sending the
+// reader back to a grid between every two photographs — and it says out loud
+// which sequence it is walking, so "3 of 9" cannot be mistaken for a position
+// count.
+.seq {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 3px 4px;
+  border: 1px solid $border;
+  border-radius: 999px;
+  background: $bg-surface;
+}
+
+.seq_step {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  font-family: inherit;
+  font-size: 16px;
+  line-height: 1;
+  color: $primary-600;
+  cursor: pointer;
+  transition: background-color 120ms ease;
+
+  &:hover {
+    background: $primary-050;
+  }
+
+  &:focus {
+    outline: none;
+    box-shadow: $focus-ring;
+  }
+
+  // At either end of the sequence: still focusable, still explains itself, and
+  // not a dead arrow (the same rule the reading switch's `.mode__off` follows).
+  &__off {
+    color: $text-disabled;
+    cursor: default;
+
+    &:hover {
+      background: transparent;
+    }
+  }
+}
+
+.seq_count {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: $text-secondary;
+  white-space: nowrap;
+}
+
+.seq_of {
+  color: $text-tertiary;
 }
 
 .facts {
@@ -321,21 +413,89 @@
   background: rgba(255, 255, 255, .22);
 }
 
-// The chronology itself: one column per visit, in the record's own order, and it
-// scrolls sideways rather than shrinking six visits into stamps.
+// The chronology itself: one column per visit, in the record's own order.
+//
+// `width: fit-content` with `margin: 0 auto` is what makes two visits — the
+// commonest case — a centred pair rather than two 300px columns pinned left with
+// half the dialog empty beside them: the track is as wide as its columns want to
+// be, capped at the body's width, and centred inside it. Past that cap the
+// columns shrink (to `min-width`, never below), and past *that* it scrolls
+// sideways rather than squeezing six visits into stamps.
+//
+// The two edge gradients are the "there is more" affordance, and they are
+// attached `local`, so each appears only while there is actually unscrolled
+// content on that side — a clipped column can never read as a cropped
+// photograph. The scrollbar is styled rather than left to the platform, which
+// also stops it being an overlay bar that fades out of sight.
 .strip {
+  // The height budget of one column's frame — the frame's own width is derived
+  // from it and the position's aspect (see `.strip_col__portrait`), so a
+  // landscape frame is wide and short and a facial frame tall and narrow, and
+  // neither letterboxes inside the other's box.
+  --strip-h: min(380px, 44vh);
   display: flex;
   gap: 12px;
+  width: fit-content;
+  max-width: 100%;
+  margin: 0 auto;
   overflow-x: auto;
-  padding-bottom: 4px;
+  padding-bottom: 6px;
+  background:
+    linear-gradient(to right, $bg-surface, rgba(255, 255, 255, 0)) left center,
+    linear-gradient(to left, $bg-surface, rgba(255, 255, 255, 0)) right center,
+    radial-gradient(
+      farthest-side at 0 50%, rgba(16, 30, 50, .16), rgba(16, 30, 50, 0)
+    ) left center,
+    radial-gradient(
+      farthest-side at 100% 50%, rgba(16, 30, 50, .16), rgba(16, 30, 50, 0)
+    ) right center;
+  background-repeat: no-repeat;
+  background-size: 28px 100%, 28px 100%, 12px 100%, 12px 100%;
+  background-attachment: local, local, scroll, scroll;
+
+  &::-webkit-scrollbar {
+    height: 10px;
+  }
+
+  &::-webkit-scrollbar-track {
+    border-radius: 999px;
+    background: $bg-sunken;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+    background: $border-strong;
+  }
+
+  scrollbar-width: thin;
+
+  // Two visits have the dialog to themselves, so the budget is raised and both
+  // photographs are read larger — still bounded by the window's own height, so
+  // this cannot become the clipping it replaced.
+  &__roomy {
+    --strip-h: min(500px, 50vh);
+  }
 }
 
+// The column is exactly as wide as its frame's aspect makes it at the height
+// budget — 3:4 for a facial frame, 3:2 for an intraoral or occlusal one — which is
+// what lets the track be `fit-content` and centre itself. It shrinks (never grows)
+// from there, down to a floor, and past the floor the track scrolls.
 .strip_col {
-  flex: 0 0 300px;
-  min-width: 0;
+  flex: 0 1 auto;
   display: flex;
   flex-direction: column;
   gap: 6px;
+
+  &__portrait {
+    width: calc(.75 * var(--strip-h));
+    min-width: 230px;
+  }
+
+  &__landscape {
+    width: calc(1.5 * var(--strip-h));
+    min-width: 265px;
+  }
 }
 
 .strip_head {
@@ -362,17 +522,17 @@
   color: $text-tertiary;
 }
 
-// One height for every column whatever the frame's aspect: the comparison holds
-// the frame constant, so the *frames* are one size and the photograph is
-// contained in each. Tall enough that a portrait facial frame is ~285px wide —
-// this is the surface a clinician judges change on, and a 200px column is the
-// small-thumbnail complaint all over again.
+// Every column's frame is the *same* frame — that is what makes time the only
+// variable — but which frame it is comes from the position on screen: the height
+// is the strip's budget and the width follows from the aspect (the padding trick,
+// the same one the series tile's own cells use). One 380px-tall box for every
+// position had the intraoral and occlusal photographs, where molar relation and
+// arch form are actually judged, sitting 300 × 200 with 180px of empty panel
+// above and below them.
 .strip_frame {
   position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 380px;
+  display: block;
+  width: 100%;
   padding: 0;
   border: 1px solid $border-strong;
   border-radius: 6px;
@@ -392,15 +552,36 @@
   }
 }
 
+.strip_col__portrait .strip_frame {
+  // 3:4 — a facial photograph.
+  padding-top: 133.33%;
+}
+
+.strip_col__landscape .strip_frame {
+  // 3:2 — an intraoral or occlusal photograph.
+  padding-top: 66.67%;
+}
+
 .strip_img {
-  max-width: 100%;
-  max-height: 100%;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
   object-fit: contain;
   pointer-events: none;
 }
 
 .strip_none {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 100%;
+  padding: 0 8px;
+  box-sizing: border-box;
+  transform: translate(-50%, -50%);
   font-size: 12px;
+  text-align: center;
+  line-height: 1.4;
   color: $text-tertiary;
 }
 
@@ -421,9 +602,31 @@
   color: $text-tertiary;
 }
 
+// A second photograph filed at the same position is a way in, not a claim: the
+// line is the control that opens the stack of them in the enlarged reading, where
+// ‹ › steps through every one.
 .strip_more {
+  align-self: flex-start;
+  padding: 1px 8px;
+  border: 1px solid $border;
+  border-radius: 999px;
+  background: $bg-surface;
+  font-family: inherit;
   font-size: 11.5px;
-  color: $text-tertiary;
+  font-weight: 600;
+  color: $primary-600;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease;
+
+  &:hover {
+    background: $primary-050;
+    border-color: $primary-600;
+  }
+
+  &:focus {
+    outline: none;
+    box-shadow: $focus-ring;
+  }
 }
 
 // ---- Two visits, whole series ----------------------------------------------
@@ -439,6 +642,16 @@
   font-size: 12.5px;
   font-variant-numeric: tabular-nums;
   color: $text-secondary;
+  text-align: center;
+}
+
+// The from/to pair swapped, when the reader picks the visit that is already on
+// the other side — stated, because a select that silently rearranged both columns
+// would be a control doing something it did not say.
+.pair_swapped {
+  margin: 0;
+  font-size: 12px;
+  color: $text-tertiary;
   text-align: center;
 }
 

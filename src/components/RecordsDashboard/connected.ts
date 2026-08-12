@@ -40,6 +40,9 @@ import {
   updatePatient,
   setPatientTrendPlot,
   closeImage,
+  // Filing a batch of photographs is the upload screen's own import, once per
+  // photograph (see `onAddPhotographs`).
+  importFileRequested,
 } from 'actions/workspace';
 
 /** The first rail tile that holds no image, or null when every tile is used. */
@@ -111,6 +114,40 @@ const mapDispatchToProps = (dispatch: GenericDispatch): DispatchProps => ({
       intent: intent !== undefined ? intent : null,
     }));
     dispatch(setRecordsDashboardShown({ isShown: false }));
+  },
+  /**
+   * File a whole sitting's photographs at once, *without leaving the dashboard*.
+   *
+   * Each photograph goes onto its own rail tile — the same one-image-per-tile shape
+   * every other filed record has — through the very action the upload screen's own
+   * drop dispatches (`IMPORT_FILE_REQUESTED`), carrying the record details the
+   * filing dialog reviewed. The already-empty tile is used for the first of them so
+   * a blank tile is not left stranded beside the batch.
+   *
+   * Deliberately no `setRecordsDashboardShown` and no `setActiveWorkspace`: the
+   * clinician stays on the visit's tile and the photographs appear on it as they
+   * load, which is the whole difference between this and nine trips through the
+   * upload screen.
+   *
+   * The caller hands the batch over **one photograph at a time** — see
+   * `RecordsDashboard#handleFilePhotoBatch`: the rail refuses to create a second
+   * empty tile while an empty one exists, so a whole batch dispatched in one tick
+   * asked for tiles that were never made. This loop is therefore normally one
+   * iteration long, and correct for more.
+   */
+  onAddPhotographs: (
+    emptyWorkspaceId: string | null,
+    entries: Array<{ file: File; meta: ImageRecordMeta }>,
+  ) => {
+    entries.forEach(({ file, meta }, index) => {
+      const workspaceId = index === 0 && emptyWorkspaceId !== null
+        ? emptyWorkspaceId
+        : uniqueId('workspace_');
+      if (workspaceId !== emptyWorkspaceId) {
+        dispatch(addNewWorkspace({ id: workspaceId }));
+      }
+      dispatch(importFileRequested({ file, workspaceId, meta }));
+    });
   },
   // A patient's own details are corrected with the same action registration
   // uses, so the persistence middleware saves the corrected record exactly the

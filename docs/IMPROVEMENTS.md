@@ -82,14 +82,16 @@ never from the on-screen preview alone.
 
 - [ ] **Patient dashboard: study models are still missing.** The surface itself
   is done — it is a full workspace page, not a modal, and it now holds the
-  extraoral/intraoral photograph types, the per-timepoint analysis history, the
-  cross-timepoint measurement trend, a horizontal treatment timeline with the
-  elapsed interval on every gap, and working launch points into the tracing
-  editor, the clinical report, the treatment simulation and a superimposition of
-  a named pair of timepoints. What the commercial field still has and this does
-  not is **study models / 3D records** (plaster scans, IOS meshes): a new record
-  type with its own viewer, not a variation on an image.
-  `components/RecordsDashboard/`.
+  extraoral/intraoral photograph types filed at their position in the standard
+  photographic series (a composite nine-position tile per visit, with the
+  visit-vs-visit comparison and the enlarging viewer beside it), the
+  per-timepoint analysis history, the cross-timepoint measurement trend, a
+  horizontal treatment timeline with the elapsed interval on every gap, and
+  working launch points into the tracing editor, the clinical report, the
+  treatment simulation and a superimposition of a named pair of timepoints. What
+  the commercial field still has and this does not is **study models / 3D
+  records** (plaster scans, IOS meshes): a new record type with its own viewer,
+  not a variation on an image. `components/RecordsDashboard/`.
 - [ ] **Non-lateral analysis.** PA/frontal cephalometric analysis (the frontal
   landmark points already exist in `analyses/landmarks/frontalPhoto/`),
   photographic (facial esthetic) analysis, and arch/space analysis.

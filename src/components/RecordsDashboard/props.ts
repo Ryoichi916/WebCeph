@@ -49,6 +49,25 @@ export interface DispatchProps {
    * also clears any slot chosen earlier.
    */
   onAddImage(emptyWorkspaceId: string | null, intent?: ImageRecordMeta | null): any;
+  /**
+   * File a reviewed batch of photographs into the record — one entry per
+   * photograph, each carrying the record details the filing dialog showed (its
+   * frame, the type that frame belongs to, the visit and the visit's day).
+   *
+   * The point of it is that it does **not** navigate. A nine-frame photographic
+   * series was nine separate full-page uploads, each of which left the records
+   * dashboard for the upload screen and landed in the record viewer, so the empty
+   * cell's own act threw the clinician off the surface they pressed it on — nine
+   * times for one sitting's photographs. This files the whole sitting with the
+   * dashboard still on screen; the images appear on the visit's tile as they load.
+   *
+   * `emptyWorkspaceId` is the rail's already-empty tile, used for the first
+   * photograph so a blank tile is not left stranded beside the batch.
+   */
+  onAddPhotographs(
+    emptyWorkspaceId: string | null,
+    entries: Array<{ file: File; meta: ImageRecordMeta }>,
+  ): any;
   /** Correct the patient's own demographics (name, chart ID, DOB, sex). */
   onSavePatient(id: string, details: PatientDetails): any;
   /** Correct a record's type / timepoint / capture date. */

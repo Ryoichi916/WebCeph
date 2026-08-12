@@ -19,6 +19,18 @@ import {
 
 const classes = require('./photoseries.scss');
 
+/** The magnifier on a filled cell's hover label — "this enlarges". */
+const ZoomGlyph = () => (
+  <svg
+    width="10" height="10" viewBox="0 0 12 12" aria-hidden="true"
+  >
+    <g fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+      <circle cx="5" cy="5" r="3.4" />
+      <path d="M7.6 7.6 L10.6 10.6" />
+    </g>
+  </svg>
+);
+
 /** The `+` on an empty cell — the slot row's own mark, at cell size. */
 const CellPlus = () => (
   <svg
@@ -34,6 +46,11 @@ const CellPlus = () => (
     />
   </svg>
 );
+
+/** Whether a file drag is currently over the tile (see `onAddBatch`). */
+interface DragState {
+  isOver: boolean;
+}
 
 export interface PhotoSeriesProps {
   /**
@@ -66,6 +83,18 @@ export interface PhotoSeriesProps {
   onCompare?(view: PhotoView | null): any;
   /** Correct one photograph's record details — the unplaced strip's own action. */
   onEdit?(record: PatientRecord): any;
+  /**
+   * Open the photographs filed at *this* position of this visit — the extras
+   * badge's own act. The count on a cell is a way in, not a claim: pressing it
+   * lands in the enlarged reading with the stack of them under ‹ ›.
+   */
+  onOpenStack?(view: PhotoViewOption, record: PatientRecord): any;
+  /**
+   * File a whole batch of photographs into this visit at once — the series is shot
+   * in one sitting, and the tile accepts it in one act (see `AddPhotoSeries`).
+   * `files` is the drop that landed on the tile, or null for the head's own button.
+   */
+  onAddBatch?(files: File[] | null): any;
 }
 
 /**
@@ -91,9 +120,11 @@ export interface PhotoSeriesProps {
  * the read-only viewer; no cell offers tracing, an analysis or a measurement, and
  * no landmark is ever plotted on one.
  */
-export default class PhotoSeries extends React.PureComponent<PhotoSeriesProps> {
+export default class PhotoSeries extends React.PureComponent<PhotoSeriesProps, DragState> {
+  state: DragState = { isOver: false };
+
   render() {
-    const { records, canCompare } = this.props;
+    const { records, canCompare, onAddBatch } = this.props;
     const isCompare = this.props.variant === 'compare';
     const series = buildPhotoSeries(records);
     const visit = this.visitName();
@@ -101,7 +132,13 @@ export default class PhotoSeries extends React.PureComponent<PhotoSeriesProps> {
       <div
         className={cx(classes.series, {
           [classes.series__compare]: isCompare,
+          // A drag of the sitting's photographs over the tile it belongs to.
+          [classes.series__over]: this.state.isOver,
         })}
+        onDragOver={onAddBatch !== undefined ? this.handleDragOver : undefined}
+        onDragEnter={onAddBatch !== undefined ? this.handleDragOver : undefined}
+        onDragLeave={onAddBatch !== undefined ? this.handleDragLeave : undefined}
+        onDrop={onAddBatch !== undefined ? this.handleDrop : undefined}
       >
         {isCompare ? null : (
           <div className={classes.series_head}>
@@ -111,6 +148,21 @@ export default class PhotoSeries extends React.PureComponent<PhotoSeriesProps> {
                 (n, { cells }) => n + cells.length, 0,
               )} positions
             </span>
+            {/* Filing the rest of the sitting: one act for the whole batch, with
+                each photograph's frame proposed in series order and editable
+                before anything is written. A clinic shoots the series in one
+                sitting; nine cells were nine full-page uploads. */}
+            {onAddBatch !== undefined ? (
+              <button
+                type="button"
+                className={classes.series_add}
+                title={`Add several photographs to ${visit} at once — or drop ` +
+                  'them anywhere on this tile'}
+                onClick={this.handleAddBatch}
+              >
+                Add photographs
+              </button>
+            ) : null}
             {/* The comparison this tile is a half of. Offered only where there
                 is a second visit with photographs to compare against — a control
                 that opens a comparison of one visit with itself is not a
@@ -223,53 +275,70 @@ export default class PhotoSeries extends React.PureComponent<PhotoSeriesProps> {
     }
     const date = formatCaptureDate(record.captureDate);
     return (
-      <button
+      <div
         key={view.id}
-        type="button"
         className={cx(classes.cell, classes.cell__filled, frameClass, {
           // "Currently open behind this surface" is a fact about the *record
           // page*. Inside the comparison it would read as a selection — a blue
           // ring round one of eighteen cells that means nothing there.
           [classes.cell__active]: record.isActive && !isCompare,
         })}
-        // Named for what pressing it does — enlarge, in the read-only viewer.
-        // Nothing here offers tracing or analysis: a photograph is not traced by
-        // this app, and the caption, the viewer and the record's own chip all say
-        // so in the same words.
-        title={`${getPhotoViewLabel(view.id)} — ${this.visitName()}` +
-          `${date !== null ? ` · ${date}` : ''}. Enlarge (view only, not analysable)`}
-        aria-label={`Enlarge the ${getPhotoViewLabelInSentence(view.id)} ` +
-          `photograph of ${this.visitName()}`}
-        onClick={this.handleOpen(record)}
       >
-        <span className={classes.cell_frame}>
-          {record.thumbnail !== null ? (
-            <img
-              className={classes.cell_img}
-              src={record.thumbnail}
-              alt=""
-              draggable={false}
-            />
-          ) : (
-            <span className={classes.cell_none}>No image data</span>
-          )}
-          {/* A second photograph filed at the same position is not dropped and
-              not silently hidden: the cell says how many more there are, and the
-              viewer's own position mode lists them. */}
-          {extras.length > 0 ? (
-            <span
-              className={classes.cell_more}
-              title={`${extras.length + 1} photographs are filed at this ` +
-                'position — this is the earliest of them'}
-            >
-              +{extras.length}
+        <button
+          type="button"
+          className={classes.cell_open}
+          // Named for what pressing it does — enlarge, in the read-only viewer.
+          // Nothing here offers tracing or analysis: a photograph is not traced by
+          // this app, and the caption, the viewer and the record's own chip all say
+          // so in the same words.
+          title={`${getPhotoViewLabel(view.id)} — ${this.visitName()}` +
+            `${date !== null ? ` · ${date}` : ''}. Enlarge (view only, not analysable)`}
+          aria-label={`Enlarge the ${getPhotoViewLabelInSentence(view.id)} ` +
+            `photograph of ${this.visitName()}`}
+          onClick={this.handleOpen(record)}
+        >
+          <span className={classes.cell_frame}>
+            {record.thumbnail !== null ? (
+              <img
+                className={classes.cell_img}
+                src={record.thumbnail}
+                alt=""
+                draggable={false}
+              />
+            ) : (
+              <span className={classes.cell_none}>No image data</span>
+            )}
+            {/* What the press does, on the frame it does it to — nine cells that
+                open a viewer used to give no sign at all that a photograph
+                enlarges. Screen only: nobody enlarges a printed photograph. */}
+            <span className={classes.cell_zoom}>
+              <ZoomGlyph />
+              Enlarge
             </span>
-          ) : null}
-        </span>
-        <span className={classes.cell_caption}>
-          {getPhotoViewShortLabel(view.id)}
-        </span>
-      </button>
+          </span>
+          <span className={classes.cell_caption}>
+            {getPhotoViewShortLabel(view.id)}
+          </span>
+        </button>
+        {/* A second photograph filed at the same position is not dropped, not
+            hidden and not merely counted: the badge is the control that opens the
+            stack of them, which is what makes `PhotoSeriesCell#extras`' promise
+            ("they are all reachable") true from this surface. */}
+        {extras.length > 0 ? (
+          <button
+            type="button"
+            className={classes.cell_more}
+            title={`${extras.length + 1} photographs are filed at ` +
+              `${getPhotoViewLabelInSentence(view.id)} — open all of them ` +
+              '(this cell shows the earliest)'}
+            aria-label={`Open all ${extras.length + 1} photographs filed at ` +
+              `${getPhotoViewLabelInSentence(view.id)} of ${this.visitName()}`}
+            onClick={this.handleOpenStack(view, record)}
+          >
+            +{extras.length}
+          </button>
+        ) : null}
+      </div>
     );
   };
 
@@ -332,6 +401,51 @@ export default class PhotoSeries extends React.PureComponent<PhotoSeriesProps> {
   private handleCompareAll = () => {
     if (this.props.onCompare !== undefined) {
       this.props.onCompare(null);
+    }
+  };
+
+  private handleOpenStack = (view: PhotoViewOption, record: PatientRecord) =>
+    (e: React.MouseEvent<HTMLButtonElement>) => {
+      e.stopPropagation();
+      if (this.props.onOpenStack !== undefined) {
+        this.props.onOpenStack(view, record);
+      } else {
+        // Never a dead control: without the stack reading the badge still opens
+        // the photograph it is drawn on.
+        this.props.onOpenPhoto(record);
+      }
+    };
+
+  private handleAddBatch = () => {
+    if (this.props.onAddBatch !== undefined) {
+      this.props.onAddBatch(null);
+    }
+  };
+
+  // ---- A drop of the whole sitting onto the tile -----------------------------
+
+  private handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    if (!this.state.isOver) {
+      this.setState({ isOver: true });
+    }
+  };
+
+  private handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    this.setState({ isOver: false });
+  };
+
+  private handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    this.setState({ isOver: false });
+    const files: File[] = [];
+    for (let i = 0; i < e.dataTransfer.files.length; i += 1) {
+      files.push(e.dataTransfer.files[i]);
+    }
+    if (this.props.onAddBatch !== undefined && files.length > 0) {
+      this.props.onAddBatch(files);
     }
   };
 }

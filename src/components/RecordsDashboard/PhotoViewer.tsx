@@ -14,10 +14,12 @@ import PhotoSeries from './PhotoSeries';
 
 import {
   buildPhotoSeries,
+  findPhotoView,
   formatCaptureDate,
   formatInterval,
   getImageTypeLabel,
   getPhotoViewLabel,
+  getPhotoViewLabelInSentence,
   getPhotoViewShortLabel,
   getTimepointToken,
   getVisitPill,
@@ -41,6 +43,24 @@ const actionIconStyle: React.CSSProperties = { width: 16, height: 16 };
  */
 export type PhotoViewerMode = 'single' | 'position' | 'series';
 
+/**
+ * Which sequence the enlarged reading's ‹ › walks.
+ *
+ * A photograph is never read on its own: a clinician walks a visit's series frame
+ * by frame, or one frame along the case, or the several photographs filed at one
+ * position. So the enlarged reading carries the walk the reader arrived by, and
+ * says which one it is — "3 of 9 · T1 series" cannot be read as a position count.
+ *
+ * `visit` — the whole series of the visit the photograph belongs to, in the
+ * composite's own reading order (extras and unplaced photographs included, so
+ * nothing of the visit is unreachable).
+ * `position` — this position at every visit that photographed it: the comparison
+ * the strip is, continued inside the enlargement.
+ * `stack` — the photographs filed at *one* position of *one* visit, which is what
+ * a cell's `+N` badge and the strip's own "+N more" line open.
+ */
+export type PhotoSeqScope = 'visit' | 'position' | 'stack';
+
 /** What the viewer was opened on. */
 export interface PhotoViewerTarget {
   mode: PhotoViewerMode;
@@ -50,6 +70,11 @@ export interface PhotoViewerTarget {
   view: PhotoView | null;
   /** The visit it was opened from — seeds the two-visit comparison. */
   groupKey: string | null;
+  /**
+   * Which sequence an enlarged reading walks (see `PhotoSeqScope`). Omitted, a
+   * photograph opened from a visit's own tile walks that visit's series.
+   */
+  scope?: PhotoSeqScope;
 }
 
 export interface PhotoViewerProps {
@@ -78,9 +103,19 @@ interface State {
   imageId: string | null;
   /** The position on screen in `position` mode. */
   view: PhotoView | null;
+  /** Which sequence `single` mode's ‹ › walks (see `PhotoSeqScope`). */
+  scope: PhotoSeqScope;
   /** The two visits compared in `series` mode, by group key. */
   aKey: string | null;
   bKey: string | null;
+  /**
+   * Whether the last pick in `series` mode swapped the pair — the reader chose the
+   * visit that was already on the other side, and the two sides traded places
+   * rather than both showing one visit. Stated on screen, because a select that
+   * rearranged both columns without saying so would be a control doing something
+   * it did not announce.
+   */
+  swapped: boolean;
 }
 
 /** How a visit is named in this viewer's captions: its pill, then its day. */
@@ -89,12 +124,33 @@ const visitLabel = (group: TimepointGroup<PatientRecord>): string => {
   return token !== null ? token : getVisitPill(group.label).token;
 };
 
-/** Every visit that holds at least one photograph — the photographic chronology. */
+/** Every visit that holds at least one photograph. */
 const photoVisits = (
   groups: Array<TimepointGroup<PatientRecord>>,
 ): Array<TimepointGroup<PatientRecord>> =>
   groups.filter(
     (group) => group.records.some(({ type }) => isPhotographType(type)),
+  );
+
+/**
+ * Every visit the across-visits chronology draws a column for: each labelled visit
+ * of the case, plus any unlabelled group that holds photographs (so no photograph
+ * of the record is unreachable from here).
+ *
+ * **Why not only the photographed visits.** `renderPosition` already argues that a
+ * visit which does not hold *this* position gets an empty column, because hiding it
+ * would silently compress the chronology. A visit that holds no photographs at all
+ * is the same fact one step further: a case photographed at T1 and T3 with a
+ * ceph-only T2 read "T1 … T3 +2 y" with T2 nowhere on screen, i.e. the interval
+ * spanned a visit the reader was never told about. The principle cannot be applied
+ * one way for a visit with one photograph and the other way for a visit with none.
+ */
+const chronologyVisits = (
+  groups: Array<TimepointGroup<PatientRecord>>,
+): Array<TimepointGroup<PatientRecord>> =>
+  groups.filter(
+    (group) => group.label !== null
+      || group.records.some(({ type }) => isPhotographType(type)),
   );
 
 /**
@@ -199,7 +255,15 @@ export default class PhotoViewer extends React.PureComponent<PhotoViewerProps, S
 
   // ---- The three readings ---------------------------------------------------
 
-  /** One photograph, as large as the window allows. */
+  /**
+   * One photograph, as large as the window allows — and the walk it belongs to.
+   *
+   * The frame's *width* follows the photograph's own aspect (its recorded pixel
+   * size, or the position's frame where the pixels are unknown), so a portrait
+   * photograph is not laid inside an 830px-wide panel with 210px of dark ground
+   * either side of it. Its height is bounded by the window rather than by a fixed
+   * `64vh`, so on a 1366 × 768 laptop the reading shrinks instead of being clipped.
+   */
   private renderSingle = () => {
     const record = this.currentRecord();
     if (record === undefined) {
@@ -213,19 +277,31 @@ export default class PhotoViewer extends React.PureComponent<PhotoViewerProps, S
     const view = reconcilePhotoView(record.type, record.photoView);
     const date = formatCaptureDate(record.captureDate);
     const age = this.props.getAgeOn(record.captureDate);
+    const option = findPhotoView(view);
+    const aspect = record.width !== null && record.height !== null
+      && record.width > 0 && record.height > 0
+      ? record.width / record.height
+      : (option !== undefined && option.frame === 'landscape' ? 1.5 : 0.75);
+    const frameStyle = {
+      // 18px = the frame's own 8px padding either side plus its hairline border.
+      maxWidth: `calc(${aspect.toFixed(3)} * (var(--photo-h) - 18px) + 18px)`,
+    } as React.CSSProperties;
     return (
       <div className={classes.single}>
-        <div className={classes.single_frame}>
-          {record.thumbnail !== null ? (
-            <img
-              className={classes.single_img}
-              src={record.thumbnail}
-              alt={`${getPhotoViewLabel(view)} photograph`}
-              draggable={false}
-            />
-          ) : (
-            <span className={classes.single_none}>Image data unavailable</span>
-          )}
+        <div className={classes.single_main}>
+          <div className={classes.single_frame} style={frameStyle}>
+            {record.thumbnail !== null ? (
+              <img
+                className={classes.single_img}
+                src={record.thumbnail}
+                alt={`${getPhotoViewLabel(view)} photograph`}
+                draggable={false}
+              />
+            ) : (
+              <span className={classes.single_none}>Image data unavailable</span>
+            )}
+          </div>
+          {this.renderSeq()}
         </div>
         <div className={classes.facts}>
           <FactRow label="Position" value={getPhotoViewLabel(view)} />
@@ -291,6 +367,65 @@ export default class PhotoViewer extends React.PureComponent<PhotoViewerProps, S
   };
 
   /**
+   * ‹ › within the reading the enlargement was arrived by (see `PhotoSeqScope`),
+   * with the sequence named: a clinician walking a visit's series or one frame
+   * along the case had to close back to a grid between every two photographs.
+   *
+   * Drawn only where there is somewhere to step; the arrows at either end stay
+   * focusable and keep their tooltip rather than becoming dead controls, which is
+   * the rule the reading switch's own unavailable chips follow.
+   */
+  private renderSeq = () => {
+    const seq = this.sequence();
+    if (seq.ids.length < 2) {
+      return null;
+    }
+    const index = seq.ids.indexOf(this.state.imageId as string);
+    if (index < 0) {
+      return null;
+    }
+    const hasPrev = index > 0;
+    const hasNext = index < seq.ids.length - 1;
+    return (
+      <div className={classes.seq} role="group" aria-label={seq.label}>
+        <button
+          type="button"
+          className={cx(classes.seq_step, {
+            [classes.seq_step__off]: !hasPrev,
+          })}
+          aria-label={`Previous — ${seq.label}`}
+          aria-disabled={!hasPrev}
+          title={hasPrev
+            ? `Previous of ${seq.label}`
+            : `This is the first of ${seq.label}`}
+          onClick={hasPrev ? this.handleStep(-1) : undefined}
+        >
+          ‹
+        </button>
+        <span className={classes.seq_count}>
+          {index + 1}
+          <span className={classes.seq_of}>{` of ${seq.ids.length} · `}</span>
+          {seq.label}
+        </span>
+        <button
+          type="button"
+          className={cx(classes.seq_step, {
+            [classes.seq_step__off]: !hasNext,
+          })}
+          aria-label={`Next — ${seq.label}`}
+          aria-disabled={!hasNext}
+          title={hasNext
+            ? `Next of ${seq.label}`
+            : `This is the last of ${seq.label}`}
+          onClick={hasNext ? this.handleStep(1) : undefined}
+        >
+          ›
+        </button>
+      </div>
+    );
+  };
+
+  /**
    * One position, at every visit that photographed it — the comparison a
    * clinician actually reads (see this class's own doc comment).
    *
@@ -298,9 +433,16 @@ export default class PhotoViewer extends React.PureComponent<PhotoViewerProps, S
    * hold this position: an empty column is the honest statement that the frame was
    * not taken then, and hiding it would silently compress the chronology.
    */
-  private renderPosition = (visits: Array<TimepointGroup<PatientRecord>>) => {
+  private renderPosition = (photographed: Array<TimepointGroup<PatientRecord>>) => {
     const { view } = this.state;
-    const held = this.countsByView(visits);
+    const held = this.countsByView(photographed);
+    // Every labelled visit of the case, not only the photographed ones — see
+    // `chronologyVisits`.
+    const visits = chronologyVisits(this.props.groups);
+    const option = findPhotoView(view);
+    const frameClass = option !== undefined
+      ? classes[`strip_col__${option.frame}`]
+      : classes.strip_col__portrait;
     return (
       <div className={classes.across}>
         <div className={classes.picker} role="group" aria-label="Series position">
@@ -341,11 +483,22 @@ export default class PhotoViewer extends React.PureComponent<PhotoViewerProps, S
             No visit of this record holds a photograph yet.
           </p>
         ) : (
-          <div className={classes.strip}>
+          <div
+            className={cx(classes.strip, {
+              // Two columns have the dialog to themselves and are read larger.
+              [classes.strip__roomy]: visits.length <= 2,
+            })}
+          >
             {visits.map((group, index) => {
               const cell = view !== null
                 ? this.cellAt(group, view) : null;
               const record = cell !== null ? cell.record : null;
+              // A visit that holds no photographs at all says so in its own words:
+              // "not on file" is about this *position*, and on a ceph-only visit it
+              // would read as a gap in a series that was never started.
+              const hasPhotos = group.records.some(
+                ({ type }) => isPhotographType(type),
+              );
               const since = index > 0
                 ? formatInterval(
                   parseCaptureDate(visits[index - 1].firstDate),
@@ -353,7 +506,7 @@ export default class PhotoViewer extends React.PureComponent<PhotoViewerProps, S
                 )
                 : null;
               return (
-                <div key={group.key} className={classes.strip_col}>
+                <div key={group.key} className={cx(classes.strip_col, frameClass)}>
                   <div className={classes.strip_head}>
                     <span className={classes.strip_visit}>{visitLabel(group)}</span>
                     {/* Elapsed time from the previous column, so a row of four
@@ -383,7 +536,11 @@ export default class PhotoViewer extends React.PureComponent<PhotoViewerProps, S
                     <div
                       className={cx(classes.strip_frame, classes.strip_frame__empty)}
                     >
-                      <span className={classes.strip_none}>Not on file</span>
+                      <span className={classes.strip_none}>
+                        {hasPhotos
+                          ? 'Not on file'
+                          : 'Not photographed at this visit'}
+                      </span>
                     </div>
                   )}
                   <div className={classes.strip_foot}>
@@ -397,10 +554,20 @@ export default class PhotoViewer extends React.PureComponent<PhotoViewerProps, S
                       </span>
                     ) : null}
                   </div>
-                  {cell !== null && cell.extras.length > 0 ? (
-                    <span className={classes.strip_more}>
-                      {`+${cell.extras.length} more filed at this position`}
-                    </span>
+                  {/* …and the several photographs filed at one position are a
+                      control, not a count: it opens the stack of them in the
+                      enlarged reading, where ‹ › steps through every one. */}
+                  {cell !== null && record !== null && cell.extras.length > 0 ? (
+                    <button
+                      type="button"
+                      className={classes.strip_more}
+                      title={`${cell.extras.length + 1} photographs are filed at ` +
+                        `${getPhotoViewLabelInSentence(view)} of ` +
+                        `${visitLabel(group)} — open all of them`}
+                      onClick={this.handleOpenStack(record)}
+                    >
+                      {`+${cell.extras.length} more here — open all`}
+                    </button>
                   ) : null}
                 </div>
               );
@@ -411,20 +578,45 @@ export default class PhotoViewer extends React.PureComponent<PhotoViewerProps, S
     );
   };
 
-  /** Two visits' whole series, side by side — the records-sheet reading. */
+  /**
+   * Two visits' whole series, side by side — the records-sheet reading.
+   *
+   * **The two sides are a from/to pair and can never be one visit.** Both selects
+   * list every photographed visit, and choosing the one that is already on the
+   * other side *swaps* the pair rather than putting one visit in both columns: the
+   * header read "0 days apart" above two identical nine-cell composites, which is a
+   * comparison of nothing — and the tile's own "Compare visits" already refuses to
+   * offer a comparison of one visit with itself for exactly that reason.
+   */
   private renderSeries = (visits: Array<TimepointGroup<PatientRecord>>) => {
     const a = this.groupByKey(this.state.aKey);
     const b = this.groupByKey(this.state.bKey);
-    const interval = a !== undefined && b !== undefined
+    const isPair = a !== undefined && b !== undefined && a.key !== b.key;
+    const interval = isPair
       ? formatInterval(
-        parseCaptureDate(a.firstDate), parseCaptureDate(b.firstDate),
+        parseCaptureDate((a as TimepointGroup<PatientRecord>).firstDate),
+        parseCaptureDate((b as TimepointGroup<PatientRecord>).firstDate),
       )
       : null;
     return (
       <div className={classes.pair}>
-        {interval !== null ? (
+        {/* Which two visits, in which direction, and how far apart — and where the
+            two are recorded on one day it says *that* rather than "0 days apart",
+            which is a duration nobody wrote down. */}
+        {isPair ? (
           <p className={classes.pair_interval}>
-            {interval} apart
+            {`${visitLabel(a as TimepointGroup<PatientRecord>)} → ` +
+              `${visitLabel(b as TimepointGroup<PatientRecord>)}`}
+            {interval === null
+              ? ' · interval unknown'
+              : (interval === '0 days'
+                ? ' · both recorded on the same day'
+                : ` · ${interval} apart`)}
+          </p>
+        ) : null}
+        {this.state.swapped ? (
+          <p className={classes.pair_swapped}>
+            That visit was already on the other side, so the two sides swapped.
           </p>
         ) : null}
         <div className={classes.pair_cols}>
@@ -437,7 +629,13 @@ export default class PhotoViewer extends React.PureComponent<PhotoViewerProps, S
                 <select
                   className={classes.pair_select}
                   value={group !== undefined ? group.key : ''}
-                  aria-label={key === 'a' ? 'Earlier visit' : 'Later visit'}
+                  aria-label={key === 'a'
+                    ? 'Visit in the left column' : 'Visit in the right column'}
+                  title={key === 'a'
+                    ? 'Which visit the left composite is — picking the visit ' +
+                      'already on the right swaps the two'
+                    : 'Which visit the right composite is — picking the visit ' +
+                      'already on the left swaps the two'}
                   onChange={onChange}
                 >
                   {visits.map((visit) => (
@@ -558,9 +756,70 @@ export default class PhotoViewer extends React.PureComponent<PhotoViewerProps, S
       imageId: target !== null ? target.imageId : null,
       view: view !== null
         ? view : (firstHeld !== undefined ? firstHeld : null),
+      // What the enlarged reading's ‹ › walks: what the caller asked for, else the
+      // series of the visit the photograph was pressed in.
+      scope: target !== null && target.scope !== undefined ? target.scope : 'visit',
       aKey: visits.length > 0 ? visits[aIndex].key : null,
-      bKey: visits.length > 0 ? visits[bIndex].key : null,
+      // Never the same visit on both sides: with one photographed visit there is no
+      // pair to show and the reading itself is unavailable (see `renderModes`).
+      bKey: visits.length > 1
+        ? visits[bIndex === aIndex ? (aIndex === 0 ? 1 : aIndex - 1) : bIndex].key
+        : (visits.length > 0 ? visits[0].key : null),
+      swapped: false,
     };
+  }
+
+  /**
+   * The photographs the enlarged reading's ‹ › walks, and the name of that walk
+   * (see `PhotoSeqScope`). Derived on render from the record itself, so a
+   * photograph removed while the viewer is open drops out of the walk with it.
+   */
+  private sequence(): { ids: string[]; label: string } {
+    const record = this.currentRecord();
+    const { scope, view } = this.state;
+    if (record === undefined) {
+      return { ids: [], label: '' };
+    }
+    if (scope === 'position' && view !== null) {
+      const ids: string[] = [];
+      photoVisits(this.props.groups).forEach((group) => {
+        const cell = this.cellAt(group, view);
+        if (cell !== null && cell.record !== null) {
+          ids.push(cell.record.imageId);
+        }
+      });
+      return { ids, label: `${getPhotoViewLabel(view)} across visits` };
+    }
+    const group = this.groupOf(record);
+    if (group === undefined) {
+      return { ids: [record.imageId], label: '' };
+    }
+    if (scope === 'stack' && view !== null) {
+      const cell = this.cellAt(group, view);
+      const ids: string[] = [];
+      if (cell !== null && cell.record !== null) {
+        ids.push(cell.record.imageId);
+        cell.extras.forEach((extra) => ids.push(extra.imageId));
+      }
+      return {
+        ids: ids.length > 0 ? ids : [record.imageId],
+        label: `at ${getPhotoViewLabelInSentence(view)} · ${visitLabel(group)}`,
+      };
+    }
+    // The visit's whole series in the composite's own reading order, extras and
+    // unplaced photographs included — nothing of the visit is out of reach.
+    const layout = buildPhotoSeries(group.records);
+    const ids: string[] = [];
+    layout.rows.forEach(({ cells }) => {
+      cells.forEach((cell) => {
+        if (cell.record !== null) {
+          ids.push(cell.record.imageId);
+          cell.extras.forEach((extra) => ids.push(extra.imageId));
+        }
+      });
+    });
+    layout.unplaced.forEach((r) => ids.push(r.imageId));
+    return { ids, label: `${visitLabel(group)}’s photographs` };
   }
 
   /** How many visits hold each position — what the picker's chips report. */
@@ -647,21 +906,72 @@ export default class PhotoViewer extends React.PureComponent<PhotoViewerProps, S
 
   private handlePickView = (view: PhotoView) => () => this.setState({ view });
 
-  private handlePickA = (e: React.ChangeEvent<HTMLSelectElement>) =>
-    this.setState({ aKey: e.target.value });
+  /**
+   * The two sides are a from/to pair: picking the visit that is already on the
+   * other side trades places with it, so the comparison can never become one visit
+   * against itself.
+   */
+  private handlePickA = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const key = e.target.value;
+    this.setState((state) => (key === state.bKey
+      ? { aKey: key, bKey: state.aKey, swapped: true }
+      : { aKey: key, bKey: state.bKey, swapped: false }));
+  };
 
-  private handlePickB = (e: React.ChangeEvent<HTMLSelectElement>) =>
-    this.setState({ bKey: e.target.value });
+  private handlePickB = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const key = e.target.value;
+    this.setState((state) => (key === state.aKey
+      ? { bKey: key, aKey: state.bKey, swapped: true }
+      : { bKey: key, aKey: state.aKey, swapped: false }));
+  };
 
-  /** Enlarging from a comparison keeps the comparison's own position. */
+  /**
+   * Enlarging from the across-visits strip keeps walking *that* comparison: ‹ ›
+   * then steps the same position along the case, which is the reading the reader
+   * pressed into.
+   */
   private handleEnlarge = (record: PatientRecord) => () =>
-    this.handleShowSingle(record);
+    this.handleShowSingle(record, 'position');
 
-  private handleShowSingle = (record: PatientRecord) => this.setState({
+  /** …and the "+N more here" line walks the photographs at that one position. */
+  private handleOpenStack = (record: PatientRecord) => () =>
+    this.handleShowSingle(record, 'stack');
+
+  /** Enlarging from a visit's composite walks that visit's series. */
+  private handleShowSingle = (
+    record: PatientRecord, scope: PhotoSeqScope = 'visit',
+  ) => this.setState({
     mode: 'single',
     imageId: record.imageId,
-    view: reconcilePhotoView(record.type, record.photoView),
+    // A stack is one position by definition, so the position on screen is kept;
+    // otherwise the photograph's own position is what is being looked at.
+    view: scope === 'stack'
+      ? this.state.view
+      : reconcilePhotoView(record.type, record.photoView),
+    scope,
   });
+
+  /** One step along the current walk (see `sequence`). */
+  private handleStep = (delta: number) => () => {
+    const seq = this.sequence();
+    const index = seq.ids.indexOf(this.state.imageId as string);
+    const next = index + delta;
+    if (index < 0 || next < 0 || next >= seq.ids.length) {
+      return;
+    }
+    const record = this.findRecord(this.props, seq.ids[next]);
+    if (record === undefined) {
+      return;
+    }
+    this.setState({
+      imageId: record.imageId,
+      // Walking a visit's series moves the position with the photograph; walking a
+      // position along the case, or a stack at one position, holds it.
+      view: this.state.scope === 'visit'
+        ? reconcilePhotoView(record.type, record.photoView)
+        : this.state.view,
+    });
+  };
 
   private handleOpenRecord = (record: PatientRecord) => () =>
     this.props.onOpenRecord(record);

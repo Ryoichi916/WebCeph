@@ -17,23 +17,20 @@
 //     So the empty cells are drawn, quietly, at the same size — and each is the
 //     control that fills exactly its own position.
 
-// One tile is one visit's series. 760 holds four facial frames at ~181px (241 tall)
-// and three intraoral at ~248 — large enough to *assess* a frame, which is the whole
-// complaint the old 112px photograph rows earned, and small enough that a visit's
-// tile plus its cephalogram cards is still one screenful.
-$series-max: 760px;
-
+// One tile is one visit's series, and it fills the card it sits in: a clinic 27"
+// monitor buys bigger photographs, not a wider white margin beside a capped tile.
+// (It was capped at 760px, which made the facial frames ~181px wide at 1440 *and*
+// at 1680 with ~100–360px of the card's own width empty beside them.) The per-band
+// `minmax()` floors below are what keep the frames assessable at the other end.
 .series {
   box-sizing: border-box;
   width: 100%;
-  max-width: $series-max;
   padding: 12px 12px 14px 20px;
   font-family: $font-stack;
 
   // Inside the comparison viewer the tile is one of two columns and carries no
   // head of its own (the viewer's chrome names the visit): it fills its column.
   &__compare {
-    max-width: none;
     padding: 0;
   }
 }
@@ -57,6 +54,45 @@ $series-max: 760px;
   font-size: 12.5px;
   font-variant-numeric: tabular-nums;
   color: $text-tertiary;
+}
+
+// The tile is also the drop target for the sitting's photographs: the whole
+// series arrives as one drop and is filed in one act.
+.series__over {
+  border-radius: 8px;
+  box-shadow: inset 0 0 0 2px $primary-600;
+  background: $primary-050;
+}
+
+// Filing the rest of the sitting — the visit's *primary* act on this tile, so it
+// carries the primary colour where "Compare visits" (a way of looking) is flat.
+.series_add {
+  margin-left: auto;
+  padding: 3px 10px;
+  border: 1px solid $primary-600;
+  border-radius: 999px;
+  background: $primary-600;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: #FFFFFF;
+  cursor: pointer;
+  transition: background-color 120ms ease;
+
+  &:hover {
+    background: $primary-700;
+    border-color: $primary-700;
+  }
+
+  &:focus {
+    outline: none;
+    box-shadow: $focus-ring;
+  }
+}
+
+// …and with both on the row, only the first of them takes the free space.
+.series_add + .series_compare {
+  margin-left: 0;
 }
 
 // The comparison this tile is a half of — a flat control, because the visit's
@@ -104,25 +140,49 @@ $series-max: 760px;
   gap: 8px;
 }
 
-// Four facial frames across.
+// Four facial frames across. The floor is what a facial frame stops being
+// assessable below; past it the band wraps rather than shrinking further.
 .band_cells__extraoral {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(126px, 1fr));
 }
 
 // Right buccal → centre → left buccal: the patient's right on the left of the
 // sheet, the convention every clinical photograph set follows.
 .band_cells__intraoral {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(150px, 1fr));
 }
 
-// The two occlusals sit on the intraoral band's own column grid, so upper and
-// lower line up under the buccal segments above them instead of being stretched
-// to half the tile each.
+// The two occlusals close the tile's width, half each, like the two bands above
+// them do — they were laid on the intraoral band's three-column grid, which left
+// every series tile ending in an empty third of a row (~245 × 175px) on screen, in
+// both columns of the two-visit comparison and on the printed sheet. The occlusal
+// views are also the frames arch form and transverse width are judged on, so the
+// width the ragged edge was wasting goes to them.
 .band_cells__occlusal {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(150px, 1fr));
+}
+
+// …and inside the comparison viewer, where a tile is one of two columns of a
+// dialog that has to survive a 900px window, the floors come off: a grid whose
+// columns cannot shrink below their floor overflows its column instead, and a
+// composite that runs out past the dialog edge is the very fault this round is
+// closing on the strip.
+.series__compare {
+  .band_cells__extraoral {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .band_cells__intraoral {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .band_cells__occlusal {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .cell {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -144,6 +204,31 @@ $series-max: 760px;
 
   &__empty {
     cursor: default;
+  }
+}
+
+// A *filled* cell is a wrapper, not the control: the photograph opens on this
+// button, and the extras badge beside it is a second control (a button cannot be
+// nested inside a button, and the badge has to be pressable — see `.cell_more`).
+.cell_open {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+
+  &:focus {
+    outline: none;
+
+    .cell_frame {
+      box-shadow: $focus-ring;
+    }
   }
 }
 
@@ -208,6 +293,62 @@ $series-max: 760px;
   color: $primary-600;
 }
 
+// A filled cell is a control too — nine of them, each opening the enlarged
+// reading — and until now hovering one changed nothing at all: `cursor: pointer`
+// was the only sign that a photograph enlarged. Same treatment as the empty
+// cell's, in the same idiom (primary border, a subtle lift), plus the word for
+// what the press does.
+.cell__filled:hover .cell_frame,
+.cell_open:focus .cell_frame {
+  border-color: $primary-600;
+  box-shadow: 0 3px 10px rgba(16, 30, 50, .18);
+}
+
+.cell__filled:hover .cell_open {
+  transform: translateY(-1px);
+}
+
+.cell__filled:hover .cell_caption {
+  color: $primary-700;
+  font-weight: 600;
+}
+
+.cell_open {
+  transition: transform 120ms ease;
+}
+
+.cell_frame {
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+// "Enlarge", revealed on the frame itself: on paper it is not drawn at all (see
+// the print block), because nobody can enlarge a printed photograph.
+.cell_zoom {
+  position: absolute;
+  left: 4px;
+  bottom: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px 2px 5px;
+  border-radius: 999px;
+  background: rgba(20, 24, 29, .78);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: .02em;
+  color: $text-on-dark;
+  opacity: 0;
+  transform: translateY(3px);
+  transition: opacity 120ms ease, transform 120ms ease;
+  pointer-events: none;
+}
+
+.cell__filled:hover .cell_zoom,
+.cell_open:focus .cell_zoom {
+  opacity: 1;
+  transform: translateY(0);
+}
+
 // Paper only (see `.cell_print` in the print block below).
 .cell_print {
   display: none;
@@ -236,18 +377,37 @@ $series-max: 760px;
   color: $canvas-text;
 }
 
-// More than one photograph filed at the same position.
+// More than one photograph filed at the same position — a *control*, positioned
+// on the cell (which is why a filled cell is a wrapper): pressing it opens the
+// stack of them in the enlarged reading, where ‹ › steps through every one. As a
+// badge it opened the first photograph, i.e. the count claimed a second
+// photograph existed and then would not show it.
 .cell_more {
   position: absolute;
   top: 4px;
   right: 4px;
-  padding: 1px 6px;
+  z-index: 1;
+  padding: 1px 7px;
+  border: 1px solid rgba(255, 255, 255, .28);
   border-radius: 999px;
   background: rgba(20, 24, 29, .82);
+  font-family: inherit;
   font-size: 11px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   color: $text-on-dark;
+  cursor: pointer;
+  transition: background-color 120ms ease;
+
+  &:hover {
+    background: $primary-600;
+    border-color: $primary-600;
+  }
+
+  &:focus {
+    outline: none;
+    box-shadow: $focus-ring;
+  }
 }
 
 .cell_caption {
@@ -380,7 +540,8 @@ $series-max: 760px;
     page-break-inside: avoid;
   }
 
-  .series_compare {
+  .series_compare,
+  .series_add {
     display: none;
   }
 
@@ -398,8 +559,46 @@ $series-max: 760px;
 
   .cell_more,
   .unplaced_fix,
-  .cell_plus {
+  .cell_plus,
+  // "Enlarge" is a promise about a screen.
+  .cell_zoom {
     display: none;
+  }
+
+  // On paper the composite has the page's width and no floor can be honoured by
+  // shrinking, so the floors come off and the bands stay the bands.
+  .band_cells__extraoral {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .band_cells__intraoral {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .band_cells__occlusal {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  // Hover and focus are facts about a screen, not about the chart: a sheet
+  // printed while the cursor happened to be resting on a cell must not print that
+  // photograph ringed in blue and lifted off the page — the same rule
+  // `.cell__active` follows below. Restated at the hover rules' own specificity,
+  // because `@media print` adds none: `.cell__filled:hover .cell_frame` outranks
+  // `.cell__active .cell_frame` wherever both apply.
+  .cell_open,
+  .cell__filled:hover .cell_open {
+    transform: none;
+  }
+
+  .cell__filled:hover .cell_frame,
+  .cell_open:focus .cell_frame {
+    border-color: #C3CCD6;
+    box-shadow: none;
+  }
+
+  .cell__filled:hover .cell_caption {
+    color: #52616F;
+    font-weight: 500;
   }
 
   // …and the empty position says so in words, since the plus it says it with on
