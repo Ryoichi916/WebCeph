@@ -28,10 +28,19 @@ const PERSISTABLE_EVENTS: ActionType[] = [
   'ADD_PATIENT_REQUESTED',
   'UPDATE_PATIENT_REQUESTED',
   'REMOVE_PATIENT_REQUESTED',
-  'SET_ACTIVE_PATIENT_REQUESTED',
+  // Not SET_ACTIVE_PATIENT_REQUESTED: the active patient is deliberately NOT a
+  // persisted key (see `PERSISTABLE_KEYS`), so opening a case changed nothing in
+  // the persisted subset — and still rewrote the whole blob, which now carries a
+  // film thumbnail per case and runs to megabytes in a real practice. Opening one
+  // case must not re-serialise every other case's thumbnail.
   // The trend board a case is followed on lives on the patient (see `Patient`),
   // so setting it has to reach the same store the demographics are saved to.
   'SET_PATIENT_TREND_PLOT_REQUESTED',
+  // The case list's row for a patient (record count, last visit, tracing
+  // progress, film thumbnail). Persisted with the patients themselves: the list
+  // is the first surface of a launch, and it cannot re-derive these by reading
+  // every saved project. @see PatientCaseSummary
+  'SET_PATIENT_CASE_SUMMARY',
 ];
 
 const isPersistenceNeededForAction = ({ type }: GenericAction): boolean => {
@@ -47,6 +56,9 @@ const PERSISTABLE_KEYS: StoreKey[] = [
   // Patient records persist; the active patient does not, so every launch
   // starts at the patient picker.
   'patients.byId',
+  // …and what each of their saved projects holds, so the case list can be read,
+  // sorted and filtered the moment it opens. @see PatientCaseSummary
+  'patients.caseIndex',
 ];
 
 import requestIdleCallback from 'utils/requestIdleCallback';

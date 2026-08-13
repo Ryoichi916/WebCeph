@@ -75,6 +75,7 @@ const mapDispatchToProps: MapDispatchToPropsFunction<DispatchProps, OwnProps> =
         chartId: details.chartId,
         dateOfBirth: details.dateOfBirth,
         sex: details.sex,
+        reading: details.reading,
       }));
     },
     // Same path the records dashboard uses to open a card.

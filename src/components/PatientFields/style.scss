@@ -9,8 +9,20 @@
   gap: 6px;
 }
 
+// One height for every field label, whatever script it is written in.
+// "READING (かな)" is set in the same 11px as "CHART ID", but かな glyphs carry a
+// taller ascent/descent, so an auto line box came out 15px against 12px — and the
+// input under it therefore started 3px lower than its neighbours', which is
+// exactly how a row of fields ends up on three baselines. An explicit line-height
+// (a length, so the 10px "optional" aside inherits it too) makes the label box
+// the same size in Latin, kana and kanji.
+$field-label-line: 15px;
+
 .field_label {
+  display: block;
+  min-height: $field-label-line;
   font-size: 11px;
+  line-height: $field-label-line;
   font-weight: 600;
   letter-spacing: .06em;
   text-transform: uppercase;
@@ -94,11 +106,15 @@
   overflow: hidden;
 }
 
+// 14px of side padding, not 16: the two segments are the widest fixed thing in
+// the picker's one-line registration row, and those four pixels are what let the
+// row stay on one line on a 1152px laptop instead of wrapping the control and the
+// Register button onto a second, otherwise empty line.
 .segment {
   appearance: none;
   border: none;
   margin: 0;
-  padding: 0 16px;
+  padding: 0 14px;
   background: none;
   font-family: $font-stack;
   font-size: 13px;

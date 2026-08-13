@@ -625,6 +625,16 @@ interface Patient {
   /** Recorded sex, or empty/absent when unspecified (older records). */
   sex?: PatientSex;
   /**
+   * The reading of the name — かな for a Japanese name, a romanisation for any
+   * other script — or empty/absent when it was not entered.
+   *
+   * A Japanese practice does not scan a name list in codepoint order: 長谷川 is
+   * filed under は, not after 鈴木. Kanji carry no reading a collator can find,
+   * so the reading is the field the case list sorts and searches names on when
+   * it is present, falling back to the name itself when it is not.
+   */
+  reading?: string;
+  /**
    * The measurements this patient's trend board is plotted on (see the records
    * dashboard's `TrendChart`), or absent/null while it is on the chart's own
    * defaults.
@@ -638,9 +648,56 @@ interface Patient {
   trendPlot?: string[] | null;
 }
 
+/**
+ * What the case list knows about a patient's record without opening it.
+ *
+ * A patient's images and tracings live in their own project blob (see
+ * store/middleware/project), which is far too heavy to read for every row of a
+ * practice-sized list — a single case runs to megabytes of base64 film. So the
+ * few facts the list is sorted, filtered and scanned on are counted off the
+ * project **at the moment it is written**, and kept beside the patient as this
+ * summary.
+ *
+ * Every field is counted off the records themselves; nothing here is estimated
+ * or carried over. A patient with no summary at all has never had a project
+ * saved, and the list says exactly that ("No records") rather than guessing.
+ */
+interface PatientCaseSummary {
+  /** Epoch ms the summary was counted, i.e. when the project was last written. */
+  savedAt: number;
+  /** Images on file (every type, loaded records only). */
+  recordCount: number;
+  /** Distinct timepoints those images belong to — the case's visit count. */
+  timepointCount: number;
+  /** Earliest capture date on file (ISO `YYYY-MM-DD`), or null when undated. */
+  firstVisitDate: string | null;
+  /** Latest capture date on file (ISO `YYYY-MM-DD`), or null when undated. */
+  lastVisitDate: string | null;
+  /** Traceable films on file (lateral cephalograms). */
+  cephCount: number;
+  /** Of those, how many carry a complete tracing of their own analysis. */
+  tracedCount: number;
+  /** …and how many carry some landmarks but not the full set. */
+  partialCount: number;
+  /**
+   * A small JPEG data URI of the most recent film on file, or null when the case
+   * holds no image (or the thumbnail could not be rendered). Deliberately tiny
+   * (~100px) — hundreds of these are held in one persisted state.
+   */
+  thumbnail: string | null;
+  /** The image type the thumbnail is of, so the row can name what it shows. */
+  thumbnailType: ImageType | null;
+}
+
 interface StoreState {
   'patients.byId': { [id: string]: Patient };
   'patients.activeId': string | null;
+  /**
+   * The case list's index: one derived summary per patient, keyed by patient id.
+   * Written when a project is saved or opened, dropped with the patient.
+   * @see PatientCaseSummary
+   */
+  'patients.caseIndex': { [id: string]: PatientCaseSummary };
   'app.init.isInitialized': boolean;
   'app.status.isUpdating': boolean;
   'app.status.isInstalling': boolean;
@@ -1174,6 +1231,8 @@ interface Events {
     /** ISO `YYYY-MM-DD`, or empty when not recorded. */
     dateOfBirth: string;
     sex: PatientSex;
+    /** Reading of the name (かな), or empty when not entered. @see Patient */
+    reading: string;
   };
   UPDATE_PATIENT_REQUESTED: {
     id: string;
@@ -1181,6 +1240,7 @@ interface Events {
     chartId: string;
     dateOfBirth: string;
     sex: PatientSex;
+    reading: string;
   };
   REMOVE_PATIENT_REQUESTED: {
     id: string;
@@ -1192,6 +1252,16 @@ interface Events {
   SET_PATIENT_TREND_PLOT_REQUESTED: {
     id: string;
     symbols: string[] | null;
+  };
+  /**
+   * Records what a patient's saved project holds, for the case list's row.
+   * Counted off the project by the project middleware when it is written or
+   * loaded — never typed in, and never for a patient who is not on file.
+   * @see PatientCaseSummary
+   */
+  SET_PATIENT_CASE_SUMMARY: {
+    id: string;
+    summary: PatientCaseSummary;
   };
   SET_ACTIVE_PATIENT_REQUESTED: {
     id: string | null;

@@ -112,9 +112,11 @@
   background: $bg-surface;
 }
 
-// The preview is shaped like the frame the row is filed at, so the shape says
-// whether a landscape intraoral photograph landed on a facial position before the
-// words do.
+// The preview is shaped like the *photograph* wherever its pixels have been read
+// (and like the row's frame until then), so a landscape intraoral photograph sitting
+// on a facial position is visible as a landscape photograph rather than letterboxed
+// into a portrait box — the shape is evidence about the file, and the warning beside
+// it is about exactly that shape.
 .row_frame {
   position: relative;
   flex: 0 0 auto;
@@ -152,6 +154,17 @@
   font-size: 13px;
   font-weight: 500;
   color: $text-primary;
+}
+
+// The photograph's measured pixel size — the fact the position was proposed from,
+// stated beside the file it belongs to.
+.row_px {
+  margin-left: 8px;
+  font-size: 11.5px;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: $text-tertiary;
 }
 
 .row_field {

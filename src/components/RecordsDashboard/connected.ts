@@ -159,6 +159,7 @@ const mapDispatchToProps = (dispatch: GenericDispatch): DispatchProps => ({
       chartId: details.chartId,
       dateOfBirth: details.dateOfBirth,
       sex: details.sex,
+      reading: details.reading,
     }));
   },
   // Record metadata is stored on the image props, so correcting it is the same

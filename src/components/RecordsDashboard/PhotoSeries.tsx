@@ -13,6 +13,7 @@ import {
   getPhotoViewLabelInSentence,
   getTimepointToken,
   PhotoSeriesCell,
+  PhotoSeriesLayout,
   PhotoViewOption,
   TimepointGroup,
 } from 'utils/records';
@@ -28,6 +29,21 @@ const ZoomGlyph = () => (
       <circle cx="5" cy="5" r="3.4" />
       <path d="M7.6 7.6 L10.6 10.6" />
     </g>
+  </svg>
+);
+
+/** The `+` inside an empty cell's "Add" label — the mirror of `ZoomGlyph`. */
+const AddGlyph = () => (
+  <svg
+    width="10" height="10" viewBox="0 0 12 12" aria-hidden="true"
+  >
+    <path
+      d="M6 2 V10 M2 6 H10"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+    />
   </svg>
 );
 
@@ -51,6 +67,23 @@ const CellPlus = () => (
 interface DragState {
   isOver: boolean;
 }
+
+/**
+ * Up to how many filled positions a visit's series is drawn *compactly* — the
+ * frames it holds at full size, the rest as a named strip under them (see
+ * `renderMissing`).
+ *
+ * Why there is a threshold at all. The composite's own rule is that the gaps are
+ * in the shape of the thing, and it earns that on a nearly complete visit: seven
+ * frames on file and two dashed holes *is* the reading "this visit was not
+ * photographed from the left". It stops earning it on a progress visit with one
+ * photograph, where nine full cells made an 852 × 897px tile that was ~700px of
+ * empty dashed frames on screen and, on paper, a whole A4 sheet ~70% "Not on
+ * file" boxes for a single photograph. Four is the line: above it the shape still
+ * reads, at or below it the visit is sized to what it actually holds and every
+ * position is still named, still counted in the head and still fileable.
+ */
+const SPARSE_MAX_FILLED = 4;
 
 export interface PhotoSeriesProps {
   /**
@@ -116,6 +149,16 @@ export interface PhotoSeriesProps {
  * position: the upload form opens already stating the frame, the type it belongs
  * to, the visit and the visit's day.
  *
+ * **…and a sparsely photographed visit is sized to what it holds.** The empty
+ * frames earn their space while the composite still reads as a composite; on a
+ * progress visit with one photograph on file, nine full cells were ~700px of
+ * dashed boxes on screen and most of an A4 sheet on paper. At or below
+ * `SPARSE_MAX_FILLED` filled positions the tile draws the frames it has, at the
+ * size the composite gives them, in one row (`renderSparse`), and names every
+ * position it has not got in one compact strip beneath them (`renderMissing`) —
+ * each of which still files exactly itself. Nothing is hidden and nothing is
+ * renamed; only the empty frames' *size* changes.
+ *
  * **Nothing here is traceable and nothing pretends to be.** A photograph opens in
  * the read-only viewer; no cell offers tracing, an analysis or a measurement, and
  * no landmark is ever plotted on one.
@@ -128,6 +171,24 @@ export default class PhotoSeries extends React.PureComponent<PhotoSeriesProps, D
     const isCompare = this.props.variant === 'compare';
     const series = buildPhotoSeries(records);
     const visit = this.visitName();
+    const positions = series.rows.reduce((n, { cells }) => n + cells.length, 0);
+    // A visit with a photograph or two on file is drawn at the size of what it
+    // holds, not at the size of the whole series (see `SPARSE_MAX_FILLED`).
+    //
+    // `total > 0` and not `filled > 0`: a visit holding *no photographs at all*
+    // keeps the nine frames, because that reading is the empty composite itself —
+    // it is how a series is started (see `AddPhotoSeries`). But a visit whose only
+    // photographs carry no position (a legacy record, or a type correction that
+    // cleared them) holds photographs, and answering it with nine dashed frames
+    // above the strip that lists them is the same ~700px of voids in a different
+    // place.
+    //
+    // Never inside the two-visit comparison: there the two composites are read
+    // *against each other*, cell against cell, and a tile that dropped its empty
+    // frames would put T3's right buccal beside T1's frontal. A gap costs space
+    // there and earns it.
+    const isSparse = !isCompare
+      && series.total > 0 && series.filled <= SPARSE_MAX_FILLED;
     return (
       <div
         className={cx(classes.series, {
@@ -140,16 +201,40 @@ export default class PhotoSeries extends React.PureComponent<PhotoSeriesProps, D
         onDragLeave={onAddBatch !== undefined ? this.handleDragLeave : undefined}
         onDrop={onAddBatch !== undefined ? this.handleDrop : undefined}
       >
+        {/* What the drop will do, said during the drag. The tile used to ring
+            itself blue and tint itself and *say nothing at all* while a sitting's
+            nine photographs hovered over it — while the dialog it opens is full of
+            exactly the sentence the reader needs. `pointer-events: none` (see the
+            stylesheet), so the overlay cannot swallow the drop it describes. */}
+        {this.state.isOver ? (
+          <div className={classes.series_over} aria-hidden="true">
+            <span className={classes.series_over_note}>
+              {`Drop to file at ${visit}${this.visitDay()} — positions proposed ` +
+                "from each photograph's own shape, editable before anything is " +
+                'written'}
+            </span>
+          </div>
+        ) : null}
         {isCompare ? null : (
           <div className={classes.series_head}>
             <span className={classes.series_title}>Photographic series</span>
             <span className={classes.series_count}>
-              {series.filled} of {series.rows.reduce(
-                (n, { cells }) => n + cells.length, 0,
-              )} positions
+              {series.filled} of {positions} positions
+              {/* …and how many photographs those positions hold, wherever the two
+                  numbers differ. A re-shoot filed at an occupied position, or a
+                  photograph carrying no position at all, made the head read "9 of
+                  9 positions" while the visit held ten photographs — with only a
+                  cell's `+1` badge saying otherwise. */}
+              {series.total !== series.filled ? (
+                <span className={classes.series_count_of}>
+                  {series.total === 1
+                    ? ' · 1 photograph on file'
+                    : ` · ${series.total} photographs on file`}
+                </span>
+              ) : null}
             </span>
             {/* Filing the rest of the sitting: one act for the whole batch, with
-                each photograph's frame proposed in series order and editable
+                each photograph's frame proposed from its own shape and editable
                 before anything is written. A clinic shoots the series in one
                 sitting; nine cells were nine full-page uploads. */}
             {onAddBatch !== undefined ? (
@@ -171,24 +256,37 @@ export default class PhotoSeries extends React.PureComponent<PhotoSeriesProps, D
               <button
                 type="button"
                 className={classes.series_compare}
-                title={`Compare ${visit}'s photographs with the other visits'`}
+                // Named for the visit it sits on, because it is seeded from it: the
+                // comparison opens on a position *this* visit holds and walks that
+                // one frame along the whole case. Three tiles carrying an identical
+                // "Compare visits" read as three controls doing the same thing.
+                title={`Compare ${visit}'s photographs with the other visits' — ` +
+                  'one position at a time, along the whole case'}
                 onClick={this.handleCompareAll}
               >
-                Compare visits
+                {this.visitToken() !== null
+                  ? `Compare ${this.visitToken()} across visits`
+                  : 'Compare across visits'}
               </button>
             ) : null}
           </div>
         )}
-        {series.rows.map(({ row, cells }) => (
-          <div key={row.key} className={classes.band}>
-            <span className={classes.band_label}>{row.label}</span>
-            <div
-              className={cx(classes.band_cells, classes[`band_cells__${row.key}`])}
-            >
-              {cells.map((cell) => this.renderCell(cell, isCompare))}
+        {isSparse
+          ? this.renderSparse(series, isCompare)
+          : series.rows.map(({ row, cells }) => (
+            <div key={row.key} className={classes.band}>
+              <span className={classes.band_label}>{row.label}</span>
+              <div
+                className={cx(classes.band_cells, classes[`band_cells__${row.key}`])}
+              >
+                {cells.map((cell) => this.renderCell(cell, isCompare))}
+              </div>
             </div>
-          </div>
-        ))}
+          ))}
+        {/* …and, on a sparsely photographed visit, every position it has not got —
+            named, counted and (on the record page) still the control that files
+            it, at the size of a line of text instead of ~700px of empty frames. */}
+        {isSparse ? this.renderMissing(series, isCompare) : null}
         {/* Photographs the record holds but does not place: filed before this
             app recorded a position, or left without one by a type correction.
             They are listed, never guessed into a cell — "Intraoral photograph"
@@ -210,10 +308,13 @@ export default class PhotoSeries extends React.PureComponent<PhotoSeriesProps, D
     );
   }
 
+  /** This visit's series token ("T2"), where it carries one. */
+  private visitToken = (): string | null =>
+    getTimepointToken(this.props.group.label);
+
   /** How this visit is named in a sentence — its series token, or a phrase. */
   private visitName = (): string => {
-    const { group } = this.props;
-    const token = getTimepointToken(group.label);
+    const token = this.visitToken();
     return token !== null ? token : 'this visit';
   };
 
@@ -221,6 +322,118 @@ export default class PhotoSeries extends React.PureComponent<PhotoSeriesProps, D
   private visitDay = (): string => {
     const { group } = this.props;
     return group.firstDate !== null ? ` · ${group.firstDate}` : '';
+  };
+
+  /**
+   * A sparsely photographed visit: the frames it actually holds, in the series'
+   * own reading order, on the extraoral band's own four-column grid — and nothing
+   * else (the positions it has not got are named in `renderMissing` below).
+   *
+   * **Why one row and not the three bands.** The bands are the composite, and the
+   * composite is a *reading*: facial symmetry against the profile, the buccal
+   * segments against each other, the arches beneath them. Four photographs cannot
+   * be read that way, and keeping the three bands for them cost the full height of
+   * all three — a 4-of-9 visit came out 938px tall, i.e. *taller than the 9-of-9
+   * visit above it*, because a band's row is as tall as its tallest cell whether it
+   * holds one frame or four. One row of the same four columns keeps every frame at
+   * exactly the size the composite gives it (199px wide at 1440, 294px at 1920) and
+   * costs one row's height for the whole visit.
+   *
+   * Nothing is renamed and nothing is hidden: each cell carries its own position's
+   * caption, the head states the count out of nine, and the strip below names every
+   * position that is not here.
+   */
+  private renderSparse = (
+    series: PhotoSeriesLayout<PatientRecord>, isCompare: boolean,
+  ) => {
+    const filled: Array<PhotoSeriesCell<PatientRecord>> = [];
+    series.rows.forEach(({ cells }) => cells.forEach((cell) => {
+      if (cell.record !== null) {
+        filled.push(cell);
+      }
+    }));
+    if (filled.length === 0) {
+      // A visit whose photographs all carry no position: there is nothing to draw
+      // here, and a band label over an empty grid would be a heading for nothing.
+      // The strip below names all nine, and the unplaced strip carries the
+      // photographs themselves.
+      return null;
+    }
+    return (
+      <div className={classes.band}>
+        <span className={classes.band_label}>On file</span>
+        <div className={cx(classes.band_cells, classes.band_cells__sparse)}>
+          {filled.map((cell) => this.renderCell(cell, isCompare))}
+        </div>
+      </div>
+    );
+  };
+
+  /**
+   * The named positions this visit has not got, as one compact strip under the
+   * frames it has — the sparse tile's answer to "nine cells however few are
+   * filled" (see `SPARSE_MAX_FILLED`).
+   *
+   * Every position is still named, in the composite's own reading order, and on
+   * the record page every one of them is still the control that files exactly
+   * itself — the same act the empty cell carries, at the size of a line of text.
+   * On paper the strip is the same sentence with the pluses dropped, which is what
+   * keeps a one-photograph visit to a block instead of a sheet.
+   */
+  private renderMissing = (
+    series: PhotoSeriesLayout<PatientRecord>, isCompare: boolean,
+  ) => {
+    const empty: Array<PhotoSeriesCell<PatientRecord>> = [];
+    series.rows.forEach(({ cells }) => cells.forEach((cell) => {
+      if (cell.record === null) {
+        empty.push(cell);
+      }
+    }));
+    if (empty.length === 0) {
+      return null;
+    }
+    const canFill = !isCompare && this.props.onFill !== undefined;
+    const token = this.visitToken();
+    return (
+      <div className={classes.missing}>
+        <span className={classes.missing_label}>
+          {empty.length === 1
+            ? '1 position not on file'
+            : `${empty.length} positions not on file`}
+          {/* The visit, on screen, where the reader may be scanning three tiles;
+              never on paper, where this strip prints inside the visit's own block
+              under the stamp that has just named it (the rule `.slots_at_print`
+              follows two rows below it). */}
+          <span className={classes.missing_at}>
+            {token !== null ? ` at ${token}${this.visitDay()}` : ''}
+          </span>
+        </span>
+        <span className={classes.missing_list}>
+          {empty.map(({ view }) => (
+            canFill ? (
+              <button
+                key={view.id}
+                type="button"
+                className={classes.missing_item}
+                title={`Add ${getPhotoViewLabelInSentence(view.id)} photograph to ` +
+                  `${this.visitName()}${this.visitDay()} — files as ` +
+                  `${getImageTypeLabel(view.imageType).toLowerCase()}`}
+                aria-label={`Add the ${getPhotoViewLabelInSentence(view.id)} ` +
+                  `photograph to ${this.visitName()}`}
+                onClick={this.handleFill(view)}
+              >
+                <span className={classes.missing_plus} aria-hidden="true">+</span>
+                {getPhotoViewShortLabel(view.id)}
+              </button>
+            ) : (
+              <span key={view.id} className={classes.missing_item}>
+                {getPhotoViewShortLabel(view.id)}
+              </span>
+            )
+          ))}
+        </span>
+      </div>
+    );
   };
 
   private renderCell = (
@@ -262,6 +475,14 @@ export default class PhotoSeries extends React.PureComponent<PhotoSeriesProps, D
         >
           <span className={classes.cell_frame}>
             <CellPlus />
+            {/* The word for the act, revealed on the frame it acts on — the mirror
+                of a filled cell's "Enlarge". A blue tint and a bare plus left the
+                sentence ("Add the upper occlusal photograph to T2 · 2026-06-18")
+                living only in the `title`, i.e. only for a mouse that waited. */}
+            <span className={classes.cell_add}>
+              <AddGlyph />
+              Add
+            </span>
             {/* On paper the cell is a statement about the visit, not a control:
                 nobody can press a plus on a printed chart. Same mechanism as the
                 slot row's `.slot_print` and the identity band's `.fact_print`. */}
@@ -344,6 +565,19 @@ export default class PhotoSeries extends React.PureComponent<PhotoSeriesProps, D
 
   private renderUnplaced = (record: PatientRecord, isCompare: boolean) => {
     const date = formatCaptureDate(record.captureDate);
+    // The strip exists precisely because *nothing knows* which of the five
+    // intraoral frames this photograph is: the clinician has to look at it and
+    // say. At 54 × 36px they could not — they had to enlarge it first, which made
+    // "Set position" a control that could not be answered from what was on screen.
+    // So the frame is the size a shape can be told at, in the photograph's own
+    // aspect where the record holds its pixels.
+    const aspect = record.width !== null && record.height !== null
+      && record.width > 0 && record.height > 0
+      ? record.width / record.height
+      : 1.5;
+    const frameStyle: React.CSSProperties = {
+      width: Math.round(Math.max(60, Math.min(150, 80 * aspect))),
+    };
     return (
       <span key={record.imageId} className={classes.unplaced_item}>
         <button
@@ -354,7 +588,7 @@ export default class PhotoSeries extends React.PureComponent<PhotoSeriesProps, D
             'analysable)'}
           onClick={this.handleOpen(record)}
         >
-          <span className={classes.unplaced_frame}>
+          <span className={classes.unplaced_frame} style={frameStyle}>
             {record.thumbnail !== null ? (
               <img
                 className={classes.cell_img}
@@ -364,8 +598,18 @@ export default class PhotoSeries extends React.PureComponent<PhotoSeriesProps, D
               />
             ) : null}
           </span>
-          <span className={classes.unplaced_name}>
-            {getImageTypeLabel(record.type)}
+          <span className={classes.unplaced_main}>
+            <span className={classes.unplaced_name}>
+              {getImageTypeLabel(record.type)}
+            </span>
+            {/* …and the day it was taken, on screen: which of two unplaced
+                intraoral photographs this is, is a question about the sitting as
+                much as about the shape, and the answer was in a tooltip. */}
+            <span className={classes.unplaced_meta}>
+              {date !== null ? date : 'No capture date'}
+              {record.width !== null && record.height !== null
+                ? ` · ${record.width} × ${record.height}` : ''}
+            </span>
           </span>
         </button>
         {!isCompare && this.props.onEdit !== undefined ? (

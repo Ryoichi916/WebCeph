@@ -12,8 +12,8 @@ const classes = require('./style.scss');
  * The patient-demographics form fields, in one place.
  *
  * Registration (components/PatientPicker) and "Edit patient details" on the
- * records dashboard ask for the same four things — name, chart ID, date of
- * birth, sex — and must ask for them identically: the same labels, the same
+ * records dashboard ask for the same things — name, its reading (かな), chart
+ * ID, date of birth, sex — and must ask for them identically: the same labels, the same
  * ISO echo under the date input, the same two-segment sex control that can be
  * cleared, the same error affordance. These are those fields; neither surface
  * owns a second copy.
@@ -51,10 +51,24 @@ const FieldLabel = (
   </span>
 );
 
+/**
+ * A label-sized blank, for a column of the form that carries a control instead
+ * of a field — the Register button, which has to line up with the inputs beside
+ * it. It lives here because the height it stands in for is defined here: the
+ * picker's own stylesheet has no `.field_label`, so the spacer it used to render
+ * with that class name was unstyled, came out 16px instead of 12–15px, and left
+ * the Register button hanging 4px below the field row it belongs to.
+ */
+export const FieldLabelSpacer = () => (
+  <span className={classes.field_label} aria-hidden="true">&nbsp;</span>
+);
+
 export interface PatientTextFieldProps {
   label: string;
   value: string;
   placeholder?: string;
+  /** Marks the field "optional" in its micro label, as the date of birth is. */
+  optional?: boolean;
   /** Outlines the input in red; set independently of `message`. */
   invalid?: boolean;
   /** Validation message shown on the reserved line under the input. */
@@ -67,11 +81,11 @@ export interface PatientTextFieldProps {
 
 /** Name / chart ID: a 36px text input with a micro label and an error line. */
 export const PatientTextField = ({
-  label, value, placeholder, invalid = false, message = null,
+  label, value, placeholder, optional, invalid = false, message = null,
   className, autoFocus, onChange, onKeyDown,
 }: PatientTextFieldProps) => (
   <label className={cx(classes.field, className)}>
-    <FieldLabel text={label} />
+    <FieldLabel text={label} optional={optional} />
     <input
       type="text"
       className={cx(classes.field_input, {
@@ -183,12 +197,19 @@ export const SexField = ({ value, className, onChange }: SexFieldProps) => {
   );
 };
 
-/** What the four fields hold; the shape both surfaces validate and submit. */
+/** What the fields hold; the shape both surfaces validate and submit. */
 export interface PatientDetails {
   name: string;
   chartId: string;
   dateOfBirth: string;
   sex: PatientSex;
+  /**
+   * The reading of the name (かな for a Japanese name), or empty when it was not
+   * entered. Optional clinical bookkeeping, but the field the case list orders
+   * and searches names by: kanji carry no reading a collator can sort on.
+   * @see Patient
+   */
+  reading: string;
 }
 
 export type PatientDetailsErrorField = 'name' | 'chartId' | 'both';

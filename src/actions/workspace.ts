@@ -49,6 +49,12 @@ export const setActivePatient = createActionCreator('SET_ACTIVE_PATIENT_REQUESTE
 export const setPatientTrendPlot = createActionCreator(
   'SET_PATIENT_TREND_PLOT_REQUESTED',
 );
+// What a patient's saved project holds — counted off the project when it is
+// written or opened, so the case list can be sorted and filtered on a case
+// without reading megabytes of film for every row. @see PatientCaseSummary
+export const setPatientCaseSummary = createActionCreator(
+  'SET_PATIENT_CASE_SUMMARY',
+);
 
 // Project lifecycle (a project is a patient's images + tracings + analyses).
 export const openPatient = createActionCreator('OPEN_PATIENT_REQUESTED');

@@ -118,6 +118,7 @@ import {
   findPhotoView,
   buildPhotoSeries,
   PHOTO_VIEW_OPTIONS,
+  PhotoSeriesLayout,
   PhotoViewOption,
 } from 'utils/records';
 
@@ -2234,23 +2235,43 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
    *
    * Screen only, and only at ≥1200px (see the stylesheet): on paper each visit
    * prints its own "not filed" list, and below 1200 the timeline gets the width.
+   *
+   * **The photographs are one row, in the series' own vocabulary.** They used to be
+   * three type rows — "Profile photograph · Frontal photograph · Intraoral
+   * photograph" — which counted the very same photographs a second way on the same
+   * screen: the tile head, the timeline chip and every reading of the viewer count
+   * *positions out of nine*, so a visit holding four facial frames read "Frontal
+   * photograph T1" here and "4 of 9 positions" 30cm to the left. One row now, per
+   * visit, in positions ("T1 9/9 · T2 5/9"). The radiographs keep their type rows:
+   * a film either is or is not on file, which is exactly what a type row says.
    */
   private renderCoverage = (groups: TimepointGroup<PatientRecord>[]) => {
-    const held = IMAGE_TYPE_OPTIONS.map((option) => ({
-      option,
-      // Where it is held, in chronological order — the timeline's own order.
-      at: groups
-        .filter((group) => group.records.some((r) => r.type === option.id))
-        .map((group) => group.label !== null
-          ? getTimepointToken(group.label) : 'Unlabelled'),
-    }));
-    const onFile = held.filter(({ at }) => at.length > 0).length;
+    const held = IMAGE_TYPE_OPTIONS
+      .filter(({ id }) => !isPhotographType(id))
+      .map((option) => ({
+        option,
+        // Where it is held, in chronological order — the timeline's own order.
+        at: groups
+          .filter((group) => group.records.some((r) => r.type === option.id))
+          .map((group) => group.label !== null
+            ? getTimepointToken(group.label) : 'Unlabelled'),
+      }));
+    // …and the photographic series, per visit, as the composite itself counts it.
+    const series = groups
+      .map((group) => ({
+        token: group.label !== null
+          ? getTimepointToken(group.label) : 'Unlabelled',
+        layout: buildPhotoSeries(group.records),
+      }))
+      .filter(({ layout }) => layout.total > 0);
+    const onFile = held.filter(({ at }) => at.length > 0).length
+      + (series.length > 0 ? 1 : 0);
     return (
       <aside className={classes.coverage} aria-label="What this case holds">
         <div className={classes.coverage_head}>
           <span className={classes.coverage_title}>Across all visits</span>
           <span className={classes.coverage_count}>
-            {onFile} of {IMAGE_TYPE_OPTIONS.length} types
+            {onFile} of {held.length + 1} on file
           </span>
         </div>
         <dl className={classes.coverage_list}>
@@ -2295,12 +2316,71 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
               </div>
             );
           })}
+          {this.renderCoverageSeries(series)}
         </dl>
         {/* The same standing this surface gives its empty slots: this is what is
             on file, not a checklist a case can fail. (One string, printed at the
             panel's foot on paper — see `COVERAGE_QUALIFIER`.) */}
         <p className={classes.coverage_note}>{COVERAGE_QUALIFIER}</p>
       </aside>
+    );
+  };
+
+  /**
+   * The photographic series' own row of the coverage pane: one row for the whole
+   * series, per visit, counted in *positions* — the vocabulary the tile head, the
+   * timeline chip and the photograph viewer all use ("T1 9/9 · T2 5/9 · T3 1/9").
+   *
+   * A visit that holds a photograph carrying no position counts it too, as `+n`:
+   * "T2 0/9" beside a visit that plainly holds a photograph would be the pane
+   * contradicting the tile, and the photograph is on file whether or not the record
+   * says which frame it is.
+   */
+  private renderCoverageSeries = (
+    series: Array<{ token: string | null; layout: PhotoSeriesLayout<PatientRecord> }>,
+  ) => {
+    const full = series.map(({ token, layout }) =>
+      `${token !== null ? token : 'Unlabelled'} ${layout.filled} of 9 positions` +
+      (layout.unplaced.length > 0
+        ? ` and ${layout.unplaced.length} with no position recorded` : ''));
+    // Past three visits the entries stop fitting a 244px pane as a list, so the run
+    // is stated as its first three and its own count, with every visit named in the
+    // tooltip (the rule the type rows above follow at four).
+    const isRun = series.length > 3;
+    const shown = isRun ? series.slice(0, 3) : series;
+    return (
+      <div key="photo_series" className={classes.coverage_row}>
+        <dt className={classes.coverage_type}>Photographic series</dt>
+        <dd
+          className={classes.coverage_at}
+          title={series.length > 0
+            ? `Photographic series on file at ${full.join(', ')}`
+            : undefined}
+        >
+          {series.length > 0 ? shown.map(({ token, layout }, i) => (
+            <span key={i} className={classes.coverage_series}>
+              <span className={classes.coverage_token}>
+                {token !== null ? token : 'Unlabelled'}
+              </span>
+              <span className={classes.coverage_series_n}>
+                {layout.filled}/9
+                {layout.unplaced.length > 0 ? (
+                  <span className={classes.coverage_series_extra}>
+                    {`+${layout.unplaced.length}`}
+                  </span>
+                ) : null}
+              </span>
+            </span>
+          )) : (
+            <span className={classes.coverage_none}>Not on file</span>
+          )}
+          {isRun ? (
+            <span className={classes.coverage_count_at}>
+              {series.length} visits
+            </span>
+          ) : null}
+        </dd>
+      </div>
     );
   };
 

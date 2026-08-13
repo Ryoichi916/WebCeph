@@ -9,10 +9,11 @@ import {
   removePatient,
   openPatient,
 } from 'actions/workspace';
-import { getPatientsList } from 'store/reducers/patients';
+import { getPatientsList, getPatientCaseIndex } from 'store/reducers/patients';
 
 const mapStateToProps = (state: StoreState): StateProps => ({
   patients: getPatientsList(state),
+  caseIndex: getPatientCaseIndex(state),
 });
 
 const mapDispatchToProps = (dispatch: GenericDispatch): DispatchProps => ({
@@ -21,9 +22,10 @@ const mapDispatchToProps = (dispatch: GenericDispatch): DispatchProps => ({
     chartId: string,
     dateOfBirth: string,
     sex: PatientSex,
+    reading: string,
   ) => {
     const id = uniqueId(`patient_${new Date().getTime()}_`);
-    dispatch(addPatient({ id, name, chartId, dateOfBirth, sex }));
+    dispatch(addPatient({ id, name, chartId, dateOfBirth, sex, reading }));
     dispatch(openPatient({ patientId: id }));
   },
   onOpen: (id: string) => dispatch(openPatient({ patientId: id })),

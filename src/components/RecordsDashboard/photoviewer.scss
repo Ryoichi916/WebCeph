@@ -117,6 +117,22 @@
   // plus the dialog's own title and actions bars did not fit the window, and the
   // reading was lost by clipping rather than by shrinking. This shrinks.
   --photo-h: min(576px, 58vh);
+  // The *width* budget the photograph and the facts share — this row's own
+  // content box, stated rather than measured: the dialog is `width: 96%` capped
+  // at 1180 (see `contentStyle`) and the body is padded 24px either side, so the
+  // row is `min(1180 - 48, 96vw - 48)`, with 8px kept back for a platform
+  // scrollbar. A percentage could not do this job: the photograph's column is
+  // shrink-to-fit, so a percentage on the frame would resolve against a width
+  // the frame itself decides.
+  --single-w: min(1132px, calc(96vw - 56px));
+  // …and what the facts column takes out of it: `.facts`' own flex basis plus the
+  // row's gap. The frame is bounded by the rest (see `renderSingle`), so a
+  // landscape photograph can no longer push the facts and the three record
+  // actions below itself and off the bottom of the dialog.
+  // (280 + the 20px gap + 4px of slack: flex line-breaking is decided on the
+  // items' *base* sizes, so a single rounded-up pixel here would wrap the facts
+  // below the photograph — the very failure this budget exists to prevent.)
+  --facts-col: 304px;
 }
 
 .single_main {
@@ -422,11 +438,19 @@
 // columns shrink (to `min-width`, never below), and past *that* it scrolls
 // sideways rather than squeezing six visits into stamps.
 //
-// The two edge gradients are the "there is more" affordance, and they are
-// attached `local`, so each appears only while there is actually unscrolled
-// content on that side — a clipped column can never read as a cropped
-// photograph. The scrollbar is styled rather than left to the platform, which
-// also stops it being an overlay bar that fades out of sight.
+// The "there is more" affordance is *not* here: it is the veil and the arrow the
+// track draws over the columns (`.edge`), because a gradient painted on this
+// element's own background sits behind the photographs and an opaque photograph
+// hid it completely — which is how a column cut by the dialog edge came to read as
+// a cropped photograph. The scrollbar below is still styled (a real one, where the
+// platform draws one), but nothing depends on it being drawn.
+//
+// The track is the positioned parent of those two edges.
+.track {
+  position: relative;
+  min-width: 0;
+}
+
 .strip {
   // The height budget of one column's frame — the frame's own width is derived
   // from it and the position's aspect (see `.strip_col__portrait`), so a
@@ -440,18 +464,6 @@
   margin: 0 auto;
   overflow-x: auto;
   padding-bottom: 6px;
-  background:
-    linear-gradient(to right, $bg-surface, rgba(255, 255, 255, 0)) left center,
-    linear-gradient(to left, $bg-surface, rgba(255, 255, 255, 0)) right center,
-    radial-gradient(
-      farthest-side at 0 50%, rgba(16, 30, 50, .16), rgba(16, 30, 50, 0)
-    ) left center,
-    radial-gradient(
-      farthest-side at 100% 50%, rgba(16, 30, 50, .16), rgba(16, 30, 50, 0)
-    ) right center;
-  background-repeat: no-repeat;
-  background-size: 28px 100%, 28px 100%, 12px 100%, 12px 100%;
-  background-attachment: local, local, scroll, scroll;
 
   &::-webkit-scrollbar {
     height: 10px;
@@ -495,6 +507,78 @@
   &__landscape {
     width: calc(1.5 * var(--strip-h));
     min-width: 265px;
+  }
+}
+
+// One end of the chronology, where the case has more visits than the window can
+// hold: a veil wide enough to cover most of the column the dialog edge cuts (so
+// the cut cannot be read as the photograph's own edge) and, on it, the control
+// that brings that column in. Drawn only on a side that actually has unread
+// visits — the component measures the track rather than counting columns — and
+// over the whole height of the cut column, its date line included: a half-read day
+// under a veil is "there is more of this over there", where a crisp half-read day
+// beside a crisp half-read photograph is just a rendering fault.
+.edge {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 72px;
+  display: flex;
+  align-items: center;
+  pointer-events: none;
+
+  &__back {
+    left: 0;
+    justify-content: flex-start;
+    padding-left: 4px;
+    background: linear-gradient(
+      to right,
+      rgba(255, 255, 255, .97) 0%,
+      rgba(255, 255, 255, .88) 34%,
+      rgba(255, 255, 255, 0) 100%
+    );
+  }
+
+  &__on {
+    right: 0;
+    justify-content: flex-end;
+    padding-right: 4px;
+    background: linear-gradient(
+      to left,
+      rgba(255, 255, 255, .97) 0%,
+      rgba(255, 255, 255, .88) 34%,
+      rgba(255, 255, 255, 0) 100%
+    );
+  }
+}
+
+.edge_step {
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid $border-strong;
+  border-radius: 999px;
+  background: $bg-surface;
+  box-shadow: $shadow-2;
+  font-family: inherit;
+  font-size: 18px;
+  line-height: 1;
+  color: $primary-600;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease;
+
+  &:hover {
+    background: $primary-050;
+    border-color: $primary-600;
+  }
+
+  &:focus {
+    outline: none;
+    box-shadow: $focus-ring;
   }
 }
 

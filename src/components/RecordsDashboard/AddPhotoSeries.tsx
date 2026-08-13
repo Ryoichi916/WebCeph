@@ -13,6 +13,7 @@ import PhotoSeries from './PhotoSeries';
 import {
   buildPhotoSeries,
   formatCaptureDate,
+  getImageTypeLabel,
   getPhotoViewLabel,
   getPhotoViewShortLabel,
   getTimepointToken,
@@ -33,7 +34,37 @@ interface Item {
   /** A preview of the file, read locally — null until the read finishes. */
   url: string | null;
   view: PhotoView | null;
+  /**
+   * The photograph's own pixel size, measured from the decoded preview — null
+   * until it has decoded, and the whole basis of the proposal (see `assignViews`):
+   * a landscape file is an intraoral or occlusal frame, a portrait one is facial,
+   * and the app can see which without asking the clinician.
+   */
+  pxW: number | null;
+  pxH: number | null;
+  /**
+   * Whether the clinician has chosen this row's position themselves. A pinned row
+   * is never re-proposed — the proposal rearranges the rows *around* the choice
+   * rather than over it.
+   */
+  pinned: boolean;
 }
+
+/** Which frame a photograph of this shape is shot in, or null where it cannot say. */
+const frameOfShape = (
+  pxW: number | null, pxH: number | null,
+): 'portrait' | 'landscape' | null => {
+  if (pxW === null || pxH === null || pxW <= 0 || pxH <= 0) {
+    return null;
+  }
+  const aspect = pxW / pxH;
+  // A near-square photograph is not evidence of either frame, so it constrains
+  // nothing and warns about nothing: the app only ever states what it can see.
+  if (aspect > 1.02) {
+    return 'landscape';
+  }
+  return aspect < 0.98 ? 'portrait' : null;
+};
 
 export interface AddPhotoSeriesProps {
   open: boolean;
@@ -72,25 +103,56 @@ const isImageFile = (file: File): boolean =>
   file.type === '' || file.type.indexOf('image/') === 0;
 
 /**
- * Which positions a batch of `count` files is proposed at: the series' own reading
- * order, skipping the positions this visit already holds, and continuing through
- * the whole order once the free ones run out (a re-shoot is filed at a position
- * that is already occupied, and the record keeps both).
+ * Which position each unpinned row is proposed at: the series' own reading order
+ * **among the frames the photograph's own shape can be**, skipping the positions
+ * this visit already holds and the ones this batch has already taken, and
+ * continuing through that shape's frames once the free ones run out (a re-shoot is
+ * filed at a position that is already occupied, and the record keeps both).
  *
- * A proposal, never a decision: every row's position is on screen and editable
- * before anything is filed, exactly as the upload form's own Position field is.
+ * **Why the shape decides.** Assigned by series order alone, a nine-file drop
+ * proposed the first four files at the facial frames whatever they were — so a
+ * 1024 × 683 landscape intraoral photograph was proposed at "Three-quarter
+ * (oblique)", a portrait facial frame, and would have been *written as*
+ * `photo_frontal` (the frame decides the type — see `handleFile`) if the row were
+ * filed uncorrected. Nothing was dishonest about it, every row being on screen and
+ * editable, but it meant hand-correcting nine rows using a fact the app had already
+ * measured and was even drawing: the row's own thumbnail frame.
+ *
+ * Still a proposal, never a decision: every row's position is on screen and
+ * editable before anything is filed, a row whose chosen position disagrees with the
+ * photograph's shape says so (see `renderItems`), and a file whose shape says
+ * nothing — a square, or one that has not decoded yet — is proposed in the plain
+ * series order this replaces.
  */
-const proposeViews = (count: number, taken: PhotoView[]): PhotoView[] => {
-  const free = PHOTO_VIEW_OPTIONS
-    .filter(({ id }) => taken.indexOf(id) < 0)
-    .map(({ id }) => id);
-  const all = PHOTO_VIEW_OPTIONS.map(({ id }) => id);
-  const order = free.concat(all);
-  const out: PhotoView[] = [];
-  for (let i = 0; i < count; i += 1) {
-    out.push(order[i % order.length]);
-  }
-  return out;
+const assignViews = (items: Item[], taken: PhotoView[]): Item[] => {
+  const used = taken.slice();
+  items.forEach((item) => {
+    if (item.pinned && item.view !== null) {
+      used.push(item.view);
+    }
+  });
+  let overflow = 0;
+  return items.map((item) => {
+    if (item.pinned) {
+      return item;
+    }
+    const frame = frameOfShape(item.pxW, item.pxH);
+    const pool = frame === null
+      ? PHOTO_VIEW_OPTIONS
+      : PHOTO_VIEW_OPTIONS.filter((option) => option.frame === frame);
+    const free = pool.filter(({ id }) => used.indexOf(id) < 0);
+    let pick: PhotoViewOption;
+    if (free.length > 0) {
+      pick = free[0];
+    } else {
+      // Every frame of this shape is already spoken for: the extras walk that
+      // shape's frames in order rather than piling onto one of them.
+      pick = pool[overflow % pool.length];
+      overflow += 1;
+    }
+    used.push(pick.id);
+    return item.view === pick.id ? item : { ...item, view: pick.id };
+  });
 };
 
 /**
@@ -103,9 +165,12 @@ const proposeViews = (count: number, taken: PhotoView[]): PhotoView[] => {
  * clinician off the surface they pressed it on, nine times for one sitting's
  * photographs.
  *
- * **What it does not do.** It does not guess. The positions are *proposed* in the
- * series' reading order (skipping the ones the visit already holds) and every one
- * of them is a select the clinician can change before a single record is written;
+ * **What it does not do.** It does not guess. Each position is *proposed* from the
+ * photograph's own measured shape — a landscape file at the intraoral and occlusal
+ * frames, a portrait one at the facial frames, in the series' reading order within
+ * that shape and skipping the positions the visit already holds (see
+ * `assignViews`) — and every one of them is a select the clinician can change
+ * before a single record is written;
  * the visit, its day and the age on that day are stated in the head rather than
  * asked for again; and where two rows name one position, or a row names a position
  * the visit already holds, the row says so instead of quietly overwriting
@@ -221,8 +286,10 @@ export default class AddPhotoSeries extends React.PureComponent<AddPhotoSeriesPr
             onChange={this.handlePick}
           />
           <span className={classes.drop_hint}>
-            {`Filed at ${visit}${day !== null ? ` · ${day}` : ''} — positions are ` +
-              'proposed in series order and every one of them is editable below.'}
+            {`Filed at ${visit}${day !== null ? ` · ${day}` : ''} — each position ` +
+              "is proposed from the photograph's own shape (landscape frames " +
+              'intraoral, portrait frames facial) and every one of them is editable ' +
+              'below.'}
           </span>
         </div>
         {items.length > 0 ? this.renderItems() : this.renderComposite()}
@@ -251,7 +318,8 @@ export default class AddPhotoSeries extends React.PureComponent<AddPhotoSeriesPr
               : `${items.length} photographs to file`}
           </span>
           <span className={classes.list_note}>
-            Change any position before filing — nothing is written until then.
+            Positions are proposed from each photograph's own shape — change any of
+            them before filing; nothing is written until then.
           </span>
         </div>
         {items.map((item, index) => {
@@ -261,11 +329,24 @@ export default class AddPhotoSeries extends React.PureComponent<AddPhotoSeriesPr
           // both photographs rather than one silently replacing the other.
           const isRepeat = item.view !== null && counts[item.view] > 1;
           const isOccupied = item.view !== null && taken.indexOf(item.view) >= 0;
+          // …and a position that disagrees with the photograph's own shape: a
+          // landscape file at a portrait facial frame would be *written as* a
+          // frontal photograph (the frame decides the type), so the row says what
+          // it can see, in the same voice as "already on file at T1", and files it
+          // anyway if that is what the clinician means.
+          const shape = frameOfShape(item.pxW, item.pxH);
+          const isMisshapen = view !== undefined && shape !== null
+            && view.frame !== shape;
           return (
             <div key={item.key} className={classes.row}>
+              {/* The thumbnail is framed by the *photograph's* shape where it is
+                  known, not by the position's: the frame is evidence about the file,
+                  and letterboxing a landscape photograph into a portrait box was the
+                  app hiding the very fact the warning beside it is about. */}
               <span className={cx(classes.row_frame, {
-                [classes.row_frame__landscape]: view !== undefined
-                  && view.frame === 'landscape',
+                [classes.row_frame__landscape]: shape !== null
+                  ? shape === 'landscape'
+                  : (view !== undefined && view.frame === 'landscape'),
               })}
               >
                 {item.url !== null ? (
@@ -278,7 +359,16 @@ export default class AddPhotoSeries extends React.PureComponent<AddPhotoSeriesPr
                 ) : null}
               </span>
               <span className={classes.row_main}>
-                <span className={classes.row_name}>{item.file.name}</span>
+                <span className={classes.row_name}>
+                  {item.file.name}
+                  {/* The measured shape, beside the name: the fact the proposal was
+                      made on, stated rather than implied. */}
+                  {item.pxW !== null && item.pxH !== null ? (
+                    <span className={classes.row_px}>
+                      {`${item.pxW} × ${item.pxH}`}
+                    </span>
+                  ) : null}
+                </span>
                 <span className={classes.row_field}>
                   <span className={classes.row_key}>Position</span>
                   <select
@@ -298,6 +388,16 @@ export default class AddPhotoSeries extends React.PureComponent<AddPhotoSeriesPr
                     ))}
                   </select>
                 </span>
+                {isMisshapen && view !== undefined ? (
+                  <span className={classes.row_warn}>
+                    {`This photograph is ${shape === 'landscape'
+                      ? 'landscape (wider than tall)'
+                      : 'portrait (taller than wide)'} and ${view.label} is a ` +
+                      `${view.frame} frame, filed as ` +
+                      `${getImageTypeLabel(view.imageType).toLowerCase()} — check ` +
+                      'the position before filing'}
+                  </span>
+                ) : null}
                 {isRepeat || isOccupied ? (
                   <span className={classes.row_warn}>
                     {isOccupied
@@ -333,10 +433,25 @@ export default class AddPhotoSeries extends React.PureComponent<AddPhotoSeriesPr
    * what may well be a buccal segment.
    */
   private renderComposite = () => {
-    const { group } = this.props;
-    if (group === null) {
-      return null;
-    }
+    // A record with no visits yet has no group to read — which is *the* case this
+    // composite exists for. Both entry points into the dialog on a fresh record
+    // (the whole-record empty state, and the no-visits slot row) carry a proposed
+    // timepoint and day but no group, and returning null for them left "Add
+    // photographs" on a brand-new patient as a bare drop zone: no nine frames, no
+    // "Or start one frame at a time", i.e. everything this dialog says about filing
+    // the *first* photograph of a series at a named frame was missing from the one
+    // place a first photograph is filed. So the visit the batch would create is
+    // synthesised — holding nothing, which is exactly what it holds.
+    const group: TimepointGroup<PatientRecord> = this.props.group !== null
+      ? this.props.group
+      : {
+        key: '',
+        label: this.props.timepoint,
+        records: [],
+        firstDate: this.props.captureDate,
+        lastDate: this.props.captureDate,
+        undatedCount: 0,
+      };
     const series = buildPhotoSeries(group.records);
     if (series.total > 0) {
       // The visit already has a series and the page behind this dialog is drawing
@@ -413,7 +528,12 @@ export default class AddPhotoSeries extends React.PureComponent<AddPhotoSeriesPr
 
   // ---- Handlers ---------------------------------------------------------------
 
-  /** Add files to the batch, each proposed at the next free position. */
+  /**
+   * Add files to the batch, each proposed at the next free position its own shape
+   * can be (see `assignViews`). The shape arrives with the preview, a moment after
+   * the row does, so the rows are proposed again as each file decodes — a row the
+   * clinician has already set is left exactly where they put it.
+   */
   private take = (files: File[] | null) => {
     if (files === null || files.length === 0) {
       return;
@@ -423,24 +543,28 @@ export default class AddPhotoSeries extends React.PureComponent<AddPhotoSeriesPr
       return;
     }
     this.setState((state) => {
-      const taken = this.takenViews().concat(
-        state.items
-          .map(({ view }) => view)
-          .filter((view): view is PhotoView => view !== null),
-      );
-      const proposed = proposeViews(images.length, taken);
-      const added = images.map((file, i): Item => ({
+      const added = images.map((file): Item => ({
         key: nextKey(),
         file,
         url: null,
-        view: proposed[i],
+        view: null,
+        pxW: null,
+        pxH: null,
+        pinned: false,
       }));
       added.forEach((item) => this.readPreview(item));
-      return { items: state.items.concat(added), isOver: false };
+      return {
+        items: assignViews(state.items.concat(added), this.takenViews()),
+        isOver: false,
+      };
     });
   };
 
-  /** A local preview of one chosen file — never uploaded anywhere, read in page. */
+  /**
+   * A local preview of one chosen file — never uploaded anywhere, read in page —
+   * and, from the decoded preview, the photograph's pixel size: the fact the
+   * proposal is made on and the fact a disagreeing position is stated against.
+   */
   private readPreview = (item: Item) => {
     const reader = new FileReader();
     reader.onload = () => {
@@ -453,8 +577,32 @@ export default class AddPhotoSeries extends React.PureComponent<AddPhotoSeriesPr
           (i) => (i.key === item.key ? { ...i, url } : i),
         ),
       }));
+      if (url !== null) {
+        this.measure(item.key, url);
+      }
     };
     reader.readAsDataURL(item.file);
+  };
+
+  /** The decoded photograph's pixel size, and the proposal re-made on it. */
+  private measure = (key: string, url: string) => {
+    const img = new Image();
+    img.onload = () => {
+      if (!this.isMounted_) {
+        return;
+      }
+      const pxW = img.naturalWidth;
+      const pxH = img.naturalHeight;
+      this.setState((state) => ({
+        items: assignViews(
+          state.items.map(
+            (i) => (i.key === key ? { ...i, pxW, pxH } : i),
+          ),
+          this.takenViews(),
+        ),
+      }));
+    };
+    img.src = url;
   };
 
   private setInput = (node: HTMLInputElement | null) => this.input = node;
@@ -504,19 +652,31 @@ export default class AddPhotoSeries extends React.PureComponent<AddPhotoSeriesPr
     this.take(list);
   };
 
+  /**
+   * The clinician's own choice for one row — which pins it: the proposal then
+   * rearranges the *other* unpinned rows around it rather than over it, so setting
+   * one row cannot silently leave two rows on one position.
+   */
   private handlePickView = (index: number) =>
     (e: React.ChangeEvent<HTMLSelectElement>) => {
       const view = e.target.value as PhotoView;
       this.setState((state) => ({
-        items: state.items.map(
-          (item, i) => (i === index ? { ...item, view } : item),
+        items: assignViews(
+          state.items.map(
+            (item, i) => (i === index ? { ...item, view, pinned: true } : item),
+          ),
+          this.takenViews(),
         ),
       }));
     };
 
   private handleDropItem = (index: number) => () =>
     this.setState((state) => ({
-      items: state.items.filter((_, i) => i !== index),
+      // Dropping a row frees its position, so the unpinned rows are proposed again
+      // over what is left.
+      items: assignViews(
+        state.items.filter((_, i) => i !== index), this.takenViews(),
+      ),
     }));
 
   private handleFile = () => {

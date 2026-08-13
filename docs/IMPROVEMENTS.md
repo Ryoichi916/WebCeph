@@ -77,6 +77,15 @@ never from the on-screen preview alone.
   landmark + measurement export (the wceph project format already round-trips
   internally) and a report-level CSV. DICOM is a separate, larger piece.
   `store/middleware/exportImage.ts`, `components/TracingToolbar/`.
+- [ ] **The case index is persisted as one blob, thumbnails and all.** Every
+  `ADD`/`UPDATE`/`REMOVE_PATIENT` and every recounted case summary rewrites the
+  whole `patients.caseIndex` — which now carries a ~4KB JPEG per case, so a
+  500-case practice re-serialises ~2MB to IndexedDB to register one patient.
+  (Opening a case no longer triggers it: `SET_ACTIVE_PATIENT_REQUESTED` was
+  persisting a subset it cannot change and has been dropped from
+  `PERSISTABLE_EVENTS`.) The fix is to persist each case's film thumbnail under
+  its own idb key, so a write touches one case's tile rather than the practice's.
+  `store/middleware/persistence.ts`, `store/middleware/project.ts`.
 
 ## P3 — modules still missing against the commercial field
 

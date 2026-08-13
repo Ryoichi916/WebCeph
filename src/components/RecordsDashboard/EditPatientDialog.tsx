@@ -18,7 +18,8 @@ import { formatAgeFull } from 'utils/patient';
 const classes = require('./editpatient.scss');
 
 /** A field of the patient form, nameable by whatever opened the dialog. */
-export type PatientEditField = 'name' | 'chartId' | 'dateOfBirth' | 'sex';
+export type PatientEditField =
+  'name' | 'chartId' | 'dateOfBirth' | 'sex' | 'reading';
 
 export interface EditPatientDialogProps {
   open: boolean;
@@ -46,7 +47,7 @@ interface State {
 }
 
 const emptyDetails = (): PatientDetails => ({
-  name: '', chartId: '', dateOfBirth: '', sex: '',
+  name: '', chartId: '', dateOfBirth: '', sex: '', reading: '',
 });
 
 const detailsOf = (patient: Patient | null): PatientDetails =>
@@ -55,6 +56,7 @@ const detailsOf = (patient: Patient | null): PatientDetails =>
     chartId: patient.chartId || '',
     dateOfBirth: patient.dateOfBirth || '',
     sex: patient.sex || '',
+    reading: patient.reading || '',
   };
 
 /**
@@ -189,6 +191,20 @@ export default class EditPatientDialog
             />
           </div>
           <div className={classes.row}>
+            {/* The reading of the name, which is what a Japanese case list is
+                ordered by — 長谷川 is filed under は, and kanji carry no
+                reading a collator can find. Optional, like the two below it. */}
+            <PatientTextField
+              label="Reading (かな)"
+              placeholder="e.g. やまだ たろう"
+              optional
+              value={details.reading}
+              onChange={this.handleReading}
+              onKeyDown={this.handleKeyDown}
+            />
+            <span className={classes.spacer} />
+          </div>
+          <div className={classes.row}>
             <DateOfBirthField
               className={classes.dob}
               value={details.dateOfBirth}
@@ -230,6 +246,7 @@ export default class EditPatientDialog
     const { details } = this.state;
     return details.name.trim() !== stored.name.trim() ||
       details.chartId.trim() !== stored.chartId.trim() ||
+      details.reading.trim() !== stored.reading.trim() ||
       details.dateOfBirth !== stored.dateOfBirth ||
       details.sex !== stored.sex;
   };
@@ -252,6 +269,7 @@ export default class EditPatientDialog
       focusField === 'dateOfBirth' ? root.querySelector('input[type="date"]')
       : focusField === 'sex' ? root.querySelector('[role="group"] button')
       : focusField === 'chartId' ? (texts.length > 1 ? texts[1] : null)
+      : focusField === 'reading' ? (texts.length > 2 ? texts[2] : null)
       : (texts.length > 0 ? texts[0] : null);
     if (target !== null) {
       (target as HTMLElement).focus();
@@ -261,6 +279,8 @@ export default class EditPatientDialog
   private handleName = (name: string) => this.change({ name });
 
   private handleChartId = (chartId: string) => this.change({ chartId });
+
+  private handleReading = (reading: string) => this.change({ reading });
 
   private handleDateOfBirth = (dateOfBirth: string) =>
     this.change({ dateOfBirth });
@@ -285,6 +305,7 @@ export default class EditPatientDialog
       ...details,
       name: details.name.trim(),
       chartId: details.chartId.trim(),
+      reading: details.reading.trim(),
     };
     const error = validatePatientDetails(
       trimmed, this.props.otherChartIds, 'save',

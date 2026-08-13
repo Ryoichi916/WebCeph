@@ -116,6 +116,19 @@ interface State {
    * it did not announce.
    */
   swapped: boolean;
+  /**
+   * Whether the across-visits chronology has unread columns behind / ahead of what
+   * is on screen — measured from the track itself (see `measureStrip`), not guessed
+   * from the number of visits, because whether six columns overflow depends on the
+   * window, the position's own frame and the platform's scrollbar.
+   *
+   * They are what the edge veil and the ‹ › the track carries are drawn from: a
+   * column cut by the dialog edge with nothing over it read as a *cropped
+   * photograph*, and the CSS-only affordance this replaces was painted behind the
+   * columns, where an opaque photograph hid it completely.
+   */
+  canScrollBack: boolean;
+  canScrollOn: boolean;
 }
 
 /** How a visit is named in this viewer's captions: its pill, then its day. */
@@ -176,12 +189,31 @@ const chronologyVisits = (
 export default class PhotoViewer extends React.PureComponent<PhotoViewerProps, State> {
   state: State = this.seed(this.props);
 
+  /** The across-visits track, for measuring what is still off screen. */
+  private strip: HTMLDivElement | null = null;
+
+  componentDidMount() {
+    window.addEventListener('resize', this.measureStrip);
+    this.measureStrip();
+  }
+
   componentWillReceiveProps(next: PhotoViewerProps) {
     // Re-opening starts from what was actually pressed, never from the previous
     // reading — the same rule the record dialogs of this surface follow.
     if (next.open && !this.props.open) {
       this.setState(this.seed(next));
     }
+  }
+
+  componentDidUpdate() {
+    // A different position, a different reading or a re-opened dialog changes what
+    // the track holds and how wide its columns are, so what is off screen is
+    // re-measured rather than remembered.
+    this.measureStrip();
+  }
+
+  componentWillUnmount() {
+    window.removeEventListener('resize', this.measureStrip);
   }
 
   render() {
@@ -283,8 +315,23 @@ export default class PhotoViewer extends React.PureComponent<PhotoViewerProps, S
       ? record.width / record.height
       : (option !== undefined && option.frame === 'landscape' ? 1.5 : 0.75);
     const frameStyle = {
-      // 18px = the frame's own 8px padding either side plus its hairline border.
-      maxWidth: `calc(${aspect.toFixed(3)} * (var(--photo-h) - 18px) + 18px)`,
+      // Bounded by **both** budgets the reading has, which is the whole of the
+      // fix here: the window's height (`--photo-h`, 18px of it the frame's own
+      // padding and hairline) *and* the width the facts column needs beside the
+      // photograph (`--facts-col` out of the dialog body's own `--single-w`).
+      //
+      // Height alone was not enough. A landscape frame — every intraoral and
+      // occlusal photograph — grew wider than the body as the window got taller
+      // (854px of an 1132px body at a 1000px-tall window), so the facts and the
+      // three record actions wrapped *below* the photograph and off the bottom of
+      // the dialog: 296px of a scrollable body with no scroll hint, and "Open in
+      // record viewer", "Edit details" and "Remove" unreachable. Now the
+      // photograph shrinks instead, and the facts never leave its side.
+      //
+      // `max(240px, …)` so a genuinely narrow window still gets a readable
+      // photograph and wraps honestly rather than being squeezed to nothing.
+      maxWidth: `max(240px, min(${aspect.toFixed(3)} * (var(--photo-h) - 18px) `
+        + '+ 18px, var(--single-w) - var(--facts-col)))',
     } as React.CSSProperties;
     return (
       <div className={classes.single}>
@@ -483,11 +530,14 @@ export default class PhotoViewer extends React.PureComponent<PhotoViewerProps, S
             No visit of this record holds a photograph yet.
           </p>
         ) : (
+          <div className={classes.track}>
           <div
             className={cx(classes.strip, {
               // Two columns have the dialog to themselves and are read larger.
               [classes.strip__roomy]: visits.length <= 2,
             })}
+            ref={this.setStrip}
+            onScroll={this.measureStrip}
           >
             {visits.map((group, index) => {
               const cell = view !== null
@@ -573,8 +623,50 @@ export default class PhotoViewer extends React.PureComponent<PhotoViewerProps, S
               );
             })}
           </div>
+          {/* What is still off screen, said twice over: a veil that covers the
+              column the dialog edge cuts — so a clipped photograph can never be
+              read as a cropped one — and a control that brings it in. Drawn only
+              on the side that actually has unread visits, and drawn *over* the
+              columns, which is what a background gradient behind an opaque
+              photograph could not do. */}
+          {this.renderEdge('back', visits.length)}
+          {this.renderEdge('on', visits.length)}
+          </div>
         )}
       </div>
+    );
+  };
+
+  /**
+   * One edge of the across-visits track: the veil over the cut column and the
+   * arrow that scrolls it into view.
+   *
+   * `back` is earlier visits, `on` is later ones — the chronology's own direction,
+   * named that way in the tooltip rather than "left"/"right", which is a fact about
+   * a scrollbar and not about the case.
+   */
+  private renderEdge = (side: 'back' | 'on', count: number) => {
+    const isBack = side === 'back';
+    if (isBack ? !this.state.canScrollBack : !this.state.canScrollOn) {
+      return null;
+    }
+    const what = isBack ? 'Earlier visits' : 'Later visits';
+    return (
+      <span
+        key={side}
+        className={cx(classes.edge, isBack ? classes.edge__back : classes.edge__on)}
+      >
+        <button
+          type="button"
+          className={classes.edge_step}
+          title={`${what} — ${count} visits in all, and the row is wider than the ` +
+            'window: this brings the next ones in'}
+          aria-label={`${what} of this position`}
+          onClick={this.handleScrollStrip(isBack ? -1 : 1)}
+        >
+          {isBack ? '‹' : '›'}
+        </button>
+      </span>
     );
   };
 
@@ -766,8 +858,42 @@ export default class PhotoViewer extends React.PureComponent<PhotoViewerProps, S
         ? visits[bIndex === aIndex ? (aIndex === 0 ? 1 : aIndex - 1) : bIndex].key
         : (visits.length > 0 ? visits[0].key : null),
       swapped: false,
+      // Measured once the track is on screen, never assumed (see `measureStrip`).
+      canScrollBack: false,
+      canScrollOn: false,
     };
   }
+
+  /**
+   * What the across-visits track still holds off screen, on each side, read off
+   * the element itself. Called on mount, on every update, on the track's own
+   * scroll and on a window resize; it writes state only when the answer changes,
+   * so it cannot loop with `componentDidUpdate`.
+   */
+  private measureStrip = () => {
+    const el = this.strip;
+    const back = el !== null && el.scrollLeft > 2;
+    const on = el !== null
+      && (el.scrollWidth - el.clientWidth - el.scrollLeft) > 2;
+    if (back !== this.state.canScrollBack || on !== this.state.canScrollOn) {
+      this.setState({ canScrollBack: back, canScrollOn: on });
+    }
+  };
+
+  private setStrip = (node: HTMLDivElement | null) => {
+    this.strip = node;
+    this.measureStrip();
+  };
+
+  /** One press of an edge arrow: about two thirds of what is on screen. */
+  private handleScrollStrip = (dir: number) => () => {
+    const el = this.strip;
+    if (el === null) {
+      return;
+    }
+    el.scrollLeft += dir * Math.max(180, Math.round(el.clientWidth * 0.66));
+    this.measureStrip();
+  };
 
   /**
    * The photographs the enlarged reading's ‹ › walks, and the name of that walk

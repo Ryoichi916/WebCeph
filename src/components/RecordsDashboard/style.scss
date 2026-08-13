@@ -18,9 +18,40 @@ $page-gutter-narrow: 12px;
   flex-direction: column;
   background: $bg-app;
   font-family: $font-stack;
+  // The page column's width, as a property so the page bar and the page can only
+  // ever be moved together (see `.pagebar_inner` and `.page`, which both read it).
+  --page-max: #{$page-max};
 
   &:focus {
     outline: none;
+  }
+}
+
+// A clinic monitor buys bigger records, not a wider white margin. Capped at
+// 1340px flat, the panel's card column was pinned at 854px from 1440 up: the
+// photographic series' facial frames were a 199px thumbnail at 1440, at 1680 *and*
+// at 1920, with ~300px of empty page down each side of the panel and the composite
+// — the one element on this surface whose whole job is being looked at — frozen.
+// The floors in `photoseries.scss` keep the frames assessable at the narrow end;
+// these three steps are what let them grow at the wide one. Stepped rather than
+// fluid so the column lands on a small set of known widths a layout can be judged
+// at, each step keeping ≥30px of page margin either side, and capped at 1720
+// because a records table set 1900px wide stops being one reading.
+@media (min-width: 1500px) {
+  .surface {
+    --page-max: 1440px;
+  }
+}
+
+@media (min-width: 1660px) {
+  .surface {
+    --page-max: 1580px;
+  }
+}
+
+@media (min-width: 1880px) {
+  .surface {
+    --page-max: 1720px;
   }
 }
 
@@ -40,7 +71,7 @@ $page-gutter-narrow: 12px;
 
 .pagebar_inner {
   box-sizing: border-box;
-  max-width: $page-max;
+  max-width: var(--page-max, #{$page-max});
   margin: 0 auto;
   display: flex;
   align-items: center;
@@ -173,7 +204,7 @@ $page-gutter-narrow: 12px;
   box-sizing: border-box;
   flex: 1 0 auto;
   width: 100%;
-  max-width: $page-max;
+  max-width: var(--page-max, #{$page-max});
   margin: 0 auto;
   padding: 16px $page-gutter 24px;
   display: flex;
@@ -1732,6 +1763,31 @@ $band-gap-pad: 4px;
   font-variant-numeric: tabular-nums;
   color: $primary-900;
   white-space: nowrap;
+}
+
+// The photographic series' own entry for one visit: the visit's token and how many
+// of the nine positions it holds, kept together so a wrap can never leave "5/9" on
+// a line without the visit it belongs to.
+.coverage_series {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  white-space: nowrap;
+}
+
+.coverage_series_n {
+  font-size: 11.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: $text-secondary;
+}
+
+// …and the photographs of that visit that carry no position at all — on file, and
+// not counted among the nine (the tile's own strip is where they are placed).
+.coverage_series_extra {
+  margin-left: 2px;
+  font-weight: 500;
+  color: $warn;
 }
 
 // Absent, stated as absent — in the slots' own quiet grey, never in amber: a

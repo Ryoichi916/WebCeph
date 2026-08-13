@@ -22,7 +22,16 @@
 // (It was capped at 760px, which made the facial frames ~181px wide at 1440 *and*
 // at 1680 with ~100–360px of the card's own width empty beside them.) The per-band
 // `minmax()` floors below are what keep the frames assessable at the other end.
+//
+// Filling the card was necessary and not sufficient: the *card column* was itself
+// pinned at 854px from 1440 up, because the page column was capped at 1340px flat
+// — so a facial frame was a 199px thumbnail at 1440, at 1680 and at 1920 alike,
+// with ~300px of empty page down each side of the panel. The cap now steps with
+// the window (see `--page-max` in `style.scss`), which is what actually turns a
+// wider monitor into bigger photographs: ~299px facial frames at 1920 and ~269px
+// at 1700, off these very same floors and this very same `width: 100%`.
 .series {
+  position: relative;
   box-sizing: border-box;
   width: 100%;
   padding: 12px 12px 14px 20px;
@@ -56,12 +65,56 @@
   color: $text-tertiary;
 }
 
+// "· 10 photographs on file" — the second number, quieter than the position count
+// it qualifies, and only drawn where the two differ.
+.series_count_of {
+  color: $text-tertiary;
+  white-space: nowrap;
+}
+
 // The tile is also the drop target for the sitting's photographs: the whole
 // series arrives as one drop and is filed in one act.
 .series__over {
   border-radius: 8px;
   box-shadow: inset 0 0 0 2px $primary-600;
   background: $primary-050;
+}
+
+// …and it says what the drop will do while the drag is over it. A ring and a tint
+// name no act: the tile was ringed blue with a sitting's nine photographs hovering
+// over it and said nothing at all, while the dialog it opens states exactly this
+// sentence. Over the whole tile, so it is legible whatever the cursor is over —
+// and `pointer-events: none` throughout, so the overlay cannot swallow `dragleave`
+// or the drop it is describing.
+.series_over {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  border-radius: 8px;
+  // A wash of the same primary tint, so the label reads against a photograph as
+  // well as against an empty frame — light enough that the visit's photographs
+  // stay recognisable underneath it, since what is being dropped *onto* is part of
+  // what the reader is deciding.
+  background: rgba(232, 240, 254, .45);
+  pointer-events: none;
+}
+
+.series_over_note {
+  max-width: 420px;
+  padding: 10px 14px;
+  border: 1px solid $primary-600;
+  border-radius: 8px;
+  background: $bg-surface;
+  box-shadow: 0 6px 18px rgba(16, 30, 50, .18);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.45;
+  text-align: center;
+  color: $primary-700;
 }
 
 // Filing the rest of the sitting — the visit's *primary* act on this tile, so it
@@ -160,6 +213,18 @@
 // width the ragged edge was wasting goes to them.
 .band_cells__occlusal {
   grid-template-columns: repeat(2, minmax(150px, 1fr));
+}
+
+// A sparsely photographed visit's one row (see `renderSparse`): the extraoral
+// band's own four columns, so a frame is exactly the size it would be in the full
+// composite — the tile is shorter because it draws fewer rows, never because it
+// draws smaller photographs.
+.band_cells__sparse {
+  grid-template-columns: repeat(4, minmax(126px, 1fr));
+  // Mixed shapes in one row (a portrait facial frame beside a landscape buccal
+  // one): each cell keeps its own aspect and sits at the top of the row rather
+  // than being stretched to the tallest one.
+  align-items: start;
 }
 
 // …and inside the comparison viewer, where a tile is one of two columns of a
@@ -308,7 +373,11 @@
   transform: translateY(-1px);
 }
 
-.cell__filled:hover .cell_caption {
+// …and the caption follows the frame on *focus* as well as on hover: a keyboard
+// walking the composite got the frame's ring and the "Enlarge" label but a caption
+// still set in secondary grey, i.e. two of the three parts of one state.
+.cell__filled:hover .cell_caption,
+.cell_open:focus .cell_caption {
   color: $primary-700;
   font-weight: 600;
 }
@@ -345,6 +414,36 @@
 
 .cell__filled:hover .cell_zoom,
 .cell_open:focus .cell_zoom {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+// "Add", in the same slot on an empty frame — the empty cell's own word for its
+// own act, which until now existed only in the `title`. Primary rather than the
+// filled cell's dark pill, because the frame it sits in is the page's sunken ground
+// and the act is the tile's primary one.
+.cell_add {
+  position: absolute;
+  left: 4px;
+  bottom: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px 2px 5px;
+  border-radius: 999px;
+  background: $primary-600;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: .02em;
+  color: #FFFFFF;
+  opacity: 0;
+  transform: translateY(3px);
+  transition: opacity 120ms ease, transform 120ms ease;
+  pointer-events: none;
+}
+
+.cell__slot:hover .cell_add,
+.cell__slot:focus .cell_add {
   opacity: 1;
   transform: translateY(0);
 }
@@ -438,6 +537,90 @@
   font-weight: 600;
 }
 
+// ---- The positions a sparse visit has not got -------------------------------
+// One compact strip instead of nine full frames, on a visit that holds four or
+// fewer of them (see `SPARSE_MAX_FILLED`): every position still named, still in the
+// composite's reading order, and on the record page still the control that files
+// exactly itself. It is drawn in the same idiom as the unplaced strip below and as
+// the panel's own "Not filed at T2" row — a quiet, grey statement of what is not
+// there, never an amber one: a case is not incomplete for holding one photograph.
+.missing {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid $border;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+}
+
+.missing_label {
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: $text-tertiary;
+}
+
+// The visit named on screen, where three tiles may be being scanned at once —
+// dropped on paper, where the strip prints inside the visit's own block under the
+// stamp that has just named it (see `.slots_at_print`'s own argument).
+.missing_at {
+  display: inline;
+}
+
+.missing_list {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+// A named placeholder at the size of a line of text — dashed on the sunken ground,
+// exactly as the empty cell is, so the strip reads as the same kind of thing the
+// cells are and not as a row of new controls.
+.missing_item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 9px 2px 7px;
+  border: 1px dashed $border-strong;
+  border-radius: 999px;
+  background: $bg-sunken;
+  font-family: inherit;
+  font-size: 11.5px;
+  color: $text-tertiary;
+}
+
+button.missing_item {
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+
+  &:hover {
+    background: $primary-050;
+    border-color: $primary-600;
+    color: $primary-700;
+  }
+
+  &:focus {
+    outline: none;
+    box-shadow: $focus-ring;
+  }
+}
+
+.missing_plus {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  color: $primary-600;
+}
+
+button.missing_item:hover .missing_plus {
+  color: $primary-700;
+}
+
 // ---- Photographs the record holds but does not place ------------------------
 
 .unplaced {
@@ -462,8 +645,8 @@
 .unplaced_item {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 4px 8px 4px 4px;
+  gap: 10px;
+  padding: 6px 10px 6px 6px;
   border: 1px solid $border;
   border-radius: 8px;
   background: $bg-surface;
@@ -472,11 +655,12 @@
 .unplaced_open {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   padding: 0;
   border: none;
   background: transparent;
   font-family: inherit;
+  text-align: left;
   cursor: pointer;
 
   &:focus {
@@ -488,20 +672,42 @@
   }
 }
 
+// Big enough to answer the strip's own question. This strip exists *because*
+// nothing knows which of the five intraoral frames a photograph is — the clinician
+// has to look at it and say — and at 54 × 36px nobody can, so "Set position" could
+// only be pressed after enlarging the photograph somewhere else. 80px tall, and as
+// wide as the photograph's own aspect makes it (the inline width the component
+// computes from the record's pixels), so the shape is part of the evidence too.
 .unplaced_frame {
   position: relative;
   flex: 0 0 auto;
-  width: 54px;
-  height: 36px;
+  width: 120px;
+  height: 80px;
   border-radius: 4px;
   overflow: hidden;
   background: $canvas-bg;
   border: 1px solid $border-strong;
 }
 
+.unplaced_main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
 .unplaced_name {
   font-size: 12.5px;
+  font-weight: 500;
   color: $text-primary;
+}
+
+// The day, on screen: which sitting an unplaced photograph belongs to is half of
+// what names it, and it was in the tooltip only.
+.unplaced_meta {
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  color: $text-tertiary;
 }
 
 .unplaced_fix {
@@ -560,9 +766,55 @@
   .cell_more,
   .unplaced_fix,
   .cell_plus,
-  // "Enlarge" is a promise about a screen.
-  .cell_zoom {
+  // "Enlarge" and "Add" are promises about a screen.
+  .cell_zoom,
+  .cell_add,
+  // The drag overlay cannot exist on paper, but a sheet printed mid-drag must not
+  // carry a wash and a "Drop to file…" label over a visit's photographs.
+  .series_over {
     display: none;
+  }
+
+  // The sparse visit's strip prints as the same compact sentence, with the pluses
+  // dropped: nobody can press "+ Left buccal" on a chart, and the strip is what
+  // keeps a one-photograph visit to a block instead of a sheet that is ~70% empty
+  // boxes.
+  .missing {
+    margin-top: 8px;
+    padding-top: 6px;
+    gap: 4px 8px;
+  }
+
+  .missing_label {
+    font-size: 8.5px;
+  }
+
+  // …and it does not name the visit: the strip prints inside the visit's own block,
+  // under the stamp three lines above it (the rule `.slots_at_print` argues).
+  .missing_at {
+    display: none;
+  }
+
+  .missing_item {
+    padding: 1px 6px;
+    border-color: #C3CCD6;
+    background: #FFFFFF;
+    font-size: 8.5px;
+    color: #7B8794;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .missing_plus {
+    display: none;
+  }
+
+  // The photographs with no position recorded print at a size the sheet can spare:
+  // the 80px frame is what makes the *screen's* "Set position" answerable, and the
+  // sheet carries no such control.
+  .unplaced_frame {
+    width: 72px !important;
+    height: 48px;
   }
 
   // On paper the composite has the page's width and no floor can be honoured by
@@ -577,6 +829,10 @@
 
   .band_cells__occlusal {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .band_cells__sparse {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
   // Hover and focus are facts about a screen, not about the chart: a sheet
@@ -596,7 +852,8 @@
     box-shadow: none;
   }
 
-  .cell__filled:hover .cell_caption {
+  .cell__filled:hover .cell_caption,
+  .cell_open:focus .cell_caption {
     color: #52616F;
     font-weight: 500;
   }
