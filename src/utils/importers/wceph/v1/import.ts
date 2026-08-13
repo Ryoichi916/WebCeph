@@ -14,6 +14,7 @@ import {
   setActiveImageId,
   setSuperimpositionMode,
   superimposeImages,
+  loadVisitNotes,
 } from 'actions/workspace';
 
 import importImage from 'utils/importers/image/import';
@@ -79,6 +80,19 @@ const importFile: Importer = async (fileToImport, options) => {
       ];
     },
   ));
+
+  /**
+   * The file's clinical notes, filed onto the visits their timepoint labels name
+   * (the labels travel with the images above, so a note lands on the visit it was
+   * written about or on none at all).
+   *
+   * A note already on file for that visit is never replaced — see
+   * `Events['LOAD_VISIT_NOTES']`. Files written before the record had a written
+   * half carry no `visitNotes` at all, and nothing is dispatched for them.
+   */
+  if (json.visitNotes !== undefined) {
+    actions.push(loadVisitNotes({ notes: json.visitNotes }));
+  }
 
   if (loadSuperimpositionState) {
     let { mode, imageIds } = json.superimposition;

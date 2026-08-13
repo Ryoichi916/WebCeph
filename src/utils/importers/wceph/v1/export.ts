@@ -40,6 +40,11 @@ import {
 
 import { getActiveWorkspaceId } from 'store/reducers/workspace/activeId';
 
+// The written half of the record: one clinical note per visit, filed under the
+// visit's own timepoint label (see `visitNotes` in ./format).
+import { getVisitNotes } from 'store/reducers/workspace/records';
+import { getVisitNoteKey, readVisitNote } from 'utils/visitNotes';
+
 import { validateIndexJSON } from './validate';
 
 const createExport: Exporter = async (state, options, onUpdate) => {
@@ -71,6 +76,29 @@ const createExport: Exporter = async (state, options, onUpdate) => {
   );
 
   const activeWorkspaceId = getActiveWorkspaceId(state)!;
+
+  /**
+   * The clinical notes this file carries: the notes of the visits whose images
+   * are actually being written, and no others.
+   *
+   * Scoped that way so a file cannot contain a diagnosis about a visit it holds
+   * no image of — importing that would file a note the record has no visit for.
+   * A note is written whole, with every version it holds, so an amended entry
+   * imports as an amended entry. @see WCephJSON#visitNotes
+   */
+  const allNotes = getVisitNotes(state);
+  const exportedVisitKeys: { [key: string]: true } = {};
+  imagesToSave.forEach((id: string) => {
+    exportedVisitKeys[getVisitNoteKey(getProps(id).timepoint)] = true;
+  });
+  const visitNotes: NonNullable<WCephJSON['visitNotes']> = {};
+  Object.keys(allNotes)
+    .filter((key) => exportedVisitKeys[key] === true)
+    .filter((key) => readVisitNote(allNotes[key]) !== null)
+    .forEach((key) => {
+      visitNotes[key] = { entries: allNotes[key].entries };
+    });
+
   const activeImageId = getActiveTracingImageId(state);
   const hasActiveImage = activeImageId !== null && findIndex(
     imagesToSave, id => id === activeImageId) !== -1;
@@ -103,6 +131,9 @@ const createExport: Exporter = async (state, options, onUpdate) => {
         }),
       ),
     ),
+    // Omitted entirely when the record holds none, so a file from a chart with no
+    // notes is byte-for-byte the file this app has always written.
+    visitNotes: Object.keys(visitNotes).length > 0 ? visitNotes : undefined,
     superimposition: {
       mode: getSuperimpsotionMode(state)(activeWorkspaceId),
       imageIds: getWorkspaceImageIds(state)(activeWorkspaceId),

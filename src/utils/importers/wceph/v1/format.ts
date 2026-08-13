@@ -110,6 +110,41 @@ export type WCephJSON = {
     },
   };
 
+  /**
+   * The clinical notes of the patient's visits, keyed by the **timepoint label**
+   * the images in the file carry (trimmed; `''` for images with no label).
+   *
+   * Optional: every file written before the record had a written half carries
+   * none, and they must keep importing — a project with no notes is a project
+   * whose visits nobody has written about yet, which is exactly what the app then
+   * shows.
+   *
+   * Keyed by label and not by image id on purpose. Import re-mints image ids, so
+   * an id-keyed note would have to be re-pointed at a guess; a timepoint label
+   * travels with the images themselves (`data[id].timepoint`), so a note lands on
+   * the visit it was written about or on no visit at all — never on the wrong one.
+   *
+   * Each note holds **every version ever saved**, oldest first. That is what
+   * makes an amended entry legible after a round trip: dropping all but the
+   * current version would export a clinical record that quietly claims never to
+   * have been changed. @see VisitNote
+   */
+  visitNotes?: {
+    [timepointKey: string]: {
+      entries: Array<{
+        /** Epoch ms this version was saved. */
+        savedAt: number;
+        fields: {
+          chiefComplaint: string;
+          diagnosis: string;
+          plan: string;
+          appliance: string;
+          note: string;
+        };
+      }>;
+    };
+  };
+
   workspace: {
     mode?: 'tracing' | 'superimposition';
     activeImageId: string | null;

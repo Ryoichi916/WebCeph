@@ -93,14 +93,24 @@ never from the on-screen preview alone.
   is done — it is a full workspace page, not a modal, and it now holds the
   extraoral/intraoral photograph types filed at their position in the standard
   photographic series (a composite nine-position tile per visit, with the
-  visit-vs-visit comparison and the enlarging viewer beside it), the
-  per-timepoint analysis history, the cross-timepoint measurement trend, a
+  visit-vs-visit comparison and the enlarging viewer beside it), a **clinical
+  note per visit** (chief complaint, diagnosis, treatment plan, appliance and
+  free text, kept as an append-only trail and printed on the case sheet and the
+  report), the per-timepoint analysis history, the cross-timepoint measurement
+  trend, a
   horizontal treatment timeline with the elapsed interval on every gap, and
   working launch points into the tracing editor, the clinical report, the
   treatment simulation and a superimposition of a named pair of timepoints. What
   the commercial field still has and this does not is **study models / 3D
   records** (plaster scans, IOS meshes): a new record type with its own viewer,
   not a variation on an image. `components/RecordsDashboard/`.
+- [ ] **The written record stops at the visit note.** A visit now carries a
+  clinical note with its own amendment trail
+  (`utils/visitNotes.ts`, `components/RecordsDashboard/VisitNote.tsx`), and that
+  is the whole of the written record: there is no coded diagnosis vocabulary to
+  pick from, no consent or referral document, no per-tooth chart and no
+  appointment history. Each of those is its own module, and none of them may be
+  faked by pre-filling a note.
 - [ ] **Non-lateral analysis.** PA/frontal cephalometric analysis (the frontal
   landmark points already exist in `analyses/landmarks/frontalPhoto/`),
   photographic (facial esthetic) analysis, and arch/space analysis.

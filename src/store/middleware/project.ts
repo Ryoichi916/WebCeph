@@ -12,11 +12,16 @@ import {
 } from 'utils/caseSummary';
 
 // The state slices that make up a patient's project: the images (with their
-// pixel data), the tracings, and the workspace/tab layout.
+// pixel data), the tracings, the clinical notes of each visit, and the
+// workspace/tab layout.
 const PROJECT_KEYS: StoreKey[] = [
   'images.props',
   'images.status',
   'images.tracing',
+  // The written half of the record — one note per visit, with its amendment
+  // trail. It is part of the project and not of the patient's own row because it
+  // belongs to the visits the project holds. @see StoreEntries['records.notes']
+  'records.notes',
   'workspaces.settings',
   'workspaces.order',
   'workspaces.activeWorkspaceId',
@@ -27,6 +32,7 @@ const emptyProject = (): Partial<StoreState> => ({
   'images.props': {},
   'images.status': {},
   'images.tracing': {},
+  'records.notes': {},
   'workspaces.settings': { [defaultWorkspaceId]: defaultWorkspaceSettings },
   'workspaces.order': [defaultWorkspaceId],
   'workspaces.activeWorkspaceId': defaultWorkspaceId,

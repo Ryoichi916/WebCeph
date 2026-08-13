@@ -50,8 +50,15 @@
 // A fresh install has no list to lay out. The card then takes the size of the one
 // thing it is asking for — registering the first patient — instead of standing
 // as wide as the window around an empty table.
+// Wide enough for the five registration fields and the button to stand on ONE
+// line — at 1080px the Sex control and Register wrapped onto a second row of
+// otherwise empty tinted well, which is the same dead space the list's own well
+// was folded away to end. Never wider than the window, so a 1024px laptop still
+// gets the card rather than a horizontal scrollbar (there the row wraps, as the
+// narrow tier intends).
 .card__empty {
-  width: 1080px;
+  width: 1300px;
+  max-width: calc(100vw - 48px);
   height: auto;
   min-height: 520px;
 }
@@ -292,6 +299,16 @@
   min-width: 150px;
 }
 
+// On the first-run card the line is broken on the fields' base sizes, and a text
+// input's natural base (~180px) was enough to push Sex and Register onto a second
+// row on a 1920px screen — where the panel is at its full width. Stated as a
+// basis, the name still takes every spare pixel of the line it is on. The basis is
+// stated below both floors (150px here, 140px in the narrow tier) so each width
+// keeps its own minimum — this rule outranks the tier's and must not undo it.
+.card__empty .field_name {
+  flex: 1 1 140px;
+}
+
 .field_chart {
   flex: 0 0 148px;
 }
@@ -373,8 +390,15 @@
 
 // ------------------------------------------------------------------- the list
 
+// Shrinks when the window cannot hold the page of rows (the table inside takes
+// the squeeze), but never GROWS past the list it holds. The brand panel's own
+// content is ~354px tall, so a card holding one or two cases is taller than its
+// list — and a list block that grew into that surplus parked it between the pager
+// and the footnote, which is the blank white this arrangement exists to avoid.
+// Held to its content, the footnote sits directly under the pager and the surplus
+// falls where it reads as the card's own ground.
 .list_block {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -1175,6 +1199,20 @@ $row-inset: 4px;
 // one track that gave way and was ellipsising names a clinic actually has on
 // file ("Bäckström, Sven-Erik Johannes" in 122px at 1200).
 
+// A 1366px laptop — the commonest screen a clinic owns — is the width where the
+// nine columns and the 264px brand panel are both asking for room the table has
+// not got: the name track measured 229px there and was ellipsising
+// "Vandenberghe-Kowalczyk, Maximilian" (236px). The panel is the app's own
+// advertising, so it is what gives way first, exactly as at 1300 below; the 48px
+// goes to the two flexible tracks, and the name reads ~257px at 1366 and ~320px
+// at 1440 — enough for every name in the practice's own file.
+@media (max-width: 1500px) {
+  .brand {
+    flex: 0 0 216px;
+    padding: 28px 20px 24px;
+  }
+}
+
 // A 1280px laptop: nine columns cannot hold a 180px name here (they need ~930px
 // of table and there are ~910), so the Sex column stands down — it is read on the
 // case itself and still filterable from the toolbar — and the brand panel and the
@@ -1268,7 +1306,12 @@ $row-inset: 4px;
   // this tier exists for — the name still gets ~150px rather than the 130px floor.
   // Records is 82px because its own header asks for 73 and the label may not be
   // the thing that gets sliced; the two date columns give up the difference.
-  $cols-narrow: minmax(146px, 1fr) 92px 74px 82px 92px 120px 36px;
+  // Age and Last visit are 2px under what their own labels would like, because
+  // that is what carries "Bäckström, Sven-Erik Johannes" (199px) inside the name
+  // track at 1080 instead of ellipsising it 3px from its end. Both columns still
+  // hold their value and their qualifier ("78 y" over "1948-01-01", a date over
+  // "14 days ago") without clipping — measured, not assumed.
+  $cols-narrow: minmax(150px, 1fr) 92px 72px 82px 90px 120px 36px;
 
   .thead_grid,
   .row {

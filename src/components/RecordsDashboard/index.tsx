@@ -37,6 +37,11 @@ import PhotoViewer, { PhotoViewerTarget } from './PhotoViewer';
 import AddPhotoSeries from './AddPhotoSeries';
 import AnalysisFindings, { FilmFindings } from './AnalysisFindings';
 import TrendChart from './TrendChart';
+// The written half of the record: a visit's clinical note as the first row of its
+// panel, the editor that writes and amends one, and the block that lists a note
+// whose visit is no longer on file.
+import VisitNoteBlock, { UnmatchedVisitNotes } from './VisitNote';
+import VisitNoteDialog from './VisitNoteDialog';
 
 // The three views this surface launches. Each is the connected component the
 // editor's toolbar opens, opened here with the record the dashboard is pointing
@@ -121,6 +126,13 @@ import {
   PhotoSeriesLayout,
   PhotoViewOption,
 } from 'utils/records';
+
+import {
+  getVisitNoteKey,
+  getUnmatchedVisitNoteKeys,
+  readVisitNote,
+  countVisitsWithNotes,
+} from 'utils/visitNotes';
 
 import { getNameForAnalysis } from 'components/AnalysisSelector/strings';
 
@@ -631,6 +643,16 @@ interface State {
    * `handleFilePhotoBatch` for why a batch is a queue rather than one dispatch.
    */
   photoQueue: Array<{ file: File; meta: ImageRecordMeta }>;
+  /**
+   * The visit whose clinical note is being written or amended, or null — held as
+   * the note's own **timepoint key** (@see utils/visitNotes#getVisitNoteKey), which
+   * is what the note is filed under.
+   *
+   * A key and not an image id: a chief complaint, a diagnosis and a plan are facts
+   * about the visit, and holding the editor open on one of the five images taken
+   * that day would make the entry depend on which film was clicked.
+   */
+  editingNoteFor: string | null;
 }
 
 /**
@@ -681,6 +703,7 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
     photoViewer: null,
     photoBatch: null,
     photoQueue: [],
+    editingNoteFor: null,
   };
 
   private root: HTMLElement | null = null;
@@ -1028,6 +1051,13 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
                   {this.renderCoverage(groups)}
                   </div>
                 )}
+                {/* A clinician's entry is never dropped because a visit was
+                    relabelled or its images were removed: where one is left with
+                    no visit to sit at, it is listed here and offered to the visits
+                    on file. Nothing in the normal case. Outside the branch above,
+                    so a chart whose images were all removed still shows what was
+                    written about them. */}
+                {this.renderUnmatchedNotes(groups)}
               </div>
               {this.renderRecordsFooter()}
             </section>
@@ -1340,7 +1370,9 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
       parts.push(sex !== null ? sex : 'Sex not recorded');
     }
     // What the record covers, on the same terms the band states it on screen.
-    const { groups, timepointCount, unlabelled, span } = this.getRecordFacts();
+    const {
+      groups, timepointCount, unlabelled, span, notedVisits,
+    } = this.getRecordFacts();
     if (groups.length > 1) {
       const labelled = timepointCount > 0
         ? `${timepointCount} timepoints` : 'No timepoint labels';
@@ -1352,6 +1384,13 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
     if (span !== null) {
       parts.push(span.interval !== null
         ? `${span.dates} (${span.interval})` : span.dates);
+    }
+    // …and how much of it is written up, where anything is. The entries themselves
+    // print with their visits; this says at a glance whether the sheet in hand is
+    // a complete record or an imaging record with the notes still to come.
+    if (notedVisits > 0) {
+      parts.push(`Notes at ${notedVisits} of ${groups.length} ` +
+        `${groups.length === 1 ? 'visit' : 'visits'}`);
     }
     // Whose practice holds the record. Read from the one letterhead this app
     // stores — the same practice, clinician and license the clinical report's
@@ -1503,6 +1542,12 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
     return {
       groups,
       timepointCount: groups.filter(({ label }) => label !== null).length,
+      // How many of those visits have a clinical note on file — the one reading
+      // of "is this a patient record or a pile of films" the band can state, and
+      // counted off the notes themselves (@see utils/visitNotes).
+      notedVisits: countVisitsWithNotes(
+        this.props.notes, groups.map(({ key }) => key),
+      ),
       unlabelled: groups
         .filter(({ label }) => label === null)
         .reduce((total, group) => total + group.records.length, 0),
@@ -1542,7 +1587,9 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
     const dob = patient !== null ? formatDisplayDate(patient.dateOfBirth) : null;
     const age = patient !== null ? formatAgeFull(patient.dateOfBirth) : null;
     const sex = patient !== null ? formatSexFull(patient.sex) : null;
-    const { groups, timepointCount, unlabelled, span } = this.getRecordFacts();
+    const {
+      groups, timepointCount, unlabelled, span, notedVisits,
+    } = this.getRecordFacts();
     // A count of one is not a chronology, and the record it counts is the single
     // stamp 120px below this cell: on a one-visit chart "TIMEPOINTS 1" was the
     // fourth statement of "one" inside one screen (the top bar's "Records (1)",
@@ -1639,6 +1686,17 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
               it. */}
           {span !== null ? (
             <IdentityFact label="Record span" value={span.dates} />
+          ) : null}
+          {/* How much of the record is written up — offered only once something
+              *is*. "0 of 3 visits" would be a second nag beside the empty note
+              line each visit already carries, and this band states what the record
+              holds, not what it lacks. */}
+          {notedVisits > 0 ? (
+            <IdentityFact
+              label="Clinical notes"
+              value={`${notedVisits} of ${groups.length} ` +
+                `${groups.length === 1 ? 'visit' : 'visits'}`}
+            />
           ) : null}
         </dl>
 
@@ -3688,6 +3746,20 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
           />
         </div>
         <div className={classes.group_cards}>
+          {/* The visit's own entry, first: what the patient came for, what was
+              found, what was decided, and what is in the mouth — the half of a
+              patient record this surface used not to hold at all. It leads the
+              visit's panel because that is the order a chart entry is read in, and
+              it is one quiet line while nobody has written it.
+
+              Read only through `utils/visitNotes`, and it renders nothing this
+              app composed: an unwritten field is absent, an amended entry says so
+              and stays readable as it stood (see `VisitNote`). */}
+          <VisitNoteBlock
+            visitName={visitName}
+            note={this.props.notes[getVisitNoteKey(group.label)]}
+            onEdit={this.openVisitNote(getVisitNoteKey(group.label))}
+          />
           {/* The card is handed its group: what the stamp beside it already
               states, the card does not repeat. */}
           {cards.map(
@@ -4144,7 +4216,97 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
           onRemove={this.handleRemoveScale}
           onCancel={this.closeRemoveScale}
         />
+        {/* Writing or amending a visit's clinical note. Opened on the visit's own
+            label, day and the age then, so an entry cannot be written onto the
+            wrong visit from a page of six — and it states, before saving, that an
+            amendment keeps what is on file. */}
+        {this.renderVisitNoteDialog()}
       </div>
+    );
+  };
+
+  /**
+   * The visit-note editor, opened on the visit `editingNoteFor` names.
+   *
+   * The visit is looked up by note key through the page's own grouping, so the
+   * dialog's caption (label · day · age then) is the very stamp the visit wears on
+   * the page behind it. A note whose visit is no longer on file — the case
+   * `UnmatchedVisitNotes` lists — is still editable: the key is then all the record
+   * has, and the caption says exactly that rather than borrowing a date.
+   */
+  private renderVisitNoteDialog = () => {
+    const { records, notes } = this.props;
+    const { editingNoteFor } = this.state;
+    const key = editingNoteFor;
+    const group = key !== null
+      ? groupRecordsByTimepoint(records).filter((g) => g.key === key)[0]
+      : undefined;
+    const date = group !== undefined ? group.firstDate : null;
+    const visitName = group !== undefined
+      ? (group.label !== null ? group.label.trim() : 'images with no timepoint label')
+      : (key !== null && key !== ''
+        ? key : 'images with no timepoint label');
+    return (
+      <VisitNoteDialog
+        open={key !== null}
+        visitName={visitName}
+        visitDate={date}
+        visitAge={this.getAgeOn(date)}
+        reading={key !== null ? readVisitNote(notes[key]) : null}
+        onSave={this.handleSaveVisitNote}
+        onCancel={this.closeVisitNote}
+      />
+    );
+  };
+
+  /** Open the note editor on one visit (its note key). */
+  private openVisitNote = (key: string) => () =>
+    this.setState({ editingNoteFor: key });
+
+  private closeVisitNote = () => this.setState({ editingNoteFor: null });
+
+  /**
+   * Save what the editor holds against the visit it was opened on — an append, so
+   * the entry already on file is kept and the amendment is dated (the reducer is
+   * what guarantees that; see store/reducers/workspace/records).
+   */
+  private handleSaveVisitNote = (fields: VisitNoteFields) => {
+    const { editingNoteFor } = this.state;
+    if (editingNoteFor === null) {
+      return;
+    }
+    this.props.onSaveVisitNote(editingNoteFor, fields);
+    this.setState({ editingNoteFor: null });
+  };
+
+  /**
+   * The notes of this chart that no visit on file carries a label for, listed
+   * rather than dropped — and offered to the visits that hold no note of their own.
+   *
+   * Null in the normal case, which is every case where nothing has been
+   * relabelled: this block appears only when the record actually holds an entry
+   * with nowhere to sit. @see utils/visitNotes#getUnmatchedVisitNoteKeys
+   */
+  private renderUnmatchedNotes = (groups: TimepointGroup<PatientRecord>[]) => {
+    const { notes } = this.props;
+    const keys = getUnmatchedVisitNoteKeys(notes, groups.map(({ key }) => key));
+    if (keys.length === 0) {
+      return null;
+    }
+    return (
+      <UnmatchedVisitNotes
+        notes={keys.map((key) => ({ key, note: notes[key] }))}
+        // Only the visits with no note of their own: a move must never overwrite
+        // an entry somebody wrote (the reducer refuses it too).
+        destinations={groups
+          .filter(({ key }) => readVisitNote(notes[key]) === null)
+          .map((group) => ({
+            key: group.key,
+            label: group.label !== null
+              ? group.label.trim() : 'the images with no timepoint label',
+          }))}
+        onRefile={this.props.onRefileVisitNote}
+      />
     );
   };
 

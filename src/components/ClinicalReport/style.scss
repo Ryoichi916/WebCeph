@@ -1554,6 +1554,86 @@ $cont-line-height: 13px;
   color: $text-tertiary;
 }
 
+// ---- The entry recorded in the patient's record ----------------------------
+//
+// The practice's own words, printed where this sheet used to print blank rules
+// (see `ClinicalReport#renderClinicalNotes`). Set as a labelled entry rather than
+// as prose: a referrer reading a report looks for the diagnosis and the plan, and
+// a label column is what makes those two findable in one glance.
+.note_entry {
+  break-inside: avoid;
+  page-break-inside: avoid;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 0 2px;
+}
+
+// When the entry was recorded, and whether it has been amended since. A printed
+// copy of a clinical note that does not state this is not a copy of a record.
+.note_stamp {
+  font-size: 9px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: .02em;
+  color: $text-tertiary;
+}
+
+.note_fields {
+  margin: 0;
+  display: grid;
+  // 32mm: fits the longest of the five labels ("Treatment plan") on one line at
+  // 8.5px caps — a wrapped label in a two-column entry reads as a squeezed table
+  // on a signed document.
+  grid-template-columns: 32mm minmax(0, 1fr);
+  gap: 4px 8px;
+  align-items: baseline;
+}
+
+.note_field {
+  display: contents;
+}
+
+.note_label {
+  margin: 0;
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  line-height: 1.5;
+  color: $text-tertiary;
+}
+
+// The clinician's text, and only that. `pre-wrap`: their own line breaks are part
+// of what they wrote.
+.note_value {
+  margin: 0;
+  min-width: 0;
+  font-size: 10px;
+  line-height: 1.5;
+  color: $text-primary;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.note_retracted {
+  margin: 0;
+  font-size: 9.5px;
+  font-style: italic;
+  color: $text-secondary;
+}
+
+// The rules under a printed entry are for additions to it, and say so — without
+// this the sheet showed an entry and then three unexplained lines.
+.notes_more {
+  margin-top: 4px;
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: $text-tertiary;
+}
+
 // The ruled writing area: six lines in **two columns** (see `NOTE_RULES`),
 // which is the whole trick — six writing lines in the height of three.
 //

@@ -17,6 +17,9 @@ import {
 
 import { getRecordAnalyses, getRecordLaunch } from './selectors';
 
+// The written half of the record: one clinical note per visit.
+import { getVisitNotes } from 'store/reducers/workspace/records';
+
 import { getWorkspacesIdsInOrder } from 'store/reducers/workspace/order';
 import { getWorkspaceImageIds } from 'store/reducers/workspace/settings';
 
@@ -39,6 +42,8 @@ import {
   unsetScaleFactor,
   updatePatient,
   setPatientTrendPlot,
+  saveVisitNote,
+  refileVisitNote,
   closeImage,
   // Filing a batch of photographs is the upload screen's own import, once per
   // photograph (see `onAddPhotographs`).
@@ -75,6 +80,10 @@ const mapStateToProps = (state: StoreState): StateProps => {
       .filter((p) => patient === null || p.id !== patient.id)
       .map((p) => p.chartId || ''),
     emptyWorkspaceId: findEmptyWorkspaceId(state),
+    // The visits' clinical notes — what the patient came for, what was found,
+    // what was decided, and what is in the mouth. Part of the project, so they
+    // travel with the films (see store/middleware/project).
+    notes: getVisitNotes(state),
   };
 };
 
@@ -213,6 +222,25 @@ const mapDispatchToProps = (dispatch: GenericDispatch): DispatchProps => ({
   // is dispatched to the store the demographics live in and persisted with them.
   onSetTrendPlot: (patientId: string, symbols: string[] | null) => {
     dispatch(setPatientTrendPlot({ id: patientId, symbols }));
+  },
+  /**
+   * Write or amend a visit's clinical note.
+   *
+   * The clock is read here rather than in the reducer, which stays a pure function
+   * of its payload — and the reducer *appends*: what is on file is kept and this
+   * version is added beside it, so an amendment is recorded as an amendment and
+   * the entry stays readable as it stood. @see VisitNote
+   */
+  onSaveVisitNote: (timepoint: string, fields: VisitNoteFields) => {
+    dispatch(saveVisitNote({
+      timepoint, fields, savedAt: new Date().getTime(),
+    }));
+  },
+  // Moving a note onto the visit it belongs to, with its trail — never onto a
+  // visit that already holds one (the reducer refuses it, and the dashboard only
+  // offers the visits that have none).
+  onRefileVisitNote: (from: string, to: string) => {
+    dispatch(refileVisitNote({ from, to }));
   },
   onRemoveRecord: (record: PatientRecord, fallbackWorkspaceId: string | null) => {
     dispatch(closeImage({

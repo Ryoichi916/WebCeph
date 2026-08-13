@@ -689,6 +689,64 @@ interface PatientCaseSummary {
   thumbnailType: ImageType | null;
 }
 
+/**
+ * What a clinician wrote about one visit — the clinical half of a patient
+ * record, beside the imaging half the rest of this file describes.
+ *
+ * Every field is the clinician's own text and nothing else. Nothing here is
+ * derived from a tracing, proposed by the app or prefilled from a template: an
+ * app that writes "Class II division 1" into a diagnosis field because the ANB
+ * came out at 6° has put words in a clinician's mouth, and the record it
+ * produces cannot be relied on afterwards. Empty means nobody has written it.
+ *
+ * Four named fields and one free text, which is the minimum a visit entry is
+ * expected to state: what the patient came for, what was found, what was
+ * decided, and what is in the mouth. @see utils/visitNotes#VISIT_NOTE_FIELDS
+ */
+interface VisitNoteFields {
+  /** Why the patient attended, as recorded by the clinician. */
+  chiefComplaint: string;
+  /** The diagnosis recorded at this visit. */
+  diagnosis: string;
+  /** The treatment plan as it stood at this visit. */
+  plan: string;
+  /** Appliance in place / what was fitted or removed, and its details. */
+  appliance: string;
+  /** Anything else about the visit, in the clinician's own words. */
+  note: string;
+}
+
+/**
+ * One saved version of a visit's note: what was written, and when it was
+ * written. @see VisitNote
+ */
+interface VisitNoteEntry {
+  /** Epoch ms this version was saved (local clock of the machine writing it). */
+  savedAt: number;
+  fields: VisitNoteFields;
+}
+
+/**
+ * A visit's clinical note, held as **every version ever saved** rather than as
+ * one mutable blob.
+ *
+ * A clinical record is not silently rewritten. The last entry is the note as it
+ * stands; the ones before it are what it said before each amendment, kept so the
+ * surfaces can state plainly that the entry was amended, when, and what it used
+ * to say (see `RecordsDashboard`'s note block, which labels them "earlier
+ * version"). Amending is therefore an append, never an overwrite — and nothing
+ * in the app deletes an entry once it is written.
+ *
+ * Keyed per **timepoint**, not per image: a visit's chief complaint, diagnosis
+ * and plan are facts about the visit, and filing them against one of the five
+ * images taken that day would make the record depend on which film a clinician
+ * happened to click. @see StoreEntries['records.notes']
+ */
+interface VisitNote {
+  /** Oldest first; the last is current. Never empty for a stored note. */
+  entries: VisitNoteEntry[];
+}
+
 interface StoreState {
   'patients.byId': { [id: string]: Patient };
   'patients.activeId': string | null;
@@ -802,6 +860,20 @@ interface StoreState {
    * navigation clears it (see store/reducers/workspace/records).
    */
   'records.filing.intent': ImageRecordMeta | null;
+  /**
+   * The clinical notes of this patient's visits, keyed by the visit's timepoint
+   * label exactly as the imaging records carry it — trimmed, and `''` for the
+   * images that carry no label at all (the same key
+   * `utils/records#groupRecordsByTimepoint` groups on, via
+   * `utils/visitNotes#getVisitNoteKey`).
+   *
+   * Part of the patient's **project**, so it is saved, re-opened and exported
+   * with the films it belongs to (see store/middleware/project and the wceph
+   * format's `visitNotes`). A key with no visit on file is not dropped: the
+   * dashboard surfaces it rather than deleting a clinician's entry because a
+   * visit was relabelled. @see VisitNote
+   */
+  'records.notes': { [timepointKey: string]: VisitNote };
   'workspaces.order': string[];
   'workspaces.activeWorkspaceId': string | null;
   'workspaces.settings': {
@@ -1212,6 +1284,47 @@ interface Events {
    */
   SET_RECORD_FILING_INTENT: {
     intent: ImageRecordMeta | null;
+  };
+  /**
+   * Write a visit's clinical note — an **append**: the fields are stored as a
+   * new version beside the ones already on file, and nothing already written is
+   * changed or removed. @see VisitNote
+   *
+   * `savedAt` travels in the payload so the reducer stays a pure function of its
+   * input (the clock is read by the surface that saves).
+   */
+  SAVE_VISIT_NOTE: {
+    /** Timepoint key of the visit — @see utils/visitNotes#getVisitNoteKey */
+    timepoint: string;
+    fields: VisitNoteFields;
+    /** Epoch ms this version was saved. */
+    savedAt: number;
+  };
+  /**
+   * Move a whole note — every version of it — from one timepoint key to
+   * another, for the case a visit was relabelled after its note was written and
+   * the entry is left pointing at a label no image carries any more.
+   *
+   * The note's own content and its amendment trail travel unchanged: re-filing
+   * says which visit an entry belongs to, and is not itself an amendment of what
+   * it says. Refused when the destination already holds a note, so nothing a
+   * clinician wrote is ever overwritten by a move.
+   */
+  REFILE_VISIT_NOTE: {
+    from: string;
+    to: string;
+  };
+  /**
+   * Load a project's visit notes wholesale — the import path of the wceph
+   * format (see utils/importers/wceph/v1/import).
+   *
+   * Merged into what is open, and it never replaces a note already on file: an
+   * imported file filling in the notes of visits that have none is a record
+   * being completed, while one silently overwriting an entry the clinician wrote
+   * in this chart would be data loss with no trail.
+   */
+  LOAD_VISIT_NOTES: {
+    notes: { [timepointKey: string]: VisitNote };
   };
   /** Set the active analysis for a specific image. */
   SET_ACTIVE_ANALYSIS_REQUESTED: {

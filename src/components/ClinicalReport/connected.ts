@@ -19,6 +19,10 @@ import {
   getImageCaptureDate,
 } from 'store/reducers/workspace/image';
 import { getActivePatient } from 'store/reducers/patients';
+// The visit's own clinical note — the practice's words, printed in the notes area
+// of the sheet rather than left as blank rules (see `props#visitNote`).
+import { getVisitNotes } from 'store/reducers/workspace/records';
+import { getCurrentVisitNote } from 'utils/visitNotes';
 
 import map from 'lodash/map';
 import keyBy from 'lodash/keyBy';
@@ -40,6 +44,7 @@ const mapStateToProps =
         imageType: null,
         timepoint: null,
         captureDate: null,
+        visitNote: null,
         manualLandmarks: EMPTY_MANUAL,
         scaleFactor: null,
         needsScaleForLinear: false,
@@ -60,6 +65,11 @@ const mapStateToProps =
       imageType: (image && image.type) || null,
       timepoint: getImageTimepoint(state)(imageId),
       captureDate: getImageCaptureDate(state)(imageId),
+      // The note of the *visit* this film belongs to, keyed by its timepoint
+      // label — so every film of one visit reports the one entry.
+      visitNote: getCurrentVisitNote(
+        getVisitNotes(state), getImageTimepoint(state)(imageId),
+      ),
       manualLandmarks: getManualLandmarks(state)(imageId),
       scaleFactor: getScaleFactor(state)(imageId),
       needsScaleForLinear: hasUnreportableLinearMeasurements(state)(imageId),

@@ -38,6 +38,17 @@ export const setRecordsDashboardShown = createActionCreator('SET_RECORDS_DASHBOA
 // empty slot on the dashboard opens an upload form that is already filled in.
 export const setRecordFilingIntent = createActionCreator('SET_RECORD_FILING_INTENT');
 
+// A visit's clinical note — what the patient came for, the diagnosis, the plan
+// and what is in the mouth, in the clinician's own words. Saving is an append:
+// the note keeps every version it has ever held, so an amended entry says so and
+// can be read as it stood. @see VisitNote
+export const saveVisitNote = createActionCreator('SAVE_VISIT_NOTE');
+// Move a note to the visit it belongs to, with its trail — for an entry left
+// pointing at a timepoint label no image carries any more.
+export const refileVisitNote = createActionCreator('REFILE_VISIT_NOTE');
+// Notes arriving with an imported project file (never overwriting one on file).
+export const loadVisitNotes = createActionCreator('LOAD_VISIT_NOTES');
+
 // Patient records (name + chart id + demographics).
 export const addPatient = createActionCreator('ADD_PATIENT_REQUESTED');
 export const updatePatient = createActionCreator('UPDATE_PATIENT_REQUESTED');

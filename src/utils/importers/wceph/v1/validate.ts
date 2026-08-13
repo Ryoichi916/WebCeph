@@ -62,6 +62,7 @@ enum ValidationErrorType {
   INVALID_SKIPPED_STEPS,
   INVALID_IMAGE_NAME,
   INVALID_RECORD_METADATA,
+  INVALID_VISIT_NOTES,
 }
 
 const getMessageForError = (type: ValidationErrorType, _data?: any) => {
@@ -175,6 +176,40 @@ const rules: Array<[
       });
     },
     createErrorMaker(ValidationErrorType.INVALID_RECORD_METADATA),
+    undefined,
+  ],
+  [
+    // The clinical notes of the visits (@see WCephJSON#visitNotes). Optional, so
+    // every file written before the record had a written half keeps importing;
+    // when present, each note must hold at least one version, each version must
+    // carry a numeric timestamp, and each of the five fields must be a string.
+    //
+    // Text is validated as text and never inspected further: what a clinician
+    // wrote is not this validator's business, and a note is not rejected for
+    // saying something an app did not expect.
+    ({ visitNotes }) => {
+      if (isUndefined(visitNotes)) {
+        return true;
+      }
+      if (!isPlainObject(visitNotes)) {
+        return false;
+      }
+      return every(values(visitNotes), (note: any) => (
+        isPlainObject(note) &&
+        Array.isArray(note.entries) &&
+        note.entries.length > 0 &&
+        every(note.entries, (entry: any) => (
+          isPlainObject(entry) &&
+          isNumber(entry.savedAt) &&
+          isPlainObject(entry.fields) &&
+          every(
+            ['chiefComplaint', 'diagnosis', 'plan', 'appliance', 'note'],
+            (field) => isString(entry.fields[field]),
+          )
+        ))
+      ));
+    },
+    createErrorMaker(ValidationErrorType.INVALID_VISIT_NOTES),
     undefined,
   ],
   [

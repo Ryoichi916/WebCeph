@@ -1,0 +1,311 @@
+import * as React from 'react';
+
+import * as cx from 'classnames';
+
+import IconEdit from 'material-ui/svg-icons/image/edit';
+import IconNote from 'material-ui/svg-icons/action/assignment';
+
+import {
+  VisitNoteReading,
+  filledVisitNoteFields,
+  formatVisitNoteProvenance,
+  formatVisitNoteStamp,
+  readVisitNote,
+} from 'utils/visitNotes';
+
+const classes = require('./visitnote.scss');
+
+const iconStyle: React.CSSProperties = { width: 15, height: 15 };
+
+export interface VisitNoteBlockProps {
+  /**
+   * The visit this note belongs to, as the record labels it — used in the
+   * controls' accessible names and tooltips so a press on a page of six visits
+   * says which visit it writes about.
+   */
+  visitName: string;
+  /** The stored note of this visit, or undefined when nothing is on file. */
+  note: VisitNote | undefined;
+  /** Opens the editor on this visit (write a first entry, or amend the current). */
+  onEdit(): any;
+}
+
+interface State {
+  /** Whether the earlier versions of an amended note are expanded. */
+  isHistoryShown: boolean;
+}
+
+/**
+ * A visit's **clinical note**, as the first row of the visit's own panel: what
+ * the patient came for, what was found, what was decided, and what is in the
+ * mouth — beside the films those decisions were made on.
+ *
+ * This is the half of a patient record the app had nowhere to keep: a case could
+ * hold nine films, ninety-one measurements and no statement of what anybody had
+ * decided. It is deliberately the *first* row of the visit block rather than a
+ * footnote under the images, because that is the order a chart entry is read in.
+ *
+ * Three things it does not do, all of them on purpose:
+ *
+ * - It writes nothing. Every word shown here was typed by a clinician; a field
+ *   nobody filled in is simply absent, and a visit nobody has written about says
+ *   so in one quiet line ("No note recorded for this visit").
+ * - It hides nothing. An amended entry states that it was amended, when, and how
+ *   often, and its earlier versions are readable in place, labelled as earlier
+ *   versions — a clinical record is not silently rewritten.
+ * - It has no delete. The editor can empty an entry (that is a retraction, and it
+ *   is kept in the trail like any other amendment), but nothing removes what was
+ *   written.
+ *
+ * Printed with the visit, in the same order, with the controls dropped and the
+ * provenance line kept — see `visitnote.scss`'s print block.
+ */
+export default class VisitNoteBlock
+  extends React.PureComponent<VisitNoteBlockProps, State> {
+  state: State = { isHistoryShown: false };
+
+  render() {
+    const { visitName, note, onEdit } = this.props;
+    const reading = readVisitNote(note);
+    if (reading === null) {
+      return (
+        <div className={cx(classes.note, classes.note__empty)}>
+          <span className={classes.note_key}>
+            <IconNote color="#A9B4BE" style={iconStyle} />
+            <span>Clinical note</span>
+          </span>
+          {/* The quiet empty state: a statement of the record, not a task the
+              visit is failing. It prints too — on a filed sheet "no note
+              recorded" is a fact worth having, and it is the same wording. */}
+          <span className={classes.note_none}>No note recorded for this visit</span>
+          <span className={classes.note_spacer} />
+          <button
+            type="button"
+            className={classes.note_write}
+            title={`Write the clinical note for ${visitName}`}
+            aria-label={`Write the clinical note for ${visitName}`}
+            onClick={onEdit}
+          >
+            <IconEdit color="currentColor" style={iconStyle} />
+            <span>Write note</span>
+          </button>
+        </div>
+      );
+    }
+    return (
+      <div className={classes.note}>
+        <div className={classes.note_head}>
+          <span className={classes.note_key}>
+            <IconNote color="#52616F" style={iconStyle} />
+            <span>Clinical note</span>
+          </span>
+          {/* When it was written, and — only when it has been — that it was
+              amended, how often, and when last. On screen and on paper. */}
+          <span className={classes.note_stamp}>
+            {formatVisitNoteProvenance(reading)}
+          </span>
+          <span className={classes.note_spacer} />
+          <button
+            type="button"
+            className={classes.note_write}
+            title={`Amend the clinical note for ${visitName} — the current ` +
+              `entry is kept and the amendment is dated`}
+            aria-label={`Amend the clinical note for ${visitName}`}
+            onClick={onEdit}
+          >
+            <IconEdit color="currentColor" style={iconStyle} />
+            <span>Amend note</span>
+          </button>
+        </div>
+        <dl className={classes.note_fields}>
+          {filledVisitNoteFields(reading.current).map(({ option, value }) => (
+            <div key={option.key} className={classes.note_field}>
+              <dt className={classes.note_label}>{option.shortLabel}</dt>
+              {/* `white-space: pre-wrap` in the stylesheet: a clinician's own
+                  line breaks are part of what they wrote. */}
+              <dd className={classes.note_value}>{value}</dd>
+            </div>
+          ))}
+        </dl>
+        {reading.amendmentCount > 0 ? this.renderHistory(reading) : null}
+      </div>
+    );
+  }
+
+  /**
+   * The versions this entry said before the current one — newest superseded
+   * first, each dated and named as an earlier version.
+   *
+   * Collapsed by default and labelled with a count, because the note that matters
+   * on a records page is the one that stands; expanded, it is the whole trail,
+   * which is what makes "amended twice" a checkable claim rather than a badge.
+   */
+  private renderHistory = (reading: VisitNoteReading) => {
+    const { isHistoryShown } = this.state;
+    const count = reading.superseded.length;
+    return (
+      <div className={classes.note_history}>
+        <button
+          type="button"
+          className={classes.note_history_toggle}
+          aria-expanded={isHistoryShown}
+          onClick={this.toggleHistory}
+        >
+          <span
+            className={cx(classes.note_history_caret, {
+              [classes.note_history_caret__open]: isHistoryShown,
+            })}
+            aria-hidden="true"
+          />
+          <span>
+            {isHistoryShown ? 'Hide' : 'Show'}
+            {count === 1
+              ? ' the earlier version of this note'
+              : ` the ${count} earlier versions of this note`}
+          </span>
+        </button>
+        {isHistoryShown ? (
+          <ol className={classes.note_versions}>
+            {reading.superseded.map((version) => (
+              <li key={version.savedAt} className={classes.note_version}>
+                <div className={classes.note_version_head}>
+                  {/* Named plainly: what this said, from when to when. */}
+                  <span className={classes.note_version_label}>
+                    Earlier version
+                  </span>
+                  <span className={classes.note_version_stamp}>
+                    {`written ${formatVisitNoteStamp(version.savedAt)}, ` +
+                      `replaced ${formatVisitNoteStamp(version.supersededAt)}`}
+                  </span>
+                </div>
+                {/* Which fields the amendment that replaced it changed — read off
+                    the two versions themselves, never a stored claim about them. */}
+                {version.changed.length > 0 ? (
+                  <p className={classes.note_version_changed}>
+                    {`Amendment changed: ${version.changed
+                      .map(({ shortLabel }) => shortLabel.toLowerCase())
+                      .join(', ')}`}
+                  </p>
+                ) : null}
+                <dl className={classes.note_fields}>
+                  {filledVisitNoteFields(version.fields).length === 0 ? (
+                    <div className={classes.note_field}>
+                      <dd className={classes.note_value_empty}>
+                        This version held no text.
+                      </dd>
+                    </div>
+                  ) : filledVisitNoteFields(version.fields).map(
+                    ({ option, value }) => (
+                      <div key={option.key} className={classes.note_field}>
+                        <dt className={classes.note_label}>{option.shortLabel}</dt>
+                        <dd className={classes.note_value}>{value}</dd>
+                      </div>
+                    ),
+                  )}
+                </dl>
+              </li>
+            ))}
+          </ol>
+        ) : null}
+      </div>
+    );
+  };
+
+  private toggleHistory = () =>
+    this.setState(({ isHistoryShown }) => ({ isHistoryShown: !isHistoryShown }));
+}
+
+export interface UnmatchedVisitNotesProps {
+  /**
+   * The notes whose timepoint key no image on file carries, keyed exactly as they
+   * are stored. Never empty when this is rendered.
+   */
+  notes: Array<{ key: string; note: VisitNote }>;
+  /** The visits on file that hold no note of their own, in the record's order. */
+  destinations: Array<{ key: string; label: string }>;
+  /** Re-file a note onto one of those visits, with its whole trail. */
+  onRefile(from: string, to: string): any;
+}
+
+/**
+ * The notes of this chart that no visit on file carries a label for — an entry
+ * written at "T2", then relabelled "T2 Progress"; an entry whose visit's images
+ * were all removed.
+ *
+ * It exists because the alternative is worse in exactly the way a records system
+ * must not be: keyed by the visit's label, a note *can* be left pointing at a
+ * label nothing carries, and an app that quietly dropped it would delete a
+ * clinician's diagnosis to tidy up after a spelling correction. So nothing is
+ * deleted and nothing is guessed — the entry is listed with the label it was
+ * written under, and re-filing it onto a visit is an explicit press that names
+ * that visit.
+ *
+ * Only visits with **no note of their own** are offered: moving an entry onto a
+ * visit that already has one would have to overwrite it, and no path in this app
+ * overwrites a clinician's note.
+ */
+export const UnmatchedVisitNotes = (
+  { notes, destinations, onRefile }: UnmatchedVisitNotesProps,
+) => (
+  <section className={classes.orphans} aria-label="Notes with no visit on file">
+    <div className={classes.orphans_head}>
+      <h4 className={classes.orphans_title}>
+        {notes.length === 1
+          ? '1 note is not filed at any visit on file'
+          : `${notes.length} notes are not filed at any visit on file`}
+      </h4>
+      <p className={classes.orphans_hint}>
+        Each was written against the timepoint named below, and no image on file
+        carries that label now — a visit relabelled, or its images removed. Nothing
+        has been deleted: file each note at the visit it belongs to.
+      </p>
+    </div>
+    {notes.map(({ key, note }) => {
+      const reading = readVisitNote(note);
+      if (reading === null) {
+        return null;
+      }
+      return (
+        <div key={key} className={classes.orphan}>
+          <span className={classes.orphan_key}>
+            {key !== '' ? key : (
+              <span className={classes.orphan_key_unset}>
+                Written for images with no timepoint label
+              </span>
+            )}
+            {' · '}
+            <span className={classes.note_stamp}>
+              {formatVisitNoteProvenance(reading)}
+            </span>
+          </span>
+          <dl className={classes.note_fields}>
+            {filledVisitNoteFields(reading.current).map(({ option, value }) => (
+              <div key={option.key} className={classes.note_field}>
+                <dt className={classes.note_label}>{option.shortLabel}</dt>
+                <dd className={classes.note_value}>{value}</dd>
+              </div>
+            ))}
+          </dl>
+          {destinations.length > 0 ? (
+            <div className={classes.orphan_refile}>
+              <span className={classes.orphan_refile_label}>File this note at</span>
+              {destinations.map((destination) => (
+                <button
+                  key={destination.key}
+                  type="button"
+                  className={classes.orphan_pill}
+                  title={`Move this note, with its amendment trail, to ` +
+                    `${destination.label}`}
+                  aria-label={`File this note at ${destination.label}`}
+                  onClick={() => onRefile(key, destination.key)}
+                >
+                  {destination.label}
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      );
+    })}
+  </section>
+);

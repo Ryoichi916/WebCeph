@@ -33,6 +33,12 @@ export interface StateProps {
    * it instead of creating a second empty tile beside it.
    */
   emptyWorkspaceId: string | null;
+  /**
+   * The written half of the record: one clinical note per visit, keyed by the
+   * visit's timepoint label (@see StoreEntries['records.notes']). Read through
+   * `utils/visitNotes` — the dashboard never indexes a note's versions itself.
+   */
+  notes: { [timepointKey: string]: VisitNote };
 }
 
 export interface DispatchProps {
@@ -116,6 +122,22 @@ export interface DispatchProps {
    * morning (see `TrendChart`).
    */
   onSetTrendPlot(patientId: string, symbols: string[] | null): any;
+  /**
+   * Write or amend a visit's clinical note. `timepoint` is the visit's note key
+   * (@see utils/visitNotes#getVisitNoteKey).
+   *
+   * Always an append: the entry on file is kept and the new version is dated, so
+   * an amended note can be read as it stands *and* as it stood. Nothing in this
+   * component or its dispatch can remove a version.
+   */
+  onSaveVisitNote(timepoint: string, fields: VisitNoteFields): any;
+  /**
+   * Move a note — with its whole amendment trail — onto the visit it belongs to,
+   * for an entry left pointing at a label no image carries any more (see
+   * `UnmatchedVisitNotes`). Never offered towards a visit that already holds a
+   * note.
+   */
+  onRefileVisitNote(from: string, to: string): any;
 }
 
 export interface OwnProps {

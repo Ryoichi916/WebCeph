@@ -38,6 +38,13 @@ import {
   formatAgeFull, formatSexFull, getAnalysisContext,
 } from 'utils/patient';
 import { parseCaptureDate, formatCaptureDate } from 'utils/records';
+// The visit's clinical note, printed in the notes area of the sheet: the same
+// helpers the records dashboard reads it with, so one entry reads one way on both
+// documents (see `renderClinicalNotes`).
+import {
+  filledVisitNoteFields,
+  formatVisitNoteProvenance,
+} from 'utils/visitNotes';
 // A saved PDF is named after the document title, so every printable view titles
 // itself from the patient rather than from the image's file name.
 import { printDocumentTitle } from 'utils/printTitle';
@@ -93,6 +100,17 @@ const NOTE_RULES: number[] = [0, 1, 2, 3, 4, 5];
  * lands *under* the last table, and growing it there would buy a whole extra
  * side of paper for nothing — which is exactly what this report used to do.
  */
+/**
+ * Ruled lines under an entry that is **already printed** above them.
+ *
+ * Four, in two columns (two lines each): the area is then for what a reader adds
+ * to the practice's own note by hand, not a blank note of its own — and the block
+ * has to leave room for the entry it follows without pushing the certification
+ * onto another side. An odd count left one column of the pair short, which on a
+ * signed document reads as a printing fault.
+ */
+const NOTE_RULES_ADDENDUM: number[] = [0, 1, 2, 3];
+
 const NOTE_RULES_SHEET: number[] = [
   0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11,
   12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
@@ -837,23 +855,10 @@ export default class ClinicalReport extends React.PureComponent<Props, State> {
                 [classes.tail__own_sheet]: isCombined,
               })}
             >
-              {/* Ruled space for the clinician's own reading of the numbers.
-                  A referral sheet needs somewhere to write it, and it gives
-                  the closing block height instead of leaving the foot of the
-                  last page empty. */}
-              <div className={classes.notes}>
-                <div className={classes.section_label}>
-                  Clinical notes &amp; plan
-                  <span className={classes.notes_hint}>
-                    to be completed by hand
-                  </span>
-                </div>
-                <div className={classes.notes_rules}>
-                  {(isCombined ? NOTE_RULES_SHEET : NOTE_RULES).map((i) => (
-                    <span key={i} className={classes.notes_rule} />
-                  ))}
-                </div>
-              </div>
+              {/* The clinician's own reading of the case: the entry recorded for
+                  this film's visit where the record holds one, and ruled space to
+                  write in either way. @see renderClinicalNotes */}
+              {this.renderClinicalNotes(isCombined)}
 
               {/* Certification and footer travel together. The two are the
                   document's signature, and a sheet carrying nothing but
@@ -926,6 +931,82 @@ export default class ClinicalReport extends React.PureComponent<Props, State> {
               </div>
             </div>
           </div>
+        </div>
+      </div>
+    );
+  }
+
+  /**
+   * The sheet's "Clinical notes & plan" area.
+   *
+   * Where the record holds a clinical note for **this film's visit**, that entry
+   * is what fills it: the practice's own statement of the case — chief complaint,
+   * diagnosis, plan, appliance — printed above the ruled lines instead of a page of
+   * blank rules beside ninety-one measurements the app worked out for itself. It is
+   * the same entry the records sheet prints, read from the same store, so a report
+   * and a case sheet filed together cannot say two different things.
+   *
+   * It is attributed and dated on the sheet, and an amended entry says so (see
+   * `formatVisitNoteProvenance`) — a printed copy of a clinical note that does not
+   * state when it was written, or that it has been amended since, is not a copy of
+   * a clinical record.
+   *
+   * Nothing is composed here: a field the clinician left empty is absent, and where
+   * the visit has no entry at all the area is exactly the ruled writing space it
+   * has always been. The rules are kept in both cases — a report that goes out is
+   * annotated by hand — but a printed entry takes the shorter set: the writing area
+   * is for additions to what is already there, not a second blank note.
+   */
+  private renderClinicalNotes(isCombined: boolean) {
+    const { visitNote, timepoint } = this.props;
+    const fields = visitNote !== null
+      ? filledVisitNoteFields(visitNote.current) : [];
+    const rules = visitNote !== null
+      ? (isCombined ? NOTE_RULES : NOTE_RULES_ADDENDUM)
+      : (isCombined ? NOTE_RULES_SHEET : NOTE_RULES);
+    return (
+      <div className={classes.notes}>
+        <div className={classes.section_label}>
+          Clinical notes &amp; plan
+          <span className={classes.notes_hint}>
+            {visitNote === null
+              ? 'to be completed by hand'
+              : ('recorded in this patient\'s record' +
+                (timepoint !== null && timepoint.trim() !== ''
+                  ? ` at ${timepoint.trim()}` : ''))}
+          </span>
+        </div>
+        {visitNote !== null ? (
+          <div className={classes.note_entry}>
+            <div className={classes.note_stamp}>
+              {formatVisitNoteProvenance(visitNote)}
+            </div>
+            {fields.length > 0 ? (
+              <dl className={classes.note_fields}>
+                {fields.map(({ option, value }) => (
+                  <div key={option.key} className={classes.note_field}>
+                    <dt className={classes.note_label}>{option.label}</dt>
+                    <dd className={classes.note_value}>{value}</dd>
+                  </div>
+                ))}
+              </dl>
+            ) : (
+              /* An entry every field of which has been cleared — a retraction,
+                 which the record keeps and this sheet must not print as blank. */
+              <p className={classes.note_retracted}>
+                Every field of this entry has been cleared. The versions it held
+                before remain in the patient's record.
+              </p>
+            )}
+            {fields.length > 0 ? (
+              <div className={classes.notes_more}>Further notes</div>
+            ) : null}
+          </div>
+        ) : null}
+        <div className={classes.notes_rules}>
+          {rules.map((i) => (
+            <span key={i} className={classes.notes_rule} />
+          ))}
         </div>
       </div>
     );

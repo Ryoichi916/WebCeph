@@ -1,7 +1,10 @@
 import { handleActions } from 'utils/store';
 
+import { appendVisitNoteEntry, readVisitNote } from 'utils/visitNotes';
+
 const KEY_DASHBOARD_SHOWN: StoreKey = 'records.dashboard.isShown';
 const KEY_FILING_INTENT: StoreKey = 'records.filing.intent';
+const KEY_VISIT_NOTES: StoreKey = 'records.notes';
 
 const reducers: Partial<ReducerMap> = {
   [KEY_DASHBOARD_SHOWN]: handleActions<typeof KEY_DASHBOARD_SHOWN>({
@@ -45,6 +48,73 @@ const reducers: Partial<ReducerMap> = {
     SET_ACTIVE_PATIENT_REQUESTED: () => null,
     OPEN_PATIENT_REQUESTED: () => null,
   }, null),
+  /**
+   * The clinical notes of this patient's visits — the written half of the
+   * record, keyed by timepoint label. @see StoreEntries['records.notes']
+   *
+   * Every write here is an **append** (see `appendVisitNoteEntry`): amending a
+   * note adds a version beside the ones already stored, and no action in this
+   * app removes one. Two consequences worth stating: a save that changed nothing
+   * leaves the note exactly as it was, and re-filing a note carries its whole
+   * trail across to the new key rather than starting it again.
+   */
+  [KEY_VISIT_NOTES]: handleActions<typeof KEY_VISIT_NOTES>({
+    SAVE_VISIT_NOTE: (state, { payload: { timepoint, fields, savedAt } }) => {
+      const next = appendVisitNoteEntry(state[timepoint], fields, savedAt);
+      if (next === state[timepoint]) {
+        return state;
+      }
+      if (next === undefined) {
+        // Nothing was on file and nothing was written: there is no note to store.
+        return state;
+      }
+      return { ...state, [timepoint]: next };
+    },
+    /**
+     * Move a note to the visit it belongs to, with its whole amendment trail.
+     * Refused where the destination already holds a note — a move must never be
+     * able to overwrite an entry somebody wrote.
+     */
+    REFILE_VISIT_NOTE: (state, { payload: { from, to } }) => {
+      const note = state[from];
+      if (readVisitNote(note) === null || from === to) {
+        return state;
+      }
+      if (readVisitNote(state[to]) !== null) {
+        return state;
+      }
+      const next = { ...state, [to]: note };
+      delete next[from];
+      return next;
+    },
+    /**
+     * Notes arriving with an imported wceph file: they fill in the visits that
+     * have none and leave every note already on file untouched.
+     * @see Events['LOAD_VISIT_NOTES']
+     */
+    LOAD_VISIT_NOTES: (state, { payload: { notes } }) => {
+      const next = { ...state };
+      Object.keys(notes).forEach((key) => {
+        if (readVisitNote(next[key]) === null &&
+          readVisitNote(notes[key]) !== null) {
+          next[key] = notes[key];
+        }
+      });
+      return next;
+    },
+    /**
+     * A loaded project's notes replace whatever is in memory — and a project
+     * saved before this key existed carries none, which must read as "this
+     * patient has no notes" and not as the previous patient's notes still being
+     * on screen. So the fallback is empty rather than `state`.
+     */
+    LOAD_PROJECT_SUCCEEDED: (_, { payload }) => {
+      const notes = payload['records.notes'];
+      return notes !== undefined ? notes : {};
+    },
+    // Leaving a patient takes their notes with them, for the same reason.
+    SET_ACTIVE_PATIENT_REQUESTED: () => ({}),
+  }, {}),
 };
 
 export default reducers;
@@ -58,3 +128,10 @@ export const isRecordsDashboardShown = (state: StoreState) =>
  */
 export const getRecordFilingIntent = (state: StoreState) =>
   state[KEY_FILING_INTENT];
+
+/**
+ * Every visit note of the open patient, keyed by timepoint label. Read through
+ * `utils/visitNotes` — `getCurrentVisitNote(notes, timepoint)` for the note of
+ * one visit, `readVisitNote` for its amendment trail.
+ */
+export const getVisitNotes = (state: StoreState) => state[KEY_VISIT_NOTES] || {};
