@@ -6,10 +6,16 @@ import IconEdit from 'material-ui/svg-icons/image/edit';
 import IconNote from 'material-ui/svg-icons/action/assignment';
 
 import {
+  VISIT_NOTE_FIELDS,
+  VISIT_NOTE_RETRACTED_STATEMENT,
+  VisitNoteFieldOption,
   VisitNoteReading,
   filledVisitNoteFields,
   formatVisitNoteProvenance,
+  formatVisitNoteRefiling,
   formatVisitNoteStamp,
+  formatVisitNoteVersionLabel,
+  getVisitNoteVisitName,
   readVisitNote,
 } from 'utils/visitNotes';
 
@@ -33,6 +39,14 @@ export interface VisitNoteBlockProps {
 interface State {
   /** Whether the earlier versions of an amended note are expanded. */
   isHistoryShown: boolean;
+  /**
+   * Which earlier versions are being read **whole**, keyed by the moment they
+   * were written. A superseded version otherwise shows only the fields the
+   * amendment changed (see `renderHistory`): an entry amended twice is the same
+   * fifteen lines three times, and the volume of near-identical prose is what
+   * makes a trail unreadable — not the difficulty of spotting the change.
+   */
+  openVersions: { [savedAt: number]: true };
 }
 
 /**
@@ -55,14 +69,16 @@ interface State {
  *   versions — a clinical record is not silently rewritten.
  * - It has no delete. The editor can empty an entry (that is a retraction, and it
  *   is kept in the trail like any other amendment), but nothing removes what was
- *   written.
+ *   written — and a retracted entry *says* it has been cleared
+ *   (`VISIT_NOTE_RETRACTED_STATEMENT`) rather than showing a provenance line with
+ *   no words under it.
  *
  * Printed with the visit, in the same order, with the controls dropped and the
  * provenance line kept — see `visitnote.scss`'s print block.
  */
 export default class VisitNoteBlock
   extends React.PureComponent<VisitNoteBlockProps, State> {
-  state: State = { isHistoryShown: false };
+  state: State = { isHistoryShown: false, openVersions: {} };
 
   render() {
     const { visitName, note, onEdit } = this.props;
@@ -92,6 +108,11 @@ export default class VisitNoteBlock
         </div>
       );
     }
+    const fields = filledVisitNoteFields(reading.current);
+    // Where this entry was written, when it has since been moved here. One line,
+    // on screen and on paper: an entry re-filed onto another visit's day must not
+    // read as though it had been written that day.
+    const refiling = formatVisitNoteRefiling(reading, visitName);
     return (
       <div className={classes.note}>
         <div className={classes.note_head}>
@@ -99,8 +120,8 @@ export default class VisitNoteBlock
             <IconNote color="#52616F" style={iconStyle} />
             <span>Clinical note</span>
           </span>
-          {/* When it was written, and — only when it has been — that it was
-              amended, how often, and when last. On screen and on paper. */}
+          {/* When it was written, who by, and — only when it has been — that it
+              was amended, how often, and when last. On screen and on paper. */}
           <span className={classes.note_stamp}>
             {formatVisitNoteProvenance(reading)}
           </span>
@@ -117,16 +138,31 @@ export default class VisitNoteBlock
             <span>Amend note</span>
           </button>
         </div>
-        <dl className={classes.note_fields}>
-          {filledVisitNoteFields(reading.current).map(({ option, value }) => (
-            <div key={option.key} className={classes.note_field}>
-              <dt className={classes.note_label}>{option.shortLabel}</dt>
-              {/* `white-space: pre-wrap` in the stylesheet: a clinician's own
-                  line breaks are part of what they wrote. */}
-              <dd className={classes.note_value}>{value}</dd>
-            </div>
-          ))}
-        </dl>
+        {refiling !== null ? (
+          <p className={classes.note_refiled}>{refiling}</p>
+        ) : null}
+        {fields.length === 0 ? (
+          /* Every field of the entry that stands has been cleared — a retraction,
+             which the record keeps and this block must not render as *nothing*:
+             the head above it says the entry exists and that it was amended, and a
+             visit whose panel then showed a provenance line and no words at all
+             read as a rendering fault on screen and on the filed sheet. The same
+             sentence the clinical report prints, from the same constant. */
+          <p className={classes.note_retracted}>
+            {VISIT_NOTE_RETRACTED_STATEMENT}
+          </p>
+        ) : (
+          <dl className={classes.note_fields}>
+            {fields.map(({ option, value }) => (
+              <div key={option.key} className={classes.note_field}>
+                <dt className={classes.note_label}>{option.shortLabel}</dt>
+                {/* `white-space: pre-wrap` in the stylesheet: a clinician's own
+                    line breaks are part of what they wrote. */}
+                <dd className={classes.note_value}>{value}</dd>
+              </div>
+            ))}
+          </dl>
+        )}
         {reading.amendmentCount > 0 ? this.renderHistory(reading) : null}
       </div>
     );
@@ -139,6 +175,17 @@ export default class VisitNoteBlock
    * Collapsed by default and labelled with a count, because the note that matters
    * on a records page is the one that stands; expanded, it is the whole trail,
    * which is what makes "amended twice" a checkable claim rather than a badge.
+   *
+   * **A superseded version shows what the amendment changed, not the whole of
+   * itself.** Reprinting every field of every version put the same fifteen lines
+   * on the page three times for an entry amended twice — measured at over 1000px
+   * of one visit's panel, about two thirds of it word-for-word the entry directly
+   * above — and no marker on a changed field solves that, because the cost is the
+   * scrolling, not the finding. So each version renders the fields the amendment
+   * that replaced it touched, names the ones it did not in one muted line, and
+   * carries its own control for reading the version whole. What is *not* reduced
+   * is the record: every version, every field and every stamp is still here, one
+   * press away, and the press is on the version itself.
    */
   private renderHistory = (reading: VisitNoteReading) => {
     const { isHistoryShown } = this.state;
@@ -166,53 +213,177 @@ export default class VisitNoteBlock
         </button>
         {isHistoryShown ? (
           <ol className={classes.note_versions}>
-            {reading.superseded.map((version) => (
-              <li key={version.savedAt} className={classes.note_version}>
-                <div className={classes.note_version_head}>
-                  {/* Named plainly: what this said, from when to when. */}
-                  <span className={classes.note_version_label}>
-                    Earlier version
-                  </span>
-                  <span className={classes.note_version_stamp}>
-                    {`written ${formatVisitNoteStamp(version.savedAt)}, ` +
-                      `replaced ${formatVisitNoteStamp(version.supersededAt)}`}
-                  </span>
-                </div>
-                {/* Which fields the amendment that replaced it changed — read off
-                    the two versions themselves, never a stored claim about them. */}
-                {version.changed.length > 0 ? (
-                  <p className={classes.note_version_changed}>
-                    {`Amendment changed: ${version.changed
-                      .map(({ shortLabel }) => shortLabel.toLowerCase())
-                      .join(', ')}`}
-                  </p>
-                ) : null}
-                <dl className={classes.note_fields}>
-                  {filledVisitNoteFields(version.fields).length === 0 ? (
-                    <div className={classes.note_field}>
-                      <dd className={classes.note_value_empty}>
-                        This version held no text.
-                      </dd>
-                    </div>
-                  ) : filledVisitNoteFields(version.fields).map(
-                    ({ option, value }) => (
-                      <div key={option.key} className={classes.note_field}>
-                        <dt className={classes.note_label}>{option.shortLabel}</dt>
-                        <dd className={classes.note_value}>{value}</dd>
+            {reading.superseded.map((version) => {
+              // The fields the amendment that replaced this version changed, as a
+              // lookup — so each one can be marked *in the body* of the version it
+              // changed. Three near-identical blocks with one line naming the
+              // changed field above them is a diff the reader has to do by eye.
+              const changed: { [key: string]: true } = {};
+              version.changed.forEach(({ key }) => { changed[key] = true; });
+              // Read whole on request, and whole regardless where the trail's own
+              // reading of it is empty (a version the amendment matched exactly
+              // cannot happen through `appendVisitNoteEntry`, but a stored file
+              // says what it says and this must not render as a blank).
+              const isOpen = this.state.openVersions[version.savedAt] === true ||
+                version.changed.length === 0;
+              // The rows this version shows, in the catalogue's order: the changed
+              // fields always — including a field the amendment *added*, which
+              // holds nothing here and is stated as holding nothing rather than
+              // silently missing from the version it was added to — and the
+              // unchanged ones only when the version is being read whole.
+              const rows: Array<{
+                option: VisitNoteFieldOption;
+                value: string | null;
+                isChanged: boolean;
+              }> = [];
+              const unchanged: string[] = [];
+              VISIT_NOTE_FIELDS.forEach((option) => {
+                const value = version.fields[option.key].trim();
+                const isChanged = changed[option.key] === true;
+                if (value === '') {
+                  if (isChanged) {
+                    rows.push({ option, value: null, isChanged });
+                  }
+                  return;
+                }
+                if (isOpen || isChanged) {
+                  rows.push({ option, value, isChanged });
+                } else {
+                  unchanged.push(option.shortLabel);
+                }
+              });
+              const fields = filledVisitNoteFields(version.fields);
+              return (
+                <li key={version.savedAt} className={classes.note_version}>
+                  <div className={classes.note_version_head}>
+                    {/* Numbered, not merely called "earlier": two amendments can
+                        fall in the same second, and an ordinal is the one label
+                        that still puts the trail in order when they do. */}
+                    <span className={classes.note_version_label}>
+                      {formatVisitNoteVersionLabel(
+                        version.version, reading.versionCount,
+                      )}
+                    </span>
+                    <span className={classes.note_version_stamp}>
+                      {`written ${formatVisitNoteStamp(version.savedAt)}, ` +
+                        `replaced ${formatVisitNoteStamp(version.supersededAt)}`}
+                    </span>
+                    {version.author !== null ? (
+                      <span className={classes.note_version_stamp}>
+                        {`by ${version.author}`}
+                      </span>
+                    ) : null}
+                  </div>
+                  {/* Which fields the amendment that replaced it changed is stated
+                      in the body, on the fields themselves — never twice. The
+                      prose line that used to sit here ("Amendment changed: plan")
+                      printed the same fact 4px above the PLAN label carrying its
+                      own CHANGED tag; the marker on the field is the stronger of
+                      the two, so it is the one that stayed. */}
+                  <dl className={classes.note_fields}>
+                    {fields.length === 0 && rows.length === 0 ? (
+                      <div className={classes.note_field}>
+                        <dd className={classes.note_value_empty}>
+                          This version held no text.
+                        </dd>
                       </div>
-                    ),
-                  )}
-                </dl>
-              </li>
-            ))}
+                    ) : rows.map(({ option, value, isChanged }) => (
+                      <div key={option.key} className={classes.note_field}>
+                        {this.renderVersionLabel(option, isChanged)}
+                        {value !== null ? (
+                          <dd className={classes.note_value}>{value}</dd>
+                        ) : (
+                          <dd className={classes.note_value_unset}>
+                            Not written in this version.
+                          </dd>
+                        )}
+                      </div>
+                    ))}
+                  </dl>
+                  {/* The fields this version said exactly as the entry above it
+                      says them, named rather than reprinted — and the press that
+                      prints them. */}
+                  {unchanged.length > 0 ? (
+                    <div className={classes.note_version_rest}>
+                      <span className={classes.note_version_same}>
+                        {`${unchanged
+                          .map((label, i) => (i === 0 ? label : label.toLowerCase()))
+                          .join(', ')} unchanged`}
+                      </span>
+                      <button
+                        type="button"
+                        className={classes.note_version_toggle}
+                        aria-expanded={false}
+                        aria-label={`Show all fields of version ` +
+                          `${version.version} of this note`}
+                        onClick={this.openVersion(version.savedAt)}
+                      >
+                        Show the whole version
+                      </button>
+                    </div>
+                  ) : this.state.openVersions[version.savedAt] === true ? (
+                    <div className={classes.note_version_rest}>
+                      <button
+                        type="button"
+                        className={classes.note_version_toggle}
+                        aria-expanded
+                        aria-label={`Show only what changed in version ` +
+                          `${version.version} of this note`}
+                        onClick={this.closeVersion(version.savedAt)}
+                      >
+                        Show only what changed
+                      </button>
+                    </div>
+                  ) : null}
+                </li>
+              );
+            })}
           </ol>
         ) : null}
       </div>
     );
   };
 
+  /**
+   * A field's label inside an earlier version, marked where the amendment that
+   * replaced that version changed *this* field.
+   *
+   * The marker is what makes the trail readable at all: an entry amended twice is
+   * three blocks of near-identical text, and a reader who has to compare five
+   * fields by eye to find the sentence that moved is not reading a trail, they are
+   * proof-reading one. The word "changed" beside the label, not a colour alone.
+   */
+  private renderVersionLabel = (
+    option: VisitNoteFieldOption, isChanged: boolean,
+  ) => (
+    <dt
+      className={cx(classes.note_label, {
+        [classes.note_label__changed]: isChanged,
+      })}
+    >
+      {option.shortLabel}
+      {isChanged ? (
+        <span className={classes.note_changed_tag}>changed</span>
+      ) : null}
+    </dt>
+  );
+
   private toggleHistory = () =>
     this.setState(({ isHistoryShown }) => ({ isHistoryShown: !isHistoryShown }));
+
+  /** Read one earlier version whole — every field it held, changed or not. */
+  private openVersion = (savedAt: number) => () =>
+    this.setState(({ openVersions }) => ({
+      openVersions: { ...openVersions, [savedAt]: true as true },
+    }));
+
+  /** …and back to what the amendment changed. */
+  private closeVersion = (savedAt: number) => () =>
+    this.setState(({ openVersions }) => {
+      const next = { ...openVersions };
+      delete next[savedAt];
+      return { openVersions: next };
+    });
 }
 
 export interface UnmatchedVisitNotesProps {
@@ -269,8 +440,10 @@ export const UnmatchedVisitNotes = (
         <div key={key} className={classes.orphan}>
           <span className={classes.orphan_key}>
             {key !== '' ? key : (
+              /* One phrase for the unlabelled visit, from the one helper every
+                 surface names it through. @see getVisitNoteVisitName */
               <span className={classes.orphan_key_unset}>
-                Written for images with no timepoint label
+                {`Written for ${getVisitNoteVisitName(null)}`}
               </span>
             )}
             {' · '}
@@ -278,14 +451,20 @@ export const UnmatchedVisitNotes = (
               {formatVisitNoteProvenance(reading)}
             </span>
           </span>
-          <dl className={classes.note_fields}>
-            {filledVisitNoteFields(reading.current).map(({ option, value }) => (
-              <div key={option.key} className={classes.note_field}>
-                <dt className={classes.note_label}>{option.shortLabel}</dt>
-                <dd className={classes.note_value}>{value}</dd>
-              </div>
-            ))}
-          </dl>
+          {filledVisitNoteFields(reading.current).length === 0 ? (
+            <p className={classes.note_retracted}>
+              {VISIT_NOTE_RETRACTED_STATEMENT}
+            </p>
+          ) : (
+            <dl className={classes.note_fields}>
+              {filledVisitNoteFields(reading.current).map(({ option, value }) => (
+                <div key={option.key} className={classes.note_field}>
+                  <dt className={classes.note_label}>{option.shortLabel}</dt>
+                  <dd className={classes.note_value}>{value}</dd>
+                </div>
+              ))}
+            </dl>
+          )}
           {destinations.length > 0 ? (
             <div className={classes.orphan_refile}>
               <span className={classes.orphan_refile_label}>File this note at</span>

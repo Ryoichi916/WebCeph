@@ -124,10 +124,11 @@ export type WCephJSON = {
    * travels with the images themselves (`data[id].timepoint`), so a note lands on
    * the visit it was written about or on no visit at all — never on the wrong one.
    *
-   * Each note holds **every version ever saved**, oldest first. That is what
-   * makes an amended entry legible after a round trip: dropping all but the
-   * current version would export a clinical record that quietly claims never to
-   * have been changed. @see VisitNote
+   * Each note holds **every version ever saved**, oldest first, each with who
+   * wrote it and when. That is what makes an amended entry legible after a round
+   * trip: dropping all but the current version would export a clinical record that
+   * quietly claims never to have been changed, and dropping the authors would
+   * export one that cannot say who wrote any of it. @see VisitNote
    */
   visitNotes?: {
     [timepointKey: string]: {
@@ -141,7 +142,23 @@ export type WCephJSON = {
           appliance: string;
           note: string;
         };
+        /**
+         * Who wrote this version, as stamped when it was saved. Absent where the
+         * writing device had no clinician on file — and absent from every file
+         * written before entries carried an author, which import must therefore
+         * treat as "author not recorded" and never as a name to fill in.
+         * @see VisitNoteEntry.author
+         */
+        author?: string;
       }>;
+      /**
+       * The visit this note was **written for**, where it has since been re-filed
+       * at another one, and when it was moved. Travels with the note so a re-filed
+       * entry does not arrive reading as though it had been written at the visit
+       * it now sits under. @see VisitNote.refiledFrom
+       */
+      refiledFrom?: string;
+      refiledAt?: number;
     };
   };
 

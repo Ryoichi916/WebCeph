@@ -14,6 +14,7 @@ import {
   setScaleFactor,
   unsetScaleFactor,
   setImageProps,
+  refileVisitNote,
   setActiveWorkspace,
   removeWorkspace,
   closeImage,
@@ -29,6 +30,7 @@ import {
   canShowSummary,
 } from 'store/reducers/workspace/analyses';
 import { isPerformingBackgroundWork } from 'store/reducers/workspace/workers';
+import { getVisitNotes } from 'store/reducers/workspace/records';
 import { isProfilogramShown, getScale } from 'store/reducers/workspace/canvas';
 import {
   hasImage, getManualLandmarks, getAnalysisId, getScaleFactor,
@@ -60,6 +62,8 @@ const mapStateToProps =
     return {
       missingLandmarkCount,
       records,
+      // The written half of the record, for the record menu's correction dialog.
+      notes: getVisitNotes(state),
       record: record !== undefined ? record : null,
       // Auto-plot needs an image and an analysis whose manual steps define which
       // landmarks to place. The active predictor (see predictors/index.ts) does
@@ -139,6 +143,9 @@ const mapDispatchToProps =
     },
     // Exactly the paths the records dashboard and the read-only record viewer
     // use — one data path per record action, whatever surface it is invoked from.
+    onRefileVisitNote: (from: string, to: string) => {
+      dispatch(refileVisitNote({ from, to, refiledAt: new Date().getTime() }));
+    },
     onSaveRecordMeta: (meta: ImageRecordMeta) => {
       if (imageId !== null) {
         dispatch(setImageProps({

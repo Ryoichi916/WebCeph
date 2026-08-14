@@ -6,6 +6,7 @@ import * as cx from 'classnames';
 import { Helmet } from 'react-helmet';
 
 import map from 'lodash/map';
+import range from 'lodash/range';
 import filter from 'lodash/filter';
 
 import IconPrint from 'material-ui/svg-icons/action/print';
@@ -42,8 +43,11 @@ import { parseCaptureDate, formatCaptureDate } from 'utils/records';
 // helpers the records dashboard reads it with, so one entry reads one way on both
 // documents (see `renderClinicalNotes`).
 import {
+  VISIT_NOTE_RETRACTED_STATEMENT,
   filledVisitNoteFields,
   formatVisitNoteProvenance,
+  formatVisitNoteRefiling,
+  getVisitNoteVisitName,
 } from 'utils/visitNotes';
 // A saved PDF is named after the document title, so every printable view titles
 // itself from the patient rather than from the image's file name.
@@ -86,21 +90,6 @@ const classes = require('./style.scss');
 const NOTE_RULES: number[] = [0, 1, 2, 3, 4, 5];
 
 /**
- * Ruled lines when the closing block gets a **sheet of its own**.
- *
- * The combined report always ends on one — nine analyses never leave room for
- * the tail under the last table — and that sheet used to carry four short rules,
- * a signature row and 80 % white: the code above called it "a proper signature
- * page" and it read as a printer fault. Given a whole side of A4, the writing
- * area is what should fill it: twenty-four full-width rules at a real writing
- * pitch (see `.tail__own_sheet`), with the certification and the footer settled
- * at the foot of the sheet where a signature belongs.
- *
- * The single-analysis report keeps the six two-column rules above: its tail
- * lands *under* the last table, and growing it there would buy a whole extra
- * side of paper for nothing — which is exactly what this report used to do.
- */
-/**
  * Ruled lines under an entry that is **already printed** above them.
  *
  * Four, in two columns (two lines each): the area is then for what a reader adds
@@ -111,10 +100,94 @@ const NOTE_RULES: number[] = [0, 1, 2, 3, 4, 5];
  */
 const NOTE_RULES_ADDENDUM: number[] = [0, 1, 2, 3];
 
-const NOTE_RULES_SHEET: number[] = [
-  0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11,
-  12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
-];
+/**
+ * Ruled lines when the closing block gets a **sheet of its own**.
+ *
+ * The combined report always ends on one — nine analyses never leave room for
+ * the tail under the last table — and that sheet used to carry four short rules,
+ * a signature row and 80 % white: the code above called it "a proper signature
+ * page" and it read as a printer fault. Given a whole side of A4, the writing
+ * area is what should fill it: full-width rules at a real writing pitch (see
+ * `.tail__own_sheet`), with the certification and the footer settled at the foot
+ * of the sheet where a signature belongs.
+ *
+ * **The count that fills that sheet depends on what shares it, so it is worked out
+ * from the entry** (see `getOwnSheetRuleCount`) instead of fixed. Fixed, it was
+ * wrong in both directions: 4 rules left "a signature row at the top of an
+ * 80 %-white sheet", 24 filled a *blank* sheet properly, and the 6 the code then
+ * chose for a sheet carrying a clinical entry left ~100 mm of white between the
+ * last rule and CERTIFICATION — the very fault this block was rewritten to
+ * prevent, one entry further along.
+ *
+ * MAX is the whole writing area at the rule pitch, which is what a sheet carrying
+ * no entry gets; MIN is four, for the same reason the addendum is four.
+ *
+ * The single-analysis report keeps the counted sets above: its tail lands *under*
+ * the last table, where the count is what decides the height, and growing it
+ * there would buy a whole extra side of paper for nothing — which is exactly what
+ * this report used to do.
+ */
+const NOTE_RULES_SHEET_MAX = 26;
+const NOTE_RULES_SHEET_MIN = 4;
+
+/**
+ * The tail's own sheet, in millimetres of paper — the numbers
+ * `getOwnSheetRuleCount` reasons with, and the other half of `.tail__own_sheet`.
+ *
+ * `NOTES_MM` is the writing area the block has for the entry and the rules
+ * together: 250 mm of block, less the certification and footer that close it.
+ * `RULE_MM` is the rule pitch the stylesheet sets. `LINE_MM` and `LINE_CHARS` are
+ * one printed line of a clinician's text and how much of it fits across the value
+ * column at the sheet's own type (9.5 px over ~137 mm; see `.note_value`), and
+ * `FIELD_MM` is what a field row costs beyond its lines. `CHROME_MM` is the
+ * heading, the provenance stamp and the "FURTHER NOTES" caption.
+ *
+ * Estimates, deliberately — a rule count is not clinical data, and being a line
+ * out changes a millimetre of white on a sheet that no longer has 100 of them.
+ */
+const OWN_SHEET_NOTES_MM = 197;
+const OWN_SHEET_RULE_MM = 7.5;
+const NOTE_LINE_MM = 3.7;
+const NOTE_LINE_CHARS = 115;
+const NOTE_FIELD_MM = 1.2;
+const NOTE_CHROME_MM = 8;
+
+/**
+ * How many ruled writing lines the tail's **own sheet** takes, given the entry
+ * printed above them: as many as the paper the entry leaves will hold.
+ *
+ * Estimated off the entry's own text rather than measured, because the count has
+ * to be chosen before the sheet is laid out — and because the alternative was
+ * worse in both directions a fixed count can be wrong (see the constants above).
+ * One printed line per `NOTE_LINE_CHARS` of a field's text, the clinician's own
+ * line breaks counted as the breaks they are, plus what each field row and the
+ * block's own chrome cost; whatever is left of the writing area, at the rule
+ * pitch, is the count.
+ *
+ * Never clipped in CSS: on a signed sheet a clinician's words must not be
+ * croppable to make room for ruled lines, so an entry longer than the sheet takes
+ * the minimum count and the block flows on rather than losing a word of it.
+ */
+const getOwnSheetRuleCount = (
+  fields: Array<{ value: string }>,
+): number[] => {
+  let used = fields.length > 0 ? NOTE_CHROME_MM : 0;
+  fields.forEach(({ value }) => {
+    const lines = value.split('\n').reduce(
+      (total, line) =>
+        total + Math.max(1, Math.ceil(line.length / NOTE_LINE_CHARS)),
+      0,
+    );
+    used += lines * NOTE_LINE_MM + NOTE_FIELD_MM;
+  });
+  return range(Math.min(
+    NOTE_RULES_SHEET_MAX,
+    Math.max(
+      NOTE_RULES_SHEET_MIN,
+      Math.floor((OWN_SHEET_NOTES_MM - used) / OWN_SHEET_RULE_MM),
+    ),
+  ));
+};
 
 /**
  * Global (unhashed) body class toggled while the report is open; the print
@@ -946,24 +1019,52 @@ export default class ClinicalReport extends React.PureComponent<Props, State> {
    * the same entry the records sheet prints, read from the same store, so a report
    * and a case sheet filed together cannot say two different things.
    *
-   * It is attributed and dated on the sheet, and an amended entry says so (see
-   * `formatVisitNoteProvenance`) — a printed copy of a clinical note that does not
-   * state when it was written, or that it has been amended since, is not a copy of
-   * a clinical record.
+   * It is dated on the sheet, an amended entry says so, and it is attributed to
+   * whoever this device's letterhead named when it was written — or states that its
+   * author is not recorded where nothing was on file to attribute it to (see
+   * `formatVisitNoteProvenance`, which composes all three). A printed copy of a
+   * clinical note that does not state when it was written, who wrote it, or that it
+   * has been amended since is not a copy of a clinical record; and a comment
+   * claiming it is attributed while nothing on the sheet named anybody — which is
+   * what stood here — is worse than the gap it papered over.
    *
    * Nothing is composed here: a field the clinician left empty is absent, and where
    * the visit has no entry at all the area is exactly the ruled writing space it
    * has always been. The rules are kept in both cases — a report that goes out is
-   * annotated by hand — but a printed entry takes the shorter set: the writing area
-   * is for additions to what is already there, not a second blank note.
+   * annotated by hand — but on the sheet the tail has to itself, the writing area
+   * fills whatever the entry leaves (`.tail__own_sheet`): a signed sheet with the
+   * certification parked 100 mm below the last rule reads as a printer fault, which
+   * is the very thing that layout was written to prevent.
    */
   private renderClinicalNotes(isCombined: boolean) {
-    const { visitNote, timepoint } = this.props;
+    const { visitNote, timepoint, captureDate } = this.props;
     const fields = visitNote !== null
       ? filledVisitNoteFields(visitNote.current) : [];
-    const rules = visitNote !== null
-      ? (isCombined ? NOTE_RULES : NOTE_RULES_ADDENDUM)
-      : (isCombined ? NOTE_RULES_SHEET : NOTE_RULES);
+    // On a sheet of its own, the rules are what fills the paper the entry leaves —
+    // counted, not fixed (@see getOwnSheetRuleCount). Under the last table it is
+    // the count that decides the height instead, and the two sets there are
+    // unchanged: a longer writing area would buy a whole extra side of A4.
+    // What is actually printed above the rules, which is what the writing area has
+    // to be counted against: the entry's fields, or — for an entry every field of
+    // which has been cleared — the one sentence that says so.
+    const printed = visitNote !== null && fields.length === 0
+      ? [{ value: VISIT_NOTE_RETRACTED_STATEMENT }] : fields;
+    const rules = isCombined
+      ? getOwnSheetRuleCount(printed)
+      : (visitNote !== null ? NOTE_RULES_ADDENDUM : NOTE_RULES);
+    // Which visit this entry belongs to, dated: the FILM DATE cell that carries the
+    // same day is three sheets away by the time a referrer reaches the tail, and an
+    // entry stamped "Recorded 2026-08-13" against a visit in April 2025 needs the
+    // visit's own day beside it or it reads as an entry written sixteen months late.
+    const visitLabel = timepoint !== null && timepoint.trim() !== ''
+      ? timepoint.trim() : null;
+    const visitDay = formatCaptureDate(captureDate);
+    const at = [visitLabel, visitDay].filter((part) => part !== null).join(' · ');
+    // …and where it was written, when it has since been re-filed at this visit.
+    const refiling = visitNote !== null
+      ? formatVisitNoteRefiling(
+        visitNote, getVisitNoteVisitName(visitLabel),
+      ) : null;
     return (
       <div className={classes.notes}>
         <div className={classes.section_label}>
@@ -972,8 +1073,7 @@ export default class ClinicalReport extends React.PureComponent<Props, State> {
             {visitNote === null
               ? 'to be completed by hand'
               : ('recorded in this patient\'s record' +
-                (timepoint !== null && timepoint.trim() !== ''
-                  ? ` at ${timepoint.trim()}` : ''))}
+                (at !== '' ? ` at ${at}` : ''))}
           </span>
         </div>
         {visitNote !== null ? (
@@ -981,6 +1081,9 @@ export default class ClinicalReport extends React.PureComponent<Props, State> {
             <div className={classes.note_stamp}>
               {formatVisitNoteProvenance(visitNote)}
             </div>
+            {refiling !== null ? (
+              <div className={classes.note_stamp}>{refiling}</div>
+            ) : null}
             {fields.length > 0 ? (
               <dl className={classes.note_fields}>
                 {fields.map(({ option, value }) => (
@@ -992,10 +1095,11 @@ export default class ClinicalReport extends React.PureComponent<Props, State> {
               </dl>
             ) : (
               /* An entry every field of which has been cleared — a retraction,
-                 which the record keeps and this sheet must not print as blank. */
+                 which the record keeps and this sheet must not print as blank. The
+                 same sentence the records dashboard shows on screen and prints on
+                 the case sheet, from the one constant both read. */
               <p className={classes.note_retracted}>
-                Every field of this entry has been cleared. The versions it held
-                before remain in the patient's record.
+                {VISIT_NOTE_RETRACTED_STATEMENT}
               </p>
             )}
             {fields.length > 0 ? (

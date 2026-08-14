@@ -104,6 +104,17 @@ never from the on-screen preview alone.
   the commercial field still has and this does not is **study models / 3D
   records** (plaster scans, IOS meshes): a new record type with its own viewer,
   not a variation on an image. `components/RecordsDashboard/`.
+- [ ] **A visit cannot exist without an image, so a filmless visit cannot be
+  written up.** A note is keyed by timepoint, and the timepoints of a chart are
+  derived from the images filed at them (`groupRecordsByTimepoint` →
+  `getVisitNoteKey`): a chart with no films has no note surface at all, and a
+  consultation, an emergency visit, a bond-up review or a debond that produced no
+  radiograph has nowhere to be recorded. The records dashboard's empty state now
+  says so plainly rather than leaving a clinician to look for the field. The fix
+  is a visit that exists in its own right — a timepoint the clinician can create
+  with a date and a label and no image — which every surface that groups by
+  timepoint then has to read from that list instead of from the films
+  (`utils/records.ts`, `components/RecordsDashboard/`).
 - [ ] **The written record stops at the visit note.** A visit now carries a
   clinical note with its own amendment trail
   (`utils/visitNotes.ts`, `components/RecordsDashboard/VisitNote.tsx`), and that
@@ -111,6 +122,18 @@ never from the on-screen preview alone.
   pick from, no consent or referral document, no per-tooth chart and no
   appointment history. Each of those is its own module, and none of them may be
   faked by pre-filling a note.
+- [ ] **The `.wceph` export throws on every chart, and the import crashes.** Two
+  pre-existing faults in the project file, found while checking that the export
+  now carries every clinical note (it does — `utils/importers/wceph/v1/export.ts`,
+  verified by unzipping a real file). First, `validate.ts` requires
+  `data[image].tracing.mode` to be one of `auto|assisted|manual`, and nothing in
+  the app dispatches `SET_TRACING_MODE_REQUESTED` any more, so `createExport`
+  rejects its own output with `INVALID_TRACING_MODE` for *any* chart, notes or no
+  notes. Second, importing a `.wceph` into a patient throws `Cannot read
+  properties of undefined (reading 'isLoading')` — reproduced with a file holding
+  no notes at all, so it is the image half. Until both are fixed the archive file
+  is unreachable in the UI, which is the one place a clinician's record leaves
+  this device.
 - [ ] **Non-lateral analysis.** PA/frontal cephalometric analysis (the frontal
   landmark points already exist in `analyses/landmarks/frontalPhoto/`),
   photographic (facial esthetic) analysis, and arch/space analysis.

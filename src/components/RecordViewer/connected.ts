@@ -30,6 +30,8 @@ import {
   getPatientsList,
 } from 'store/reducers/patients';
 
+import { getVisitNotes } from 'store/reducers/workspace/records';
+
 import { PatientDetails } from 'components/PatientFields';
 
 import {
@@ -39,6 +41,7 @@ import {
   setImageProps,
   removeWorkspace,
   updatePatient,
+  refileVisitNote,
   closeImage,
 } from 'actions/workspace';
 
@@ -60,6 +63,7 @@ const mapStateToProps: MapStateToProps<StateProps, OwnProps, StoreState> =
       captureDate: getImageCaptureDate(state)(imageId),
       photoView: getImagePhotoView(state)(imageId),
       records: getPatientRecords(state),
+      notes: getVisitNotes(state),
     };
   };
 
@@ -85,6 +89,10 @@ const mapDispatchToProps: MapDispatchToPropsFunction<DispatchProps, OwnProps> =
         workspaceId: record.workspaceId,
         imageId: record.imageId,
       }));
+    },
+    // The dashboard's own path (RecordsDashboard/connected#onRefileVisitNote).
+    onRefileVisitNote: (from: string, to: string) => {
+      dispatch(refileVisitNote({ from, to, refiledAt: new Date().getTime() }));
     },
     onSaveMeta: (meta: ImageRecordMeta) => {
       dispatch(setImageProps({

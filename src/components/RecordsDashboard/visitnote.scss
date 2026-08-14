@@ -26,11 +26,14 @@
   // under them instead of starting 12px to their left.
   padding: 10px 12px 12px 20px;
   font-family: $font-stack;
-  // A written entry is the one row of the panel that is not an image: the tint
-  // says so before the label does. Pale enough not to compete with the film rows'
-  // own hover state ($primary-050), and it is not a hover — nothing here moves
-  // under the pointer.
-  background: #FBFCFE;
+  // A written entry is the one row of the panel that is not an image, and the
+  // ground says so before the label does — at a value a clinic monitor actually
+  // renders. It used to be #FBFCFE: four levels of 255 off the card behind it,
+  // which is a comment claiming a distinction the screen did not draw. The app's
+  // own sunken ground instead ($bg-sunken, the register the coverage pane and the
+  // editor's effect line are set on), which is not a hover state — nothing here
+  // moves under the pointer.
+  background: $bg-sunken;
 
   // Rows of one panel, divided rather than detached — the same hairline
   // `.card + .card` uses. The note leads the visit, so the rule falls below it.
@@ -99,6 +102,13 @@
 .note_write {
   box-sizing: border-box;
   flex: 0 0 auto;
+  // The provenance line beside it now carries an author as well as a date and an
+  // amendment count, so on a narrow panel the head wraps — and a wrapped flex line
+  // leaves the spacer behind on the line above, which put this control hard against
+  // the left margin under the "CLINICAL NOTE" label, reading as a second row of the
+  // entry. `margin-left: auto` holds it to the right edge on whichever line it ends
+  // up on.
+  margin-left: auto;
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -179,6 +189,30 @@
   font-size: 12.5px;
   font-style: italic;
   color: $text-disabled;
+}
+
+// An entry every field of which has been cleared. Not styled as an absence — the
+// entry is on file, it is dated, and what it used to say is in the trail — so it
+// is set as the statement it is, in the secondary register, at reading size.
+// Printed too: a filed sheet must never show an entry that exists, says it was
+// amended, and says nothing. @see VISIT_NOTE_RETRACTED_STATEMENT
+.note_retracted {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: $text-secondary;
+}
+
+// "Filed at T2 on 2026-08-13 · written for T3" — the one line a re-filed entry
+// owes its reader (@see utils/visitNotes#formatVisitNoteRefiling). In the
+// provenance register, because that is what it is: a fact about the entry's
+// filing, not about the case.
+.note_refiled {
+  margin: 0;
+  font-size: 11.5px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: $text-tertiary;
 }
 
 // ---- The amendment trail ---------------------------------------------------
@@ -285,10 +319,85 @@
   color: $text-disabled;
 }
 
-.note_version_changed {
+// A field the amendment added: it holds nothing in *this* version, and the trail
+// says so where the field would be rather than leaving the added field out of the
+// version it was added to.
+.note_value_unset {
   margin: 0;
+  min-width: 0;
+  font-size: 12.5px;
+  font-style: italic;
+  line-height: 1.5;
+  color: $text-disabled;
+}
+
+// The closing line of a collapsed version: which fields it said exactly as the
+// entry above it says them, and the press that prints them. (The prose line that
+// used to sit at the *top* of a version — "Amendment changed: plan" — is gone: it
+// restated, 4px above it, the CHANGED tag on the field's own label.)
+.note_version_rest {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+  margin-top: 2px;
+}
+
+.note_version_same {
   font-size: 11.5px;
-  color: $text-tertiary;
+  font-style: italic;
+  color: $text-disabled;
+}
+
+.note_version_toggle {
+  padding: 0;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: $primary-700;
+  cursor: pointer;
+
+  &:hover {
+    color: $primary-900;
+    text-decoration: underline;
+  }
+
+  &:focus {
+    outline: none;
+    box-shadow: $focus-ring;
+    border-radius: 4px;
+  }
+
+  @media print {
+    display: none;
+  }
+}
+
+// The fields the amendment actually changed, marked **in the version they
+// changed** — a rule down the label and the word beside it. Without this an entry
+// amended twice is three near-identical blocks and one line of prose naming the
+// field, and the reader has to diff five paragraphs by eye to find the sentence
+// that moved. The word carries the meaning; the rule only finds it.
+.note_label__changed {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0 5px;
+  margin-left: -8px;
+  padding-left: 6px;
+  border-left: 2px solid $warn;
+  color: $text-secondary;
+}
+
+.note_changed_tag {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: $warn;
 }
 
 // ---- A note whose visit is no longer on file --------------------------------
@@ -437,12 +546,93 @@
   color: $text-tertiary;
 }
 
+// The dialog's scrolling body (mui's own element, classed through
+// `bodyClassName`). The fields are what pages when the window is short — the
+// statements about the save are pinned above the buttons, outside this box.
+//
+// A thin scrollbar where the platform draws one. It is **not** what carries the
+// affordance: measured in this app's own browser, a body with 116px of overflow
+// draws no scrollbar at all until it is dragged, whatever these rules say (and
+// `overflow-y: scroll` and `scrollbar-width` change nothing) — which is how the
+// Note field came to be cut mid-box at 1280x720 with nothing on screen saying so.
+// The masks below are the affordance; this is the refinement on top of it.
+.dlg_body {
+  &::-webkit-scrollbar {
+    width: 10px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: $bg-sunken;
+    border-radius: 5px;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: $border-strong;
+    border: 2px solid $bg-surface;
+    border-radius: 5px;
+
+    &:hover {
+      background: $text-tertiary;
+    }
+  }
+}
+
 .dlg_fields {
   display: flex;
   flex-direction: column;
   gap: 12px;
   margin: 8px 0 4px;
   font-family: $font-stack;
+}
+
+// The edge masks that say the fields continue past the scrollport (@see
+// VisitNoteDialog#renderMask). Sticky to the *scroller's* edges — the fields' own
+// siblings, so the mask stays at the edge of the box rather than travelling with
+// the content — and pulled back by their own height so they take no layout space
+// and cannot themselves make the body scroll. Shown only in the direction there is
+// actually something in, and 22px of gradient rather than a hard line: the field
+// under it fades out, which is the thing being said.
+.dlg_mask {
+  display: block;
+  position: sticky;
+  z-index: 2;
+  height: 22px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+
+  &__top {
+    top: -4px;
+    margin-bottom: -22px;
+    background: linear-gradient(to bottom, $bg-surface 20%, rgba(255, 255, 255, 0));
+  }
+
+  &__bottom {
+    bottom: -8px;
+    margin-top: -22px;
+    background: linear-gradient(to top, $bg-surface 20%, rgba(255, 255, 255, 0));
+  }
+
+  &__shown {
+    opacity: 1;
+  }
+}
+
+// The pinned strip above the dialog's buttons: what saving will do to the record,
+// the attribution gap and its field, and the refusal of a destructive keypress.
+// Left-aligned inside an actions container mui sets `text-align: right` on.
+.dlg_strip {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-align: left;
+}
+
+.dlg_buttons {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  margin-top: 8px;
 }
 
 .dlg_field {
@@ -489,9 +679,127 @@
   }
 }
 
-// What saving will do to the record, before it is done.
+// The attribution gap the effect line names, and the field that closes it — the
+// identity band's idiom for a missing chart ID, one register quieter because it
+// sits under a paragraph rather than in a header.
+.dlg_gap {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  margin: 0;
+  font-family: $font-stack;
+}
+
+.dlg_gap_pill {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  height: 26px;
+  padding: 0 11px;
+  border: 1px dashed $border-strong;
+  border-radius: 999px;
+  background: $bg-surface;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1;
+  color: $primary-700;
+  cursor: pointer;
+  transition: border-color 120ms ease, background-color 120ms ease,
+    color 120ms ease;
+
+  &:hover {
+    border-style: solid;
+    border-color: $primary-500;
+    background: $primary-050;
+    color: $primary-900;
+  }
+
+  &:focus {
+    outline: none;
+    border-style: solid;
+    border-color: $primary-600;
+    box-shadow: $focus-ring;
+  }
+}
+
+.dlg_gap_hint {
+  flex: 1 1 220px;
+  min-width: 0;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: $text-tertiary;
+}
+
+.dlg_gap_label {
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: $text-tertiary;
+}
+
+.dlg_gap_input {
+  box-sizing: border-box;
+  flex: 1 1 200px;
+  min-width: 0;
+  height: 30px;
+  padding: 0 9px;
+  border: 1px solid $border-strong;
+  border-radius: 6px;
+  background: $bg-surface;
+  font-family: $font-stack;
+  font-size: 13.5px;
+  color: $text-primary;
+
+  &:focus {
+    outline: none;
+    border-color: $primary-600;
+    box-shadow: $focus-ring;
+  }
+}
+
+.dlg_gap_save {
+  box-sizing: border-box;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid $primary-600;
+  border-radius: 6px;
+  background: $bg-surface;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1;
+  color: $primary-700;
+  cursor: pointer;
+
+  &:hover {
+    background: $primary-050;
+    color: $primary-900;
+  }
+
+  &:focus {
+    outline: none;
+    box-shadow: $focus-ring;
+  }
+
+  &:disabled {
+    border-color: $border;
+    color: $text-disabled;
+    cursor: default;
+    background: $bg-surface;
+  }
+}
+
+// What saving will do to the record, before it is done. No margin of its own: it
+// is a row of `.dlg_strip`, which spaces its rows.
 .dlg_effect {
-  margin: 10px 0 4px;
+  margin: 0;
   padding: 9px 11px;
   border-radius: 6px;
   background: $bg-sunken;
@@ -517,6 +825,21 @@
   }
 }
 
+// Escape refused on unsaved text (see `VisitNoteDialog#handleKeyDown`). The
+// warning register, because the keypress the clinician just made would have cost
+// them the entry: this is the app declining to do it, and saying so.
+.dlg_kept {
+  margin: 0;
+  padding: 8px 11px;
+  border-left: 3px solid $warn;
+  border-radius: 4px;
+  background: $warn-bg;
+  font-family: $font-stack;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #6B4200;
+}
+
 // Screen-only chrome (the dialog overlay), so printing the case sheet with an
 // editor open does not wash the sheet grey. Same mechanism as editpatient.scss.
 .no_print {
@@ -534,10 +857,58 @@
     background: transparent;
     padding: 6px 0 8px 0;
     gap: 4px;
-    // Never split a clinical entry across two sheets: half a treatment plan on
-    // sheet 2 and half on sheet 3 is a record nobody can read in one go.
+  }
+
+  // **A long entry flows.** This block used to carry `break-inside: avoid`, on
+  // the reasoning that half a treatment plan on sheet 2 and half on sheet 3 is a
+  // record nobody can read in one go. On a real write-up that reasoning cost the
+  // chart the very thing it promised: an entry taller than a sheet cannot be kept
+  // whole, so Chrome pushed it forward and split it anyway — sheet 1 blank but for
+  // the running head, sheet 2 carrying the visit's stamp alone, the entry starting
+  // on sheet 3 and breaking across 3→4 regardless. Two wasted A4 sides, a visit
+  // header stranded from its own note, and a stylesheet comment that was false for
+  // exactly the entries it mattered for.
+  //
+  // What is held together instead is what *can* be: the entry's head with its
+  // first field (`break-after: avoid` below), each field's label with its text,
+  // and no field left with one line hanging over a sheet edge (`orphans`/`widows`).
+  // Every sheet carries the patient's identity in the running head, so an entry
+  // continued overleaf is still a filable page of the right chart.
+  .note_head {
     break-inside: avoid;
     page-break-inside: avoid;
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+
+  .note_label {
+    break-inside: avoid;
+    page-break-inside: avoid;
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+
+  .note_value {
+    orphans: 2;
+    widows: 2;
+  }
+
+  // A retraction is one sentence and it is the whole of what the entry says: it is
+  // never left on a sheet of its own, and never split.
+  .note_retracted,
+  .note_refiled {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .note_retracted {
+    font-size: 9pt;
+    color: $text-secondary;
+  }
+
+  .note_refiled {
+    font-size: 7.5pt;
+    color: $text-secondary;
   }
 
   .note__empty {
@@ -563,12 +934,61 @@
     font-size: 8.5pt;
   }
 
-  // The trail's toggle is a control; on paper the sheet carries the current entry
-  // and the provenance line that says it was amended. (The earlier versions
-  // themselves are readable on screen — a case sheet is what the record says
-  // today, and the line above states plainly that it has been amended and when.)
+  // **The trail prints exactly as far as it has been opened.**
+  //
+  // This block used to be `.note_history { display: none }`, on the reasoning that
+  // a case sheet is what the record says today. On the one artefact where an
+  // amendment matters most — a filed or a disclosed copy — that made "amended
+  // twice" an unverifiable claim: the sheet said the entry had been amended twice
+  // and carried nothing to check it against, and a reader who had deliberately
+  // expanded the trail on screen then printed a sheet without it.
+  //
+  // So the disclosure is honoured. The versions are in the DOM only while the
+  // reader has them open (see `VisitNote#renderHistory`), which makes the screen
+  // the scope control: expand the trail, or a single version of it, and it is on
+  // the sheet; leave it collapsed and the sheet is the current entry as before.
+  // The controls themselves drop out (`.note_history_toggle`,
+  // `.note_version_toggle`), and each version keeps its ordinal, its two stamps
+  // and its author, which is what makes the printed trail readable in order.
   .note_history {
-    display: none;
+    gap: 4px;
+    margin-top: 4px;
+  }
+
+  .note_versions {
+    gap: 6px;
+  }
+
+  .note_version {
+    padding: 3px 0 3px 8px;
+    // A version is one unit of a trail: it is not split across a sheet edge while
+    // it can be helped, and it never starts one line above the fold.
+    break-inside: avoid;
+    page-break-inside: avoid;
+
+    .note_value {
+      font-size: 9pt;
+    }
+  }
+
+  .note_version_head {
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+
+  .note_version_label {
+    font-size: 7pt;
+  }
+
+  .note_version_stamp,
+  .note_version_same,
+  .note_value_unset {
+    font-size: 7pt;
+    color: $text-secondary;
+  }
+
+  .note_changed_tag {
+    font-size: 6.5pt;
   }
 
   .orphans {

@@ -5875,9 +5875,12 @@ $tc-band-outer: #F1F7FC;
   // films it tallies at the foot of sheet 1. `break-before: avoid` is the wrong
   // tool for it in Chrome: where it bites at all, it walks the break backwards
   // through every preceding joint that also carries an avoidance, and a chart's
-  // panels are one such chain — see `.fb_core` and `.trend_grid`. A visit's
-  // group is already an unbreakable box, so a tally printed *inside* the last one
-  // cannot be separated from it by anything.
+  // panels are one such chain — see `.fb_core` and `.trend_grid`. Printed inside
+  // the group, the tally follows the last card in the flow, which is what keeps
+  // the two together on every chart whose last visit fits a sheet — and on one
+  // whose last visit does not (a visit carrying a full write-up is taller than A4;
+  // see `.group`), the tally travels with the run it ends rather than with a whole
+  // visit pushed to a fresh side.
 
   .records_head::after,
   .records_foot::before {
@@ -5885,7 +5888,7 @@ $tc-band-outer: #F1F7FC;
   }
 
   // The document is titled by the running head at the top of every sheet
-  // ("IMAGING RECORDS"), so the panel's own heading 12mm below it — "Imaging
+  // ("CASE RECORDS"), so the panel's own heading 12mm below it — "Case
   // records" — printed the name of the document twice on every first sheet. On
   // the empty chart those were two of the three lines of ink on an otherwise
   // blank A4. The running head owns the document's name, exactly as it owns the
@@ -6185,11 +6188,21 @@ $tc-band-outer: #F1F7FC;
   // film's worth of sheet. (Every point of this matters: the records panel, its
   // tally and its notes are one unbreakable run on paper — see `.records_foot` —
   // and a five-visit case sat 2mm over one sheet, which cost the chart a page.)
+  // A visit is **allowed to flow across sheets**, and its stamp is not allowed to
+  // be left behind on its own.
+  //
+  // This used to be `break-inside: avoid`, which is the right rule for a visit
+  // whose contents fit a page and a trap for one whose do not: a visit carrying a
+  // full clinical write-up is taller than A4, so Chrome pushed the whole box to a
+  // fresh sheet, split it there anyway, and left the sheet before it blank —
+  // paying two sides of paper for a break it did not avoid. The units that must
+  // stay whole are the ones that can: each film's card (`.card`), the slots row,
+  // and the note's own head, label and field rows (see visitnote.scss). The stamp
+  // is bound to whatever follows it by `break-after: avoid` below, so no sheet ever
+  // ends on "T1 2025-02-03 AGE 16 y 10 mo" with the visit itself overleaf.
   .group {
     display: block;
     padding-bottom: 4pt;
-    break-inside: avoid;
-    page-break-inside: avoid;
   }
 
   // The stamp, as one line: label · day · interval · age, in the running head's
@@ -6202,6 +6215,11 @@ $tc-band-outer: #F1F7FC;
     gap: 0 10pt;
     padding: 1pt 0 2pt;
     margin: 0;
+    // …and it never prints without the visit it names. @see `.group` above.
+    break-inside: avoid;
+    page-break-inside: avoid;
+    break-after: avoid;
+    page-break-after: avoid;
   }
 
   // …at a stamp's size, not a screen's: 12.5px of date and age is 9.4pt, which on

@@ -43,7 +43,7 @@ import { getActiveWorkspaceId } from 'store/reducers/workspace/activeId';
 // The written half of the record: one clinical note per visit, filed under the
 // visit's own timepoint label (see `visitNotes` in ./format).
 import { getVisitNotes } from 'store/reducers/workspace/records';
-import { getVisitNoteKey, readVisitNote } from 'utils/visitNotes';
+import { readVisitNote } from 'utils/visitNotes';
 
 import { validateIndexJSON } from './validate';
 
@@ -78,25 +78,40 @@ const createExport: Exporter = async (state, options, onUpdate) => {
   const activeWorkspaceId = getActiveWorkspaceId(state)!;
 
   /**
-   * The clinical notes this file carries: the notes of the visits whose images
-   * are actually being written, and no others.
+   * The clinical notes this file carries: **every note the chart holds**, each
+   * under the key it is filed at.
    *
-   * Scoped that way so a file cannot contain a diagnosis about a visit it holds
-   * no image of — importing that would file a note the record has no visit for.
-   * A note is written whole, with every version it holds, so an amended entry
-   * imports as an amended entry. @see WCephJSON#visitNotes
+   * This used to be scoped to the visits whose images are being written, on the
+   * reasoning that a file should not contain a diagnosis about a visit it holds no
+   * image of. That reasoning cost the record the very thing the dashboard promises
+   * about these entries. A note whose visit was relabelled, or whose images were
+   * all removed, is listed on screen under "…not filed at any visit on file" —
+   * a panel whose whole argument is "Nothing has been deleted" — and it was
+   * precisely those notes the filter dropped: the archive file, the one artefact a
+   * clinician keeps, was where the diagnosis did get deleted.
+   *
+   * So nothing is filtered out. On the far side, `LOAD_VISIT_NOTES` refuses to
+   * overwrite a key that already holds an entry, and `getUnmatchedVisitNoteKeys`
+   * re-surfaces a note whose visit the file has no image of in the same unfiled
+   * panel it left from — where it can be read and filed. A note the reader has to
+   * file is a record; a note the file left behind is not.
+   *
+   * A note is written whole — every version it holds, each with the author stamped
+   * into it, and the record of any re-filing — so an amended entry imports as an
+   * amended entry, an attributed one stays attributed, and one written for another
+   * visit still says so. @see WCephJSON#visitNotes
    */
   const allNotes = getVisitNotes(state);
-  const exportedVisitKeys: { [key: string]: true } = {};
-  imagesToSave.forEach((id: string) => {
-    exportedVisitKeys[getVisitNoteKey(getProps(id).timepoint)] = true;
-  });
   const visitNotes: NonNullable<WCephJSON['visitNotes']> = {};
   Object.keys(allNotes)
-    .filter((key) => exportedVisitKeys[key] === true)
     .filter((key) => readVisitNote(allNotes[key]) !== null)
     .forEach((key) => {
-      visitNotes[key] = { entries: allNotes[key].entries };
+      const note = allNotes[key];
+      visitNotes[key] = {
+        entries: note.entries,
+        refiledFrom: note.refiledFrom,
+        refiledAt: note.refiledAt,
+      };
     });
 
   const activeImageId = getActiveTracingImageId(state);

@@ -1533,6 +1533,18 @@ $cont-line-height: 13px;
   min-height: 250mm;
   justify-content: space-between;
 
+  // **The writing area takes whatever the entry leaves**, and the count that fills
+  // it is worked out from the entry itself — see
+  // `ClinicalReport#getOwnSheetRuleCount`, whose arithmetic these two numbers (the
+  // 7.5 mm pitch, and the 250 mm the block is given) are the other half of.
+  //
+  // Not done in CSS. A flex box cannot be told "fill the sheet, and clip the rules
+  // that do not fit" without a definite height, and giving this block one would
+  // put a long entry's own text under the certification instead of the rules: a
+  // signed sheet must never be able to clip a clinician's words to make room for
+  // ruled lines. The count is chosen before layout instead, so nothing on the sheet
+  // is ever cropped and the rules simply stop where the signature block begins.
+
   // Full-width rules at a writing pitch, not the two-column shorthand the
   // flowing tail uses: there is room here for lines somebody can actually write
   // a plan on.

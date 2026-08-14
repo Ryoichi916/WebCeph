@@ -198,9 +198,16 @@ const rules: Array<[
         isPlainObject(note) &&
         Array.isArray(note.entries) &&
         note.entries.length > 0 &&
+        // Both optional, and both older files simply lack: an entry's author, and
+        // the record of the note having been re-filed from another visit. Checked
+        // for *type* only where present, on the same terms as the text — a name is
+        // a name, not something this validator has an opinion about.
+        (isUndefined(note.refiledFrom) || isString(note.refiledFrom)) &&
+        (isUndefined(note.refiledAt) || isNumber(note.refiledAt)) &&
         every(note.entries, (entry: any) => (
           isPlainObject(entry) &&
           isNumber(entry.savedAt) &&
+          (isUndefined(entry.author) || isString(entry.author)) &&
           isPlainObject(entry.fields) &&
           every(
             ['chiefComplaint', 'diagnosis', 'plan', 'appliance', 'note'],

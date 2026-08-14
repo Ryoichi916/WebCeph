@@ -36,7 +36,16 @@ export interface VisitNoteFieldOption {
    * being read as the record's own.
    */
   hint: string;
-  /** Rows the editor's textarea opens at; the field grows past it as needed. */
+  /**
+   * Rows the editor's textarea opens at — its **minimum** height, never its
+   * maximum: the editor grows every field to the text in it as it is typed and
+   * caps that growth at `VISIT_NOTE_FIELD_MAX_ROWS`
+   * (@see components/RecordsDashboard/VisitNoteDialog#grow). This used to say
+   * "the field grows past it as needed" while the stylesheet only set
+   * `resize: vertical`, so a five-line plan was written through a three-line
+   * window and the clinician had to hand-drag the box to read their own first
+   * line.
+   */
   rows: number;
 }
 
@@ -91,6 +100,16 @@ export const VISIT_NOTE_FIELDS: VisitNoteFieldOption[] = [
   },
 ];
 
+/**
+ * How tall the editor lets a field grow before it starts scrolling inside itself.
+ *
+ * A treatment plan is routinely five or six lines and has to be readable whole
+ * while it is being typed; a pasted page is not, and a field that grew to it
+ * would push the dialog's Save button off a 720px screen. Fourteen rows is the
+ * point where the dialog still paginates rather than the field.
+ */
+export const VISIT_NOTE_FIELD_MAX_ROWS = 14;
+
 /** A note with nothing written in it — what a fresh editor opens on. */
 export const emptyVisitNoteFields = (): VisitNoteFields => ({
   chiefComplaint: '',
@@ -124,6 +143,44 @@ export const trimVisitNoteFields = (fields: VisitNoteFields): VisitNoteFields =>
 /** True when no field holds anything — nothing to store, nothing to show. */
 export const isVisitNoteEmpty = (fields: VisitNoteFields): boolean =>
   VISIT_NOTE_FIELDS.every(({ key }) => fields[key].trim() === '');
+
+/**
+ * What the record says about an entry whose every field has been cleared.
+ *
+ * One sentence, in one place, because three surfaces have to say it and none of
+ * them may say it differently: the dashboard's note block, the printed case sheet
+ * and the clinical report's "Clinical notes & plan" area. A retraction is a
+ * clinical act — the entry still exists, it is still dated, and what it used to
+ * say is still in the record — and a surface that renders it as *nothing* prints
+ * an entry that says it was amended and then says nothing at all.
+ */
+export const VISIT_NOTE_RETRACTED_STATEMENT =
+  'Every field of this entry has been cleared. The versions it held before ' +
+  'remain in the patient\'s record.';
+
+/**
+ * The name of the visit a note is filed at, as every surface that has to name it
+ * in a sentence names it — the trimmed timepoint label, or one phrase for the
+ * images that carry no label at all.
+ *
+ * One helper because the tooltip on the note's own button ("Write the clinical
+ * note for …"), the editor's caption and the re-filing pills all name the same
+ * visit, and they used to name the unlabelled one three different ways: "No
+ * timepoint label", "images with no timepoint label", "the images with no
+ * timepoint label". Two names for one visit on one page is a records defect,
+ * not a wording preference.
+ *
+ * Not to be confused with the visit's *printed heading* (`getVisitPill` and the
+ * sheet's own label), which is a heading and not part of a sentence.
+ */
+export const UNLABELLED_VISIT_NAME = 'the images with no timepoint label';
+
+export const getVisitNoteVisitName = (
+  label: string | null | undefined,
+): string => (
+  label === null || label === undefined || label.trim() === ''
+    ? UNLABELLED_VISIT_NAME : label.trim()
+);
 
 /**
  * Whether two versions say the same thing — so an "amendment" that changed
@@ -169,6 +226,28 @@ export interface VisitNoteReading {
   /** How many times it has been amended since it was first written. */
   amendmentCount: number;
   /**
+   * How many versions the note holds in all, current one included — the
+   * denominator of "Version 2 of 3", which is what makes the trail readable in
+   * order when two amendments fall in the same minute.
+   */
+  versionCount: number;
+  /**
+   * Who wrote the **first** version, as it was stamped when it was written, or
+   * null when nothing was stored to attribute it to. Never re-read from the
+   * letterhead: an entry's author is part of what was written.
+   */
+  recordedBy: string | null;
+  /** Who wrote the version that stands, on the same terms. */
+  author: string | null;
+  /**
+   * Where this note was written, when it has since been re-filed at another
+   * visit — the timepoint key it was written under — with the day it was moved.
+   * Null on a note that has always been filed where it sits.
+   * @see Events['REFILE_VISIT_NOTE']
+   */
+  refiledFrom: string | null;
+  refiledAt: number | null;
+  /**
    * The versions it said before the current one, **newest superseded first**,
    * each with the moment it stopped being current and the fields that changed
    * when it did. What the dashboard's "earlier versions" list is built from.
@@ -179,10 +258,21 @@ export interface VisitNoteReading {
     savedAt: number;
     /** Epoch ms it was replaced (the next version's `savedAt`). */
     supersededAt: number;
+    /** Its place in the note's own sequence, 1-based: "Version 2 of 3". */
+    version: number;
+    /** Who wrote this version, as stamped then, or null when unattributed. */
+    author: string | null;
     /** The fields the amendment that replaced it changed. */
     changed: VisitNoteFieldOption[];
   }>;
 }
+
+/** An entry's stored author, normalised to null when there is none. */
+const authorOf = (entry: VisitNoteEntry): string | null => {
+  const author = entry.author;
+  return author === undefined || author === null || author.trim() === ''
+    ? null : author.trim();
+};
 
 export const readVisitNote = (
   note: VisitNote | undefined | null,
@@ -196,13 +286,22 @@ export const readVisitNote = (
     fields: entry.fields,
     savedAt: entry.savedAt,
     supersededAt: entries[i + 1].savedAt,
+    version: i + 1,
+    author: authorOf(entry),
     changed: changedVisitNoteFields(entry.fields, entries[i + 1].fields),
   })).reverse();
+  const refiledFrom = note.refiledFrom;
+  const refiledAt = note.refiledAt;
   return {
     current: last.fields,
     recordedAt: entries[0].savedAt,
     updatedAt: last.savedAt,
     amendmentCount: entries.length - 1,
+    versionCount: entries.length,
+    recordedBy: authorOf(entries[0]),
+    author: authorOf(last),
+    refiledFrom: refiledFrom === undefined ? null : refiledFrom,
+    refiledAt: refiledAt === undefined || refiledAt === null ? null : refiledAt,
     superseded,
   };
 };
@@ -225,13 +324,21 @@ const pad2 = (n: number): string => (n < 10 ? `0${n}` : String(n));
 
 /**
  * When an entry was written, as the record states it: ISO `YYYY-MM-DD` and the
- * local clock time, e.g. `2026-03-04 15:12`.
+ * local clock time **to the second**, e.g. `2026-03-04 15:12:41`.
  *
  * The date half is the app's one date format (see
  * `utils/records#formatCaptureDate`) for the same reason it exists there: a
  * clinical record cannot afford a day that reads as either 08/04 or 04/08. The
  * time is part of it because two amendments on one day are two different entries,
  * and a trail that dates both "2026-03-04" cannot be read in order.
+ *
+ * The seconds are there for exactly the same reason one step down: an entry
+ * corrected twice while the clinician was still looking at it printed "written
+ * 03:46, replaced 03:46" on both earlier versions, which reads as a printing
+ * fault rather than as a trail. Two entries can still share a second — nothing in
+ * a clock rules that out — so the ordinal on each version
+ * (@see formatVisitNoteVersionLabel) is what actually orders the trail, and
+ * `appendVisitNoteEntry` keeps the stamps themselves strictly increasing.
  */
 export const formatVisitNoteStamp = (at: number): string => {
   const d = new Date(at);
@@ -239,8 +346,19 @@ export const formatVisitNoteStamp = (at: number): string => {
     return 'date not recorded';
   }
   return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())} ` +
-    `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+    `${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
 };
+
+/**
+ * A version's place in the note's own sequence: `"Version 2 of 3"`.
+ *
+ * The trail is read in order off *this*, not off the clock: it is the one label
+ * that stays unambiguous when two versions share a second, and it names the
+ * current entry too (the one that is `versionCount` of `versionCount`).
+ */
+export const formatVisitNoteVersionLabel = (
+  version: number, versionCount: number,
+): string => `Version ${version} of ${versionCount}`;
 
 /** The day alone, for the surfaces that have room for a date and not a clock. */
 export const formatVisitNoteDay = (at: number): string => {
@@ -252,18 +370,31 @@ export const formatVisitNoteDay = (at: number): string => {
 };
 
 /**
- * The note's own provenance in one line: when it was written, and — only when it
- * has been — when and how often it was amended.
+ * The note's own provenance in one line: when it was written, **who by**, and —
+ * only when it has been — when and how often it was amended, and who by.
  *
- * `"Recorded 2026-01-12 14:32"`, or
- * `"Recorded 2026-01-12 14:32 · amended twice, last 2026-03-04 15:12"`. The word
- * "amended" is used plainly and the count is exact: an amended clinical entry
- * says so on every surface that shows it, including on paper.
+ * `"Recorded 2026-01-12 14:32:07 by Dr Sato"`, or
+ * `"Recorded 2026-01-12 14:32:07 by Dr Sato · amended twice, last 2026-03-04
+ * 15:12:44"`. The word "amended" is used plainly and the count is exact: an
+ * amended clinical entry says so on every surface that shows it, including on
+ * paper.
+ *
+ * The author is whatever was stamped into the entry when it was written (the
+ * letterhead's clinician; @see components/ClinicalReport/letterhead), never
+ * re-read afterwards — editing the letterhead names the person signing the *next*
+ * sheet and must not be able to rewrite who wrote an entry last year. Where
+ * nothing was stored to attribute an entry to, the line says so in the app's own
+ * idiom for a value that is not on file ("author not recorded"): a printed entry
+ * that cannot say who made it is half a trail, and the half that is missing is
+ * named rather than left to be assumed.
  */
 export const formatVisitNoteProvenance = (
   reading: VisitNoteReading,
 ): string => {
-  const written = `Recorded ${formatVisitNoteStamp(reading.recordedAt)}`;
+  const by = (who: string | null) =>
+    (who !== null ? ` by ${who}` : ' · author not recorded');
+  const written =
+    `Recorded ${formatVisitNoteStamp(reading.recordedAt)}${by(reading.recordedBy)}`;
   if (reading.amendmentCount === 0) {
     return written;
   }
@@ -272,7 +403,40 @@ export const formatVisitNoteProvenance = (
     : (reading.amendmentCount === 2
       ? 'amended twice'
       : `amended ${reading.amendmentCount} times`);
-  return `${written} · ${times}, last ${formatVisitNoteStamp(reading.updatedAt)}`;
+  // The amendment's own author only where it differs from the entry's — an entry
+  // amended by the person who wrote it does not need saying twice, and the line
+  // already carries a date, a count and a name.
+  const last = reading.author !== reading.recordedBy
+    ? by(reading.author) : '';
+  return `${written} · ${times}, ` +
+    `last ${formatVisitNoteStamp(reading.updatedAt)}${last}`;
+};
+
+/**
+ * The one line a re-filed note owes its reader: which visit it is filed at now,
+ * when it was moved there, and which visit it was **written for**.
+ *
+ * Without it, moving an entry from T3 to T2 (@see Events['REFILE_VISIT_NOTE'])
+ * left "Debond planned at the next visit" sitting under another visit's date as
+ * though it had been written there — a silent change of what the record says
+ * about when a decision was taken. Re-filing is not an amendment of the entry's
+ * text, so it is not in the trail; it is a fact about the entry's filing, and it
+ * prints with it.
+ *
+ * Null for the ordinary case: a note that has always been where it sits.
+ */
+export const formatVisitNoteRefiling = (
+  reading: VisitNoteReading,
+  /** The visit it sits at now, named as `getVisitNoteVisitName` names it. */
+  visitName: string,
+): string | null => {
+  if (reading.refiledFrom === null) {
+    return null;
+  }
+  const when = reading.refiledAt !== null
+    ? ` on ${formatVisitNoteDay(reading.refiledAt)}` : '';
+  return `Filed at ${visitName}${when} · written for ` +
+    `${getVisitNoteVisitName(reading.refiledFrom)}`;
 };
 
 /**
@@ -288,22 +452,61 @@ export const appendVisitNoteEntry = (
   note: VisitNote | undefined,
   fields: VisitNoteFields,
   savedAt: number,
+  /**
+   * Who is writing it — the letterhead's clinician, read by the surface that
+   * saves and stamped into this version for good. Null/empty when the device has
+   * no clinician on file, and the surfaces then say the author is not recorded
+   * rather than guessing one.
+   */
+  author?: string | null,
 ): VisitNote | undefined => {
   const next = trimVisitNoteFields(fields);
+  const by = author === undefined || author === null || author.trim() === ''
+    ? undefined : author.trim();
   const previous = note !== undefined ? note.entries : [];
   if (previous.length === 0) {
     // Nothing on file and nothing written: there is no note here, and an empty
     // one would put "Recorded 14:32" on a visit nobody has written about.
     return isVisitNoteEmpty(next)
       ? undefined
-      : { entries: [{ savedAt, fields: next }] };
+      : { ...note, entries: [{ savedAt, fields: next, author: by }] };
   }
   const current = previous[previous.length - 1].fields;
   if (sameVisitNoteFields(current, next)) {
     return note;
   }
-  return { entries: [...previous, { savedAt, fields: next }] };
+  // A version never carries a stamp at or before the one it supersedes. The clock
+  // is the machine's, and a machine's clock can be corrected backwards (or by a
+  // sync, or across a DST boundary): without this, an amendment could be dated
+  // *before* the entry it replaces, and the trail — which is read in order —
+  // would state an impossibility about a clinical record. One second, so the
+  // stamps stay distinct at the resolution they are printed at.
+  const at = Math.max(savedAt, previous[previous.length - 1].savedAt + 1000);
+  return {
+    ...note,
+    entries: [...previous, { savedAt: at, fields: next, author: by }],
+  };
 };
+
+/**
+ * Records that a note has been moved to another visit, keeping what it says and
+ * its whole trail — and keeping the visit it was **written for**.
+ *
+ * The one place a stored note's filing is changed, so the fact of the move cannot
+ * be lost on the way: the entries are copied through untouched (re-filing is not
+ * an amendment of the text), and `refiledFrom` keeps the *original* key through a
+ * second move — a note written for T3, filed at T2 and later moved to T4 was
+ * still written for T3, and that is what its line says. @see formatVisitNoteRefiling
+ */
+export const refileVisitNoteEntry = (
+  note: VisitNote,
+  from: string,
+  refiledAt: number,
+): VisitNote => ({
+  ...note,
+  refiledFrom: note.refiledFrom !== undefined ? note.refiledFrom : from,
+  refiledAt,
+});
 
 /**
  * The note keys of a chart that no visit on file carries — a note whose visit
@@ -327,11 +530,23 @@ export const getUnmatchedVisitNoteKeys = (
 };
 
 /**
- * How many of a chart's visits have a note on file — the identity band's count,
- * and the honest denominator for "is this a patient record or a pile of films".
+ * How many of a chart's visits are **written up** — the identity band's count and
+ * the printed running head's, and the honest denominator for "is this a patient
+ * record or a pile of films".
+ *
+ * A visit counts when the entry that *stands* there holds text. It deliberately
+ * does not count a visit whose only entry has been retracted (every field
+ * cleared): that entry is still in the record, still dated and still readable as
+ * an earlier version — nothing is deleted here — but the visit has no written-up
+ * content, and "CLINICAL NOTES 2 of 3 visits" counting it said the opposite in the
+ * one place a clinician reads the number as an answer to "what still needs
+ * writing up".
  */
-export const countVisitsWithNotes = (
+export const countVisitsWithWrittenNotes = (
   notes: { [key: string]: VisitNote },
   visitKeys: string[],
 ): number =>
-  visitKeys.filter((key) => readVisitNote(notes[key]) !== null).length;
+  visitKeys.filter((key) => {
+    const reading = readVisitNote(notes[key]);
+    return reading !== null && !isVisitNoteEmpty(reading.current);
+  }).length;

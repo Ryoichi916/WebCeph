@@ -2,7 +2,9 @@ import { Store, Middleware } from 'redux';
 import idb from 'idb-keyval';
 
 import { isActionOfType } from 'utils/store';
-import { loadProjectSucceeded, setPatientCaseSummary } from 'actions/workspace';
+import {
+  loadProjectSucceeded, setPatientCaseSummary, saveProject,
+} from 'actions/workspace';
 import { defaultWorkspaceId, defaultWorkspaceSettings } from 'utils/config';
 import { getPatientRecords } from 'store/reducers/workspace';
 import { getPatientCaseIndex } from 'store/reducers/patients';
@@ -239,6 +241,34 @@ const middleware = ({ getState, dispatch }: Store<StoreState>) =>
       }
       // The list's row for this case, counted off the very state just written.
       await refreshCaseSummary(state as StoreState, patientId, dispatch);
+      return;
+    }
+
+    /**
+     * A clinical note is written to storage the moment it is saved.
+     *
+     * Everything else in a project is a *file* the clinician chose and can choose
+     * again: an image lost to a closed tab is re-uploaded from the folder it came
+     * from. A note exists nowhere but here — it is typed once, into a dialog that
+     * states it will be "kept with the patient's project" — and until this branch
+     * existed that promise came true only when something else happened to save the
+     * project (leaving the case, or the toolbar's Save). A clinician who wrote a
+     * diagnosis and closed the tab lost it.
+     *
+     * It goes through SAVE_PROJECT_REQUESTED rather than writing a key of its own:
+     * one write path for the project means one set of guards (see
+     * `unbackedPatientId`) and one place the case list's row is re-counted from
+     * what was actually written.
+     */
+    if (
+      isActionOfType(action, 'SAVE_VISIT_NOTE') ||
+      isActionOfType(action, 'REFILE_VISIT_NOTE')
+    ) {
+      next(action);
+      const patientId = getState()['patients.activeId'];
+      if (patientId !== null) {
+        dispatch(saveProject({ patientId }));
+      }
       return;
     }
 

@@ -1,6 +1,8 @@
 import { handleActions } from 'utils/store';
 
-import { appendVisitNoteEntry, readVisitNote } from 'utils/visitNotes';
+import {
+  appendVisitNoteEntry, readVisitNote, refileVisitNoteEntry,
+} from 'utils/visitNotes';
 
 const KEY_DASHBOARD_SHOWN: StoreKey = 'records.dashboard.isShown';
 const KEY_FILING_INTENT: StoreKey = 'records.filing.intent';
@@ -59,8 +61,12 @@ const reducers: Partial<ReducerMap> = {
    * trail across to the new key rather than starting it again.
    */
   [KEY_VISIT_NOTES]: handleActions<typeof KEY_VISIT_NOTES>({
-    SAVE_VISIT_NOTE: (state, { payload: { timepoint, fields, savedAt } }) => {
-      const next = appendVisitNoteEntry(state[timepoint], fields, savedAt);
+    SAVE_VISIT_NOTE: (
+      state, { payload: { timepoint, fields, savedAt, author } },
+    ) => {
+      const next = appendVisitNoteEntry(
+        state[timepoint], fields, savedAt, author,
+      );
       if (next === state[timepoint]) {
         return state;
       }
@@ -71,11 +77,15 @@ const reducers: Partial<ReducerMap> = {
       return { ...state, [timepoint]: next };
     },
     /**
-     * Move a note to the visit it belongs to, with its whole amendment trail.
+     * Move a note to the visit it belongs to, with its whole amendment trail —
+     * and with the fact of the move on it, so the entry cannot come to read as
+     * though it had been written at the visit it was moved to (see
+     * `refileVisitNoteEntry`, and the filing line every surface prints from it).
+     *
      * Refused where the destination already holds a note — a move must never be
      * able to overwrite an entry somebody wrote.
      */
-    REFILE_VISIT_NOTE: (state, { payload: { from, to } }) => {
+    REFILE_VISIT_NOTE: (state, { payload: { from, to, refiledAt } }) => {
       const note = state[from];
       if (readVisitNote(note) === null || from === to) {
         return state;
@@ -83,7 +93,7 @@ const reducers: Partial<ReducerMap> = {
       if (readVisitNote(state[to]) !== null) {
         return state;
       }
-      const next = { ...state, [to]: note };
+      const next = { ...state, [to]: refileVisitNoteEntry(note, from, refiledAt) };
       delete next[from];
       return next;
     },

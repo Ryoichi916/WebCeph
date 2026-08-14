@@ -46,6 +46,10 @@ import IconFilm from 'material-ui/svg-icons/image/crop-original';
 import IconUndo from 'material-ui/svg-icons/content/undo';
 import IconRedo from 'material-ui/svg-icons/content/redo';
 
+// The record menu's correction dialog edits the visit label a clinical note is
+// filed under, so the toolbar reads the note filed there. @see handleSaveRecordMeta
+import { getVisitNoteKey, readVisitNote } from 'utils/visitNotes';
+
 const classes = require('./style.scss');
 
 // Lateral-cephalometric analyses the user can switch between — shared with the
@@ -554,6 +558,14 @@ export default class TracingToolbar extends React.PureComponent<Props, State> {
               photoView: record.photoView,
             }}
             fileName={record.name}
+            // What a relabelling does to the visit's clinical note, stated by the
+            // same dialog wherever it is opened from.
+            // @see EditRecordDialog#renderNoteEffect
+            visitNote={readVisitNote(
+              this.props.notes[getVisitNoteKey(record.timepoint)],
+            )}
+            isOnlyImageAtVisit={this.countImagesAtVisit(record.timepoint) === 1}
+            hasNoteAt={this.hasNoteAt}
             onSave={this.handleSaveRecordMeta}
             onCancel={this.closeEditRecord}
           />
@@ -681,8 +693,36 @@ export default class TracingToolbar extends React.PureComponent<Props, State> {
 
   private closeEditRecord = () => this.setState({ isEditRecordOpen: false });
 
+  /** How many images are filed at one visit label, as the record groups them. */
+  private countImagesAtVisit = (timepoint: string | null): number => {
+    const key = getVisitNoteKey(timepoint);
+    return this.props.records
+      .filter((r) => getVisitNoteKey(r.timepoint) === key).length;
+  };
+
+  /** Whether a visit key already holds a clinical note. */
+  private hasNoteAt = (key: string): boolean =>
+    readVisitNote(this.props.notes[key]) !== null;
+
+  /**
+   * Save the corrected details — and carry the visit's clinical note across when
+   * the correction is what moves the visit. The same rule, and the same action, as
+   * the records dashboard's own path (@see RecordsDashboard#handleSaveMeta): a note
+   * is filed under the visit's label, and relabelling the last image of a visit
+   * would otherwise leave a clinician's diagnosis pointing at a label nothing
+   * carries.
+   */
   private handleSaveRecordMeta = (meta: ImageRecordMeta) => {
+    const { record } = this.props;
     this.setState({ isEditRecordOpen: false });
+    if (record !== null) {
+      const from = getVisitNoteKey(record.timepoint);
+      const to = getVisitNoteKey(meta.timepoint);
+      if (from !== to && this.hasNoteAt(from) &&
+        this.countImagesAtVisit(record.timepoint) === 1) {
+        this.props.onRefileVisitNote(from, to);
+      }
+    }
     this.props.onSaveRecordMeta(meta);
   };
 

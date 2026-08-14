@@ -40,6 +40,16 @@ export interface StateProps {
    * under the metadata so the other timepoints are one click away.
    */
   records: PatientRecord[];
+  /**
+   * The written half of the record: one clinical note per visit, keyed by the
+   * visit's timepoint label (@see StoreEntries['records.notes']).
+   *
+   * Read here for one reason: this panel's "Edit details" dialog edits that very
+   * label, so it has to be able to say what a relabelling does to the note filed
+   * at the visit — and to carry the note across with the image.
+   * @see RecordsDashboard#handleSaveMeta
+   */
+  notes: { [timepointKey: string]: VisitNote };
 }
 
 export interface DispatchProps {
@@ -54,6 +64,13 @@ export interface DispatchProps {
   onOpenRecord(record: PatientRecord): any;
   /** Correct this image's type / timepoint / capture date. */
   onSaveMeta(meta: ImageRecordMeta): any;
+  /**
+   * Carry a visit's clinical note, with its whole amendment trail, onto the visit
+   * label this image has just been given — the same action the records dashboard
+   * dispatches, so a relabelling made from here and one made there do the same
+   * thing to the record. @see Events['REFILE_VISIT_NOTE']
+   */
+  onRefileVisitNote(from: string, to: string): any;
   /** Drop this image from the record; see RecordsDashboard/props. */
   onRemoveRecord(record: PatientRecord, fallbackWorkspaceId: string | null): any;
 }

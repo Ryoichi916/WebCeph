@@ -20,6 +20,10 @@ import { getRecordAnalyses, getRecordLaunch } from './selectors';
 // The written half of the record: one clinical note per visit.
 import { getVisitNotes } from 'store/reducers/workspace/records';
 
+// Who signs the sheets this device prints — stamped into a note when it is
+// written, so an entry says who made it. @see onSaveVisitNote
+import { readLetterhead } from 'components/ClinicalReport/letterhead';
+
 import { getWorkspacesIdsInOrder } from 'store/reducers/workspace/order';
 import { getWorkspaceImageIds } from 'store/reducers/workspace/settings';
 
@@ -230,17 +234,30 @@ const mapDispatchToProps = (dispatch: GenericDispatch): DispatchProps => ({
    * of its payload — and the reducer *appends*: what is on file is kept and this
    * version is added beside it, so an amendment is recorded as an amendment and
    * the entry stays readable as it stood. @see VisitNote
+   *
+   * The author is read here for the same reason and stamped into the version by
+   * the reducer: it is whoever the device's letterhead names *now*
+   * (@see components/ClinicalReport/letterhead — the same clinician who signs
+   * every sheet this app prints), and once written it is part of the entry. Empty
+   * where no clinician has been entered on this device, and the surfaces then say
+   * the author is not recorded rather than putting a name to an entry.
    */
   onSaveVisitNote: (timepoint: string, fields: VisitNoteFields) => {
+    const { clinician } = readLetterhead();
     dispatch(saveVisitNote({
-      timepoint, fields, savedAt: new Date().getTime(),
+      timepoint,
+      fields,
+      savedAt: new Date().getTime(),
+      author: clinician !== '' ? clinician : null,
     }));
   },
   // Moving a note onto the visit it belongs to, with its trail — never onto a
   // visit that already holds one (the reducer refuses it, and the dashboard only
-  // offers the visits that have none).
+  // offers the visits that have none). The day of the move travels with it: an
+  // entry filed at another visit says so, and says which visit it was written
+  // for. @see utils/visitNotes#formatVisitNoteRefiling
   onRefileVisitNote: (from: string, to: string) => {
-    dispatch(refileVisitNote({ from, to }));
+    dispatch(refileVisitNote({ from, to, refiledAt: new Date().getTime() }));
   },
   onRemoveRecord: (record: PatientRecord, fallbackWorkspaceId: string | null) => {
     dispatch(closeImage({

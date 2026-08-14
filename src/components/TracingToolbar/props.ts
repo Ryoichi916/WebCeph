@@ -16,6 +16,15 @@ export interface StateProps {
   record: PatientRecord | null;
   /** Every image of the open patient — the fallback tile a removal lands on. */
   records: PatientRecord[];
+  /**
+   * The clinical notes of the open patient, keyed by the visit's timepoint label
+   * (@see StoreEntries['records.notes']).
+   *
+   * Read for one reason: the record menu's "Edit details" edits that very label,
+   * so it has to state what a relabelling does to the note filed at the visit —
+   * and carry the note across with the image. @see RecordsDashboard#handleSaveMeta
+   */
+  notes: { [timepointKey: string]: VisitNote };
   isAutoPlotting: boolean;
   /** Whether both reference points (Sella and Nasion) are placed. */
   canPlotFromReferences: boolean;
@@ -79,6 +88,12 @@ export interface DispatchProps {
   onUnsetScaleFactor(): any;
   /** Correct this image's type / timepoint / capture date. */
   onSaveRecordMeta(meta: ImageRecordMeta): any;
+  /**
+   * Carry a visit's clinical note, with its whole amendment trail, onto the visit
+   * label this image has just been given — the same action the records dashboard
+   * dispatches. @see Events['REFILE_VISIT_NOTE']
+   */
+  onRefileVisitNote(from: string, to: string): any;
   /** Drop this image from the record; see RecordsDashboard/props. */
   onRemoveRecord(record: PatientRecord, fallbackWorkspaceId: string | null): any;
 };

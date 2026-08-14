@@ -121,6 +121,31 @@
   }
 }
 
+// What this edit does to the visit's clinical note (@see
+// EditRecordDialog#renderNoteEffect). Quiet while the note stays where it is, in
+// the app's warning register once the label being typed would move it: the note is
+// a clinician's own text, and its filing changing is a change to the record.
+.note_effect,
+.note_effect__warn {
+  margin: 10px 0 0;
+  padding: 9px 11px;
+  border-radius: 6px;
+  font-family: $font-stack;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.note_effect {
+  background: $bg-sunken;
+  color: $text-secondary;
+}
+
+.note_effect__warn {
+  background: $warn-bg;
+  border: 1px solid #F0DDB8;
+  color: #6B4200;
+}
+
 // What saving will change, stated before it is saved.
 .effect {
   &__ok,

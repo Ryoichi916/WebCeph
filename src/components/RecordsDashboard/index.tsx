@@ -129,9 +129,10 @@ import {
 
 import {
   getVisitNoteKey,
+  getVisitNoteVisitName,
   getUnmatchedVisitNoteKeys,
   readVisitNote,
-  countVisitsWithNotes,
+  countVisitsWithWrittenNotes,
 } from 'utils/visitNotes';
 
 import { getNameForAnalysis } from 'components/AnalysisSelector/strings';
@@ -672,10 +673,10 @@ const BODY_OPEN_CLASS = 'records-dashboard-open';
  * The header band is the patient's identity — the demographics every analysis
  * and every printed report is read against, editable here because correcting a
  * wrong date of birth or sex is routine clinical work. Below it, filling the
- * rest of the page, is the imaging record — grouped by timepoint, not listed by
- * file: one visit per row of the timeline, headed by its label, the day (or
- * span) it covers and the patient's age then, with that visit's films and
- * photographs beside it as cards. Each card opens its image and carries the two
+ * rest of the page, is the case record — grouped by visit, not listed by file:
+ * one visit per row of the timeline, headed by its label, the day (or span) it
+ * covers and the patient's age then, carrying the clinical entry written about
+ * that visit and its films and photographs beside it as cards. Each card opens its image and carries the two
  * recovery actions the record needs (correct the details, or drop the image).
  *
  * The way back to the editor is a fixed control in the page bar, and Escape
@@ -821,8 +822,13 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
                   here as well, a long name was clamped to
                   "…for Alexandra Katherin…" on screen and cut on paper for no
                   gain. */}
+              {/* What this surface holds, named for what it *is*: the visits of
+                  the case, each with the images filed at it and the clinical entry
+                  written about it. It said "Every image on file, grouped by
+                  timepoint" while the clinical notes were already sitting in it —
+                  a records module whose own caption denies half of what it keeps. */}
               <span className={classes.pagebar_caption}>
-                Every image on file, grouped by timepoint
+                Every visit in order — its images and its clinical entry
               </span>
             </div>
             <span className={classes.pagebar_spacer} />
@@ -839,7 +845,7 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
               <button
                 type="button"
                 className={classes.print_action}
-                title="Print this patient's imaging records, or save them as a PDF"
+                title="Print this patient's case records, or save them as a PDF"
                 onClick={this.handlePrint}
               >
                 <IconPrint color="currentColor" style={actionIconStyle} />
@@ -904,9 +910,15 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
                   [classes.records_head__floating]: isHeadFloating,
                 })}
               >
-                <h3 className={classes.records_title}>Imaging records</h3>
+                <h3 className={classes.records_title}>Case records</h3>
+                {/* The count says *images*, because that is what it counts. It
+                    read "5 on file" under a heading that used to say "Imaging
+                    records", and the clinical entries now filed in this same panel
+                    were not in that number — the visits that carry one are counted
+                    by the identity band ("CLINICAL NOTES 2 of 3 visits"). */}
                 <span className={classes.records_count}>
-                  {records.length === 1 ? '1 on file' : `${records.length} on file`}
+                  {records.length === 1
+                    ? '1 image on file' : `${records.length} images on file`}
                 </span>
                 <span className={classes.records_spacer} />
                 {/* With nothing on file the empty block below owns the message;
@@ -940,6 +952,20 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
                     <p className={cx(classes.empty_hint, classes.empty_hint__offer)}>
                       Add a lateral cephalogram to start tracing. Frontal films,
                       panoramics and photographs can be filed alongside it.
+                    </p>
+                    {/* …and what this chart cannot do yet, stated where it is
+                        first met rather than discovered. A visit exists here
+                        because an image was filed at it, so the clinical entry —
+                        which is filed against the visit, not against a film — has
+                        nowhere to go until then: a consultation, an emergency
+                        visit or a debond with no radiograph cannot be written up
+                        in this record. It is on the backlog (docs/IMPROVEMENTS.md);
+                        until it is done, the honest thing is to say so instead of
+                        letting a clinician look for the entry field. */}
+                    <p className={cx(classes.empty_hint, classes.empty_hint__offer)}>
+                      A clinical entry is written on a visit, and a visit appears
+                      here with its first image — a consultation with no film
+                      cannot be recorded yet.
                     </p>
                     {/* Typed, like every affordance after it. The prose above
                         names the types a first visit can hold while the only
@@ -1309,10 +1335,20 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
     const {
       editingImageId, removingImageId, isEditingPatient, applyScaleImageId,
       reportImageId, simulationImageId, superimposePair, photoViewer,
+      editingNoteFor,
     } = this.state;
     if (
       editingImageId !== null || removingImageId !== null || isEditingPatient ||
       applyScaleImageId !== null ||
+      // …including the clinical-note editor, and it matters more there than
+      // anywhere else on this surface: the text in that dialog exists nowhere
+      // else. Without it in this list, one Escape while writing an entry took the
+      // clinician out of the records surface altogether — the dialog went with it,
+      // unmounted, and what they had typed was gone, with no draft, no undo and no
+      // trace in the record. (The dialog itself refuses to close on Escape while
+      // it holds unsaved text; this is what keeps the *page* under it from
+      // leaving.) @see VisitNoteDialog
+      editingNoteFor !== null ||
       // …including the photograph viewer, which closes on Escape itself: without
       // it in this list one Escape shut the viewer *and* left the records surface,
       // landing the clinician on whichever photograph happened to be open in the
@@ -1337,7 +1373,7 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
 
   /**
    * The printed chart's running head — and, on paper, the record's *only* header:
-   * it repeats on every sheet, because a sheet of a patient's imaging record that
+   * it repeats on every sheet, because a sheet of a patient's case record that
    * does not name the patient is not filable, and the identity band is hidden
    * behind it (see the print block) so no fact is printed twice. It replaces the
    * page bar, whose exit control and keyboard shortcut mean nothing on paper.
@@ -1412,7 +1448,7 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
         <tr>
           <th className={classes.print_head_cell} scope="col">
             <span className={classes.print_head_inner}>
-              <span className={classes.print_head_label}>Imaging records</span>
+              <span className={classes.print_head_label}>Case records</span>
               <span className={classes.print_head_name}>{heading}</span>
               {parts.length > 0 ? (
                 <span className={classes.print_head_facts}>{parts.join(' · ')}</span>
@@ -1490,7 +1526,7 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
         ? dates[0] : `${dates[0]} – ${dates[dates.length - 1]}`);
     return (
       <Helmet
-        title={printDocumentTitle(patient, 'Imaging records', [span])}
+        title={printDocumentTitle(patient, 'Case records', [span])}
       />
     );
   };
@@ -1542,10 +1578,14 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
     return {
       groups,
       timepointCount: groups.filter(({ label }) => label !== null).length,
-      // How many of those visits have a clinical note on file — the one reading
-      // of "is this a patient record or a pile of films" the band can state, and
-      // counted off the notes themselves (@see utils/visitNotes).
-      notedVisits: countVisitsWithNotes(
+      // How many of those visits are **written up** — the one reading of "is this
+      // a patient record or a pile of films" the band can state, and counted off
+      // the notes themselves (@see utils/visitNotes#countVisitsWithWrittenNotes,
+      // which counts a visit whose current entry holds text: a visit whose only
+      // entry has been retracted is still in the record and still readable, but it
+      // is not one that has been written up, and counting it made "CLINICAL NOTES
+      // 2 of 3 visits" say the opposite of what it means).
+      notedVisits: countVisitsWithWrittenNotes(
         this.props.notes, groups.map(({ key }) => key),
       ),
       unlabelled: groups
@@ -3619,6 +3659,14 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
     // which reads as a timepoint plus an unrelated remark. The slots row below
     // and the trend's cells then named the same visit two further ways.
     const visitName = label !== null ? label.trim() : 'No timepoint label';
+    // The same visit, named for a *sentence* rather than as a heading — the note
+    // block's tooltip and accessible name ("Write the clinical note for …"), which
+    // has to read as English and has to match what the editor's caption and the
+    // re-filing pills call the same visit. One helper for all three: this page
+    // used to call the unlabelled visit "No timepoint label" in the note's tooltip
+    // and "images with no timepoint label" in the dialog it opened.
+    // @see utils/visitNotes#getVisitNoteVisitName
+    const noteVisitName = getVisitNoteVisitName(label);
     // How long after the previous visit this one was taken. The elapsed interval
     // between consecutive stops is the case timeline's own figure on screen, and
     // the band is a screen device (see the print block) — so on paper each visit
@@ -3756,7 +3804,7 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
               app composed: an unwritten field is absent, an amended entry says so
               and stays readable as it stood (see `VisitNote`). */}
           <VisitNoteBlock
-            visitName={visitName}
+            visitName={noteVisitName}
             note={this.props.notes[getVisitNoteKey(group.label)]}
             onEdit={this.openVisitNote(getVisitNoteKey(group.label))}
           />
@@ -4102,7 +4150,7 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
   };
 
   private renderDialogs = () => {
-    const { records, patient, otherChartIds } = this.props;
+    const { records, patient, otherChartIds, notes } = this.props;
     const {
       editingImageId, removingImageId, isEditingPatient, patientFocusField,
       applyScaleImageId, removeScaleImageId, photoViewer, photoBatch,
@@ -4143,6 +4191,14 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
             type: null, timepoint: null, captureDate: null, photoView: null,
           }}
           fileName={editing !== undefined ? editing.name : null}
+          // The visit's clinical note travels with the visit label this dialog
+          // edits, so the dialog is told what is filed there and whether this
+          // image is the last thing holding that label. @see handleSaveMeta
+          visitNote={editing !== undefined
+            ? readVisitNote(notes[getVisitNoteKey(editing.timepoint)]) : null}
+          isOnlyImageAtVisit={editing !== undefined
+            ? this.countImagesAtVisit(editing) === 1 : false}
+          hasNoteAt={this.hasNoteAt}
           onSave={this.handleSaveMeta}
           onCancel={this.closeEdit}
         />
@@ -4242,10 +4298,12 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
       ? groupRecordsByTimepoint(records).filter((g) => g.key === key)[0]
       : undefined;
     const date = group !== undefined ? group.firstDate : null;
+    // Named through the one helper the note block's own controls use, so the
+    // dialog's caption and the button that opened it cannot call one visit two
+    // things. @see utils/visitNotes#getVisitNoteVisitName
     const visitName = group !== undefined
-      ? (group.label !== null ? group.label.trim() : 'images with no timepoint label')
-      : (key !== null && key !== ''
-        ? key : 'images with no timepoint label');
+      ? getVisitNoteVisitName(group.label)
+      : getVisitNoteVisitName(key);
     return (
       <VisitNoteDialog
         open={key !== null}
@@ -4302,8 +4360,7 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
           .filter(({ key }) => readVisitNote(notes[key]) === null)
           .map((group) => ({
             key: group.key,
-            label: group.label !== null
-              ? group.label.trim() : 'the images with no timepoint label',
+            label: getVisitNoteVisitName(group.label),
           }))}
         onRefile={this.props.onRefileVisitNote}
       />
@@ -4660,10 +4717,48 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
 
   private closeEdit = () => this.setState({ editingImageId: null });
 
+  /** How many images are filed at the same visit as this one, itself included. */
+  private countImagesAtVisit = (record: PatientRecord): number => {
+    const key = getVisitNoteKey(record.timepoint);
+    return this.props.records
+      .filter((r) => getVisitNoteKey(r.timepoint) === key).length;
+  };
+
+  /** Whether a visit key already holds a clinical note. */
+  private hasNoteAt = (key: string): boolean =>
+    readVisitNote(this.props.notes[key]) !== null;
+
+  /**
+   * Save corrected record details — and, where the correction relabels the visit,
+   * carry the visit's clinical note across with it.
+   *
+   * A note is filed under the visit's timepoint label, so correcting "T1" to
+   * "T1 Pre-treatment" moved the images and left the entry pointing at a label
+   * nothing carried: the visit read "No note recorded for this visit" and the
+   * clinician's diagnosis appeared in the unfiled-notes panel further down the
+   * page. Nothing was lost — that panel exists so nothing can be — but a
+   * correction of a spelling is not a request to detach a diagnosis, so the note
+   * is re-filed with the image and the dialog states it beforehand
+   * (@see EditRecordDialog#renderNoteEffect).
+   *
+   * Only when this image is the last one holding the old label: with other images
+   * still filed there the visit itself has not moved, and its note belongs to the
+   * images that stayed. The move is the same action the unfiled panel dispatches
+   * (`REFILE_VISIT_NOTE`), so the entry keeps its whole trail and the record states
+   * which visit it was written for — and the reducer refuses a destination that
+   * already holds a note, which leaves the entry listed as unfiled exactly as the
+   * dialog said it would be.
+   */
   private handleSaveMeta = (meta: ImageRecordMeta) => {
     const { editingImageId } = this.state;
     const record = this.props.records.filter((r) => r.imageId === editingImageId)[0];
     if (record !== undefined) {
+      const from = getVisitNoteKey(record.timepoint);
+      const to = getVisitNoteKey(meta.timepoint);
+      if (from !== to && this.hasNoteAt(from) &&
+        this.countImagesAtVisit(record) === 1) {
+        this.props.onRefileVisitNote(from, to);
+      }
       this.props.onSaveRecordMeta(record, meta);
     }
     this.setState({ editingImageId: null });

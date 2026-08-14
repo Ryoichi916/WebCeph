@@ -36,6 +36,10 @@ import {
 
 import { formatAgeFull } from 'utils/patient';
 
+// This panel's "Edit details" edits the visit label a clinical note is filed
+// under, so it reads the note filed there. @see handleSaveMeta
+import { getVisitNoteKey, readVisitNote } from 'utils/visitNotes';
+
 import { LATERAL_ANALYSES } from 'analyses/lateral';
 
 const classes = require('./style.scss');
@@ -141,7 +145,7 @@ export default class RecordViewer extends React.PureComponent<Props, State> {
     const {
       className, src, name, type, timepoint, captureDate, photoView,
       width, height,
-      patient, otherChartIds, records, imageId, onOpenRecordsClick,
+      patient, otherChartIds, records, imageId, notes, onOpenRecordsClick,
     } = this.props;
     const dateOfBirth = patient !== null ? patient.dateOfBirth : null;
     const { zoom, isPanning, isPannable } = this.state;
@@ -502,10 +506,18 @@ export default class RecordViewer extends React.PureComponent<Props, State> {
           </div>
         </aside>
 
+        {/* The same dialog the records dashboard corrects a record with, told the
+            same three things about the visit's clinical note: what is filed there,
+            whether this image is the last thing holding the label the note hangs
+            on, and whether the label being typed already carries an entry of its
+            own. @see EditRecordDialog#renderNoteEffect */}
         <EditRecordDialog
           open={this.state.isEditOpen}
           initialValue={{ type, timepoint, captureDate, photoView }}
           fileName={name}
+          visitNote={readVisitNote(notes[getVisitNoteKey(timepoint)])}
+          isOnlyImageAtVisit={this.countImagesAtVisit(timepoint) === 1}
+          hasNoteAt={this.hasNoteAt}
           onSave={this.handleSaveMeta}
           onCancel={this.closeEdit}
         />
@@ -633,8 +645,34 @@ export default class RecordViewer extends React.PureComponent<Props, State> {
     }
   };
 
+  /** How many images are filed at one visit label, as the record groups them. */
+  private countImagesAtVisit = (timepoint: string | null): number => {
+    const key = getVisitNoteKey(timepoint);
+    return this.props.records
+      .filter((r) => getVisitNoteKey(r.timepoint) === key).length;
+  };
+
+  /** Whether a visit key already holds a clinical note. */
+  private hasNoteAt = (key: string): boolean =>
+    readVisitNote(this.props.notes[key]) !== null;
+
+  /**
+   * Save the corrected details — and carry the visit's clinical note across when
+   * the correction is what moves the visit.
+   *
+   * The same rule, for the same reason, as the records dashboard's own path (see
+   * `RecordsDashboard#handleSaveMeta`): a note is filed under the visit's label, so
+   * relabelling the last image of a visit would otherwise leave a clinician's
+   * diagnosis pointing at a label nothing carries.
+   */
   private handleSaveMeta = (meta: ImageRecordMeta) => {
+    const from = getVisitNoteKey(this.props.timepoint);
+    const to = getVisitNoteKey(meta.timepoint);
     this.setState({ isEditOpen: false });
+    if (from !== to && this.hasNoteAt(from) &&
+      this.countImagesAtVisit(this.props.timepoint) === 1) {
+      this.props.onRefileVisitNote(from, to);
+    }
     this.props.onSaveMeta(meta);
   };
 

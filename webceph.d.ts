@@ -717,13 +717,29 @@ interface VisitNoteFields {
 }
 
 /**
- * One saved version of a visit's note: what was written, and when it was
- * written. @see VisitNote
+ * One saved version of a visit's note: what was written, when it was written,
+ * and who by. @see VisitNote
  */
 interface VisitNoteEntry {
-  /** Epoch ms this version was saved (local clock of the machine writing it). */
+  /**
+   * Epoch ms this version was saved (local clock of the machine writing it).
+   * Strictly greater than the stamp of the version it supersedes — see
+   * `utils/visitNotes#appendVisitNoteEntry`, which will not let a corrected clock
+   * date an amendment before the entry it replaces.
+   */
   savedAt: number;
   fields: VisitNoteFields;
+  /**
+   * Who wrote this version: the clinician on the device's letterhead at the
+   * moment it was saved (@see components/ClinicalReport/letterhead), copied in
+   * here and never read back from the letterhead afterwards — correcting the
+   * letterhead names whoever signs the *next* sheet, and must not be able to
+   * rewrite who wrote an entry a year ago.
+   *
+   * Absent where the device had no clinician on file, and the surfaces then state
+   * that the author is not recorded rather than attributing the entry to anyone.
+   */
+  author?: string;
 }
 
 /**
@@ -745,6 +761,20 @@ interface VisitNoteEntry {
 interface VisitNote {
   /** Oldest first; the last is current. Never empty for a stored note. */
   entries: VisitNoteEntry[];
+  /**
+   * The timepoint key this note was **written for**, when it has since been
+   * re-filed at another visit (@see Events['REFILE_VISIT_NOTE']) — the original
+   * one, kept through any number of moves.
+   *
+   * Absent on a note that has always been filed where it sits, which is every
+   * note of every case nothing has been relabelled in. Without it, moving an
+   * entry from T3 to T2 left it dated under T2's day as though it had been
+   * written there, which is a silent change to what the record says about when a
+   * decision was taken. @see utils/visitNotes#formatVisitNoteRefiling
+   */
+  refiledFrom?: string;
+  /** Epoch ms of the most recent re-filing, printed with the line above. */
+  refiledAt?: number;
 }
 
 interface StoreState {
@@ -1299,6 +1329,13 @@ interface Events {
     fields: VisitNoteFields;
     /** Epoch ms this version was saved. */
     savedAt: number;
+    /**
+     * Who wrote it — the device's letterhead clinician, read by the surface that
+     * saves for the same reason the clock is, and stamped into the version for
+     * good. Null where the device has no clinician on file.
+     * @see VisitNoteEntry.author
+     */
+    author: string | null;
   };
   /**
    * Move a whole note — every version of it — from one timepoint key to
@@ -1309,10 +1346,16 @@ interface Events {
    * says which visit an entry belongs to, and is not itself an amendment of what
    * it says. Refused when the destination already holds a note, so nothing a
    * clinician wrote is ever overwritten by a move.
+   *
+   * The move itself is recorded on the note (`refiledFrom`/`refiledAt`) and
+   * printed with it: an entry re-filed onto another visit's day must not read as
+   * though it had been written that day. @see VisitNote.refiledFrom
    */
   REFILE_VISIT_NOTE: {
     from: string;
     to: string;
+    /** Epoch ms of the move, for the note's own filing line. */
+    refiledAt: number;
   };
   /**
    * Load a project's visit notes wholesale — the import path of the wceph
