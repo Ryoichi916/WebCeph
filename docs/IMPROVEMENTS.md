@@ -86,6 +86,17 @@ never from the on-screen preview alone.
   `PERSISTABLE_EVENTS`.) The fix is to persist each case's film thumbnail under
   its own idb key, so a write touches one case's tile rather than the practice's.
   `store/middleware/persistence.ts`, `store/middleware/project.ts`.
+- [ ] **`npm test` cannot run: the test runner is not installed.** The suite is
+  karma + mocha + `expect`, and none of the three are in `node_modules` — the
+  script exits `karma: not found`, so the nine spec files in `src/` (analyses,
+  landmarks, predictor, wceph import/export) are never executed by anything. The
+  specs themselves are sound: run through a stand-in runner they are 122 passing,
+  1 failing, and the one failure is the exporter spec — its fixture state carries
+  no `workspaces.settings`, and `createExport` has read the workspace's
+  superimposition mode since 2017 (`Cannot read properties of undefined`), which
+  is the same `.wceph` export fault recorded in P3. Restoring the devDependencies
+  (or moving the suite to a runner that is installed) is what makes any of this
+  enforceable in CI. `karma.conf.js`, `package.json`.
 
 ## P3 — modules still missing against the commercial field
 

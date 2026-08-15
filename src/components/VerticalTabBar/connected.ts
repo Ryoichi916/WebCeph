@@ -39,12 +39,15 @@ import {
   getImageType,
   getImageTimepoint,
   getImageCaptureDate,
+  getImagePhotoView,
 } from 'store/reducers/workspace/image';
 
 import {
   getImageTypeShortLabel,
   getImageTypeLabel,
   getImageTypeLabelWithArticle,
+  getPhotoViewShortLabel,
+  getPhotoViewLabel,
   formatCaptureDate,
 } from 'utils/records';
 
@@ -70,12 +73,19 @@ const mapStateToProps: MapStateToProps<StateProps, OwnProps, StoreState> =
         const timepoint = getImageTimepoint(state)(firstImageId);
         const type = getImageType(state)(firstImageId);
         const date = formatCaptureDate(getImageCaptureDate(state)(firstImageId));
+        // A photograph filed at a series position is named by that position, the
+        // way the dashboard's own record chips name it. Its image type alone does
+        // not identify it: one visit's series carries three intraoral frames and
+        // two facial ones, and captioned by type the rail read "T2 / Intraoral"
+        // three times over — five tiles, three of them indistinguishable.
+        const view = getImagePhotoView(state)(firstImageId);
         captions[workspaceId] = {
           timepoint,
-          typeLabel: getImageTypeShortLabel(type),
+          typeLabel: view !== null
+            ? getPhotoViewShortLabel(view) : getImageTypeShortLabel(type),
           fullLabel: [
             timepoint,
-            getImageTypeLabel(type),
+            view !== null ? getPhotoViewLabel(view) : getImageTypeLabel(type),
             date,
           ].filter((part) => part !== null).join(' · '),
         };

@@ -10,7 +10,9 @@ import find from 'lodash/find';
 
 describe('WCeph Exporter', () => {
   it('should be able to export a valid WCeph v1 file', async () => {
-    const url = require('file-loader!./fixtures/images/ceph1.jpg');
+    // esModule=false: see the note in import.test.ts — webpack 5's file-loader
+    // returns a module namespace object unless asked for the bare URL.
+    const url = require('file-loader?esModule=false!./fixtures/images/ceph1.jpg');
     const imageFile = new File([await (await fetch(url)).blob()], 'Export test.jpg');
     const state: Partial<StoreState> = {
       'workspace.mode': 'tracing',

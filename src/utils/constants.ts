@@ -41,7 +41,11 @@ import memoize from 'lodash/memoize';
 
 declare var require: __WebpackModuleApi.RequireFunction;
 
-const requireCursor = require.context('file-loader!./cursors', false, /.png$/i);
+// `esModule=false` keeps file-loader returning the URL string itself. Under
+// webpack 5 the loader defaults to an ES module, so a bare `file-loader!`
+// request hands back a module namespace object and the custom cursor below
+// would render as `url([object Module])` — an invalid value the browser drops.
+const requireCursor = require.context('file-loader?esModule=false!./cursors', false, /.png$/i);
 
 export const mapCursor = memoize((cursor: string | undefined): string => {
   let value = '';

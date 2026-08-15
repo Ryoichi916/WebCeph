@@ -119,6 +119,30 @@ export default class TracingToolbar extends React.PureComponent<Props, State> {
     isSimulationOpen: false,
   };
 
+  /**
+   * The two shortcuts the history buttons name in their own tooltips.
+   *
+   * They were named and not wired: the app binds exactly one key (`n`, a new
+   * workspace — see `components/App/shortcuts`), so `Ctrl+Z` over a mis-dragged
+   * landmark did nothing while the button beside it promised that it would.
+   *
+   * Bound here rather than in the app-level `HotKeys` because this toolbar is
+   * mounted only while a tracing is open, and it is the piece that knows whether
+   * there is anything to undo: the same `canUndo`/`canRedo` that grey the buttons
+   * guard the keys, so a shortcut can never do what the button refuses to.
+   *
+   * A keypress made inside a text field is left alone — the note editor, the
+   * record form and the calibration dialog all sit over this surface, and inside
+   * them Ctrl+Z is the browser's own undo of what is being typed.
+   */
+  componentDidMount() {
+    document.addEventListener('keydown', this.handleHistoryKey);
+  }
+
+  componentWillUnmount() {
+    document.removeEventListener('keydown', this.handleHistoryKey);
+  }
+
   render() {
     const {
       imageId, className,
@@ -754,6 +778,36 @@ export default class TracingToolbar extends React.PureComponent<Props, State> {
   private selectAnalysis = (id: string) => {
     this.closeMenu();
     this.props.onSelectAnalysis(id);
+  };
+
+  /** @see componentDidMount */
+  private handleHistoryKey = (e: KeyboardEvent) => {
+    if (!e.ctrlKey && !e.metaKey) {
+      return;
+    }
+    if (e.key !== 'z' && e.key !== 'Z') {
+      return;
+    }
+    const target = e.target as HTMLElement | null;
+    if (target !== null) {
+      const tag = (target.tagName || '').toUpperCase();
+      if (
+        tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' ||
+        target.isContentEditable
+      ) {
+        return;
+      }
+    }
+    const isRedo = e.shiftKey;
+    if (isRedo ? !this.props.canRedo : !this.props.canUndo) {
+      return;
+    }
+    e.preventDefault();
+    if (isRedo) {
+      this.props.onRedoClick();
+    } else {
+      this.props.onUndoClick();
+    }
   };
 
   private exportAs = (format: 'png' | 'jpeg') => {

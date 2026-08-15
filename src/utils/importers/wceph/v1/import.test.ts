@@ -3,7 +3,9 @@ import importFile from './import';
 import { isV1GeometricalPoint } from './validate';
 import { isActionOfType } from 'utils/store';
 
-const url = require('file-loader!./fixtures/valid/1.wceph');
+// esModule=false: webpack 5's file-loader otherwise returns a module namespace
+// object instead of the URL string this spec fetches.
+const url = require('file-loader?esModule=false!./fixtures/valid/1.wceph');
 
 describe('WCeph Importer', () => {
   it('should be able to import a valid WCeph v1 file', async () => {
