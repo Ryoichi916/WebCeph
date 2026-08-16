@@ -115,17 +115,15 @@ never from the on-screen preview alone.
   the commercial field still has and this does not is **study models / 3D
   records** (plaster scans, IOS meshes): a new record type with its own viewer,
   not a variation on an image. `components/RecordsDashboard/`.
-- [ ] **A visit cannot exist without an image, so a filmless visit cannot be
-  written up.** A note is keyed by timepoint, and the timepoints of a chart are
-  derived from the images filed at them (`groupRecordsByTimepoint` →
-  `getVisitNoteKey`): a chart with no films has no note surface at all, and a
-  consultation, an emergency visit, a bond-up review or a debond that produced no
-  radiograph has nowhere to be recorded. The records dashboard's empty state now
-  says so plainly rather than leaving a clinician to look for the field. The fix
-  is a visit that exists in its own right — a timepoint the clinician can create
-  with a date and a label and no image — which every surface that groups by
-  timepoint then has to read from that list instead of from the films
-  (`utils/records.ts`, `components/RecordsDashboard/`).
+- ~~A visit cannot exist without an image.~~ **Out of scope by the owner's
+  decision (2026-08-16): the appointment is not a thing this app records.** What
+  it records is images, filed under a patient and dated — a chart is a patient
+  and their dated films and photographs, nothing more. The dated groups the
+  dashboard already draws are that filing order made visible, not an appointment
+  book, and no visit-record type, filmless entry or scheduling surface is to be
+  built on top of them. A blind clinical reviewer called the gap a blocker for
+  charting a whole treated case; that is a fair reading of a *practice
+  management* system, and this is not one.
 - [ ] **The written record stops at the visit note.** A visit now carries a
   clinical note with its own amendment trail
   (`utils/visitNotes.ts`, `components/RecordsDashboard/VisitNote.tsx`), and that
@@ -156,8 +154,14 @@ never from the on-screen preview alone.
   evidences tracing accuracy on a real radiograph. Validating against real
   anonymised films — or shipping one — is the strongest remaining credibility
   lever.
-- [ ] **Multi-clinician / cloud records.** Storage is local to the browser by
-  design; sharing, multi-device access and practice-level records are absent.
+- ~~Multi-clinician / cloud records.~~ **Out of scope by the owner's decision
+  (2026-08-16): local storage is the requirement, not a limitation to be worked
+  around.** Patient data stays in this browser; no server, no accounts, no sync,
+  and no practice-wide backup module. A blind clinical reviewer withheld an
+  unreserved recommendation over exactly this, and the answer is that the
+  reviewer was scoring a different product. What remains genuinely worth doing
+  under a local-first rule is the `.wceph` archive bug above — today it is the
+  only way a chart leaves this device, and it throws.
 
 ## Done in recent rounds
 
