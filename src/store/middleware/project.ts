@@ -73,6 +73,68 @@ let unbackedPatientId: string | null = null;
  */
 let restoringPatientId: string | null = null;
 
+// ---- Autosave ---------------------------------------------------------------
+
+/**
+ * Every action that edits the clinical content of the open project. Any one of
+ * them schedules a (debounced) save of the whole project, so a tracing session
+ * survives a refresh or a closed tab without the clinician ever pressing the
+ * toolbar's Save.
+ *
+ * Without this, calibration and tracing edits wrote nothing: the project was
+ * persisted only on the explicit Save button, on changing patients, on saving a
+ * visit note and on importing an image — so 42 placed landmarks and the film's
+ * calibration silently reverted to nothing on reload, while the film itself
+ * (whose import happens to save) survived, which made the loss look arbitrary.
+ */
+const AUTOSAVE_ACTION_TYPES: { [type: string]: true } = {
+  // The film's record: type, timepoint, capture date, analysis, tracing merged
+  // in via props.
+  SET_IMAGE_PROPS: true,
+  // Calibration.
+  SET_SCALE_FACTOR_REQUESTED: true,
+  UNSET_SCALE_FACTOR_REQUESTED: true,
+  // The tracing itself.
+  SET_TRACING_MODE_REQUESTED: true,
+  ADD_MANUAL_LANDMARK_REQUESTED: true,
+  ADD_MANUAL_LANDMARKS_BATCH_REQUESTED: true,
+  REMOVE_MANUAL_LANDMARK_REQUESTED: true,
+  SKIP_MANUAL_STEP_REQUESTED: true,
+  UNSKIP_MANUAL_STEP_REQUESTED: true,
+  UNDO_REQUESTED: true,
+  REDO_REQUESTED: true,
+  // Which analysis the film is read under.
+  SET_ACTIVE_ANALYSIS_REQUESTED: true,
+  // Removing a film from the chart is as much an edit as filing one.
+  CLOSE_IMAGE_REQUESTED: true,
+};
+
+/** How long a burst of edits is allowed to settle before the write. */
+const AUTOSAVE_DELAY_MS = 500;
+
+let autosaveTimer: number | null = null;
+/** The patient the pending autosave was scheduled for. */
+let autosavePatientId: string | null = null;
+/** Writes to IndexedDB currently in flight. */
+let pendingWriteCount = 0;
+
+/**
+ * Whether clinical work is sitting in memory that storage does not have yet —
+ * an autosave still waiting on its debounce, or a write still in flight. The
+ * beforeunload guard (src/index.tsx) asks this to decide whether closing the
+ * tab needs a warning.
+ */
+export const hasUnsavedProjectChanges = (): boolean =>
+  autosaveTimer !== null || pendingWriteCount > 0;
+
+const cancelPendingAutosave = () => {
+  if (autosaveTimer !== null) {
+    clearTimeout(autosaveTimer);
+    autosaveTimer = null;
+    autosavePatientId = null;
+  }
+};
+
 // ---- The case list's index --------------------------------------------------
 
 /**
@@ -259,6 +321,9 @@ const middleware = ({ getState, dispatch }: Store<StoreState>) =>
     if (isActionOfType(action, 'SAVE_PROJECT_REQUESTED')) {
       next(action);
       const { patientId } = action.payload;
+      // This save reads the whole current state, so whatever a pending
+      // autosave was going to write is written now.
+      cancelPendingAutosave();
       const state = getState() as any;
       // The workspace is saved on the way out of every case, including a case
       // whose project could not be read — and there the workspace holds the
@@ -277,11 +342,14 @@ const middleware = ({ getState, dispatch }: Store<StoreState>) =>
       unbackedPatientId = null;
       const project: Partial<StoreState> = {};
       PROJECT_KEYS.forEach((key) => { (project as any)[key] = state[key]; });
+      pendingWriteCount += 1;
       try {
         await idb.set(storageKey(patientId), project);
       } catch (e) {
         console.error('Failed to save project', e);
         return;
+      } finally {
+        pendingWriteCount -= 1;
       }
       // The list's row for this case, counted off the very state just written.
       await refreshCaseSummary(state as StoreState, patientId, dispatch);
@@ -381,7 +449,42 @@ const middleware = ({ getState, dispatch }: Store<StoreState>) =>
       return;
     }
 
-    return next(action);
+    const result = next(action);
+
+    /**
+     * Autosave: an edit to the open project's clinical content schedules a
+     * write of the whole project, debounced so a burst of stepper actions (an
+     * auto-plot files dozens at once) settles into a single save.
+     *
+     * Through SAVE_PROJECT_REQUESTED like every other write, so it shares the
+     * one write path, its guards (see `unbackedPatientId`) and the case list's
+     * re-count. The patient is pinned at scheduling time and checked again at
+     * fire time: if the clinician has moved to another chart in between, the
+     * stale timer must not write the new chart's slices under the old chart's
+     * key — and the change-patient path has already saved the old chart anyway.
+     */
+    if (AUTOSAVE_ACTION_TYPES[action.type] === true) {
+      const patientId = getState()['patients.activeId'];
+      if (patientId !== null) {
+        if (autosaveTimer !== null) {
+          clearTimeout(autosaveTimer);
+        }
+        autosavePatientId = patientId;
+        autosaveTimer = window.setTimeout(() => {
+          const scheduledFor = autosavePatientId;
+          autosaveTimer = null;
+          autosavePatientId = null;
+          if (
+            scheduledFor !== null &&
+            scheduledFor === getState()['patients.activeId']
+          ) {
+            dispatch(saveProject({ patientId: scheduledFor }));
+          }
+        }, AUTOSAVE_DELAY_MS);
+      }
+    }
+
+    return result;
   };
 
 export default middleware as Middleware;
