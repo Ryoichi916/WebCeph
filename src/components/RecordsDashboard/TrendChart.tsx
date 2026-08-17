@@ -101,6 +101,12 @@ const REGION_OF_CATEGORY: { [category: string]: Region | undefined } = {
   overjet: 'dental',
   upperLipProminence: 'soft',
   lowerLipProminence: 'soft',
+  // The facial surface's own readings (see `Categories.softTissueProfile`):
+  // Merrifield's Z angle and the convexity/fold angles read on skin, so they
+  // chart under the soft-tissue region — they used to ride into the skeletal
+  // row under the old `skeletalProfile` label.
+  softTissueProfile: 'soft',
+  mentolabialSulcus: 'soft',
 };
 
 // ---- the plot's coordinate space -------------------------------------------

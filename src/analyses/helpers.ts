@@ -303,7 +303,14 @@ const categoryMap: Record<Category, string> = {
   skeletalBite: 'Skeletal bite',
   skeletalPattern: 'Skeletal pattern',
   skeletalProfile: 'Skeletal profile',
+  // Tweed's FMA · IMPA · FMIA, read together (see `Categories.tweedTriangle`).
+  // Only ever printed under a Tweed heading, so it does not repeat his name.
+  tweedTriangle: 'Diagnostic triangle',
   chin: 'Chin prominence',
+  // The facial surface's own profile reading, kept apart from the skeletal
+  // one — see `Categories.softTissueProfile`.
+  softTissueProfile: 'Soft-tissue profile',
+  mentolabialSulcus: 'Mentolabial fold',
   lowerLipProminence: 'Lower lip prominence',
   upperLipProminence: 'Upper lip prominence',
   overbite: 'Overbite',
@@ -320,6 +327,9 @@ const indicationMap: Record<Indication<Category>, string> = {
   concave: 'Concave',
   convex: 'Convex',
   counterclockwise: 'Counter-clockwise',
+  // The mentolabial fold (see `Categories.mentolabialSulcus`).
+  deep: 'Deep',
+  shallow: 'Shallow',
   horizontal: 'Horizontal',
   vertical: 'Vertical',
   lingual: 'Lingual',
@@ -733,13 +743,32 @@ export function composeInterpretation<C extends Category>(
  * Tries to get the most reasonable indication given contradicting
  * interpretations of the evaluated value of a landmark by returning the
  * most occurring indication.
+ *
+ * **An even split is broken by the evidence, not by declaration order.** A
+ * group whose measurements vote 1–1 used to take whichever indication was
+ * *declared first* in the analysis module: Ricketts' growth-pattern chip read
+ * "Normal" off a facial axis 0.5 SD inside its band while the mandibular arc
+ * sat 4.7 SD out — and flipping the two components' order in `ricketts.ts`
+ * would have flipped the chip. Ties now go to the indication backed by the
+ * measurement furthest from its norm in standard deviations, which is the same
+ * rule the report's divergence note uses to name the measurement that "drives"
+ * a finding. A component with no SD to standardize by — no norm, or a norm
+ * published as a range (see `normSd`) — scores 0, so a range row can never
+ * out-argue a graded one.
  */
 export function resolveIndication<C extends Category>(
   results: Array<LandmarkInterpretation<C>>,
 ): Indication<C> {
   const counts: { [indication: string]: number } = {};
+  const strongest: { [indication: string]: number } = {};
   results.forEach((r) => {
     counts[r.indication] = (counts[r.indication] || 0) + 1;
+    const sd = normSd(r.mean, r.min, r.max, r.band);
+    const z = sd > 0 ? Math.abs(r.value - r.mean) / sd : 0;
+    const best = strongest[r.indication];
+    if (best === undefined || z > best) {
+      strongest[r.indication] = z;
+    }
   });
   const pairs = map(
     counts,
@@ -748,7 +777,15 @@ export function resolveIndication<C extends Category>(
       indication,
     }),
   );
-  const max = maxBy(pairs, ({ value }) => value);
+  const max = maxBy(
+    pairs,
+    // The tie-break term is squashed to (0, 0.001) — monotone in z, so a
+    // stronger deviation always argues harder, but never worth a whole vote.
+    ({ value, indication }) => {
+      const z = strongest[indication];
+      return value + z / (1 + z) / 1000;
+    },
+  );
   return max!.indication;
 };
 

@@ -1,22 +1,40 @@
 import {
   FMIA, FMPA, IMPA, yAxis,
 } from 'analyses/landmarks/angles/skeletal';
+import { tweedTriangleSum } from 'analyses/landmarks/other/skeletal';
 
-import { defaultInterpretAnalysis } from 'analyses/helpers';
+import {
+  defaultInterpretAnalysis, hasNorm, NO_NORM,
+} from 'analyses/helpers';
 
 /**
- * Tweed's diagnostic triangle — FMIA, FMPA (FMA) and IMPA, the three angles the
+ * Tweed's diagnostic triangle — FMA (FMPA), IMPA and FMIA, the three angles the
  * Frankfort horizontal, the mandibular plane and the lower incisor axis form
- * with each other (they sum to 180°) — read with the Y axis, the fourth reading
- * taken off the same Frankfort horizontal.
+ * with each other — read with the Y axis, the fourth reading taken off the same
+ * Frankfort horizontal.
  *
- * All four are computed from landmarks this app already places (Po, Or, Go, Me,
+ * All are computed from landmarks this app already places (Po, Or, Go, Me,
  * S, Gn and the lower incisor axis).
+ *
+ * **The triangle closes to 180° by construction.** The three angles are not
+ * measured independently here: FMA is Po→Or against Go→Me, IMPA is Me→Go
+ * against the incisor's apex→edge axis, FMIA is Po→Or against that same axis —
+ * three readings off the same three directed lines, so their total is 180°
+ * exactly at every tracing state, not merely near it. The closure is *printed*
+ * (see `tweedTriangleSum`) rather than left implicit, because on paper the
+ * three are measured separately and their landing on 180 is the check that the
+ * tracing is sound; and because they close, they cannot vary independently —
+ * which is why they are presented as **one finding** (see `interpret` below)
+ * rather than as three unrelated rows scattered across the table.
  *
  * The triangle's three angles carry Tweed's norms (FMA 25° ± 5, FMIA 65° ± 5,
  * IMPA 90° ± 5) and are interpreted: FMPA grades the mandibular rotation, while
  * FMIA and IMPA — read together, as Tweed intended — grade the inclination of
- * the lower incisor.
+ * the lower incisor. Both conclusions are named *on* the triangle's group, with
+ * the measurements they were read from, so the finding a clinician acts on
+ * (Tweed planned treatment on FMIA — uprighting the lower incisor until FMIA
+ * reaches its target — with FMA telling him how far that target must move) sits
+ * beside the numbers that support it.
  *
  * The **Y axis** is not Tweed's measurement and is not printed as though it
  * were: it carries Downs' 59.4° ± 3.8, attributed to him in `alsoFrom` exactly
@@ -41,12 +59,7 @@ import { defaultInterpretAnalysis } from 'analyses/helpers';
  * leaves the prescription to the clinician.
  */
 const components: AnalysisComponent[] = [
-  {
-    landmark: FMIA,
-    mean: 65,
-    max: 70,
-    min: 60,
-  },
+  // The triangle, in the order its sum line reads: FMA + IMPA + FMIA = 180°.
   {
     landmark: FMPA,
     mean: 25,
@@ -60,6 +73,19 @@ const components: AnalysisComponent[] = [
     min: 85,
   },
   {
+    landmark: FMIA,
+    mean: 65,
+    max: 70,
+    min: 60,
+  },
+  {
+    // The closure row — 180° identically (see `tweedTriangleSum`). An identity
+    // has no published norm, and inventing "180 ± 0" would dress a geometric
+    // fact as a sample statistic; the columns print an em dash instead.
+    landmark: tweedTriangleSum,
+    ...NO_NORM,
+  },
+  {
     // Y axis (S-Gn to Frankfort horizontal), graded against Downs' figure —
     // the same construction and the same norm his own section uses.
     landmark: yAxis,
@@ -69,6 +95,85 @@ const components: AnalysisComponent[] = [
     normSource: 'Downs 1948',
   },
 ];
+
+/** The triangle's rows, in the order the sum line reads them. */
+const TRIANGLE_SYMBOLS = [
+  FMPA.symbol, IMPA.symbol, FMIA.symbol, tweedTriangleSum.symbol,
+];
+
+/**
+ * Tweed's interpretation: the default per-angle reading, with the triangle
+ * pulled together into one leading group.
+ *
+ * `defaultInterpretAnalysis` on its own filed FMIA and IMPA under "Lower
+ * incisor inclination", FMPA under "Mandibular rotation" and the closure row
+ * under "Measured values" — the diagnostic triangle, which Tweed defined as one
+ * figure whose angles sum to 180°, arrived as three unrelated groups with its
+ * fourth row stranded at the bottom of the table. Here the three angles and
+ * their closure are emitted first, as one `tweedTriangle` group; the per-angle
+ * conclusions keep their own groups after it, which the shared table layout
+ * (see `AnalysisResultsViewer/grouping`) renders as labelled conclusions *on*
+ * the triangle — "Mandibular rotation — from FMPA", "Lower incisor
+ * inclination — from IMPA, FMIA" — since the triangle is the first group to
+ * tabulate those measurements.
+ *
+ * The group's own chip states the one thing true of the triangle as a whole:
+ * within Tweed's norms when every graded angle of it is, outside them
+ * otherwise. The specific conclusions stay with the per-angle findings.
+ */
+const interpret: InterpretAnalysis<Category> = (values, objects, context) => {
+  const results = defaultInterpretAnalysis(components)(values, objects, context);
+
+  // The first-reported row of each measurement, which is the row the tables
+  // will tabulate (see `groupFindings`).
+  type ResultRow = CategorizedAnalysisResult<Category>['relevantComponents'][0];
+  const rowOf: { [symbol: string]: ResultRow | undefined } = {};
+  results.forEach(({ relevantComponents }) => {
+    relevantComponents.forEach((row) => {
+      if (rowOf[row.symbol] === undefined) {
+        rowOf[row.symbol] = row;
+      }
+    });
+  });
+
+  const triangleRows = TRIANGLE_SYMBOLS
+    .map((symbol) => rowOf[symbol])
+    .filter((row): row is ResultRow => row !== undefined);
+  const gradedRows = triangleRows.filter(
+    ({ mean, min, max }) => hasNorm(mean, min, max),
+  );
+  // No angle of the triangle computed yet (an untraced film): nothing to pull
+  // together, the default grouping stands.
+  if (gradedRows.length === 0) {
+    return results;
+  }
+
+  const indication: Indication<'tweedTriangle'> = gradedRows.every(
+    ({ value, min, max }) => value >= min && value <= max,
+  ) ? 'within_norm' : 'outside_norm';
+
+  // The closure row moves into the triangle group; everything else keeps its
+  // group so the per-angle conclusions survive as named findings on the
+  // triangle. A group left empty by the move is dropped, never printed hollow.
+  const rest = results
+    .map((result) => ({
+      ...result,
+      relevantComponents: result.relevantComponents.filter(
+        ({ symbol }) => symbol !== tweedTriangleSum.symbol,
+      ),
+    }))
+    .filter(({ relevantComponents }) => relevantComponents.length > 0);
+
+  return [
+    {
+      category: 'tweedTriangle' as Category,
+      indication,
+      severity: 'none' as Severity,
+      relevantComponents: triangleRows,
+    },
+    ...rest,
+  ];
+};
 
 const analysis: Analysis<'ceph_lateral'> = {
   id: 'tweed',
@@ -85,15 +190,16 @@ const analysis: Analysis<'ceph_lateral'> = {
     note:
       'Tweed\'s triangle is a treatment prescription as much as a norm: the ' +
       'three angles are defined to sum to 180°, so they cannot vary ' +
-      'independently, and his FMIA target moves with FMPA (65° on a high ' +
-      'angle, 68° on a low one) rather than staying at the single mean ' +
-      'printed here. The Y axis is Downs\' measurement and Downs\' norm, ' +
-      'borrowed here because it is read off the same Frankfort horizontal; ' +
-      'the occlusal-plane cant is not printed in this section at all, since ' +
-      'the only published norm for it is Downs\' and it belongs to his ' +
-      'construction of the plane, not to the functional one.',
+      'independently — the closure row above is that identity, computed from ' +
+      'this tracing, not a normed measurement — and his FMIA target moves ' +
+      'with FMPA (65° on a high angle, 68° on a low one) rather than staying ' +
+      'at the single mean printed here. The Y axis is Downs\' measurement ' +
+      'and Downs\' norm, borrowed here because it is read off the same ' +
+      'Frankfort horizontal; the occlusal-plane cant is not printed in this ' +
+      'section at all, since the only published norm for it is Downs\' and ' +
+      'it belongs to his construction of the plane, not to the functional one.',
   },
-  interpret: defaultInterpretAnalysis(components),
+  interpret,
 };
 
 export default analysis;

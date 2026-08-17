@@ -32,7 +32,39 @@ type Categories = {
   upperIncisorPosition: 'normal' | 'protrusive' | 'retrusive',
   lowerIncisorPosition: 'normal' | 'protrusive' | 'retrusive',
   skeletalBite: 'normal' | 'open' | 'closed',
+  /**
+   * Tweed's diagnostic triangle read as **one** finding: FMA, IMPA and FMIA
+   * are the three angles the Frankfort horizontal, the mandibular plane and
+   * the lower incisor axis make with each other, so they are defined to sum
+   * to 180° and cannot vary independently — three separate table groups was a
+   * presentation of the geometry, not of Tweed's reading of it. `within_norm`
+   * when every graded angle of the triangle sits inside Tweed's band,
+   * `outside_norm` otherwise; the per-angle conclusions (mandibular rotation,
+   * lower incisor inclination) still travel with the same measurements and are
+   * named on the group.
+   */
+  tweedTriangle: 'within_norm' | 'outside_norm',
   chin: 'normal' | 'recessive' | 'prominent',
+  /**
+   * The *soft-tissue* profile — what the face shows, as opposed to the
+   * skeletal profile the bone underneath it draws (`skeletalProfile`). The
+   * two are separate findings by design: a thick chin pad or a full upper lip
+   * can carry a convex skeleton into a straight face, and the whole point of
+   * a soft-tissue analysis is to say when the two part company. Merrifield's
+   * Z angle and Legan & Burstone's convexity readings used to be filed under
+   * `skeletalProfile`, so the Summary printed a facial-surface reading under
+   * a "Skeletal profile" heading — a category error on the surface most
+   * likely to be pasted into a chart note.
+   */
+  softTissueProfile: 'normal' | 'concave' | 'convex',
+  /**
+   * The mentolabial (labiomental) fold, Li-Ils-Pog': how deeply the chin-lip
+   * sulcus is set. Reported as its own soft-tissue finding — deep or shallow —
+   * rather than converted into a "Chin prominence" verdict: the fold reads on
+   * the skin, the chin category on bone (Pog-NB, the facial angle), and a
+   * deep fold on a retruded incisor is not a prominent chin.
+   */
+  mentolabialSulcus: 'normal' | 'deep' | 'shallow',
   overbite: 'normal' | 'negative' | 'decreased' | 'increased',
   overjet: 'normal' | 'negative' | 'decreased' | 'increased',
   lowerLipProminence: 'normal' | 'resessive' | 'prominent',

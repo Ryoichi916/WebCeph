@@ -636,15 +636,40 @@ export const downsAngleOfConvexity: CephAngle = {
  */
 export const downsABPlaneAngle: CephAngle = {
   ...angleBetweenLines(line(B, A), line(Pog, N), 'A-B Plane Angle'),
+  /**
+   * Downs' sign convention: the angle is read as **negative when point B lies
+   * behind point A** relative to the facial line — the usual configuration —
+   * and positive when B (and with it the chin) has come forward past A, which
+   * he states happens "in Class III malocclusions or Class I occlusions with
+   * prominence of the mandible".
+   *
+   * The sign therefore hangs on **B's position relative to A across the
+   * facial-line direction** — not on which side of the facial line point A
+   * happens to fall. The previous implementation tested the latter, which is
+   * within a millimetre of a coin flip on the faces the norm describes
+   * (Ricketts' convexity of point A runs to ≈ 0 mm in adults, i.e. A sits
+   * *on* the facial line), and read backwards whenever it did resolve: a
+   * normal face with A a shade anterior printed +4.6° against Downs' band of
+   * −9…0 — a two-SD "Class 2" — while a Class III chin carried past A
+   * printed negative and graded "Class 1".
+   */
   calculate: () => (lineBA: GeoVector, linePogN: GeoVector) => (angle: GeoAngle) => {
-    const [, A] = getVectorPoints(lineBA);
+    const [ptB, ptA] = getVectorPoints(lineBA);
+    const [ptPog, ptN] = getVectorPoints(linePogN);
     const positiveValue = Math.abs(
       radiansToDegrees(calculateAngle(angle)),
     );
-    if (!isBehind(A, linePogN)) {
-      return -1 * positiveValue;
-    }
-    return positiveValue;
+    // A line through A running parallel to the facial line, directed upward
+    // (Pog → N). For an upward-directed line, `isBehind`'s cross product is
+    // positive on the *anterior* side — the same screen-orientation
+    // convention every signed reading in this file relies on.
+    const bIsAnteriorToA = isBehind(ptB, {
+      x1: ptA.x,
+      y1: ptA.y,
+      x2: ptA.x + (ptN.x - ptPog.x),
+      y2: ptA.y + (ptN.y - ptPog.y),
+    });
+    return bIsAnteriorToA ? positiveValue : -1 * positiveValue;
   },
 
   /**
@@ -652,10 +677,16 @@ export const downsABPlaneAngle: CephAngle = {
    * except in Class III malocclusions or Class I occlusions with prominence of the mandible.
    * A large negative value suggests a Class II facial pattern. The readings extend from
    * a maximum of 0 degrees to a minimum of –9 degrees, with a mean reading of -4.6 degrees.
+   *
+   * So the indications run **Class 2 below the band, Class 3 above it** —
+   * Downs' own sentences above, turned into the range triple. They used to be
+   * listed the other way round, which paired with the inverted sign
+   * convention (see `calculate`) to grade a large-negative (Class II) reading
+   * as "Class 3" and a positive (Class III) one as "Class 2".
    */
   interpret: defaultInterpetLandmark(
     'skeletalPattern',
-    ['class3', 'class1', 'class2'],
+    ['class2', 'class1', 'class3'],
   ),
 };
 

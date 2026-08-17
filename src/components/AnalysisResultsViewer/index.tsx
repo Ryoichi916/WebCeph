@@ -301,6 +301,7 @@ const buildProvenanceRows = (
   provenance: NormsProvenance | null,
   captureDate: string | null,
   timepoint: string | null,
+  patientNote?: string,
 ): string[][] => {
   const rows: string[][] = [];
   const analysisName = analysisId !== null
@@ -325,6 +326,15 @@ const buildProvenanceRows = (
     }
     if (provenance.note !== undefined) {
       rows.push(['Note', provenance.note]);
+    }
+    // What this reading did with this patient's record — an author's age
+    // correction or sex split applied, or the reason it was not. The dialog
+    // states it under the norms block; an export that drops it hands the
+    // reader age-corrected norm columns with nothing saying they were
+    // corrected, which is exactly the kind of silent rewriting the norm
+    // columns exist to prevent.
+    if (patientNote !== undefined) {
+      rows.push(['Applied', patientNote]);
     }
   }
   rows.push(['Caveat', NORMS_NOT_MATCHED]);
@@ -374,9 +384,30 @@ const buildReportRows = (
       const stars = getSeverityStars(value, mean, min, max, band);
       const name = landmark !== undefined ? landmark.name : undefined;
       const graded = hasNorm(mean, min, max);
-      const rowIndication = category === NEUTRAL_CATEGORY
+      // An ungraded row must not export its group's verdict as its own:
+      // Tweed's triangle-closure row (always 180°, no norm — see `NO_NORM`)
+      // sits in a group whose chip may read "Outside norm", and a pasted
+      // spreadsheet row saying `FMPA+IMPA+FMIA · Outside norm · 180.0°`
+      // would attribute a deviation to the one row that cannot have one.
+      //
+      // And a graded row must not export a verdict its own value contradicts:
+      // a finding's chip is resolved across the whole group, so when the
+      // group's measurements split — Downs' L1-OP reads the lower incisor
+      // labial off a steeply canted occlusal plane while IMPA reads the same
+      // tooth lingual — the group verdict is true of at most one of them, and
+      // a pasted row saying `IMPA · Labial · −7.2°` attributes to a
+      // measurement the opposite of what it found. Each row therefore exports
+      // its **own** landmark's reading of the group's category (the same
+      // re-interpretation the report's divergence note runs), and only a row
+      // whose landmark states no reading of its own inherits the group's.
+      const interpretOwn = landmark !== undefined ? landmark.interpret : undefined;
+      const own = typeof interpretOwn === 'function'
+        ? interpretOwn(value, min, max, mean)
+          .filter((r) => r.category === category)
+        : [];
+      const rowIndication = category === NEUTRAL_CATEGORY || !graded
         ? gradeAgainstNorm(value, min, max, mean)
-        : indication;
+        : (own.length > 0 ? own[0].indication : indication);
       const borrowed = normSource;
       rows.push([
         mapCategoryToString(category) || '',
@@ -622,7 +653,7 @@ export class AnalysisResultsViewer extends React.PureComponent<Props, ViewerStat
     const {
       open, onRequestClose, results, analysisId, landmarksBySymbol,
       needsScaleForLinear, timepoint, captureDate, provenance,
-      caveats, analysisContext, scaleFactor, imageWidth, imageHeight,
+      caveats, scaleFactor, imageWidth, imageHeight,
     } = this.props;
     // What this film's scale says it physically measures, and whether that is
     // possible: the millimetre rows of this table are all derived from that
@@ -630,10 +661,7 @@ export class AnalysisResultsViewer extends React.PureComponent<Props, ViewerStat
     const filmSize = getImpliedFilmSize(imageWidth, imageHeight, scaleFactor);
     const isScaleSuspect = filmSize !== null && !filmSize.isPlausible;
     const markers = caveatMarkers(caveats);
-    const patientNote =
-      provenance !== null && typeof provenance.patientNote === 'function'
-        ? provenance.patientNote(analysisContext)
-        : undefined;
+    const patientNote = this.getPatientNote();
     const { copied } = this.state;
     const analysisName = analysisId !== null
       ? (ANALYSIS_NAMES[analysisId] || analysisId)
@@ -968,11 +996,21 @@ export class AnalysisResultsViewer extends React.PureComponent<Props, ViewerStat
     );
   }
 
+  /** The patient-applied norms note, as shown in the provenance block. */
+  private getPatientNote = (): string | undefined => {
+    const { provenance, analysisContext } = this.props;
+    return provenance !== null && typeof provenance.patientNote === 'function'
+      ? provenance.patientNote(analysisContext)
+      : undefined;
+  };
+
   private handleCopyTable = () => {
     const { results, landmarksBySymbol } = this.props;
     const { provenance, captureDate, timepoint, analysisId } = this.props;
     const text = [
-      ...buildProvenanceRows(analysisId, provenance, captureDate, timepoint),
+      ...buildProvenanceRows(
+        analysisId, provenance, captureDate, timepoint, this.getPatientNote(),
+      ),
       ...buildReportRows(results, landmarksBySymbol, provenance),
     ]
       .map((cells) => cells.join('\t'))
@@ -997,7 +1035,9 @@ export class AnalysisResultsViewer extends React.PureComponent<Props, ViewerStat
       timepoint,
     } = this.props;
     const rows = [
-      ...buildProvenanceRows(analysisId, provenance, captureDate, timepoint),
+      ...buildProvenanceRows(
+        analysisId, provenance, captureDate, timepoint, this.getPatientNote(),
+      ),
       ...buildReportRows(results, landmarksBySymbol, provenance),
     ];
     // BOM so Excel opens the °/± characters as UTF-8.

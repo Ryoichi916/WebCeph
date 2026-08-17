@@ -78,9 +78,10 @@ export interface AnalysisEvaluation {
  *
  * `Analysis.interpret` — not the landmarks — decides what actually reaches the
  * results table: a module can define components and still interpret none of
- * them (`tweed` currently does). So the set is probed by running the analysis'
- * own `interpret` over its norm means: no patient number is involved, the
- * question is only "what would this analysis report if nothing were missing?".
+ * them (`tweed` once did, for years). So the set is probed by running the
+ * analysis' own `interpret` over its norm means: no patient number is
+ * involved, the question is only
+ * "what would this analysis report if nothing were missing?".
  * That is what makes an "8 of 8 measured" count in the report honest.
  */
 export const getReportableSymbols = (

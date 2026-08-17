@@ -185,6 +185,16 @@ export class AnalysisStepper extends React.PureComponent<Props, State> {
                 })}
                 onMouseEnter={isDone ? onStepMouseEnter.bind(null, step) : undefined}
                 onMouseLeave={isDone ? onStepMouseLeave.bind(null, step) : undefined}
+                // Completed rows highlight their measurement on the film. That
+                // affordance was mouse-only; a keyboard user could tab to the
+                // remove buttons but never light a measurement up. Done rows
+                // are therefore focusable, and focus/blur drive the same
+                // highlight actions as hover. React's onFocus/onBlur bubble,
+                // so tabbing on to the row's own remove button keeps the row
+                // highlighted rather than flickering it off.
+                tabIndex={isDone ? 0 : undefined}
+                onFocus={isDone ? onStepMouseEnter.bind(null, step) : undefined}
+                onBlur={isDone ? onStepMouseLeave.bind(null, step) : undefined}
               >
                 <span className={classes.step_icon}>{icons[state]}</span>
                 <span className={classes.step_text}>
@@ -192,7 +202,10 @@ export class AnalysisStepper extends React.PureComponent<Props, State> {
                     {command}
                   </span>
                   {description ? (
-                    <span className={classes.step_description} title={description}>
+                    // No title attr: the definition renders in full (the
+                    // stylesheet no longer clamps it), so a tooltip would
+                    // only repeat what is already on screen.
+                    <span className={classes.step_description}>
                       {description}
                     </span>
                   ) : null}
