@@ -7,11 +7,14 @@ import {
   setActiveImageId,
 } from 'actions/workspace';
 
-import uniqueId from 'lodash/uniqueId';
+import { mintImageId } from 'utils/ids';
 
 const importFile: Importer = async (fileToImport, options) => {
   const {
-    ids = [uniqueId('imported_image_')],
+    // Minted from the clock, never from a module counter that restarts at 1 on
+    // every page load: an id that restarts overwrites the film already stored
+    // under it. @see utils/ids
+    ids = [mintImageId()],
     workspaceId,
     meta,
   } = options;
@@ -41,6 +44,14 @@ const importFile: Importer = async (fileToImport, options) => {
     }
     if (meta.captureDate !== undefined) {
       recordMeta.captureDate = meta.captureDate;
+    }
+    // Which frame of the photographic series the upload was filed at (see
+    // `PhotoView`). Carried like the three above it: the records dashboard's
+    // series cells file at one exact position, the upload form shows it before
+    // anything is written, and without it here the position chosen was thrown
+    // away on the way into the store — every photograph arrived unplaced.
+    if (meta.photoView !== undefined) {
+      recordMeta.photoView = meta.photoView;
     }
   }
   actions.push(loadImageSucceeded({

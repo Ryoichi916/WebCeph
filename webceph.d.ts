@@ -338,6 +338,20 @@ interface Analyses {
     'soft_tissues_photo_frontal' |
     'frontal_face_proportions'
   );
+  /**
+   * The intraoral series (occlusion, buccal segments). Nothing here measures it:
+   * no intraoral analysis is implemented, so this id — like `ricketts_frontal`,
+   * `panoramic_analysis` and the two photographic ids above — is declared and
+   * not implemented. It is never resolved to a module either, because a
+   * non-traceable image carries no active analysis at all (see
+   * `reconcileAnalysisWithType`). The key exists so `photo_intraoral` is a
+   * member of `ImageType`: an intraoral photograph is a record a clinic files,
+   * and it was previously folded into `photo_frontal` alongside the full-face
+   * photograph, which is a different record entirely.
+   */
+  photo_intraoral: (
+    'intraoral_photo_record'
+  );
   panoramic: (
     'panoramic_analysis'
   );
@@ -401,6 +415,20 @@ interface NormsProvenance {
    * Returns undefined when there is nothing extra to say.
    */
   patientNote?(context?: AnalysisContext): string | undefined;
+  /**
+   * The same reading as its *figures* — the corrected norms themselves, set as a
+   * compact run a clinician can scan ("Age 22 y · facial depth 90.0° · mand.
+   * plane 23.3° · convexity 0.2 mm · mand. arc 30.5°") — with none of the
+   * methodology `patientNote` explains around them.
+   *
+   * Written by the analysis' own author, exactly as `AnalysisCaveat.lede` is,
+   * and for the same reason: a 280px block on the records dashboard sets this
+   * and carries the full `patientNote` in the element's title and on paper,
+   * while the Summary dialog and the printed report set `patientNote` outright
+   * because they have the column for it. Optional — an analysis without one has
+   * its `patientNote` shown everywhere, which is the safe fallback.
+   */
+  patientLede?(context?: AnalysisContext): string | undefined;
 }
 
 /**
@@ -421,6 +449,18 @@ type AnalysisCaveat = {
   symbols: string[];
   /** The caveat, in the clinician's terms. */
   text: string;
+  /**
+   * The same caveat as a single line — what to do and why, in one clause:
+   * "Re-check Ar — these three angles read as a misplaced articulare".
+   *
+   * Written by the caveat's own author, never derived by cutting `text` at its
+   * first full stop. Compact surfaces (the records dashboard's findings panel)
+   * set this on screen and carry the full `text` in the row's title and on
+   * paper; the Summary dialog and the printed report set `text` outright,
+   * because they have the column for it. Optional: a caveat without one is
+   * shown in full everywhere, which is the safe fallback.
+   */
+  lede?: string;
 };
 
 interface Analysis<T extends ImageType> {
@@ -523,9 +563,12 @@ type WorkspaceMode = 'tracing' | 'superimposition';
 type SuperimpositionMode = 'auto' | 'manual';
 type WorkspaceSettings = {
   isImporting: boolean;
-  isExporting: boolean;
   importError: GenericError | null;
-  exportError: GenericError | null;
+  // Exporting is deliberately NOT here: a case file is written from the whole
+  // chart, not from one rail tile, and the `isExporting`/`exportError` fields
+  // that used to sit here were written by no reducer — so the toolbar's spinner
+  // and the case-file dialog's "Writing…" could never render and a failed export
+  // was silent. @see StoreEntries['file.export']
   mode: WorkspaceMode;
   contentRect: ContentRect | null;
   images: string[];
@@ -584,11 +627,183 @@ interface Patient {
   dateOfBirth?: string;
   /** Recorded sex, or empty/absent when unspecified (older records). */
   sex?: PatientSex;
+  /**
+   * The reading of the name — かな for a Japanese name, a romanisation for any
+   * other script — or empty/absent when it was not entered.
+   *
+   * A Japanese practice does not scan a name list in codepoint order: 長谷川 is
+   * filed under は, not after 鈴木. Kanji carry no reading a collator can find,
+   * so the reading is the field the case list sorts and searches names on when
+   * it is present, falling back to the name itself when it is not.
+   */
+  reading?: string;
+  /**
+   * The measurements this patient's trend board is plotted on (see the records
+   * dashboard's `TrendChart`), or absent/null while it is on the chart's own
+   * defaults.
+   *
+   * A clinical setting rather than a view state: a case is followed on three or
+   * four values across its films, and that choice has to be the same choice when
+   * the patient is opened again tomorrow. Stored on the patient rather than in
+   * the project, because it is about how this patient is read and not about the
+   * images on file.
+   */
+  trendPlot?: string[] | null;
+}
+
+/**
+ * What the case list knows about a patient's record without opening it.
+ *
+ * A patient's images and tracings live in their own project blob (see
+ * store/middleware/project), which is far too heavy to read for every row of a
+ * practice-sized list — a single case runs to megabytes of base64 film. So the
+ * few facts the list is sorted, filtered and scanned on are counted off the
+ * project **at the moment it is written**, and kept beside the patient as this
+ * summary.
+ *
+ * Every field is counted off the records themselves; nothing here is estimated
+ * or carried over. A patient with no summary at all has never had a project
+ * saved, and the list says exactly that ("No records") rather than guessing.
+ */
+interface PatientCaseSummary {
+  /** Epoch ms the summary was counted, i.e. when the project was last written. */
+  savedAt: number;
+  /** Images on file (every type, loaded records only). */
+  recordCount: number;
+  /** Distinct timepoints those images belong to — the case's visit count. */
+  timepointCount: number;
+  /** Earliest capture date on file (ISO `YYYY-MM-DD`), or null when undated. */
+  firstVisitDate: string | null;
+  /** Latest capture date on file (ISO `YYYY-MM-DD`), or null when undated. */
+  lastVisitDate: string | null;
+  /** Traceable films on file (lateral cephalograms). */
+  cephCount: number;
+  /** Of those, how many carry a complete tracing of their own analysis. */
+  tracedCount: number;
+  /** …and how many carry some landmarks but not the full set. */
+  partialCount: number;
+  /**
+   * A small JPEG data URI of the most recent film on file, or null when the case
+   * holds no image (or the thumbnail could not be rendered). Deliberately tiny
+   * (~100px) — hundreds of these are held in one persisted state.
+   */
+  thumbnail: string | null;
+  /** The image type the thumbnail is of, so the row can name what it shows. */
+  thumbnailType: ImageType | null;
+}
+
+/**
+ * What a clinician wrote about one visit — the clinical half of a patient
+ * record, beside the imaging half the rest of this file describes.
+ *
+ * Every field is the clinician's own text and nothing else. Nothing here is
+ * derived from a tracing, proposed by the app or prefilled from a template: an
+ * app that writes "Class II division 1" into a diagnosis field because the ANB
+ * came out at 6° has put words in a clinician's mouth, and the record it
+ * produces cannot be relied on afterwards. Empty means nobody has written it.
+ *
+ * Four named fields and one free text, which is the minimum a visit entry is
+ * expected to state: what the patient came for, what was found, what was
+ * decided, and what is in the mouth. @see utils/visitNotes#VISIT_NOTE_FIELDS
+ */
+interface VisitNoteFields {
+  /** Why the patient attended, as recorded by the clinician. */
+  chiefComplaint: string;
+  /** The diagnosis recorded at this visit. */
+  diagnosis: string;
+  /** The treatment plan as it stood at this visit. */
+  plan: string;
+  /** Appliance in place / what was fitted or removed, and its details. */
+  appliance: string;
+  /** Anything else about the visit, in the clinician's own words. */
+  note: string;
+}
+
+/**
+ * One saved version of a visit's note: what was written, when it was written,
+ * and who by. @see VisitNote
+ */
+interface VisitNoteEntry {
+  /**
+   * Epoch ms this version was saved (local clock of the machine writing it).
+   * Strictly greater than the stamp of the version it supersedes — see
+   * `utils/visitNotes#appendVisitNoteEntry`, which will not let a corrected clock
+   * date an amendment before the entry it replaces.
+   */
+  savedAt: number;
+  fields: VisitNoteFields;
+  /**
+   * Who wrote this version: the clinician on the device's letterhead at the
+   * moment it was saved (@see components/ClinicalReport/letterhead), copied in
+   * here and never read back from the letterhead afterwards — correcting the
+   * letterhead names whoever signs the *next* sheet, and must not be able to
+   * rewrite who wrote an entry a year ago.
+   *
+   * Absent where the device had no clinician on file, and the surfaces then state
+   * that the author is not recorded rather than attributing the entry to anyone.
+   */
+  author?: string;
+}
+
+/**
+ * A visit's clinical note, held as **every version ever saved** rather than as
+ * one mutable blob.
+ *
+ * A clinical record is not silently rewritten. The last entry is the note as it
+ * stands; the ones before it are what it said before each amendment, kept so the
+ * surfaces can state plainly that the entry was amended, when, and what it used
+ * to say (see `RecordsDashboard`'s note block, which labels them "earlier
+ * version"). Amending is therefore an append, never an overwrite — and nothing
+ * in the app deletes an entry once it is written.
+ *
+ * Keyed per **timepoint**, not per image: a visit's chief complaint, diagnosis
+ * and plan are facts about the visit, and filing them against one of the five
+ * images taken that day would make the record depend on which film a clinician
+ * happened to click. @see StoreEntries['records.notes']
+ */
+interface VisitNote {
+  /** Oldest first; the last is current. Never empty for a stored note. */
+  entries: VisitNoteEntry[];
+  /**
+   * The timepoint key this note was **written for**, when it has since been
+   * re-filed at another visit (@see Events['REFILE_VISIT_NOTE']) — the original
+   * one, kept through any number of moves.
+   *
+   * Absent on a note that has always been filed where it sits, which is every
+   * note of every case nothing has been relabelled in. Without it, moving an
+   * entry from T3 to T2 left it dated under T2's day as though it had been
+   * written there, which is a silent change to what the record says about when a
+   * decision was taken. @see utils/visitNotes#formatVisitNoteRefiling
+   */
+  refiledFrom?: string;
+  /** Epoch ms of the most recent re-filing, printed with the line above. */
+  refiledAt?: number;
 }
 
 interface StoreState {
   'patients.byId': { [id: string]: Patient };
   'patients.activeId': string | null;
+  /**
+   * The case list's index: one derived summary per patient, keyed by patient id.
+   * Written when a project is saved or opened, dropped with the patient.
+   * @see PatientCaseSummary
+   */
+  'patients.caseIndex': { [id: string]: PatientCaseSummary };
+  /**
+   * Why the last **restore from a case file** failed, or null.
+   *
+   * Restoring registers a chart and reads a file into it, in that order, and the
+   * case list unmounts the moment the chart opens — so an import that failed
+   * after the registration left a brand-new empty chart on the list, the
+   * clinician's only copy apparently refused, and not one word anywhere. The
+   * chart is taken off the list again (nothing of it was ever written) and the
+   * reason is put here, where the case list can state it and offer the file
+   * again.
+   *
+   * Not persisted: it describes an act that has just failed, never a record.
+   * @see store/middleware/project, components/PatientPicker
+   */
+  'patients.restoreError': GenericError | null;
   'app.init.isInitialized': boolean;
   'app.status.isUpdating': boolean;
   'app.status.isInstalling': boolean;
@@ -681,10 +896,55 @@ interface StoreState {
   'analyses.summary.isShown': boolean;
   /** Whether the patient records dashboard (timeline of every image) is open. */
   'records.dashboard.isShown': boolean;
+  /**
+   * The record slot the clinician asked to fill, or null when the next upload
+   * was not directed at one.
+   *
+   * Set by an empty type slot on the records dashboard ("Add profile photo" in
+   * T2's panel), read by the upload form, which opens already filed as that type
+   * at that timepoint and day instead of making the clinician re-enter what they
+   * just clicked. Transient — it is the pending intent of one upload, not part
+   * of the record — so it is not persisted with the project, and any other
+   * navigation clears it (see store/reducers/workspace/records).
+   */
+  'records.filing.intent': ImageRecordMeta | null;
+  /**
+   * The clinical notes of this patient's visits, keyed by the visit's timepoint
+   * label exactly as the imaging records carry it — trimmed, and `''` for the
+   * images that carry no label at all (the same key
+   * `utils/records#groupRecordsByTimepoint` groups on, via
+   * `utils/visitNotes#getVisitNoteKey`).
+   *
+   * Part of the patient's **project**, so it is saved, re-opened and exported
+   * with the films it belongs to (see store/middleware/project and the wceph
+   * format's `visitNotes`). A key with no visit on file is not dropped: the
+   * dashboard surfaces it rather than deleting a clinician's entry because a
+   * visit was relabelled. @see VisitNote
+   */
+  'records.notes': { [timepointKey: string]: VisitNote };
   'workspaces.order': string[];
   'workspaces.activeWorkspaceId': string | null;
   'workspaces.settings': {
     [id: string]: WorkspaceSettings;
+  };
+  /**
+   * Writing the case out as one `.wceph` — the whole chart, not one workspace,
+   * which is why this is a key of its own and not a field of `WorkspaceSettings`
+   * (where `isExporting` sat for years, written by nothing and therefore always
+   * false: a failed export was completely silent and the clinician was left
+   * believing their only copy had been written).
+   *
+   * Not persisted: it describes an act in progress, never a record.
+   * @see store/reducers/workspace/fileExport
+   */
+  'file.export': {
+    isExporting: boolean;
+    /** How far the zip is written, 0–100, or null when nothing is being written. */
+    progress: number | null;
+    /** The name the last successful export was written under, or null. */
+    fileName: string | null;
+    /** Why the last export failed, or null. */
+    error: GenericError | null;
   };
   'treatment.stages.order': string[];
   /** User-specified order of treatment stages */
@@ -727,7 +987,49 @@ type ImageRecordMeta = {
   timepoint: string | null;
   /** ISO `YYYY-MM-DD` date the image was captured; null when not recorded. */
   captureDate: string | null;
+  /**
+   * Which position of the photographic series this photograph is, or null.
+   *
+   * Null on every radiograph (a cephalogram holds no position in a photographic
+   * series) and on a photograph whose position was never recorded — the state
+   * every photograph filed before this field existed is in. It is never inferred
+   * from the image type: "Intraoral photograph" is five different photographs,
+   * and placing one of them in the centre cell of a series grid because the type
+   * is all the record states would be the app filing a photograph the clinician
+   * did not file. @see PhotoView
+   */
+  photoView: PhotoView | null;
 };
+
+/**
+ * One position of the standard orthodontic photographic series — the composite a
+ * clinic shoots at each records visit, and the grid a clinician reads it in.
+ *
+ * Four extraoral (facial) frames and five intraoral: the eight-to-nine photograph
+ * series every orthodontic records protocol is a variation of. The ids name the
+ * *frame*, not the file: a photograph carries one, and it is what places it in
+ * the series grid, what a visit-vs-visit comparison lines up across timepoints,
+ * and what an empty cell of the grid files an upload into.
+ *
+ * Each position belongs to exactly one `ImageType` (see
+ * `utils/records#PHOTO_VIEW_OPTIONS`), so a record can never state a type and a
+ * position that contradict each other — the frontal-at-rest frame *is* a frontal
+ * photograph, the right-buccal frame *is* an intraoral photograph.
+ *
+ * Nothing here is traceable or measurable: photographs are stored, displayed and
+ * compared, never analysed (see `utils/records#isTraceableImageType`).
+ */
+type PhotoView = (
+  'face_frontal_rest' |
+  'face_frontal_smiling' |
+  'face_three_quarter' |
+  'face_profile' |
+  'intraoral_right_buccal' |
+  'intraoral_frontal' |
+  'intraoral_left_buccal' |
+  'intraoral_upper_occlusal' |
+  'intraoral_lower_occlusal'
+);
 
 type CephImageData<T extends ImageType> = {
   /** A null value indicates that the image type is not set or is unknown */
@@ -736,7 +1038,15 @@ type CephImageData<T extends ImageType> = {
   timepoint: string | null;
   /** @see ImageRecordMeta */
   captureDate: string | null;
+  /** @see ImageRecordMeta — the photographic series position, or null. */
+  photoView: PhotoView | null;
   scaleFactor: number | null;
+  /**
+   * The imageId this film's scale was copied from, or null when the scale was
+   * measured on this film (and null when there is no scale at all).
+   * @see Events#SET_SCALE_FACTOR_REQUESTED
+   */
+  scaleSourceId: string | null;
   flipX: boolean;
   flipY: boolean;
   /** A value between 0 and 1, defaults to 0.5 */
@@ -794,7 +1104,14 @@ interface Events {
     format: ExportFileFormat;
     options?: ExportFileOptions;
   };
-  EXPORT_FILE_SUCCEEDED: void;
+  /**
+   * A case file finished being written — carrying **the name it was written
+   * under**, because that is the only thing that tells a clinician the export
+   * happened and where to look for it. @see components/CaseFile
+   */
+  EXPORT_FILE_SUCCEEDED: {
+    fileName: string;
+  };
   EXPORT_FILE_FAILED: GenericError;
   EXPORT_PROGRESS_CHANGED: {
     value: number;
@@ -809,9 +1126,39 @@ interface Events {
      * metadata, e.g. a .wceph project file.
      */
     meta?: Partial<ImageRecordMeta>;
+    /**
+     * Whether this request came from the **case file dialog** — the one surface
+     * that reads a `.wceph`'s manifest, states what it will do to the chart and
+     * asks first. @see components/CaseFile
+     *
+     * Absent (false) everywhere else, and the import middleware refuses a
+     * `.wceph` without it: choosing a case file at the ordinary "Add image"
+     * input used to merge a whole foreign case — twelve films, its visits and
+     * another patient's clinical notes — with no dialog and no confirmation.
+     * An image upload adds an image.
+     */
+    isCaseFile?: boolean;
+    /**
+     * Demographic fields to write onto the open patient **if and only if this
+     * import succeeds** — the fill-in-the-blanks patch the case file dialog
+     * computed and showed field by field. @see components/CaseFile
+     *
+     * It travels with the import rather than being dispatched beside it because
+     * it used to go *first*: a file that broke halfway through left the chart
+     * carrying the file's date of birth and sex although not one image had been
+     * imported, and a date of birth is what all nine analyses index their norms
+     * by. Carried here, one path applies it and only after the images are in.
+     */
+    patientPatch?: Partial<Patient>;
   };
   IMPORT_FILE_SUCCEEDED: {
     workspaceId: string;
+    /**
+     * Whether what landed was a whole **case file** rather than one image — so
+     * the surfaces that care can react to a case arriving (the records page
+     * opens on it) without having to guess from the number of images.
+     */
+    isCaseFile?: boolean;
   };
   IMPORT_FILE_FAILED: {
     workspaceId: string;
@@ -990,6 +1337,21 @@ interface Events {
   SET_SCALE_FACTOR_REQUESTED: {
     imageId: string;
     value: number;
+    /**
+     * The film this scale was **copied from**, where it was not measured on this
+     * one — the records dashboard's "apply this scale to the record's other
+     * films" (see `RecordsDashboard#renderCardCalibration`). Absent for a
+     * calibration a clinician marked on the film itself, which is the only kind
+     * the tracing toolbar dispatches.
+     *
+     * It is part of the same payload as the number, and not a second action,
+     * because it is part of the same fact: a scale and where it came from are one
+     * entry in the record. Held only in component state, the propagation died on
+     * the next navigation — the batched reversal the dialog promises
+     * unconditionally disappeared, and the copied number then read on T2's card
+     * exactly as the measured one reads on T1's, for the life of the record.
+     */
+    sourceImageId?: string | null;
   };
   UNSET_SCALE_FACTOR_REQUESTED: {
     imageId: string;
@@ -1019,6 +1381,68 @@ interface Events {
   SET_RECORDS_DASHBOARD_SHOWN: {
     isShown: boolean;
   };
+  /**
+   * Direct the next upload at one record slot — the type, timepoint and day the
+   * clinician clicked on the records dashboard. Null undirects it.
+   * @see StoreEntries['records.filing.intent']
+   */
+  SET_RECORD_FILING_INTENT: {
+    intent: ImageRecordMeta | null;
+  };
+  /**
+   * Write a visit's clinical note — an **append**: the fields are stored as a
+   * new version beside the ones already on file, and nothing already written is
+   * changed or removed. @see VisitNote
+   *
+   * `savedAt` travels in the payload so the reducer stays a pure function of its
+   * input (the clock is read by the surface that saves).
+   */
+  SAVE_VISIT_NOTE: {
+    /** Timepoint key of the visit — @see utils/visitNotes#getVisitNoteKey */
+    timepoint: string;
+    fields: VisitNoteFields;
+    /** Epoch ms this version was saved. */
+    savedAt: number;
+    /**
+     * Who wrote it — the device's letterhead clinician, read by the surface that
+     * saves for the same reason the clock is, and stamped into the version for
+     * good. Null where the device has no clinician on file.
+     * @see VisitNoteEntry.author
+     */
+    author: string | null;
+  };
+  /**
+   * Move a whole note — every version of it — from one timepoint key to
+   * another, for the case a visit was relabelled after its note was written and
+   * the entry is left pointing at a label no image carries any more.
+   *
+   * The note's own content and its amendment trail travel unchanged: re-filing
+   * says which visit an entry belongs to, and is not itself an amendment of what
+   * it says. Refused when the destination already holds a note, so nothing a
+   * clinician wrote is ever overwritten by a move.
+   *
+   * The move itself is recorded on the note (`refiledFrom`/`refiledAt`) and
+   * printed with it: an entry re-filed onto another visit's day must not read as
+   * though it had been written that day. @see VisitNote.refiledFrom
+   */
+  REFILE_VISIT_NOTE: {
+    from: string;
+    to: string;
+    /** Epoch ms of the move, for the note's own filing line. */
+    refiledAt: number;
+  };
+  /**
+   * Load a project's visit notes wholesale — the import path of the wceph
+   * format (see utils/importers/wceph/v1/import).
+   *
+   * Merged into what is open, and it never replaces a note already on file: an
+   * imported file filling in the notes of visits that have none is a record
+   * being completed, while one silently overwriting an entry the clinician wrote
+   * in this chart would be data loss with no trail.
+   */
+  LOAD_VISIT_NOTES: {
+    notes: { [timepointKey: string]: VisitNote };
+  };
   /** Set the active analysis for a specific image. */
   SET_ACTIVE_ANALYSIS_REQUESTED: {
     imageId: string;
@@ -1037,6 +1461,8 @@ interface Events {
     /** ISO `YYYY-MM-DD`, or empty when not recorded. */
     dateOfBirth: string;
     sex: PatientSex;
+    /** Reading of the name (かな), or empty when not entered. @see Patient */
+    reading: string;
   };
   UPDATE_PATIENT_REQUESTED: {
     id: string;
@@ -1044,9 +1470,38 @@ interface Events {
     chartId: string;
     dateOfBirth: string;
     sex: PatientSex;
+    reading: string;
   };
   REMOVE_PATIENT_REQUESTED: {
     id: string;
+  };
+  /**
+   * Sets which measurements this patient's trend board plots — null to put it
+   * back on the chart's defaults. Persisted with the patient (see `Patient`).
+   */
+  SET_PATIENT_TREND_PLOT_REQUESTED: {
+    id: string;
+    symbols: string[] | null;
+  };
+  /**
+   * A restore from a case file did not land, so the chart it registered has been
+   * taken off the case list again and this is why.
+   *
+   * Dispatched by the project middleware, which is the one place that knows a
+   * given import was a restore. @see StoreState['patients.restoreError']
+   */
+  RESTORE_FROM_CASE_FILE_FAILED: {
+    error: GenericError;
+  };
+  /**
+   * Records what a patient's saved project holds, for the case list's row.
+   * Counted off the project by the project middleware when it is written or
+   * loaded — never typed in, and never for a patient who is not on file.
+   * @see PatientCaseSummary
+   */
+  SET_PATIENT_CASE_SUMMARY: {
+    id: string;
+    summary: PatientCaseSummary;
   };
   SET_ACTIVE_PATIENT_REQUESTED: {
     id: string | null;
@@ -1054,6 +1509,17 @@ interface Events {
   /** Open a patient's project: make them active and load their saved tracing. */
   OPEN_PATIENT_REQUESTED: {
     patientId: string;
+    /**
+     * A case file to read into the chart **as soon as it has opened** — how a
+     * clinician restores their only copy onto a machine that has never seen the
+     * case. @see components/PatientPicker/RestoreFromCaseFile
+     *
+     * It travels with the open rather than being dispatched beside it because
+     * opening a patient replaces the project slices wholesale
+     * (`LOAD_PROJECT_SUCCEEDED`): an import dispatched in the same tick races
+     * that replacement and loses every image it had just read in.
+     */
+    restoreFromCaseFile?: File;
   };
   /** Persist the current project (images + tracings) under a patient. */
   SAVE_PROJECT_REQUESTED: {

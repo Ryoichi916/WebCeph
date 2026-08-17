@@ -39,8 +39,16 @@ const GeoViewer = pure((props: Props) => {
     style,
     children,
   } = props;
+  // A <g>, not a nested <svg>: a nested svg element establishes its own
+  // viewport, and with no width/height/viewBox that viewport defaults to the
+  // *CSS* size of the outer svg (a few hundred px) with overflow hidden — so
+  // geometry drawn in the film's pixel coordinate space (e.g. 1578×2089) was
+  // clipped to a corner and every measurement line, landmark dot and hover
+  // highlight was invisible on a real high-resolution film. A group inherits
+  // the parent coordinate system (including the fit/zoom transform) and never
+  // clips.
   return (
-    <svg style={style}>
+    <g style={style}>
       {children}
       {
         map(objects, ({ value, symbol }) => {
@@ -79,7 +87,7 @@ const GeoViewer = pure((props: Props) => {
           return null;
         })
       }
-    </svg>
+    </g>
   );
 });
 

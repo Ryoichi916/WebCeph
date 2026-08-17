@@ -2,6 +2,13 @@
 export interface TabCaption {
   /** Timepoint label (`T1`, `T2`, …), or null when not recorded. */
   timepoint: string | null;
+  /**
+   * The day the image was captured (`2026-01-12`), or null when the record
+   * carries none. The rail groups its tiles by this — a chart is a patient and
+   * their dated images, and a 21-image case scrolled as one undifferentiated
+   * strip until the rail said where one visit ended and the next began.
+   */
+  captureDate: string | null;
   /** Rail-sized image type label, e.g. `Lat ceph`. */
   typeLabel: string;
   /** Full sentence used as the tile's tooltip / accessible name. */
@@ -23,6 +30,19 @@ export interface StateProps {
    * tile says what it is instead of only how many tiles precede it.
    */
   captions: { [workspaceId: string]: TabCaption | undefined };
+  /**
+   * The tile a slot-directed upload is waiting on, if any — the empty tile the
+   * clinician was sent to by pressing "Add frontal ceph" on the records
+   * dashboard.
+   *
+   * Without it the tile was a filled black square carrying a bare ordinal
+   * ("2", "4"): indistinguishable from a loaded film whose thumbnail failed, and
+   * silent about the filing that had just been chosen while every filed tile
+   * beside it read "T1 / Lat ceph".
+   */
+  pendingWorkspaceId: string | null;
+  /** What that pending tile is filing (from the filing intent, not the form). */
+  pendingCaption: TabCaption | null;
 }
 
 

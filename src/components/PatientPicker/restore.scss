@@ -1,0 +1,156 @@
+@import 'src/_variables.scss';
+
+// "Open a case file" from the case list — the restore path. Same dialog idiom as
+// the case file dialog inside a chart (components/CaseFile/style.scss), because
+// they are the same act reached from two places.
+
+.title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-family: $font-stack;
+}
+
+.title_heading {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: $text-primary;
+}
+
+.title_caption {
+  font-size: 12.5px;
+  font-weight: 400;
+  color: $text-tertiary;
+}
+
+.body {
+  font-family: $font-stack;
+}
+
+.lead {
+  margin: 8px 0 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: $text-secondary;
+}
+
+.pick {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+// Never in the tab order (`tabindex="-1"` on the element) and never on screen:
+// the button beside it is the control. @see components/CaseFile/style.scss
+.pick_input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.pick_name {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: $text-secondary;
+  word-break: break-all;
+}
+
+.error {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(198, 40, 40, .28);
+  border-radius: 6px;
+  background: $error-bg;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: $error;
+}
+
+// Reading the file through, before anything is created — an act in progress,
+// stated while it lasts. @see components/CaseFile/style.scss `.note_busy`
+.busy {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border: 1px solid $border;
+  border-radius: 6px;
+  background: $bg-sunken;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: $text-secondary;
+}
+
+/**
+ * The edge of the scrolling body.
+ *
+ * `autoScrollBodyContent` gives this dialog a scroll region whose content simply
+ * ended at the fold: at 1440×900 the DATE OF BIRTH and SEX labels were sliced
+ * through by the actions bar with nothing to say there was more below. Sticky
+ * rather than fixed, so it rides the bottom of the region while there is more to
+ * see and settles at the end of the content when there is not.
+ */
+.scroll_edge {
+  position: sticky;
+  bottom: -12px;
+  height: 20px;
+  margin: -20px -24px 0;
+  pointer-events: none;
+  background: linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0),
+    rgba(255, 255, 255, .96)
+  );
+}
+
+.block {
+  margin-top: 18px;
+}
+
+.block_heading {
+  margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: $text-tertiary;
+}
+
+.note {
+  margin: 0 0 6px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: $text-secondary;
+}
+
+// The registration fields, filled in from the file. Wraps rather than overflows:
+// five fields do not fit a 620px dialog on one line.
+.form_row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 12px;
+  margin-top: 6px;
+}
+
+.field_name {
+  flex: 1 1 180px;
+  min-width: 160px;
+}
+
+.field_chart {
+  flex: 0 0 148px;
+}
+
+.field_reading {
+  flex: 0 1 178px;
+  min-width: 168px;
+}
+
+.field_dob {
+  flex: 0 0 170px;
+}

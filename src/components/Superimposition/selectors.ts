@@ -66,7 +66,18 @@ export interface SuperimpositionAvailability {
   reason: string;
 }
 
-const registrationRequirement = (): string => {
+/**
+ * What a tracing has to carry before it can be registered at all, named as
+ * prose: `"Cranial base (S, N), or Maxilla (PNS, ANS), or …"`.
+ *
+ * Exported because two surfaces have to say the same thing about the same rule:
+ * this module's own record-level reason ("2 of 3 lateral cephalograms carry a
+ * tracing that can be registered…") and the records dashboard's timeline, whose
+ * per-pair Superimpose control has to explain, on the visit it is pointing at,
+ * what is missing from it. Written twice they drifted the moment a basis was
+ * added.
+ */
+export const registrationRequirement = (): string => {
   const names = REGISTRATION_BASES.map(
     (b) => `${b.label} (${basisSymbols(b).join(', ')})`,
   );

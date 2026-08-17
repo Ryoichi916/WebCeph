@@ -34,11 +34,44 @@ export const exportImage = createActionCreator('EXPORT_IMAGE_REQUESTED');
 // Patient records dashboard (the timeline of every image on file).
 export const setRecordsDashboardShown = createActionCreator('SET_RECORDS_DASHBOARD_SHOWN');
 
+// Direct the next upload at one record slot (type + timepoint + day), so an
+// empty slot on the dashboard opens an upload form that is already filled in.
+export const setRecordFilingIntent = createActionCreator('SET_RECORD_FILING_INTENT');
+
+// A visit's clinical note — what the patient came for, the diagnosis, the plan
+// and what is in the mouth, in the clinician's own words. Saving is an append:
+// the note keeps every version it has ever held, so an amended entry says so and
+// can be read as it stood. @see VisitNote
+export const saveVisitNote = createActionCreator('SAVE_VISIT_NOTE');
+// Move a note to the visit it belongs to, with its trail — for an entry left
+// pointing at a timepoint label no image carries any more.
+export const refileVisitNote = createActionCreator('REFILE_VISIT_NOTE');
+// Notes arriving with an imported project file (never overwriting one on file).
+export const loadVisitNotes = createActionCreator('LOAD_VISIT_NOTES');
+
 // Patient records (name + chart id + demographics).
 export const addPatient = createActionCreator('ADD_PATIENT_REQUESTED');
 export const updatePatient = createActionCreator('UPDATE_PATIENT_REQUESTED');
 export const removePatient = createActionCreator('REMOVE_PATIENT_REQUESTED');
 export const setActivePatient = createActionCreator('SET_ACTIVE_PATIENT_REQUESTED');
+// Which measurements this patient's trend board is followed on — persisted with
+// the patient, because a board that resets every time the case is reopened makes
+// the reader re-tick it every morning.
+export const setPatientTrendPlot = createActionCreator(
+  'SET_PATIENT_TREND_PLOT_REQUESTED',
+);
+// A restore from a case file that did not land — the chart it registered is
+// taken off the list again and the case list says why.
+// @see StoreState['patients.restoreError']
+export const restoreFromCaseFileFailed = createActionCreator(
+  'RESTORE_FROM_CASE_FILE_FAILED',
+);
+// What a patient's saved project holds — counted off the project when it is
+// written or opened, so the case list can be sorted and filtered on a case
+// without reading megabytes of film for every row. @see PatientCaseSummary
+export const setPatientCaseSummary = createActionCreator(
+  'SET_PATIENT_CASE_SUMMARY',
+);
 
 // Project lifecycle (a project is a patient's images + tracings + analyses).
 export const openPatient = createActionCreator('OPEN_PATIENT_REQUESTED');

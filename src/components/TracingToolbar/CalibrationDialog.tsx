@@ -41,6 +41,22 @@ export const formatMmPx = (value: number, decimals = 4): string => {
   return value.toFixed(decimals).replace(/0+$/, '').replace(/\.$/, '.0');
 };
 
+/** Decimals a calibration is *stated* in wherever it is shown to a reader. */
+export const SCALE_DECIMALS = 3;
+
+/**
+ * The one way an mm/px calibration is written on every surface that shows one —
+ * the toolbar chip, the record card, the simulation, the superimposition legend
+ * and the printed report. The same calibration used to print as "0.104 mm/px"
+ * here and "1 px = 0.1042 mm" on paper: one number, two precisions and two
+ * phrasings, which reads as two different measurements of the same film.
+ *
+ * (The calibration *input* in this dialog keeps its full stored precision: it is
+ * the value being edited, not a statement about it.)
+ */
+export const formatScale = (value: number): string =>
+  `${formatMmPx(value, SCALE_DECIMALS)} mm/px`;
+
 /**
  * Small hand-rolled modal for setting the image's mm-per-pixel calibration.
  * Rendered through a portal so the toolbar's own stacking context and the
@@ -204,7 +220,7 @@ export default class CalibrationDialog extends
                   <span>
                     Computed scale
                     <strong className={classes.calib_preview_value}>
-                      {formatMmPx(computed)} mm/px
+                      {formatScale(computed)}
                     </strong>
                     <span className={classes.calib_preview_alt}>
                       1 mm ≈ {(1 / computed).toFixed(1)} px

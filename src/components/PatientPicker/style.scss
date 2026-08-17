@@ -1,7 +1,12 @@
 @import 'src/_variables.scss';
+@import 'src/_fields.scss';
 
-// Patient picker — the product entry point. Split card: brand panel on the
-// left, patient registration + list on the right.
+// Patient picker — the product entry point, and the practice's case list.
+// Split card: brand panel on the left, the quick-add strip and the case table on
+// the right. The table is a CSS grid rather than a `<table>`: the header and the
+// rows are laid out from ONE column template (`$cols` below), which is what keeps
+// a header from ever standing over the wrong column, and a row can stay the single
+// button that opens the case.
 
 .screen {
   position: absolute;
@@ -18,14 +23,23 @@
   overflow: auto;
 }
 
+// The card is the window, the way every other surface in this app is (the
+// editor, the records dashboard, superimposition): it takes the width it is
+// given up to 1600px — a 1920px screen was floating a 1280px card in 320px of
+// dead app background each side while still showing eight rows — and its height
+// is its content's, up to the viewport. A three-case practice therefore gets a
+// short card with its pager under its third row instead of a third of a blank
+// sheet, and a full page of rows gets every row the window can hold.
+// No min-height once there is a list: with one or two cases a 520px floor left
+// ~140px of blank white between the pager and the footnote — the "third of a
+// blank sheet" this arrangement exists to avoid. The first-run card keeps the
+// floor (`.card__empty`), where the height carries the three-step invitation.
 .card {
   display: flex;
   align-items: stretch;
-  width: 860px;
-  max-width: calc(100vw - 48px);
-  // Stable height: content states (empty list, long list, validation error,
-  // filtered search) change what is inside, never where the card sits.
-  height: 620px;
+  width: calc(100vw - 48px);
+  max-width: 1600px;
+  height: auto;
   max-height: calc(100vh - 48px);
   background: $bg-surface;
   border-radius: 8px;
@@ -33,22 +47,41 @@
   overflow: hidden;
 }
 
+// A fresh install has no list to lay out. The card then takes the size of the one
+// thing it is asking for — registering the first patient — instead of standing
+// as wide as the window around an empty table.
+// Wide enough for the five registration fields and the button to stand on ONE
+// line — at 1080px the Sex control and Register wrapped onto a second row of
+// otherwise empty tinted well, which is the same dead space the list's own well
+// was folded away to end. Never wider than the window, so a 1024px laptop still
+// gets the card rather than a horizontal scrollbar (there the row wraps, as the
+// narrow tier intends).
+.card__empty {
+  width: 1300px;
+  max-width: calc(100vw - 48px);
+  height: auto;
+  min-height: 520px;
+}
+
 // ---------------------------------------------------------------- brand panel
 
 .brand {
-  flex: 0 0 280px;
+  flex: 0 0 264px;
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
-  padding: 32px 28px 28px;
+  padding: 32px 26px 28px;
   background: linear-gradient(168deg, $primary-700 0%, $primary-900 100%);
   color: #ffffff;
   user-select: none;
 }
 
-// Faint landmark-constellation artwork filling the middle of the panel.
+// Faint landmark-constellation artwork filling the middle of the panel. Its
+// flex basis is 0, not the drawing's own height: the card is sized to its content
+// now, and a decoration must never be what makes a three-case practice's card
+// 130px taller than its list.
 .brand_art {
-  flex: 1 1 auto;
+  flex: 1 1 0;
   min-height: 0;
   display: flex;
   align-items: center;
@@ -111,7 +144,20 @@
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
-  padding: 28px 32px 20px;
+  padding: 24px 28px 16px;
+}
+
+// Title on the left, the one creation action on the right.
+.header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.header_text {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .header_title {
@@ -121,71 +167,203 @@
   color: $text-primary;
 }
 
-.count_badge {
-  display: inline-block;
-  margin-left: 8px;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: $primary-050;
-  color: $primary-700;
-  font-size: 11.5px;
-  font-weight: 600;
-  line-height: 1.3;
-  // Optically centered on the heading's cap height.
-  vertical-align: middle;
-  position: relative;
-  top: -1px;
-  font-variant-numeric: tabular-nums;
-}
-
 .header_sub {
   margin: 4px 0 0;
   font-size: 12.5px;
   color: $text-tertiary;
 }
 
-// Register form — two rows: identity (name + chart ID) on top, demographics
-// (date of birth + sex) with the Register action below. The reserved error
-// line under the first row doubles as the inter-row gap.
-.form {
+// The folded registration well: one button, at the size of the screen's fields.
+// Filled primary because it is the only thing on this screen that creates
+// anything — and it is never on screen at the same time as the well's own
+// Register, so the surface still has exactly one primary.
+// The two ways a case gets onto this device, kept on one line at the top right.
+.header_actions {
+  flex: 0 0 auto;
   display: flex;
-  flex-direction: column;
-  margin-top: 20px;
+  align-items: center;
+  gap: 10px;
 }
 
-.form_row {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
+// Restoring a case from its file: a peer of registration, and secondary to it on
+// a practice's own machine — but never absent, because on a machine that has
+// never seen the case it is the only way in.
+.open_btn {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  height: 36px;
+  padding: 0 14px;
+  border: 1px solid $border-strong;
+  border-radius: 6px;
+  background: $bg-surface;
+  font-family: $font-stack;
+  font-size: 14px;
+  font-weight: 600;
+  color: $primary-700;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease;
 
-  & + & {
-    margin-top: 2px;
+  &:hover {
+    background: $bg-sunken;
+    border-color: $primary-600;
+  }
+
+  &:focus {
+    outline: none;
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: $focus-ring;
   }
 }
 
-.field {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+.new_btn {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 36px;
+  padding: 0 16px 0 13px;
+  border: none;
+  border-radius: 6px;
+  background: $primary-600;
+  font-family: $font-stack;
+  font-size: 14px;
+  font-weight: 600;
+  color: #ffffff;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(16, 30, 50, .2);
+  transition: background-color 120ms ease, box-shadow 120ms ease;
+
+  &:hover {
+    background: $primary-500;
+  }
+
+  &:active {
+    background: $primary-700;
+  }
+
+  &:focus {
+    outline: none;
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: 0 1px 2px rgba(16, 30, 50, .2), $focus-ring;
+  }
 }
 
-// Demographics row: fixed-width date field, natural-width segmented control,
-// Register anchored to the right by the flexible spacer.
+.new_btn_plus {
+  font-size: 17px;
+  font-weight: 400;
+  line-height: 1;
+}
+
+// ------------------------------------------------------------- quick-add strip
+// Registration is one row in a tinted well: a clinic registers a patient far less
+// often than it opens one, so the form is complete but never the loudest thing on
+// the screen — and, once there are cases on file, not on the screen at all until
+// it is asked for (`.new_btn` above). Standing open it cost ~105px, and ~190px
+// once it wrapped on a narrower window, which on a daily case list is three to
+// four rows of the practice's own list. It stays open on a fresh install, where
+// there is nothing else to do and the empty state has to invite it.
+
+.form {
+  flex: 0 0 auto;
+  margin-top: 14px;
+  padding: 10px 14px 4px;
+  border: 1px solid $border;
+  border-radius: 8px;
+  background: $bg-sunken;
+}
+
+// The well's caption line: what it is, and the way out of it.
+.form_head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.form_label {
+  display: block;
+  flex: 1 1 auto;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: $text-tertiary;
+}
+
+// Abandons the registration (Escape does the same). A text button: it is the way
+// back out of a state the user can see they are in, never a second primary.
+.form_close {
+  flex: 0 0 auto;
+  height: 24px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  font-family: $font-stack;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: $primary-600;
+  cursor: pointer;
+
+  &:hover {
+    background: $primary-050;
+  }
+
+  &:focus {
+    outline: none;
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: $focus-ring;
+  }
+}
+
+// Wraps rather than overflows: with five fields and the button, the row does not
+// fit the narrow first-run card (nor a 1024px laptop), and a Register button
+// pushed off the edge of its own well is not a registration form.
+.form_row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 12px;
+  margin-top: 6px;
+}
+
+.field_name {
+  flex: 1 1 auto;
+  min-width: 150px;
+}
+
+// On the first-run card the line is broken on the fields' base sizes, and a text
+// input's natural base (~180px) was enough to push Sex and Register onto a second
+// row on a 1920px screen — where the panel is at its full width. Stated as a
+// basis, the name still takes every spare pixel of the line it is on. The basis is
+// stated below both floors (150px here, 140px in the narrow tier) so each width
+// keeps its own minimum — this rule outranks the tier's and must not undo it.
+.card__empty .field_name {
+  flex: 1 1 140px;
+}
+
+.field_chart {
+  flex: 0 0 148px;
+}
+
+// The reading of the name (かな) — optional, and narrower than the name it reads.
+// Wide enough that its own label ("READING (かな) optional") stays on one line.
+.field_reading {
+  flex: 0 1 178px;
+  min-width: 168px;
+}
+
 .field_dob {
   flex: 0 0 170px;
-}
-
-.field_sex {
-  flex: 0 0 auto;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.form_spacer {
-  flex: 1 1 0;
 }
 
 // Button column: an invisible label spacer keeps the button aligned with the
@@ -197,195 +375,10 @@
   gap: 6px;
 }
 
-.field_label {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: .06em;
-  text-transform: uppercase;
-  color: $text-tertiary;
-}
-
-// Quiet "optional" tag inside a field label; lowercase against the
-// uppercase label so it reads as an aside, not part of the field name.
-.field_optional {
-  margin-left: 5px;
-  font-size: 10px;
-  font-weight: 500;
-  letter-spacing: .03em;
-  text-transform: lowercase;
-  color: $text-disabled;
-}
-
-// Locale-independent echo of a date input's value, so 08/06/2026 can't be
-// misread as June 8th on a patient record.
-.field_echo {
-  font-size: 11.5px;
-  line-height: 1.2;
-  font-variant-numeric: tabular-nums;
-  color: $text-disabled;
-}
-
-.field_echo_set {
-  font-weight: 600;
-  color: $text-secondary;
-}
-
-.field_input {
-  box-sizing: border-box;
-  width: 100%;
-  height: 36px;
-  padding: 0 12px;
-  border: 1px solid $border-strong;
-  border-radius: 6px;
-  background: $bg-surface;
-  font-family: $font-stack;
-  font-size: 14px;
-  color: $text-primary;
-  transition: border-color 120ms ease, box-shadow 120ms ease;
-
-  &::placeholder {
-    color: $text-disabled;
-    opacity: 1;
-  }
-
-  &:hover {
-    border-color: darken($border-strong, 8%);
-  }
-
-  &:focus {
-    outline: none;
-    border-color: $primary-600;
-    box-shadow: $focus-ring;
-  }
-}
-
-// Native date input: match the text inputs exactly and keep the picker
-// affordance quiet until hovered.
-.field_input_date {
-  &::-webkit-calendar-picker-indicator {
-    opacity: .55;
-    cursor: pointer;
-
-    &:hover {
-      opacity: .85;
-    }
-  }
-}
-
-// While empty, the browser's yyyy/mm/dd scaffold is shown in placeholder
-// gray so it cannot be mistaken for an entered date.
-.field_input_date_empty {
-  color: $text-disabled;
-}
-
-// Sex: two-option segmented control (click the active segment to clear).
-.segmented {
-  display: inline-flex;
-  align-items: stretch;
-  box-sizing: border-box;
-  height: 36px;
-  border: 1px solid $border-strong;
-  border-radius: 6px;
-  background: $bg-surface;
-  overflow: hidden;
-}
-
-.segment {
-  appearance: none;
-  border: none;
-  margin: 0;
-  padding: 0 16px;
-  background: none;
-  font-family: $font-stack;
-  font-size: 13px;
-  font-weight: 500;
-  color: $text-secondary;
-  cursor: pointer;
-  transition: background-color 120ms ease, color 120ms ease;
-
-  & + & {
-    border-left: 1px solid $border-strong;
-  }
-
-  &:hover {
-    background: $bg-sunken;
-  }
-
-  &:focus {
-    outline: none;
-  }
-
-  &:focus-visible {
-    box-shadow: inset $focus-ring;
-  }
-}
-
-.segment_active {
-  background: $primary-050;
-  color: $primary-700;
-  font-weight: 600;
-
-  &:hover {
-    background: $primary-050;
-  }
-}
-
-// Error state on a specific input: red outline + faint tint.
-.field_input_error {
-  border: 1.5px solid $error;
-  padding: 0 11.5px;
-  background: #FEF6F6;
-
-  &:hover {
-    border-color: $error;
-  }
-
-  &:focus {
-    border-color: $error;
-    box-shadow: 0 0 0 3px rgba(198, 40, 40, .18);
-  }
-}
-
-// Reserved line under each field: the card never grows or shifts when a
-// validation message appears.
-.field_error {
-  display: block;
-  min-height: 16px;
-  font-size: 12px;
-  line-height: 16px;
-  color: $error;
-}
-
-.field_error_inner {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  white-space: nowrap;
-}
-
-.field_error_icon {
-  flex-shrink: 0;
-}
-
-// Search (appears once the list grows)
-.search_row {
-  position: relative;
-  margin-top: 6px;
-}
-
-.search_icon {
-  position: absolute;
-  left: 10px;
-  top: 50%;
-  transform: translateY(-50%);
-  pointer-events: none;
-  display: flex;
-}
-
-.search_input {
-  composes: field_input;
-  padding-left: 36px;
-}
+// The demographics fields themselves (label, input, date echo, sex segments,
+// error line) live in components/PatientFields — registration and "Edit patient
+// details" on the records dashboard share one set. Only this screen's layout of
+// them stays here.
 
 // Primary Register button: keep full saturation on hover/focus/active (the
 // default mui overlay washes the blue out so it reads as disabled) and signal
@@ -437,83 +430,100 @@
   }
 }
 
-// Patient list
-.list_wrap {
-  flex: 1 1 auto;
+// ------------------------------------------------------------------- the list
+
+// Shrinks when the window cannot hold the page of rows (the table inside takes
+// the squeeze), but never GROWS past the list it holds. The brand panel's own
+// content is ~354px tall, so a card holding one or two cases is taller than its
+// list — and a list block that grew into that surplus parked it between the pager
+// and the footnote, which is the blank white this arrangement exists to avoid.
+// Held to its content, the footnote sits directly under the pager and the surplus
+// falls where it reads as the card's own ground.
+.list_block {
+  flex: 0 1 auto;
   min-height: 0;
   display: flex;
   flex-direction: column;
-  overflow-y: auto;
-  margin: 8px -12px 0;
-  padding: 0 12px;
 }
 
-// Fills the space a short list leaves between the last row and the footer.
-.list_tip {
-  flex: 1 1 auto;
+// Search + the three filters + the tally, on one 36px line.
+.toolbar {
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
-  justify-content: center;
-  padding: 20px 24px;
-  text-align: center;
-  font-size: 12px;
-  line-height: 1.7;
-  color: $text-tertiary;
-  user-select: none;
+  gap: 8px;
+  margin: 14px 0 0;
 }
 
-.kbd {
-  display: inline-block;
-  margin: 0 2px;
-  padding: 0 6px;
-  border: 1px solid $border-strong;
-  border-bottom-width: 2px;
-  border-radius: 4px;
-  background: $bg-sunken;
-  font-family: $font-stack;
-  font-size: 11px;
-  font-weight: 600;
-  line-height: 17px;
-  color: $text-secondary;
-}
-
-.list {
-  list-style: none;
-  margin: 8px 0 0;
-  padding: 0;
-}
-
-.row_item {
+.search_row {
   position: relative;
+  flex: 0 1 250px;
+}
 
-  & + & {
-    border-top: 1px solid $border;
-  }
+.search_icon {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  display: flex;
+}
 
-  // Delete fades in as a SECOND control left of the chevron; the open
-  // affordance itself never disappears from under the pointer.
-  &:hover .row_delete,
-  &:focus-within .row_delete {
-    opacity: 1;
-    pointer-events: auto;
+.search_input {
+  @include field-input;
+  padding-left: 36px;
+
+  // Chrome paints its own clear affordance on a search input; it sits well
+  // against the app's own 36px field.
+  &::-webkit-search-cancel-button {
+    cursor: pointer;
   }
 }
 
-.row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
+.filter_select {
   box-sizing: border-box;
-  width: 100%;
-  min-height: 52px;
-  padding: 8px 84px 8px 8px;
+  flex: 0 0 auto;
+  height: 36px;
+  max-width: 100%;
+  padding: 0 8px;
+  border: 1px solid $border-strong;
+  border-radius: 6px;
+  background: $bg-surface;
+  font-family: $font-stack;
+  font-size: 13px;
+  color: $text-primary;
+  cursor: pointer;
+
+  &:focus {
+    outline: none;
+    border-color: $primary-600;
+    box-shadow: $focus-ring;
+  }
+}
+
+.filter_select__wide {
+  min-width: 168px;
+}
+
+.toolbar_spacer {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+// Undo every narrowing at once. A text button, because it is the recovery from a
+// state the user can see they are in — never a second primary.
+.clear_btn {
+  flex: 0 0 auto;
+  height: 28px;
+  padding: 0 10px;
   border: none;
   border-radius: 6px;
   background: none;
-  cursor: pointer;
-  text-align: left;
   font-family: $font-stack;
-  transition: background-color 120ms ease;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: $primary-600;
+  cursor: pointer;
 
   &:hover {
     background: $primary-050;
@@ -529,25 +539,340 @@
   }
 }
 
+// How many cases the table is showing out of how many exist.
+.tally {
+  flex: 0 0 auto;
+  font-size: 12.5px;
+  color: $text-tertiary;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+
+  strong {
+    font-weight: 600;
+    color: $text-secondary;
+  }
+}
+
+// ---- The table ------------------------------------------------------------
+// ONE column template for the header and every row. The last column is empty
+// space the row's own controls (remove + chevron) float over, so the row can stay
+// a single button — a button cannot contain another button.
+//
+// TWO flexible tracks, not one. With the name column as the only `1fr` it
+// absorbed every spare pixel and surrendered every missing one: at a 1600px card
+// it measured 518px, so the name sat 350px from its own chart ID — the row's two
+// halves stopped reading as one patient — and at 1200px it measured 122px and
+// ellipsised names a clinic actually has on file. Now the slack is shared with
+// Tracing (a 1.4 : 1 split), the name never falls below 180px, and below 1300px
+// the narrow template takes over rather than squeezing nine columns further.
+$cols:
+  34px minmax(180px, 1.4fr) 96px 84px 44px 84px 112px minmax(146px, 1fr) 68px;
+
+// The header and the rows are ONE grid, so the template alone is not enough: the
+// gap and the leading inset have to be the same on both or every header label
+// stands over the column to its left. (They were not, and the AGE label stood
+// over the Sex dashes.) Both sides take the geometry from here.
+$col-gap: 10px;
+$row-inset: 4px;
+
+@mixin table-grid {
+  display: grid;
+  grid-template-columns: $cols;
+  gap: 0 $col-gap;
+  padding-left: $row-inset;
+  // The row is a <button>, and a button carries the UA's own 6px side padding:
+  // left it in and the row's 1fr column came out 6px narrower than the header's,
+  // which is exactly how a header ends up over the wrong column.
+  padding-right: 0;
+}
+
+.table {
+  // Grows into the space a full page of rows needs and shrinks (scrolling) when
+  // there are more, but never *stretches*: a three-case practice gets its pager
+  // directly under its third row instead of 400px below it.
+  flex: 0 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  margin-top: 10px;
+  // The eight columns need their width; a narrow window scrolls the table
+  // sideways rather than crushing the chart ID into two characters.
+  overflow: auto;
+  // Scroll-edge shadows, so a table with a column past its right edge says so.
+  // The two covers scroll WITH the content (`local`) and the two shadows are
+  // pinned to the element (`scroll`): each shadow is therefore masked at the end
+  // it belongs to and only shows while there is content beyond that edge.
+  background:
+    linear-gradient(to right, $bg-surface 40%, rgba(255, 255, 255, 0)) left center,
+    linear-gradient(to left, $bg-surface 40%, rgba(255, 255, 255, 0)) right center,
+    radial-gradient(
+      farthest-side at 0 50%, rgba(16, 30, 50, .17), rgba(16, 30, 50, 0)
+    ) left center,
+    radial-gradient(
+      farthest-side at 100% 50%, rgba(16, 30, 50, .17), rgba(16, 30, 50, 0)
+    ) right center;
+  background-repeat: no-repeat;
+  background-size: 26px 100%, 26px 100%, 13px 100%, 13px 100%;
+  background-attachment: local, local, scroll, scroll;
+}
+
+// A table rendering an empty state has no rows to be sized by, so it takes the
+// room instead of leaving the message stranded at the top of a void.
+.table__empty {
+  flex: 1 1 auto;
+}
+
+// The head is a block around the grid rather than the grid itself, so that on
+// paper it can become a `table-header-group` — the one thing that repeats a
+// header across printed pages — while the columns inside it stay the same grid
+// the rows are laid out on. @see the print block at the foot of this file.
+.thead {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  min-width: 800px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid $border-strong;
+  background: $bg-surface;
+}
+
+.thead_grid {
+  @include table-grid;
+  align-items: end;
+}
+
+.th {
+  display: flex;
+  align-items: flex-end;
+  min-width: 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: $text-tertiary;
+  user-select: none;
+}
+
+.th__sorted {
+  color: $primary-700;
+}
+
+// A numeric column's head belongs over its figures, not over the column's left
+// edge: RECORDS read as a left-aligned label above right-aligned counts.
+.th.cell_records {
+  justify-content: flex-end;
+
+  .th_btn {
+    // The figures below sit 8px off the column's right edge (`.cell_records`), so
+    // the label does too: the head and its column read as one stack of digits.
+    margin-left: 0;
+    margin-right: 4px;
+  }
+}
+
+.th_btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  padding: 2px 4px;
+  margin-left: -4px;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  font-family: $font-stack;
+  font-size: inherit;
+  font-weight: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+
+  &:hover {
+    background: $primary-050;
+    color: $primary-700;
+  }
+
+  &:focus {
+    outline: none;
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: $focus-ring;
+  }
+}
+
+// The sort affordance: a faint double arrow on every sortable column (so the
+// column reads as sortable before it is pressed), the real direction on the one
+// the list is ordered by.
+.sort_hint {
+  font-size: 10px;
+  line-height: 1;
+  color: $text-disabled;
+  // Held faint but never invisible: a column that only admits to being sortable
+  // once the pointer is on it does not read as sortable at rest.
+  opacity: .35;
+  transition: opacity 100ms ease;
+
+  .th_btn:hover &,
+  .th_btn:focus-visible & {
+    opacity: 1;
+  }
+}
+
+.sort_on {
+  font-size: 11px;
+  line-height: 1;
+  color: $primary-600;
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  min-width: 800px;
+}
+
+.row_item {
+  position: relative;
+
+  & + & {
+    border-top: 1px solid $border;
+  }
+
+  // Remove fades in as a SECOND control left of the chevron; the open
+  // affordance itself never disappears from under the pointer.
+  &:hover .row_delete,
+  &:focus-within .row_delete {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  // The tint belongs to the whole row, not to the button inside it: the trash and
+  // the chevron are siblings of that button, so moving onto them used to drop the
+  // highlight from the row they act on.
+  &:hover .row {
+    background: $primary-050;
+  }
+}
+
+.row {
+  @include table-grid;
+  align-items: center;
+  box-sizing: border-box;
+  width: 100%;
+  // The brief's list row (§5). At 56px only eight rows of a 25-row page fitted a
+  // 1440×900 window; at 48 the same window reads eleven.
+  min-height: 48px;
+  padding-top: 4px;
+  padding-bottom: 4px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  cursor: pointer;
+  text-align: left;
+  font-family: $font-stack;
+  transition: background-color 120ms ease;
+
+  &:focus {
+    outline: none;
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: $focus-ring;
+  }
+}
+
+// Every data cell stacks a value over its qualifier (age over date of birth,
+// count over visits, date over "5 mo ago").
+.cell {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+}
+
+.cell_value {
+  font-size: 13px;
+  font-weight: 500;
+  color: $text-primary;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cell_sub {
+  margin-top: 1px;
+  font-size: 11px;
+  color: $text-tertiary;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+// Nothing recorded. An em dash, never a zero: "0 records" and "no record saved"
+// are different statements about a chart.
+.unset {
+  font-size: 13px;
+  color: $text-disabled;
+}
+
+// ---- Cells ---------------------------------------------------------------
+
+.cell_film {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  min-width: 0;
+}
+
+// The newest film on file, contained (never cropped) on the imaging canvas'
+// own dark ground so a radiograph reads as a radiograph at 40px.
+.film {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 34px;
+  height: 40px;
+  border-radius: 5px;
+  background: $canvas-bg;
+  border: 1px solid $canvas-border;
+  overflow: hidden;
+}
+
+.film_img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+// No image on file yet: the patient's initials, in the same box the film would
+// occupy so the column never jumps.
 .avatar {
   display: flex;
   align-items: center;
   justify-content: center;
-  flex-shrink: 0;
+  box-sizing: border-box;
   width: 34px;
-  height: 34px;
-  border-radius: 999px;
-  background: $primary-100;
+  height: 40px;
+  border-radius: 5px;
+  background: $primary-050;
+  border: 1px dashed $border-strong;
   color: $primary-700;
   font-size: 13px;
   font-weight: 600;
   user-select: none;
 }
 
-.row_text {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
+.cell_name {
+  padding-right: 4px;
 }
 
 .row_name {
@@ -559,50 +884,107 @@
   text-overflow: ellipsis;
 }
 
-.row_meta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 2px;
-  min-width: 0;
+// A record filed under a chart ID alone. Said in words rather than by repeating
+// the identifier the next column already carries.
+.row_unnamed {
+  font-size: 13.5px;
+  color: $text-tertiary;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.chip {
-  flex-shrink: 0;
-  padding: 0 7px 1px;
+// The chart ID pill. A white ground with a hairline, not the sunken grey it used
+// to carry: against the hovered row's own tint ($primary-050) that grey had
+// almost no contrast, so the identifier lost its container on exactly the row
+// being pointed at. The hairline is an inset shadow rather than a border so the
+// pill's box — and with it the column's fit — does not change.
+.chip_id {
+  align-self: flex-start;
+  padding: 1px 7px 2px;
   border-radius: 999px;
-  background: $bg-sunken;
+  background: $bg-surface;
+  box-shadow: inset 0 0 0 1px $border-strong;
   color: $text-secondary;
   font-size: 11.5px;
   font-weight: 600;
   letter-spacing: .02em;
   font-variant-numeric: tabular-nums;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-// Demographics (DOB · sex · age): quiet secondary metadata, one step
-// stronger than the registration date because it is clinically relevant.
-.row_demographics {
-  font-size: 11.5px;
-  color: $text-tertiary;
+// Counts hug the column they are counted in (design brief: numeric columns are
+// right-aligned).
+.cell_records {
+  align-items: flex-end;
+  text-align: right;
+  padding-right: 8px;
+}
+
+.cell_status {
+  min-width: 0;
+}
+
+// Reserved for the row's own controls, which float over it.
+.cell_actions {
+  min-width: 0;
+}
+
+// ---- The status chip -----------------------------------------------------
+// The records dashboard's chip, in the dashboard's own palette and words, so a
+// case reads the same on the list as it does once it is open.
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  max-width: 100%;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+
+  &__ok {
+    background: $success-bg;
+    color: $success;
+  }
+
+  // Work under way: a filled amber tint.
+  &__partial {
+    background: $warn-bg;
+    color: $warn;
+  }
+
+  // Work outstanding — a film on file with nothing placed on it. Amber like
+  // `__partial` because it is the same axis of the same job; the hairline keeps
+  // the two tellable apart at a glance.
+  &__todo {
+    background: $warn-bg;
+    box-shadow: inset 0 0 0 1px rgba(178, 106, 0, .30);
+    color: $warn;
+  }
+
+  // Not a task: a case with no film will never have a tracing to be behind on,
+  // and a case with nothing saved has no state to be amber about.
+  &__muted {
+    background: $bg-sunken;
+    color: $text-secondary;
+  }
 }
 
-// Registration date: quiet metadata — every row carries the same value on a
-// fresh install, so it must never compete with the name/chart ID.
-.row_date {
-  font-size: 11.5px;
-  color: $text-disabled;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
+// ---- Row controls --------------------------------------------------------
 
 .row_chevron {
   position: absolute;
-  right: 14px;
+  right: 10px;
   top: 50%;
   transform: translateY(-50%);
   display: flex;
@@ -614,7 +996,7 @@
 // destructiveness on its own hover: red glyph on a faint red disc.
 .row_delete {
   position: absolute;
-  right: 44px;
+  right: 40px;
   top: 50%;
   transform: translateY(-50%);
   opacity: 0;
@@ -630,15 +1012,77 @@
   }
 }
 
-// Empty states
+// A touch device has no hover to reveal it with, and the first tap lands on the
+// row and opens the case — so on an iPad (a device the narrow layout below is
+// explicitly drawn for) a patient could never be removed at all. Where there is
+// no hover, the control is simply always there; the fade stays for pointers.
+@media (hover: none) {
+  .row_delete {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+// ---- Pager ---------------------------------------------------------------
+
+.pager {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid $border;
+  font-size: 12.5px;
+  color: $text-tertiary;
+  user-select: none;
+}
+
+.pager_range {
+  font-variant-numeric: tabular-nums;
+}
+
+.pager_spacer {
+  flex: 1 1 0;
+}
+
+.pager_size {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: $text-tertiary;
+
+  select {
+    height: 30px;
+    font-size: 12.5px;
+  }
+}
+
+.pager_nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.pager_page {
+  min-width: 92px;
+  text-align: center;
+  font-size: 12.5px;
+  color: $text-secondary;
+  font-variant-numeric: tabular-nums;
+}
+
+// ---- Empty states --------------------------------------------------------
+
 .empty {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  flex: 1;
+  flex: 1 1 auto;
+  min-height: 200px;
   text-align: center;
-  padding: 32px 24px;
+  padding: 24px;
   user-select: none;
 }
 
@@ -661,17 +1105,188 @@
 
 .empty_hint {
   margin-top: 4px;
+  max-width: 420px;
   font-size: 12.5px;
+  line-height: 1.6;
   color: $text-tertiary;
 }
 
-// Footer note
+// What happens after registration — three steps, so a first-run screen says what
+// the app is for and not only that it is empty.
+.empty_steps {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 20px 0 0;
+  padding: 0;
+
+  li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px 6px 8px;
+    border: 1px solid $border;
+    border-radius: 999px;
+    background: $bg-surface;
+    font-size: 12px;
+    color: $text-secondary;
+    white-space: nowrap;
+  }
+}
+
+.empty_step_no {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: $primary-050;
+  color: $primary-700;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.empty_action {
+  margin-top: 16px;
+  height: 32px;
+  padding: 0 14px;
+  border: 1px solid $border-strong;
+  border-radius: 6px;
+  background: $bg-surface;
+  font-family: $font-stack;
+  font-size: 13px;
+  font-weight: 500;
+  color: $text-primary;
+  cursor: pointer;
+
+  &:hover {
+    background: $primary-050;
+    border-color: $primary-600;
+    color: $primary-700;
+  }
+
+  &:focus {
+    outline: none;
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: $focus-ring;
+  }
+}
+
+// ---- A restore that did not land ------------------------------------------
+// The case list is where a failed restore puts the clinician back: the chart it
+// registered has been removed again, and this is the only surface left that can
+// say so. @see StoreState['patients.restoreError']
+
+.restore_failed {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0 0 12px;
+  padding: 12px 14px;
+  border: 1px solid rgba(198, 40, 40, .28);
+  border-radius: 8px;
+  background: $error-bg;
+}
+
+.restore_failed_title {
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.35;
+  color: $error;
+}
+
+.restore_failed_text {
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: #7F1D1D;
+}
+
+.restore_failed_action {
+  margin-top: 4px;
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid $border-strong;
+  border-radius: 6px;
+  background: $bg-surface;
+  font-family: $font-stack;
+  font-size: 13px;
+  font-weight: 600;
+  color: $text-primary;
+  cursor: pointer;
+
+  &:hover {
+    background: $primary-050;
+    border-color: $primary-600;
+    color: $primary-700;
+  }
+
+  &:focus {
+    outline: none;
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: $focus-ring;
+  }
+}
+
+// ---- What a removal destroys ---------------------------------------------
+// The figures the case index already holds, on their own line under the
+// sentence: a confirmation that does not say how much it deletes is asking the
+// practice to guess.
+
+.dialog_loss {
+  display: block;
+  margin-top: 10px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: $error-bg;
+  color: #7F1D1D;
+  font-size: 13px;
+  line-height: 1.5;
+
+  strong {
+    font-weight: 600;
+  }
+}
+
+// ---- Print caption -------------------------------------------------------
+// Paper carries no search box and no filter selects, so the sheet states what
+// they were set to. Screen-hidden; the print block below reveals it.
+
+.print_caption {
+  display: none;
+}
+
+.print_caption_title {
+  display: block;
+  font-size: 13pt;
+  font-weight: 600;
+  color: #000000;
+}
+
+.print_caption_meta {
+  display: block;
+  margin-top: 2px;
+  font-size: 8.5pt;
+  color: #333333;
+}
+
+// ---- Footer note ---------------------------------------------------------
+
 .footnote {
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-top: 16px;
-  padding-top: 12px;
+  margin-top: 10px;
+  padding-top: 10px;
   border-top: 1px solid $border;
   font-size: 12px;
   color: $text-tertiary;
@@ -679,8 +1294,150 @@
 }
 
 // ----------------------------------------------------------------- responsive
+// Three tiers, and the width is always reclaimed from the chrome before it is
+// taken out of the list: the brand panel narrows, then the Sex column stands
+// down, then the film tile — never the patient's own name, which used to be the
+// one track that gave way and was ellipsising names a clinic actually has on
+// file ("Bäckström, Sven-Erik Johannes" in 122px at 1200).
 
-@media (max-width: 760px) {
+// A 1366px laptop — the commonest screen a clinic owns — is the width where the
+// nine columns and the 264px brand panel are both asking for room the table has
+// not got: the name track measured 229px there and was ellipsising
+// "Vandenberghe-Kowalczyk, Maximilian" (236px). The panel is the app's own
+// advertising, so it is what gives way first, exactly as at 1300 below; the 48px
+// goes to the two flexible tracks, and the name reads ~257px at 1366 and ~320px
+// at 1440 — enough for every name in the practice's own file.
+@media (max-width: 1500px) {
+  .brand {
+    flex: 0 0 216px;
+    padding: 28px 20px 24px;
+  }
+}
+
+// A 1280px laptop: nine columns cannot hold a 180px name here (they need ~930px
+// of table and there are ~910), so the Sex column stands down — it is read on the
+// case itself and still filterable from the toolbar — and the brand panel and the
+// registration fields give up their slack. The registration well then also stays
+// on ONE line at these widths instead of wrapping its Sex control and Register
+// button onto a second row of otherwise empty tinted well.
+@media (max-width: 1300px) {
+  $cols-1300: 34px minmax(170px, 1fr) 94px 78px 82px 102px 130px 44px;
+
+  .thead_grid,
+  .row {
+    grid-template-columns: $cols-1300;
+  }
+
+  .thead,
+  .list {
+    min-width: 0;
+  }
+
+  .cell_sex {
+    display: none;
+  }
+
+  .brand {
+    flex: 0 0 216px;
+    padding: 28px 20px 24px;
+  }
+
+  // The toolbar only wraps if it has to, and with a "Clear filters" button beside
+  // the tally it does: better a second toolbar line than a tally off the card.
+  .toolbar {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+
+  // Every fixed track pared to its own label and value, and the name given a
+  // 140px flex basis rather than the text input's natural 180: a flex line is
+  // broken on the items' base sizes, before any of them is allowed to shrink, so
+  // the name's *basis* is what decided whether the row wrapped. It now fits on
+  // one line down to ~1150px — the widths where the wrap was leaving ~580×46px
+  // of empty tinted well while the list below truncated names for want of 80.
+  .form_row {
+    gap: 8px;
+  }
+
+  .field_name {
+    flex: 1 1 140px;
+    min-width: 140px;
+  }
+
+  .field_chart {
+    flex: 0 0 104px;
+  }
+
+  // These two are held at the width their own LABELS need — "READING (かな)
+  // optional" and "DATE OF BIRTH optional" — because a label that wraps costs the
+  // whole row 15px of height and puts the fields back on two baselines.
+  .field_reading {
+    flex: 0 1 150px;
+    min-width: 150px;
+  }
+
+  .field_dob {
+    flex: 0 0 146px;
+  }
+}
+
+@media (max-width: 1200px) {
+  .filter_select__wide {
+    min-width: 148px;
+  }
+
+  // Never below the width its own placeholder needs: at 230px with shrink
+  // allowed, "Search name or chart ID" was clipped to "Search name or chart" at
+  // 1100–1200 — the very failure the tier below was written to end at 1024.
+  .search_row {
+    flex: 0 0 250px;
+  }
+}
+
+// An ordinary clinic laptop (or an iPad in landscape) is 1024px wide, and there
+// even seven columns did not fit: TRACING — the list's most clinical column — was
+// amputated to "Tra…", the search placeholder was clipped mid-word and the tally
+// ran off the card. So the film tile stands down too (it is the case's own
+// picture, read once the case is open), the chevron goes with it, and the toolbar
+// and the registration row wrap instead of overflowing. Records keeps enough
+// width for its own header ("RECORDS ↕" wants 73px and had 68), and the chart ID
+// enough for a revision suffix ("C-2055-REV2").
+@media (max-width: 1160px) {
+  // Every track pared to what its own content needs, so that at 1024 — the width
+  // this tier exists for — the name still gets ~150px rather than the 130px floor.
+  // Records is 82px because its own header asks for 73 and the label may not be
+  // the thing that gets sliced; the two date columns give up the difference.
+  // Age and Last visit are 2px under what their own labels would like, because
+  // that is what carries "Bäckström, Sven-Erik Johannes" (199px) inside the name
+  // track at 1080 instead of ellipsising it 3px from its end. Both columns still
+  // hold their value and their qualifier ("78 y" over "1948-01-01", a date over
+  // "14 days ago") without clipping — measured, not assumed.
+  $cols-narrow: minmax(150px, 1fr) 92px 72px 82px 90px 120px 36px;
+
+  .thead_grid,
+  .row {
+    grid-template-columns: $cols-narrow;
+  }
+
+  .cell_film,
+  .row_chevron {
+    display: none;
+  }
+
+  .row_delete {
+    right: 6px;
+  }
+
+  .search_row {
+    flex: 1 1 250px;
+  }
+
+  .form_row {
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 900px) {
   .form_row {
     flex-wrap: wrap;
   }
@@ -688,6 +1445,7 @@
   .card {
     flex-direction: column;
     height: auto;
+    max-height: none;
     min-height: 0;
   }
 
@@ -720,5 +1478,197 @@
 
   .brand_points {
     display: none;
+  }
+
+  .table {
+    max-height: 60vh;
+  }
+}
+
+// ----------------------------------------------------------------------- print
+// A work queue is something a practice prints and carries: the untraced films of
+// the week, this month's recalls. On paper the screen's chrome is meaningless —
+// the brand panel, the registration form and the toolbar's controls all come off,
+// the caption states what those controls were set to (see `renderPrintCaption`),
+// and the table stops being a window: it flows, and no row is ever split between
+// two sheets.
+//
+// The column header prints once, at the top of the first sheet. Blink does not
+// repeat a CSS `display: table-header-group` across printed pages — probed both
+// with and without an explicit table-row/table-cell inside it, one header in a
+// four-page print either way; only a real `<table><thead>` repeats, and the body
+// here is a list of buttons, which a `<tr>` may not hold. The caption carries the
+// filter, the order and the row range instead, so a loose sheet still says which
+// cases it is showing.
+//
+// No `@page` rule here on purpose: `@page` is document-wide, and this stylesheet
+// is bundled with the report's and the superimposition's, which set their own
+// page box. The sheet is laid out to whatever the print dialog is set to.
+@media print {
+  .screen {
+    position: static;
+    display: block;
+    height: auto;
+    padding: 0;
+    background: #ffffff;
+    overflow: visible;
+  }
+
+  .card {
+    display: block;
+    width: auto;
+    max-width: none;
+    height: auto;
+    max-height: none;
+    min-height: 0;
+    border-radius: 0;
+    box-shadow: none;
+    overflow: visible;
+    // The tracing chips carry the reading a printed queue is worked from, so
+    // their tints have to survive the printer's background stripping.
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  // Screen chrome: the panel that sells the app, the form that registers a
+  // patient, the controls that narrowed the list, and the assurance about where
+  // the data lives. None of them is a fact about these cases.
+  // The pager goes with them: the sheet carries the whole filtered list now, so
+  // "Showing 26–50 of 337" under it would be both wrong and a second statement
+  // of what the caption already says.
+  .brand,
+  .form,
+  .new_btn,
+  .toolbar,
+  .footnote,
+  .header,
+  .pager,
+  .row_delete,
+  .row_chevron,
+  .cell_film,
+  .cell_actions,
+  .empty_action {
+    display: none !important;
+  }
+
+  .main {
+    display: block;
+    padding: 0;
+  }
+
+  .list_block {
+    display: block;
+  }
+
+  .print_caption {
+    display: block;
+    margin: 0 0 8px;
+  }
+
+  .table {
+    display: block;
+    width: auto;
+    // The visible height is clipped to whole rows on screen (an inline style —
+    // hence the `!important`), and paper has no viewport to clip to.
+    max-height: none !important;
+    overflow: visible;
+    margin: 0;
+    background: none;
+  }
+
+  .thead {
+    position: static;
+    min-width: 0;
+    padding: 0;
+    border-bottom: none;
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+
+  .thead_grid {
+    padding-bottom: 3px;
+    border-bottom: 1px solid #999999;
+  }
+
+  .list {
+    min-width: 0;
+  }
+
+  .row_item {
+    // A row is one patient: it is never split across two sheets.
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  // Paper is not sortable, so the sort affordance comes off; the arrow of the
+  // column the list IS ordered by stays, and the caption states it in words.
+  .sort_hint {
+    display: none;
+  }
+
+  .row {
+    min-height: 0;
+    padding-top: 3px;
+    padding-bottom: 3px;
+    border-radius: 0;
+    background: none !important;
+  }
+
+  .row_item + .row_item {
+    border-top: none;
+  }
+
+  .row_item .row {
+    border-top: 1px solid #dddddd;
+  }
+
+  // The film tile and the row's controls stand down (see above); the Sex column
+  // comes back, because a printed queue is read away from the screen that can
+  // filter on it. Seven columns, sized to A4 portrait's text block — the Tracing
+  // column ran off the page before.
+  .cell_sex {
+    display: flex !important;
+  }
+
+  // Chart ID takes a few points from its neighbours: a chart ID with a revision
+  // suffix ("C-2055-REV2") is the whole identity of a row on a loose sheet, and
+  // it may not be the thing that gets clipped. Tracing is sized to its longest
+  // chip ("No images on file"), which paper cannot recover from an ellipsis.
+  .thead_grid,
+  .row {
+    grid-template-columns:
+      minmax(90px, 1fr) 92px 78px 30px 66px 84px 118px;
+  }
+
+  // A point smaller on paper, where the chip has to hold its whole sentence and
+  // the column heads have to hold their own words ("RECORDS" wanted 64px of a
+  // 58px cell at A4 and was printing as "RECORD").
+  .chip {
+    font-size: 8pt;
+  }
+
+  .th {
+    font-size: 7.5pt;
+  }
+
+  // The qualifier lines (date of birth, visits, "5 mo ago") set a size smaller on
+  // paper, so "no date of birth" is not printed as "no date of b…".
+  .cell_sub {
+    font-size: 7.5pt;
+  }
+
+  // Paper carries no tooltip and cannot be scrolled, so a name that does not fit
+  // its column wraps to a second line rather than ending in an ellipsis nothing
+  // can recover ("Nakamura-Whitfield, Jon…").
+  .row_name,
+  .row_unnamed {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    overflow-wrap: break-word;
+  }
+
+  .cell {
+    justify-content: flex-start;
   }
 }

@@ -1,0 +1,88 @@
+@import 'src/_variables.scss';
+
+.title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-family: $font-stack;
+}
+
+.title_heading {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: $text-primary;
+}
+
+.title_caption {
+  font-size: 12.5px;
+  font-weight: 400;
+  color: $text-tertiary;
+}
+
+.fields {
+  margin-top: 4px;
+  display: flex;
+  flex-direction: column;
+}
+
+.row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+
+  // The name/chart-ID row reserves a line for its validation message (see
+  // `.field_error` in components/PatientFields), so nothing shifts when one
+  // appears — but a reserved line is not clearance: at 2px the message sat
+  // against the next row's "DATE OF BIRTH" label and read as belonging to it.
+  & + & {
+    margin-top: 12px;
+  }
+}
+
+// Same fixed width the registration form gives the date field, so the two
+// forms line up when a user goes from one to the other.
+.dob {
+  flex: 0 0 170px;
+}
+
+.spacer {
+  flex: 1 1 0;
+}
+
+// Why the optional fields matter clinically.
+.why {
+  margin: 6px 0 0;
+  font-family: $font-stack;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: $text-tertiary;
+}
+
+// What saving will change, stated before it is saved.
+.effect {
+  margin: 12px 0 4px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: $primary-050;
+  border: 1px solid $primary-100;
+  font-family: $font-stack;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: $primary-900;
+
+  strong {
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+// Screen-only: the modal layer must not print. Passed to mui's Dialog as both
+// `className` and `overlayClassName` — nothing else in the document can reach
+// the layer it renders into.
+.no_print {
+  @media print {
+    display: none !important;
+  }
+}

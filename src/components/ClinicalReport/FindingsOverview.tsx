@@ -2,15 +2,12 @@ import * as React from 'react';
 
 import * as cx from 'classnames';
 
-import map from 'lodash/map';
-
-import { chipToneFor } from 'components/AnalysisResultsViewer';
+import { chipToneFor, orderFindings } from 'components/AnalysisResultsViewer';
 import {
   mapCategoryToString,
   mapIndicationToString,
 } from 'components/AnalysisResultsViewer/strings';
 
-import { NEUTRAL_CATEGORY } from 'analyses/helpers';
 import { AnalysisEvaluation } from 'analyses/evaluate';
 import { LateralAnalysisEntry } from 'analyses/lateral';
 
@@ -20,35 +17,6 @@ const classes = require('./style.scss');
 
 /** Findings shown per analysis before the row is truncated. */
 const MAX_FINDINGS = 4;
-
-interface Finding {
-  category: Category;
-  indication: Indication<Category>;
-}
-
-/**
- * The analysis' findings ordered for a one-line summary: the abnormal ones
- * first, since those are what a reader scanning the overview needs to see.
- * Ties keep the analysis' own order.
- *
- * Ordering (and chip colour) follow the *indication*, not the worst star count
- * in the group: the same conclusion has to look the same here as it does in the
- * analysis' own section further down, and a group's worst member is not that
- * conclusion's severity.
- */
-const summarize = (results: AnalysisEvaluation['results']): Finding[] => {
-  const findings: Finding[] = map(results.filter(
-    // The neutral bucket carries measured values that name no clinical
-    // finding, so it has no place in a list of headline findings — every one
-    // of its rows is printed in full in the analysis' own section below.
-    (r) => r.category !== NEUTRAL_CATEGORY,
-  ), ({ category, indication }) => ({ category, indication }));
-  const rank = (f: Finding) => (chipToneFor(f.indication) === 'warn' ? 0 : 1);
-  return findings
-    .map((f, i) => ({ f, i }))
-    .sort((a, b) => (rank(a.f) - rank(b.f)) || (a.i - b.i))
-    .map(({ f }) => f);
-};
 
 export interface FindingsOverviewProps {
   sections: Array<{
@@ -92,7 +60,10 @@ const FindingsOverview = (
       </div>
     ) : null}
     {sections.map(({ entry, evaluation }) => {
-      const findings = summarize(evaluation.results);
+      // The abnormal findings first, ties in the analysis' own order — the one
+      // ranking rule, shared with the Summary dialog and with the records
+      // dashboard's findings panel (see `AnalysisResultsViewer/grouping`).
+      const findings = orderFindings(evaluation.results);
       const shown = findings.slice(0, MAX_FINDINGS);
       const hidden = findings.length - shown.length;
       return (

@@ -49,6 +49,23 @@
   order: 1;
 }
 
+// **The panel is where a wide monitor's surplus width goes.**
+//
+// The film cannot take it. A tracing canvas fits its image with `min(w/iw, h/ih)`
+// (see `TracingViewer/connected#getFitScale`), and a 4:5 cephalogram in a 16:9
+// canvas is bound by the *height* — so at 1280 and at 1920 the same 800 × 960 film
+// rendered at exactly the same 675px wide, with ~400px of black either side of it
+// on the wider screen. Nothing about the zoom or the re-fit changes that: no scale
+// makes a portrait film use landscape width without cropping the film, and a
+// cephalometric tracing surface does not crop the film.
+//
+// What *can* use the width is this column, and it is the column that needs it: at
+// 320px the stepper wraps its own measurement names ("Cant of occlusal plane to
+// Frankfort horizontal" over two lines) beside a canvas with 400px to spare. So it
+// steps with the window. The width is mirrored in
+// `store/reducers/workspace/canvas#stepperWidth`, which carves it out of the
+// measured content box — the two must move together, or the canvas is sized
+// against a column that is not there.
 .stepper {
   width: 320px;
   flex-shrink: 0;
@@ -56,4 +73,13 @@
   background: $bg-surface;
   border-left: 1px solid $border;
   color: $text-primary;
+
+  // @see `stepperWidth` in store/reducers/workspace/canvas.ts — same numbers.
+  @media (min-width: 1600px) {
+    width: 400px;
+  }
+
+  @media (min-width: 1800px) {
+    width: 440px;
+  }
 }

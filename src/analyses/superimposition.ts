@@ -748,41 +748,14 @@ export const buildChangeTable = (
 // ---- Elapsed interval -------------------------------------------------------
 
 /**
- * The interval between two capture dates, in whole years and months (e.g.
- * "1 y 4 mo", "7 mo", "12 days"), or null when either date is unknown. Growth is
- * read per unit time, so the interval belongs beside every change figure.
+ * The interval between two capture dates ("1 y 4 mo", "7 mo", "12 days"), or
+ * null when either date is unknown. Growth is read per unit time, so the
+ * interval belongs beside every change figure.
  *
- * Months are `mo`, never the bare `m` the age chips use: this string is printed
- * inside a view whose every other number is a millimetre — "+1.7 mm", a 10 mm
- * scale bar, 0.104 mm/px — and "5 m apart" beside them read as five metres.
- * The age chips keep `y / m` (see `utils/patient`), where nothing is measured in
- * millimetres and the ambiguity cannot arise.
+ * Re-exported, not defined here: the records dashboard states the same elapsed
+ * time as its record span, and the two surfaces printed one pair of dates two
+ * ways ("1 y 4 m" there, "1 y 4 mo" here). The one implementation lives beside
+ * the capture-date helpers it measures — see `utils/records#formatInterval`,
+ * which also documents why months are `mo` in a view full of millimetres.
  */
-export const formatInterval = (from: Date | null, to: Date | null): string | null => {
-  if (from === null || to === null) {
-    return null;
-  }
-  const earlier = from.getTime() <= to.getTime() ? from : to;
-  const later = from.getTime() <= to.getTime() ? to : from;
-  let months =
-    (later.getFullYear() - earlier.getFullYear()) * 12 +
-    (later.getMonth() - earlier.getMonth());
-  if (later.getDate() < earlier.getDate()) {
-    months -= 1;
-  }
-  if (months < 0) {
-    months = 0;
-  }
-  if (months === 0) {
-    const days = Math.round(
-      (later.getTime() - earlier.getTime()) / (24 * 60 * 60 * 1000),
-    );
-    return days === 1 ? '1 day' : `${days} days`;
-  }
-  const years = Math.floor(months / 12);
-  const rest = months % 12;
-  if (years === 0) {
-    return `${rest} mo`;
-  }
-  return rest > 0 ? `${years} y ${rest} mo` : `${years} y`;
-};
+export { formatInterval } from 'utils/records';

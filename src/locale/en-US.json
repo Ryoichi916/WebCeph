@@ -1,6 +1,6 @@
 {
   "action_load_sample_image": "Load sample image",
-  "action_pick_image": "Click to pick an image",
+  "action_pick_image": "Choose image…",
   "callout_load_sample_image": "No image at hand? Try the bundled sample cephalogram.",
   "callout_start_tracing": "To start tracing, drop a cephalogram or photograph here",
   "label_language": "Language"

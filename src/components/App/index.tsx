@@ -6,6 +6,7 @@ import Workspace from 'components/Workspace/connected';
 import Settings from 'components/Settings/connected';
 import PatientPicker from 'components/PatientPicker/connected';
 import RecordsDashboard from 'components/RecordsDashboard/connected';
+import RecordsRoute from 'components/RecordsRoute/connected';
 
 import { Route } from 'react-router-dom';
 
@@ -92,6 +93,7 @@ const App = enhance(({
   isReady, keyMap, handlers,
   shouldShowWorkspaceSwitcher,
   hasActivePatient,
+  isRecordsDashboardShown,
   activeWorkspaceId,
   title,
   locale, messages,
@@ -119,20 +121,32 @@ const App = enhance(({
                     {/* The top bar spans the full width so the left tab rail
                         tucks under it instead of colliding with its corner. */}
                     <PatientBar />
-                    <div className={classes.row}>
-                      {shouldShowWorkspaceSwitcher ? (
-                        <VerticalTabBar
-                          className={classes.tab_bar}
-                        />
-                      ) : null}
-                      <Workspace className={classes.workspace} workspaceId={activeWorkspaceId} />
-                    </div>
-                    <RecordsDashboard />
+                    {/* The patient's records dashboard is a workspace surface,
+                        not a dialog: it takes the place of the rail + editor
+                        below the top bar, exactly the way the read-only
+                        RecordViewer takes the place of the tracing canvas. Its
+                        page bar carries the way back. */}
+                    {isRecordsDashboardShown ? (
+                      <RecordsDashboard className={classes.dashboard} />
+                    ) : (
+                      <div className={classes.row}>
+                        {shouldShowWorkspaceSwitcher ? (
+                          <VerticalTabBar
+                            className={classes.tab_bar}
+                          />
+                        ) : null}
+                        <Workspace className={classes.workspace} workspaceId={activeWorkspaceId} />
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <PatientPicker />
                 )}
               </HotKeys>
+              {/* The records dashboard is a full-page surface, so it holds a
+                  history entry of its own (`#/records`): the browser's Back
+                  leaves the dashboard instead of leaving the application. */}
+              <RecordsRoute />
               <Route path="/settings" component={Settings} />
             </div>
           </IntlProvider>

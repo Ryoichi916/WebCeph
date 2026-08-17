@@ -1,5 +1,7 @@
 import { ManualLandmarks } from 'utils/tracingSnapshot';
 
+import { VisitNoteReading } from 'utils/visitNotes';
+
 export interface StateProps {
   /** The active patient record (name + chart id), or null if none is open. */
   patient: Patient | null;
@@ -26,6 +28,21 @@ export interface StateProps {
    */
   timepoint: string | null;
   captureDate: string | null;
+  /**
+   * The clinical note recorded for the **visit this film belongs to**, read back
+   * with its amendment trail, or null when the visit has none.
+   *
+   * The report's "Clinical notes & plan" area was ruled lines and nothing else:
+   * the clinician's own statement of the case existed nowhere in the app, so the
+   * document that goes out to a referrer carried the app's ninety-one measurements
+   * and none of the practice's own words. Where an entry is on file it is printed
+   * here — the same entry the records sheet prints, from the same store — and the
+   * ruled lines stay for what is added by hand.
+   *
+   * Looked up by timepoint, not by image: the note is a fact about the visit (@see
+   * VisitNote), and every film of that visit reports the same one.
+   */
+  visitNote: VisitNoteReading | null;
   /** Manually placed/auto-plotted landmarks, for the tracing overlay. */
   manualLandmarks: ManualLandmarks;
   /** mm-per-pixel calibration, or null when the image is not calibrated. */

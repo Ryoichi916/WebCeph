@@ -28,8 +28,56 @@
   margin-top: 4px;
 }
 
+// The film beside the words: which image is being removed, shown rather than
+// only named — on a record with two identically named lateral cephs the file
+// name was the whole of the evidence.
+.remove_body {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding-top: 8px;
+}
+
+.remove_thumb {
+  flex: 0 0 auto;
+  position: relative;
+  // The record card's own film ratio (68 × 85).
+  width: 68px;
+  height: 85px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: $canvas-bg;
+  border: 1px solid $border-strong;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.remove_thumb_img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+}
+
+.remove_thumb_none {
+  padding: 0 4px;
+  font-family: $font-stack;
+  font-size: 10.5px;
+  line-height: 1.2;
+  text-align: center;
+  color: $canvas-text;
+}
+
+.remove_text_col {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 .remove_identity {
-  margin: 8px 0 0;
+  margin: 0;
   font-family: $font-stack;
   font-size: 14px;
   font-weight: 600;
@@ -42,6 +90,60 @@
   font-size: 13px;
   line-height: 1.55;
   color: $text-secondary;
+}
+
+// Permanence, stated. The removal is outside undo *and* it clears the project's
+// tracing history — in an app whose toolbar carries Undo/Redo, silence here read
+// as "Ctrl-Z will fix it".
+.remove_warn {
+  margin: 10px 0 4px;
+  padding: 9px 11px;
+  border: 1px solid #F3C7C7;
+  border-radius: 6px;
+  background: $error-bg;
+  font-family: $font-stack;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: #8E2222;
+}
+
+.remove_warn_head {
+  font-weight: 600;
+}
+
+// Screen-only chrome: nothing hid the modal layer, so printing the records
+// chart with a record dialog open produced a sheet with the overlay's grey wash
+// over the whole chart and the dialog printed on top of the films. Passed to
+// mui's Dialog as both `className` and `overlayClassName`.
+.no_print {
+  @media print {
+    display: none !important;
+  }
+}
+
+// What this edit does to the visit's clinical note (@see
+// EditRecordDialog#renderNoteEffect). Quiet while the note stays where it is, in
+// the app's warning register once the label being typed would move it: the note is
+// a clinician's own text, and its filing changing is a change to the record.
+.note_effect,
+.note_effect__warn {
+  margin: 10px 0 0;
+  padding: 9px 11px;
+  border-radius: 6px;
+  font-family: $font-stack;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.note_effect {
+  background: $bg-sunken;
+  color: $text-secondary;
+}
+
+.note_effect__warn {
+  background: $warn-bg;
+  border: 1px solid #F0DDB8;
+  color: #6B4200;
 }
 
 // What saving will change, stated before it is saved.

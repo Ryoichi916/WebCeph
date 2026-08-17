@@ -11,7 +11,7 @@ import * as cx from 'classnames';
 import Props from './props';
 
 import GeoViewer from 'components/GeoViewer';
-import { isGeoPoint, isGeoVector } from 'utils/math';
+import { isGeoAngle, isGeoPoint, isGeoVector } from 'utils/math';
 import { mapCursor } from 'utils/constants';
 import {
   buildOutlines,
@@ -79,8 +79,12 @@ export class TracingViewer extends React.PureComponent<Props, State> {
       isHighlightMode,
       getPropsForLandmark,
     } = this.props;
-    const minHeight = Math.max(canvasHeight, imageHeight);
-    const minWidth = Math.max(canvasWidth, imageWidth);
+    // Surface = max(canvas, rendered film) — the raw image dimensions must not
+    // leak in here, or a fitted high-resolution film inflates the svg beyond
+    // the viewport and the visible area shows a corner of empty canvas.
+    const { scale } = this.props;
+    const minHeight = Math.max(canvasHeight, imageHeight * scale);
+    const minWidth = Math.max(canvasWidth, imageWidth * scale);
     return (
       <div className={className} style={{ height: minHeight, width: minWidth }}>
         <svg
@@ -185,8 +189,12 @@ export class TracingViewer extends React.PureComponent<Props, State> {
     // Center the (scaled) image inside the drawing surface so the radiograph
     // is the visual hero instead of hugging the top-left corner. Mouse math is
     // unaffected: all conversions use the image element's bounding rect.
-    const surfaceWidth = Math.max(canvasWidth, imageWidth);
-    const surfaceHeight = Math.max(canvasHeight, imageHeight);
+    // The surface is the larger of the canvas and the *rendered* film
+    // (image × scale) — sizing it by the raw image put a fitted high-resolution
+    // film (e.g. the 1578×2089 bundled sample) inside a surface bigger than the
+    // viewport, and the viewport then showed one corner of mostly-empty canvas.
+    const surfaceWidth = Math.max(canvasWidth, imageWidth * scale);
+    const surfaceHeight = Math.max(canvasHeight, imageHeight * scale);
     const translateX = Math.max(0, (surfaceWidth - imageWidth * scale) / 2);
     const translateY = Math.max(0, (surfaceHeight - imageHeight * scale) / 2);
     transform += ` translate(${translateX}, ${translateY}) `;
@@ -491,7 +499,13 @@ export class TracingViewer extends React.PureComponent<Props, State> {
    * tracings, so toggling it produces an obvious change.
    */
   private renderProfilogram = () => {
-    const { profilogram, isHighlightMode } = this.props;
+    const { isHighlightMode } = this.props;
+    // Same guard as the tracing's own geometry (see `isDrawable`): a segment
+    // computed against an absent image is NaN at both ends and draws nothing.
+    const profilogram = this.props.profilogram.filter(
+      ({ x1, y1, x2, y2 }) => isFinite(x1) && isFinite(y1) &&
+        isFinite(x2) && isFinite(y2),
+    );
     if (profilogram.length === 0) {
       return null;
     }
@@ -531,6 +545,33 @@ export class TracingViewer extends React.PureComponent<Props, State> {
     );
   };
 
+  /**
+   * Whether a piece of geometry can be drawn at all — every coordinate on it a
+   * finite number.
+   *
+   * A workspace with no image loaded has no width and no height to scale by, so
+   * the geometry derived for it comes through as NaN, and React then warns once
+   * per attribute per render: "Received NaN for the y2 attribute",
+   * "<circle> attribute cx: Expected number", "<polygon> attribute points:
+   * Expected number, 482,NaN NaN,NaN". Nothing is drawn either way — a NaN
+   * coordinate has no position — so the object is dropped here rather than
+   * handed to the DOM to be rejected, which also keeps the console readable for
+   * the errors that matter.
+   */
+  private isDrawable = (value: any): boolean => {
+    if (isGeoPoint(value)) {
+      return isFinite(value.x) && isFinite(value.y);
+    }
+    if (isGeoVector(value)) {
+      return isFinite(value.x1) && isFinite(value.y1) &&
+        isFinite(value.x2) && isFinite(value.y2);
+    }
+    if (isGeoAngle(value)) {
+      return value.vectors.every((vector) => this.isDrawable(vector));
+    }
+    return false;
+  };
+
   private getRenderedLandmarks = () => {
     const { landmarks } = this.props;
     const { draggedSymbol, dragX, dragY } = this.state;
@@ -547,7 +588,9 @@ export class TracingViewer extends React.PureComponent<Props, State> {
             ? { ...landmark, value: { x: dragX, y: dragY } }
             : landmark,
         );
-    return this.dedupeCoincidentVectors(points);
+    return this.dedupeCoincidentVectors(
+      points.filter(({ value }) => this.isDrawable(value)),
+    );
   };
 
   /**

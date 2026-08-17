@@ -36,6 +36,10 @@ import {
 } from 'store/reducers/patients';
 
 import {
+  isRecordsDashboardShown,
+} from 'store/reducers/workspace/records';
+
+import {
   isLastWorkspaceUsed,
   hasMultipleWorkspaces,
   getActiveWorkspaceTitle,
@@ -65,6 +69,7 @@ const mapStateToProps: MapStateToProps<StateProps, OwnProps, StoreState> =
       ),
       activeWorkspaceId: getActiveWorkspaceId(state)!,
       hasActivePatient: getActivePatientId(state) !== null,
+      isRecordsDashboardShown: isRecordsDashboardShown(state),
       title: getActiveWorkspaceTitle(state),
       shouldShowWorkspaceSwitcher: hasMultipleWorkspaces(state) || isLastWorkspaceUsed(state),
       locale: getActiveLocale(state),

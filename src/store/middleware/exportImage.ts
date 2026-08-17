@@ -8,13 +8,16 @@ import {
   getImageHeight,
   getImageName,
   getManualLandmarks,
+  getScaleFactor,
 } from 'store/reducers/workspace/image';
+import { getLandmarksToDisplay } from 'store/reducers/workspace';
 import { isProfilogramShown } from 'store/reducers/workspace/canvas';
 import { getActivePatient } from 'store/reducers/patients';
-import { buildProfilogram } from 'analyses/profilogram';
+import { buildProfilogram, Segment } from 'analyses/profilogram';
+import { isGeoVector } from 'utils/math';
 // The overlay composition (colors + drawing) is shared with the printable
 // clinical report — see utils/tracingSnapshot.ts.
-import { drawTracingOverlay } from 'utils/tracingSnapshot';
+import { drawTracingOverlay, drawScaleBar } from 'utils/tracingSnapshot';
 
 const baseName = (name: string | null): string => {
   if (!name) {
@@ -51,7 +54,22 @@ const middleware = ({ getState }: Store<StoreState>) =>
 
     const manual = getManualLandmarks(state)(imageId);
     const showProfilogram = isProfilogramShown(state);
-    const segments = showProfilogram ? buildProfilogram(manual) : [];
+    // The exported figure carries what the editor shows: the active analysis'
+    // planes and construction lines, not just the anatomy. A clinician exports
+    // this file to hand the *analysis* to someone — an unadorned film is what
+    // the original already is.
+    const display = getLandmarksToDisplay(state)(imageId);
+    const analysisSegments: Segment[] = [];
+    Object.keys(display).forEach((symbol) => {
+      const l = display[symbol];
+      if (isGeoVector(l)) {
+        analysisSegments.push({ x1: l.x1, y1: l.y1, x2: l.x2, y2: l.y2 });
+      }
+    });
+    const segments = showProfilogram
+      ? [...analysisSegments, ...buildProfilogram(manual)]
+      : analysisSegments;
+    const scaleFactor = getScaleFactor(state)(imageId);
     // Prefer the active patient (chart id / name) for the filename so exports are
     // filed against the patient; fall back to the image name.
     const patient = getActivePatient(state);
@@ -79,7 +97,17 @@ const middleware = ({ getState }: Store<StoreState>) =>
         return;
       }
       ctx.drawImage(img, 0, 0, width, height);
-      drawTracingOverlay(ctx, width, manual, segments);
+      // Labelled like the printed report's figure — the export stands alone in
+      // somebody else's viewer, where an unlabelled dot answers nothing.
+      drawTracingOverlay(ctx, width, manual, segments, {
+        labels: true,
+        pointLandmarks: display,
+      });
+      // Same rule as the printed report: a ruler from the calibration only —
+      // an uncalibrated film gets no bar rather than an invented one.
+      if (scaleFactor !== null) {
+        drawScaleBar(ctx, { x: 0, y: 0, width, height }, scaleFactor);
+      }
 
       const mime = format === 'jpeg' ? 'image/jpeg' : 'image/png';
       canvas.toBlob(

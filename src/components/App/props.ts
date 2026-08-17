@@ -6,6 +6,8 @@ export type StateProps = {
   shouldCheckCompatibility: boolean;
   shouldShowWorkspaceSwitcher: boolean;
   hasActivePatient: boolean;
+  /** Whether the patient's records dashboard replaces the editor. */
+  isRecordsDashboardShown: boolean;
   isReady: boolean;
   activeWorkspaceId: string;
   locale: string;

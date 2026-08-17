@@ -1,5 +1,7 @@
 import { PatientRecord } from 'store/reducers/workspace';
 
+import { PatientDetails } from 'components/PatientFields';
+
 export interface StateProps {
   /** Data URI of the image being viewed. */
   src: string | null;
@@ -9,22 +11,66 @@ export interface StateProps {
   timepoint: string | null;
   /** ISO `YYYY-MM-DD`, or null when the capture date was not recorded. */
   captureDate: string | null;
+  /**
+   * Which frame of the photographic series this photograph is, or null — null on
+   * every radiograph and on a photograph whose frame the record does not state.
+   * @see PhotoView
+   */
+  photoView: PhotoView | null;
   /** Natural pixel dimensions of the image. */
   width: number | null;
   height: number | null;
+  /**
+   * The patient this record belongs to, or null when none is open.
+   *
+   * The panel reads their date of birth to state the age *at this capture date* —
+   * the number the record is read against, and the number the dashboard's own
+   * group stamp carries for the same image ("AGE 12 y 3 m"). It is the whole
+   * patient rather than that one field because a missing date of birth is a gap
+   * this panel now closes, in the patient form, on the field it names.
+   */
+  patient: Patient | null;
+  /**
+   * Chart IDs of every *other* patient, so correcting this patient from here
+   * cannot silently collide with another record (the dialog's own guard).
+   */
+  otherChartIds: string[];
   /**
    * Every image of the open patient, oldest first — the record context shown
    * under the metadata so the other timepoints are one click away.
    */
   records: PatientRecord[];
+  /**
+   * The written half of the record: one clinical note per visit, keyed by the
+   * visit's timepoint label (@see StoreEntries['records.notes']).
+   *
+   * Read here for one reason: this panel's "Edit details" dialog edits that very
+   * label, so it has to be able to say what a relabelling does to the note filed
+   * at the visit — and to carry the note across with the image.
+   * @see RecordsDashboard#handleSaveMeta
+   */
+  notes: { [timepointKey: string]: VisitNote };
 }
 
 export interface DispatchProps {
   onOpenRecordsClick(): any;
+  /**
+   * Correct the patient's own demographics — the same action registration and
+   * the records dashboard use, so the persistence middleware saves the corrected
+   * patient exactly as it saved the original.
+   */
+  onSavePatient(id: string, details: PatientDetails): any;
   /** Switch the editor to another image of the same patient. */
   onOpenRecord(record: PatientRecord): any;
   /** Correct this image's type / timepoint / capture date. */
   onSaveMeta(meta: ImageRecordMeta): any;
+  /**
+   * Carry a visit's clinical note, with its whole amendment trail, onto the visit
+   * label this image has just been given — the same action the records dashboard
+   * dispatches, so a relabelling made from here and one made there do the same
+   * thing to the record. @see Events['REFILE_VISIT_NOTE']
+   */
+  onRefileVisitNote(from: string, to: string): any;
   /** Drop this image from the record; see RecordsDashboard/props. */
   onRemoveRecord(record: PatientRecord, fallbackWorkspaceId: string | null): any;
 }

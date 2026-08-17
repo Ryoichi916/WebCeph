@@ -22,6 +22,8 @@ import {
   getAnalysisId,
   getImageTimepoint,
   getImageCaptureDate,
+  getScaleFactor,
+  getImageProps,
 } from 'store/reducers/workspace/image';
 
 import {
@@ -46,12 +48,19 @@ const mapStateToProps: MapStateToProps<StateProps, OwnProps, StoreState> = (stat
       captureDate: null,
       landmarksBySymbol: EMPTY_LANDMARKS,
       needsScaleForLinear: false,
+      scaleFactor: null,
+      imageWidth: null,
+      imageHeight: null,
       caveats: EMPTY_CAVEATS,
       analysisContext: EMPTY_CONTEXT,
     };
   }
   const analysis = getActiveAnalysis(state)(activeImageId);
+  const imageProps = getImageProps(state)(activeImageId);
   return {
+    scaleFactor: getScaleFactor(state)(activeImageId),
+    imageWidth: (imageProps && imageProps.width) || null,
+    imageHeight: (imageProps && imageProps.height) || null,
     results: getCategorizedAnalysisResults(state)(activeImageId),
     analysisId: getAnalysisId(state)(activeImageId),
     provenance: analysis !== null && analysis.provenance !== undefined

@@ -34,6 +34,11 @@
   font-family: inherit;
   font-size: 13px;
   font-weight: 500;
+  // Every fixed label on the strip is the *name* of a clinical action and is
+  // never squeezed to make room; the two controls whose label length comes from
+  // the record rather than from the app opt into giving way instead (see
+  // `.button__elastic`).
+  flex-shrink: 0;
   color: $text-secondary;
   white-space: nowrap;
   cursor: pointer;
@@ -115,6 +120,39 @@
   line-height: 1;
 }
 
+// The two controls whose label is as long as the *record* makes it: the active
+// analysis' name and this film's "timepoint · type". Every other label on the
+// strip is a fixed phrase, so these two are what gives way when a long name
+// would otherwise push the strip past the viewport — which it did: with "Wits &
+// vertical" active, the strip measured 1436px of content inside a 1376px box at a
+// 1440px viewport and the last control, Export, lost its name and half its hit
+// area off the right edge. `.root` is built on the invariant that it never clips
+// the last one.
+//
+// This is the *last* thing to give, not the first: the query below tightens the
+// strip's own whitespace before any name narrows, which is why nothing is cut at
+// 1440 or 1366 and only a 1280px monitor ellipsizes at all. Only the *rendering*
+// narrows even then — the whole name stays in each control's `title` and
+// `aria-label`, so nothing a reader or a screen reader can reach is lost.
+.button__elastic {
+  min-width: 0;
+  flex-shrink: 1;
+
+  .button_label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
+// Of the two, the film's "timepoint · type" gives way first and furthest, because
+// it is the only label on the strip that is written somewhere else on screen at
+// the same time: the rail tile beside the canvas carries it, and so does the
+// records page bar. So at 1280px it is this one that becomes "T…" while the
+// analysis keeps its name.
+.button__elastic_spare {
+  flex-shrink: 6;
+}
+
 // Words inside a label that repeat what the icon, the tint or the tooltip
 // already says: "Analysis: " before the analysis name, "Plot from " before
 // "S & N", "Calibrated · " before the mm/px figure. These are the first thing
@@ -126,11 +164,32 @@
 // They are generated content rather than markup on purpose: a hidden <span>
 // would still sit in the DOM's text, so a text search — a screen reader's
 // find, a test's locator — would keep matching a phrase nobody can see.
+// …and the analysis name never narrows to nothing. Shrunk without a floor, at
+// 1280px it collapsed to an icon and a caret with no word between them — and
+// which analysis a tracing is being measured with is the one thing this control
+// exists to say, and the one label on the strip that is written nowhere else on
+// screen. Enough characters to tell the nine apart at a glance.
+.label_analysis { min-width: 7ch; }
+
 .label_analysis::before { content: 'Analysis: '; }
 .label_refs::before { content: 'Plot from '; }
 .chip_value::before { content: 'Calibrated · '; }
 
-@media (max-width: 1500px) {
+// 1720px, because that is the width at which the strip still fits while it is
+// carrying them. Measured across viewports with the longest analysis name this
+// build offers ("Wits & vertical"): with the qualifiers on and the wide metrics
+// below, the strip fits at 1700px and no longer fits at 1660px, so the qualifiers
+// are kept only above 1720 — the same measurement's threshold, plus headroom for
+// a name a future analysis might carry.
+//
+// The threshold used to be 1500px, which left a whole band — 1500 to ~1690, a
+// 1600px monitor, an ordinary clinic width — where the strip carried the
+// qualifiers *and* the wide metrics and fitted neither: the content ran ~60px
+// past its box and the last control, Export, lost its label off the right edge.
+// Below 1720 the qualifiers come off and the metrics tighten together, in the
+// same query, so the two can never disagree about whether the strip is under
+// pressure.
+@media (max-width: 1720px) {
   .label_analysis::before,
   .label_refs::before,
   .chip_value::before {
@@ -150,7 +209,19 @@
 // off any button. Padding is the cheapest thing the toolbar owns; a label is
 // the most expensive, because it is the only thing that says what an action
 // does without hovering it.
-@media (max-width: 1340px) {
+//
+// The breakpoint is the same 1720px at which the qualifiers come off (see the
+// query above), because it is the same pressure and the two must not disagree
+// about whether the strip is under it. It starts there, not at the old 1340,
+// because the strip was already ~60px over its box at a 1440px viewport:
+// twenty-one controls of 2px gaps and 8px padding do not fit 1440, whatever the
+// active analysis happens to be called. Measured with the widest name this build
+// offers ("Wits & vertical") the content was 1436px inside a 1376px box, and the
+// last control — Export — lost its label and half its hit area off the right
+// edge. Tightening here recovers ~120px across the strip, which is why no label
+// has to give at 1440 or 1366: whitespace first, then the two elastic names
+// above, and only then — at 1280 and below — would anything be cut.
+@media (max-width: 1720px) {
   .root {
     gap: 1px;
     padding: 0 6px;
@@ -637,6 +708,13 @@
     color: $primary-600;
     font-weight: 600;
   }
+}
+
+// The one destructive item in a toolbar menu — removing this film from the
+// patient's record. Named in the app's error colour, as it is on the card and in
+// the record viewer's own panel.
+.menu_item__danger {
+  color: $error;
 }
 
 .zoom_divider {

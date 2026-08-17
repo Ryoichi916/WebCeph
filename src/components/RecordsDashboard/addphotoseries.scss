@@ -1,0 +1,255 @@
+@import 'src/_variables.scss';
+
+// Filing a whole photographic series into one visit, in one act (see
+// `AddPhotoSeries.tsx`). Screen-only chrome, like every other dialog of this
+// surface.
+
+.no_print {
+  @media print {
+    display: none !important;
+  }
+}
+
+.title {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-family: $font-stack;
+}
+
+.title_heading {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: $text-primary;
+}
+
+.title_caption {
+  font-size: 12.5px;
+  color: $text-tertiary;
+}
+
+// ---- The drop area ----------------------------------------------------------
+
+.drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 18px 16px 16px;
+  border: 1px dashed $border-strong;
+  border-radius: 8px;
+  background: $bg-sunken;
+  font-family: $font-stack;
+  text-align: center;
+  transition: background-color 120ms ease, border-color 120ms ease;
+
+  &__over {
+    border-color: $primary-600;
+    border-style: solid;
+    background: $primary-050;
+  }
+}
+
+.drop_text {
+  font-size: 14px;
+  font-weight: 600;
+  color: $text-primary;
+}
+
+.drop_hint {
+  max-width: 620px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: $text-secondary;
+}
+
+// The picker itself is opened by the button above it.
+.drop_input {
+  display: none;
+}
+
+// ---- The batch --------------------------------------------------------------
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 14px;
+  font-family: $font-stack;
+}
+
+.list_head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding-bottom: 6px;
+  border-bottom: 1px solid $border;
+}
+
+.list_title {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: $text-tertiary;
+}
+
+.list_note {
+  font-size: 12px;
+  color: $text-secondary;
+}
+
+.row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 8px;
+  border: 1px solid $border;
+  border-radius: 8px;
+  background: $bg-surface;
+}
+
+// The preview is shaped like the *photograph* wherever its pixels have been read
+// (and like the row's frame until then), so a landscape intraoral photograph sitting
+// on a facial position is visible as a landscape photograph rather than letterboxed
+// into a portrait box — the shape is evidence about the file, and the warning beside
+// it is about exactly that shape.
+.row_frame {
+  position: relative;
+  flex: 0 0 auto;
+  width: 60px;
+  height: 80px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: $canvas-bg;
+  border: 1px solid $border-strong;
+
+  &__landscape {
+    width: 96px;
+    height: 64px;
+  }
+}
+
+.row_img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.row_main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.row_name {
+  overflow-wrap: anywhere;
+  font-size: 13px;
+  font-weight: 500;
+  color: $text-primary;
+}
+
+// The photograph's measured pixel size — the fact the position was proposed from,
+// stated beside the file it belongs to.
+.row_px {
+  margin-left: 8px;
+  font-size: 11.5px;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: $text-tertiary;
+}
+
+.row_field {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.row_key {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: $text-tertiary;
+}
+
+.row_select {
+  box-sizing: border-box;
+  height: 30px;
+  max-width: 100%;
+  padding: 0 8px;
+  border: 1px solid $border-strong;
+  border-radius: 6px;
+  background: $bg-surface;
+  font-family: $font-stack;
+  font-size: 13px;
+  color: $text-primary;
+
+  &:focus {
+    outline: none;
+    box-shadow: $focus-ring;
+  }
+}
+
+.row_warn {
+  font-size: 12px;
+  line-height: 1.4;
+  color: $warn;
+}
+
+.row_drop {
+  flex: 0 0 auto;
+  padding: 3px 9px;
+  border: 1px solid $border-strong;
+  border-radius: 999px;
+  background: $bg-surface;
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: $text-secondary;
+  cursor: pointer;
+
+  &:hover {
+    background: $error-bg;
+    border-color: $error;
+    color: $error;
+  }
+
+  &:focus {
+    outline: none;
+    box-shadow: $focus-ring;
+  }
+}
+
+// ---- Starting a series one frame at a time ----------------------------------
+
+.start {
+  margin-top: 14px;
+  font-family: $font-stack;
+}
+
+.start_label {
+  display: block;
+  margin-bottom: 2px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: $text-tertiary;
+}
+
+.have {
+  margin: 14px 0 0;
+  font-family: $font-stack;
+  font-size: 13px;
+  line-height: 1.5;
+  color: $text-secondary;
+}

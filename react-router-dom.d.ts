@@ -20,6 +20,42 @@ declare module 'react-router-dom' {
     children?: React.ReactNode;
   }
 
+  interface RouterHistory {
+    length: number;
+    action: string;
+    push(path: string, state?: any): void;
+    replace(path: string, state?: any): void;
+    go(n: number): void;
+    goBack(): void;
+    goForward(): void;
+  }
+
+  interface RouterLocation {
+    pathname: string;
+    search: string;
+    hash: string;
+    key?: string;
+    state?: any;
+  }
+
+  interface RouteMatch {
+    params: any;
+    isExact: boolean;
+    path: string;
+    url: string;
+  }
+
+  /** What `withRouter` (and a `Route`'s own component) is handed. */
+  export interface RouteComponentProps {
+    history: RouterHistory;
+    location: RouterLocation;
+    match: RouteMatch;
+  }
+
+  export function withRouter<P>(
+    component: React.ComponentType<P & RouteComponentProps>,
+  ): React.ComponentClass<P>;
+
   export const Route: React.ComponentClass<RouteProps>;
   export const Link: React.ComponentClass<LinkProps>;
   export const NavLink: React.ComponentClass<LinkProps>;

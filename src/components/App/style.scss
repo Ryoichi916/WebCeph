@@ -48,4 +48,34 @@
     flex-basis: 75%;
     min-width: 0;
   }
+
+  // The records dashboard occupies the same band as .row — the whole area
+  // under the top bar — and scrolls inside itself.
+  .dashboard {
+    flex-grow: 1;
+    min-height: 0;
+  }
+}
+
+// Paper is not a viewport. This frame is a 100vh flex column with
+// `overflow: hidden` because the editor's canvas scrolls inside it — but a
+// surface that *prints* (the records dashboard) has to flow across sheets, and
+// clipped to one viewport height its own print stylesheet was cut off at the
+// bottom of sheet 1: a nine-image record printed a single page with the fourth
+// timepoint sliced through its glyphs and the remaining films, the trailing
+// row and the panel's traced/calibrated tallies silently absent. A paper chart
+// that omits films without saying so is a records defect, so on paper the frame
+// stops being a window.
+//
+// (The ClinicalReport overlay escapes this same frame the other way round, by
+// hiding everything under `body.clinical-report-open` — see its print block —
+// so it is unaffected by this override.)
+@media print {
+  .container {
+    height: auto;
+    max-height: none;
+    width: auto;
+    max-width: none;
+    overflow: visible;
+  }
 }

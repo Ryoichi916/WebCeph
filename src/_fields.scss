@@ -1,0 +1,36 @@
+// Shared form-field visuals — see design brief §5 ("Buttons"/"Cards") and the
+// registration form in components/PatientFields.
+//
+// A plain SCSS mixin (not a CSS-module class) so a surface that only needs the
+// *look* of the app's text input — the patient search box, for instance — can
+// take it without importing another module's locals.
+@import 'src/_variables.scss';
+
+@mixin field-input {
+  box-sizing: border-box;
+  width: 100%;
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid $border-strong;
+  border-radius: 6px;
+  background: $bg-surface;
+  font-family: $font-stack;
+  font-size: 14px;
+  color: $text-primary;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+
+  &::placeholder {
+    color: $text-disabled;
+    opacity: 1;
+  }
+
+  &:hover {
+    border-color: darken($border-strong, 8%);
+  }
+
+  &:focus {
+    outline: none;
+    border-color: $primary-600;
+    box-shadow: $focus-ring;
+  }
+}

@@ -13,7 +13,7 @@ import * as cx from 'classnames';
 
 import Props from './props';
 
-import { formatAgeShort, formatSexShort } from 'utils/patient';
+import { formatAgeFull, formatSexShort } from 'utils/patient';
 
 const classes = require('./style.scss');
 
@@ -44,6 +44,13 @@ const actionIconStyle: React.CSSProperties = {
 
 const iconWhite = 'rgba(255, 255, 255, 0.9)';
 
+// The Records control is a toggle: while the dashboard is the surface on screen
+// it reads as pressed, and pressing it again returns to the editor.
+const activeActionStyle: React.CSSProperties = {
+  ...actionButtonStyle,
+  backgroundColor: 'rgba(255, 255, 255, 0.20)',
+};
+
 /**
  * Initials for the avatar chip: first character for CJK names (e.g. 山田 太郎
  * → 山), first letter of the first two words otherwise (John Smith → JS).
@@ -62,8 +69,8 @@ const getInitials = (text: string): string => {
 export default class PatientBar extends React.PureComponent<Props, { }> {
   render() {
     const {
-      className, activePatient, recordCount,
-      onSave, onChangePatient, onOpenRecords,
+      className, activePatient, recordCount, isRecordsShown,
+      onSave, onChangePatient, onToggleRecords,
     } = this.props;
     const name = activePatient !== null ?
       (activePatient.name || activePatient.chartId || '(unnamed)') : '—';
@@ -71,10 +78,16 @@ export default class PatientBar extends React.PureComponent<Props, { }> {
       activePatient.chartId : null;
     const initials = activePatient !== null ?
       getInitials(activePatient.name || activePatient.chartId || '') : '';
-    // Quiet demographics (e.g. "28 y · F") — shown only when recorded.
+    // Quiet demographics (e.g. "28 y 4 mo · F") — shown only when recorded.
+    //
+    // The *same* precision the records dashboard's identity band and every
+    // report header print (`formatAgeFull`), not the list-row short form: the
+    // bar read "16 y · F" while the identity band one Escape away read
+    // "16 y 1 mo" for the same patient on the same day, which is one age stated
+    // two ways rather than one age stated compactly.
     const demographics = activePatient !== null
       ? [
-          formatAgeShort(activePatient.dateOfBirth),
+          formatAgeFull(activePatient.dateOfBirth),
           formatSexShort(activePatient.sex),
         ].filter((p) => p !== null).join(' · ')
       : '';
@@ -86,10 +99,17 @@ export default class PatientBar extends React.PureComponent<Props, { }> {
             it opens the dashboard listing every image on file. */}
         <button
           type="button"
-          className={classes.patient}
-          onClick={onOpenRecords}
-          title={`Open ${name}'s records`}
-          aria-label={`Open patient records for ${name}`}
+          className={cx(classes.patient, {
+            [classes.patient__active]: isRecordsShown,
+          })}
+          onClick={onToggleRecords}
+          aria-pressed={isRecordsShown}
+          title={isRecordsShown
+            ? 'Return to the tracing editor'
+            : `Open ${name}'s records`}
+          aria-label={isRecordsShown
+            ? 'Return to the tracing editor'
+            : `Open patient records for ${name}`}
         >
           {initials !== '' ? (
             <span className={classes.patient_avatar} aria-hidden="true">
@@ -101,10 +121,19 @@ export default class PatientBar extends React.PureComponent<Props, { }> {
             </span>
           )}
           <span className={classes.patient_name} title={name}>{name}</span>
-          {chartId ? (
+          {/* While the records dashboard is the surface on screen, the identity
+              band 40px below this bar owns the identity: it carries the chart ID
+              as a pill and the demographics as labelled cells, in larger type.
+              Repeated here, the same chart ID appeared twice inside 120 vertical
+              pixels and the same age twice — the bar keeps the name, which is
+              what labels this control and the way back to the editor. (Where the
+              bar does print the age — on every other surface — it now prints it
+              at the band's own precision, so leaving the dashboard cannot change
+              the patient's age.) */}
+          {chartId && !isRecordsShown ? (
             <span className={classes.chart_id}>{chartId}</span>
           ) : null}
-          {demographics !== '' ? (
+          {demographics !== '' && !isRecordsShown ? (
             <span className={classes.demographics}>{demographics}</span>
           ) : null}
         </button>
@@ -112,12 +141,12 @@ export default class PatientBar extends React.PureComponent<Props, { }> {
         <div className={classes.actions}>
           <FlatButton
             label={recordCount > 0 ? `Records (${recordCount})` : 'Records'}
-            style={actionButtonStyle}
+            style={isRecordsShown ? activeActionStyle : actionButtonStyle}
             labelStyle={actionLabelStyle}
             hoverColor="rgba(255, 255, 255, 0.12)"
             rippleColor="#FFFFFF"
             icon={<IconRecords color={iconWhite} style={actionIconStyle} />}
-            onClick={onOpenRecords}
+            onClick={onToggleRecords}
           />
           <FlatButton
             label="Save project"

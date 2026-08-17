@@ -1,0 +1,208 @@
+@import 'src/_variables.scss';
+
+// ---------------------------------------------------------------------------
+// The printed sheet: one house style for every document this app puts on paper.
+// ---------------------------------------------------------------------------
+//
+// Two of them are filed side by side in the same chart — the clinical report
+// (`ClinicalReport`) and the case sheet (`RecordsDashboard`) — and until now they
+// were laid out by two stylesheets that had never met. The report opened with a
+// blue 17pt practice masthead, a bordered patient facts grid and a boxed scale
+// callout; the case sheet opened with an 8pt grey run of dot-separated facts and a
+// rounded blue *screen* pill. Filed together in one chart, that reads as two
+// documents from two different practices.
+//
+// So the masthead, the facts grid and the signature block are defined **once**,
+// here, and both stylesheets include them. A change to the house style is one
+// edit, and the two sheets cannot drift apart again.
+//
+// Every mixin takes a `$scale` factor: the report is laid out in a ~700px page
+// box and the case sheet's print block is written in points, so the same
+// declarations have to be able to arrive at either. `$scale: 1` is the report's
+// own screen-and-paper size (the numbers below are the report's, unchanged);
+// values under 1 tighten the block for a **running head**, which repeats on every
+// sheet of a chart and pays its height per sheet.
+
+// ---- Masthead --------------------------------------------------------------
+// The practice, the document and the day, over a 2px rule in the app's primary
+// ink. It is the first thing on the sheet and the one thing that says whose
+// record this is.
+
+@mixin ps-masthead($scale: 1) {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  // Wide enough that a two-line practice name can never touch the kicker.
+  gap: 32px * $scale;
+  padding-bottom: 14px * $scale;
+  border-bottom: 2px solid $primary-700;
+}
+
+@mixin ps-masthead-practice($scale: 1) {
+  font-size: 24px * $scale;
+  font-weight: 700;
+  letter-spacing: -.01em;
+  line-height: 1.15;
+  color: $primary-900;
+}
+
+@mixin ps-masthead-clinician($scale: 1) {
+  margin-top: 4px * $scale;
+  font-size: 12.5px * $scale;
+  color: $text-secondary;
+}
+
+@mixin ps-masthead-kicker($scale: 1) {
+  font-size: 11px * $scale;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .14em;
+  color: $primary-700;
+}
+
+@mixin ps-masthead-date($scale: 1) {
+  margin-top: 3px * $scale;
+  font-size: 12px * $scale;
+  color: $text-secondary;
+  font-variant-numeric: tabular-nums;
+}
+
+// ---- Facts grid ------------------------------------------------------------
+// Rows of aligned, hairline-separated cells: a key in small caps, the value under
+// it, and — where the value needs one — a quiet reading of it. An absent optional
+// field prints an em-dash: a clinical document states that a fact is not on file
+// rather than hiding the field.
+
+@mixin ps-facts-block($scale: 1) {
+  display: flex;
+  flex-direction: column;
+  margin-top: 14px * $scale;
+  border: 1px solid $border;
+  border-radius: 8px * $scale;
+  background: #FAFBFC;
+  overflow: hidden;
+  // A facts grid is a table of one thing: it is never split by a sheet edge.
+  break-inside: avoid;
+  page-break-inside: avoid;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+@mixin ps-facts-row {
+  display: flex;
+
+  // `& + &`, not `+ &`: a leading combinator alone is invalid CSS (and a Sass
+  // error from 2.0), which would have quietly dropped the rule that separates one
+  // row of the grid from the next.
+  & + & {
+    border-top: 1px solid $border;
+  }
+}
+
+@mixin ps-facts-cell($scale: 1) {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px * $scale;
+  padding: 10px * $scale 16px * $scale 11px * $scale;
+
+  & + & {
+    border-left: 1px solid $border;
+  }
+}
+
+@mixin ps-facts-label($scale: 1) {
+  font-size: 10px * $scale;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .1em;
+  color: $text-tertiary;
+}
+
+@mixin ps-facts-value($scale: 1) {
+  font-size: 14.5px * $scale;
+  font-weight: 600;
+  color: $text-primary;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@mixin ps-facts-note($scale: 1) {
+  font-size: 10.5px * $scale;
+  font-variant-numeric: tabular-nums;
+  color: $text-tertiary;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+// ---- Signature block -------------------------------------------------------
+// Ruled lines, as on any clinical letterhead: who compiled the document, under
+// which license, and the day it was signed. The stored clinician is printed on
+// the rule; the signature and the date are made by hand.
+
+@mixin ps-sig-section($scale: 1) {
+  break-inside: avoid;
+  page-break-inside: avoid;
+  margin-top: 18px * $scale;
+}
+
+@mixin ps-sig-row($scale: 1) {
+  display: flex;
+  align-items: flex-end;
+  gap: 28px * $scale;
+  margin-top: 14px * $scale;
+}
+
+@mixin ps-sig-field {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+@mixin ps-sig-line($scale: 1) {
+  display: flex;
+  align-items: flex-end;
+  min-height: 30px * $scale;
+  padding: 0 2px * $scale 4px * $scale;
+  border-bottom: 1px solid $text-secondary;
+  font-size: 13px * $scale;
+  font-weight: 600;
+  color: $text-primary;
+}
+
+@mixin ps-sig-caption($scale: 1) {
+  margin-top: 5px * $scale;
+  font-size: 9.5px * $scale;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .09em;
+  color: $text-tertiary;
+}
+
+// ---- Section label ---------------------------------------------------------
+// A small-caps key with a hairline running out to the measure: what the block
+// under it is.
+
+@mixin ps-section-label($scale: 1) {
+  display: flex;
+  align-items: center;
+  gap: 10px * $scale;
+  margin: 26px * $scale 0 10px * $scale;
+  font-size: 10.5px * $scale;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .13em;
+  color: $text-secondary;
+
+  // Hairline rule filling the rest of the row.
+  &::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: $border;
+  }
+}

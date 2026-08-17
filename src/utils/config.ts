@@ -1,6 +1,5 @@
 import zipObject from 'lodash/zipObject';
 import map from 'lodash/map';
-import uniqueId from 'lodash/uniqueId';
 
 const redoType: ActionType = 'REDO_REQUESTED';
 const undoType: ActionType = 'UNDO_REQUESTED';
@@ -12,6 +11,7 @@ const undoableConfig = {
 };
 
 import { SAMPLE_CEPH_DATA_URL } from 'utils/sampleCeph';
+import { mintWorkspaceId } from 'utils/ids';
 
 // The sample image is bundled with the app (as a data: URI) so it loads
 // instantly and works offline — no external requests.
@@ -32,12 +32,24 @@ export const bundleLocaleData = zipObject(
   }),
 );
 
-export const defaultWorkspaceId = uniqueId('workspace_');
+export const defaultWorkspaceId = mintWorkspaceId();
+/**
+ * A rail tile's own settings, as a new one starts.
+ *
+ * `isExporting`/`exportError` used to sit here and were written by no reducer:
+ * writing a case file is the whole chart's act, not a tile's, and it lives in
+ * `file.export` now. They are simply gone from this default — and because
+ * `workspaces.settings` is a project key (see store/middleware/project), a
+ * project saved by an older build rehydrates with those two dead fields still on
+ * each tile. Nothing reads them and nothing writes them; they are inert
+ * leftovers in a blob, not state, and they disappear the next time the project
+ * is written. No migration is run for them, because a migration that rewrites
+ * every stored project in order to delete two ignored booleans is a bigger risk
+ * to the record than the booleans are.
+ */
 export const defaultWorkspaceSettings: WorkspaceSettings = {
   isImporting: false,
   importError: null,
-  isExporting: false,
-  exportError: null,
   images: [],
   contentRect: null,
   mode: 'tracing',

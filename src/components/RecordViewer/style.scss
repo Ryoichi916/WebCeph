@@ -32,10 +32,62 @@
   background: $canvas-bg;
 
   // Zoomed past fit: the image keeps its own pixels and the well scrolls.
+  //
+  // …and, where the image overflows it, dragged — which was the only thing
+  // missing: at 400% a 1056 × 808 well shows a corner of a 3120 × 4144 photograph
+  // and could not be moved at all. The scrollbars here are the overlay kind
+  // (measured: they take 0px of layout, so nothing announced the overflow), the
+  // pointer was a plain arrow, and a drag moved nothing — while the tracing canvas
+  // beside this one has always panned by drag. `grab` states the affordance, the
+  // pointer handlers in index.tsx carry it out, and the scrollbar rules below give
+  // the bars a visible thumb on the platforms that do reserve room for them.
   &__zoomed {
     align-items: flex-start;
     justify-content: flex-start;
-    overflow: auto;
+    overflow: scroll;
+
+    // Neutral enough to read on both grounds this well uses: the canvas black a
+    // radiograph is displayed on, and the sunken grey a photograph gets.
+    &::-webkit-scrollbar {
+      width: 12px;
+      height: 12px;
+    }
+
+    &::-webkit-scrollbar-track {
+      background: rgba(123, 135, 148, .18);
+    }
+
+    &::-webkit-scrollbar-thumb {
+      border: 3px solid transparent;
+      border-radius: 6px;
+      background-clip: padding-box;
+      background-color: rgba(160, 172, 188, .75);
+
+      &:hover {
+        background-color: rgba(190, 200, 214, .9);
+      }
+    }
+  }
+
+  // Only where there is something to move: a zoom *below* fit leaves the image
+  // smaller than its well, and a grab cursor over an image that cannot be dragged
+  // is a promise the surface does not keep (see `measurePannable`).
+  &__pannable {
+    cursor: grab;
+  }
+
+  // Held: the whole well follows the pointer, so the cursor closes with it.
+  &__panning {
+    cursor: grabbing;
+  }
+
+  // A photograph is not a radiograph, and it must not be displayed as one. The
+  // light-box black belongs to a film — a studio-grey portrait floating on it
+  // read as a film on the one surface whose whole job is to say this is not a
+  // film. Photographs get the app's own sunken grey instead; the radiographic
+  // types keep the canvas black they are actually read on.
+  &__photo {
+    background: $bg-sunken;
   }
 }
 
@@ -45,6 +97,17 @@
   max-height: 100%;
   object-fit: contain;
   box-shadow: $shadow-2;
+
+  // A print on a mount: a hairline plate edge and a white surround, so a
+  // photograph has a stated boundary on a light ground instead of bleeding into
+  // it.
+  &__photo {
+    padding: 6px;
+    background: $bg-surface;
+    border: 1px solid $border-strong;
+    border-radius: 3px;
+    box-shadow: $shadow-1;
+  }
 }
 
 .no_image {
@@ -122,6 +185,14 @@
   height: 20px;
   margin: 0 4px;
   background: $border;
+}
+
+// How a zoomed image is moved, said once beside the control that zoomed it.
+.pan_hint {
+  padding-left: 4px;
+  font-size: 12px;
+  color: $text-tertiary;
+  white-space: nowrap;
 }
 
 .toolbar_note {
@@ -215,6 +286,30 @@
   color: $text-disabled;
 }
 
+// An unrecorded value that can be recorded from here is a link, not grey text —
+// the same construction as the dashboard's `.fact_fix`.
+.meta_fix {
+  padding: 0;
+  border: none;
+  background: none;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: $primary-600;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover {
+    text-decoration: underline;
+  }
+
+  &:focus {
+    outline: none;
+    box-shadow: $focus-ring;
+    border-radius: 3px;
+  }
+}
+
 // ---- Record actions --------------------------------------------------------
 
 .panel_actions {
@@ -261,6 +356,26 @@
       background: $error-bg;
     }
   }
+
+  // The panel's closing action, in the same construction as the two at its top:
+  // the tint is standing, so the way out of this surface is a target before it is
+  // hovered (it was a mui FlatButton, i.e. flat text with mui's own padding).
+  &__lead {
+    background: $primary-050;
+
+    &:hover:not(:disabled) {
+      background: $primary-100;
+    }
+  }
+}
+
+// Where the panel ends: the one control that leaves it. Its own row, so it is
+// never mistaken for a caption of the list above it.
+.panel_foot {
+  display: flex;
+  margin: 12px 0 4px;
+  padding-top: 12px;
+  border-top: 1px solid $border;
 }
 
 .note {
@@ -283,18 +398,49 @@
   min-width: 0;
 }
 
-.note_title {
-  display: block;
-  font-size: 13.5px;
-  font-weight: 600;
-  color: #8A5200;
-}
-
 .note_text {
-  margin: 6px 0 0;
+  margin: 0;
   font-size: 12.5px;
   line-height: 1.5;
   color: #8A5200;
+
+  & + & {
+    margin-top: 6px;
+  }
+}
+
+// The evidence, on request: the nine analyses this app implements. Spelled out
+// unconditionally they were the fourth statement of one fact on the screen.
+.note_toggle {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-top: 6px;
+  padding: 0;
+  border: none;
+  background: none;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #8A5200;
+  cursor: pointer;
+
+  &:hover {
+    text-decoration: underline;
+  }
+
+  &:focus {
+    outline: none;
+    box-shadow: $focus-ring;
+    border-radius: 3px;
+  }
+}
+
+.note_toggle_hint {
+  font-weight: 400;
+  font-size: 11.5px;
+  text-decoration: none;
+  color: rgba(138, 82, 0, .78);
 }
 
 // ---- Record context --------------------------------------------------------

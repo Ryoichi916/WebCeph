@@ -10,7 +10,11 @@ export interface StateProps {
    * which open in a read-only record view instead of a stepper.
    */
   isImageTraceable: boolean;
-  /** Timepoint label the upload form should start on (`T1`, `T2`, …). */
+  /**
+   * Timepoint label the upload form should start on (`T1`, `T2`, …) — the next
+   * unused label after the ones the record already carries, never the image
+   * count (see utils/records#getNextTimepointLabel).
+   */
   defaultTimepoint: string;
 };
 

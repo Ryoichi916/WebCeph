@@ -4,7 +4,6 @@ import {
   MapDispatchToPropsFunction,
 } from 'react-redux';
 
-import uniqueId from 'lodash/uniqueId';
 
 import WorkspaceSwitcher from './index';
 import {
@@ -39,15 +38,22 @@ import {
   getImageType,
   getImageTimepoint,
   getImageCaptureDate,
+  getImagePhotoView,
 } from 'store/reducers/workspace/image';
 
 import {
   getImageTypeShortLabel,
   getImageTypeLabel,
+  getImageTypeLabelWithArticle,
+  getPhotoViewShortLabel,
+  getPhotoViewLabel,
   formatCaptureDate,
 } from 'utils/records';
 
+import { getRecordFilingIntent } from 'store/reducers/workspace/records';
+
 import { TabCaption } from './props';
+import { mintWorkspaceId } from 'utils/ids';
 
 const mapStateToProps: MapStateToProps<StateProps, OwnProps, StoreState> =
   (state: StoreState) => {
@@ -67,23 +73,57 @@ const mapStateToProps: MapStateToProps<StateProps, OwnProps, StoreState> =
         const timepoint = getImageTimepoint(state)(firstImageId);
         const type = getImageType(state)(firstImageId);
         const date = formatCaptureDate(getImageCaptureDate(state)(firstImageId));
+        // A photograph filed at a series position is named by that position, the
+        // way the dashboard's own record chips name it. Its image type alone does
+        // not identify it: one visit's series carries three intraoral frames and
+        // two facial ones, and captioned by type the rail read "T2 / Intraoral"
+        // three times over — five tiles, three of them indistinguishable.
+        const view = getImagePhotoView(state)(firstImageId);
         captions[workspaceId] = {
           timepoint,
-          typeLabel: getImageTypeShortLabel(type),
+          // The day, as the record stores it — the rail groups its tiles by it.
+          captureDate: date,
+          typeLabel: view !== null
+            ? getPhotoViewShortLabel(view) : getImageTypeShortLabel(type),
           fullLabel: [
             timepoint,
-            getImageTypeLabel(type),
+            view !== null ? getPhotoViewLabel(view) : getImageTypeLabel(type),
             date,
           ].filter((part) => part !== null).join(' · '),
         };
       }
     }
+    // The slot-directed upload in progress, and the tile it is waiting on: the
+    // dashboard sends the clinician to an empty tile with a filing intent
+    // attached (see workspace/records#KEY_FILING_INTENT), so that tile can say
+    // what it is about to hold instead of showing a bare ordinal.
+    const activeTabId = getActiveWorkspaceId(state);
+    const intent = getRecordFilingIntent(state);
+    const isActiveEmpty = activeTabId !== null &&
+      thumbnails[activeTabId] === undefined;
+    const isPending = intent !== null && isActiveEmpty;
+    const intentDate = intent !== null
+      ? formatCaptureDate(intent.captureDate) : null;
     return {
-      activeTabId: getActiveWorkspaceId(state),
+      activeTabId,
       tabs,
       thumbnails,
       captions,
       canAddWorkspace: isLastWorkspaceUsed(state),
+      pendingWorkspaceId: isPending ? activeTabId : null,
+      pendingCaption: isPending && intent !== null ? {
+        timepoint: intent.timepoint,
+        // The day the filing intent carries, so the waiting tile stands in the
+        // visit it is being filed into rather than at the foot of the rail.
+        captureDate: intentDate,
+        typeLabel: getImageTypeShortLabel(intent.type),
+        fullLabel: [
+          `Filing ${getImageTypeLabelWithArticle(intent.type)}`,
+          intent.timepoint !== null ? `at ${intent.timepoint}` : null,
+          intentDate !== null ? `· ${intentDate}` : null,
+          '— pick an image for this tile',
+        ].filter((part) => part !== null).join(' '),
+      } : null,
     };
   };
 
@@ -91,7 +131,7 @@ const mapDispatchToProps: MapDispatchToPropsFunction<DispatchProps, OwnProps> =
   (dispatch) => (
     {
       onAddNewTab: () => {
-        const id = uniqueId('workspace_');
+        const id = mintWorkspaceId();
         dispatch(addNewWorkspace({ id }));
         dispatch(setActiveWorkspace({ id }));
       },

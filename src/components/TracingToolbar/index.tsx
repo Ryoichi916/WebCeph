@@ -3,13 +3,29 @@ import Props from './props';
 
 import * as cx from 'classnames';
 
-import CalibrationDialog, { formatMmPx } from './CalibrationDialog';
+import CalibrationDialog, { formatScale } from './CalibrationDialog';
 
 import ClinicalReport from 'components/ClinicalReport/connected';
 import Superimposition from 'components/Superimposition/connected';
 import TreatmentSimulation from 'components/TreatmentSimulation/connected';
 
 import { LATERAL_ANALYSES } from 'analyses/lateral';
+
+import { PatientRecord } from 'store/reducers/workspace';
+
+import EditRecordDialog from 'components/RecordMetaFields/EditRecordDialog';
+// The whole case as one file — what it carries and what it does not, stated
+// before it is written. @see components/CaseFile
+import CaseFile from 'components/CaseFile/connected';
+import { CaseFileMode } from 'components/CaseFile/props';
+import RemoveRecordDialog from 'components/RecordMetaFields/RemoveRecordDialog';
+
+import {
+  getImageTypeShortLabel,
+  getImageTypeLabel,
+  getTimepointToken,
+  formatCaptureDate,
+} from 'utils/records';
 
 import Popover from 'material-ui/Popover';
 import Menu from 'material-ui/Menu';
@@ -29,9 +45,18 @@ import IconArrowUp from 'material-ui/svg-icons/navigation/arrow-drop-up';
 import IconZoomIn from 'material-ui/svg-icons/action/zoom-in';
 import IconZoomOut from 'material-ui/svg-icons/action/zoom-out';
 import IconZoomFit from 'material-ui/svg-icons/maps/zoom-out-map';
-import IconRuler from 'material-ui/svg-icons/image/straighten';
+// The two states of the calibration chip, told apart by **shape** and not only by
+// tint: a tick for a film that carries a scale, a warning triangle for one that
+// does not. @see the chip below.
+import IconCalibrated from 'material-ui/svg-icons/action/check-circle';
+import IconNotCalibrated from 'material-ui/svg-icons/alert/warning';
+import IconFilm from 'material-ui/svg-icons/image/crop-original';
 import IconUndo from 'material-ui/svg-icons/content/undo';
 import IconRedo from 'material-ui/svg-icons/content/redo';
+
+// The record menu's correction dialog edits the visit label a clinical note is
+// filed under, so the toolbar reads the note filed there. @see handleSaveRecordMeta
+import { getVisitNoteKey, readVisitNote } from 'utils/visitNotes';
 
 const classes = require('./style.scss');
 
@@ -42,17 +67,29 @@ const classes = require('./style.scss');
 const ANALYSES = LATERAL_ANALYSES;
 
 interface State {
-  openMenu: 'analysis' | 'export' | null;
+  openMenu: 'analysis' | 'export' | 'record' | null;
   anchorEl: Element | null;
   isCalibrationOpen: boolean;
+  /** Correcting this film's record details from the editor. */
+  isEditRecordOpen: boolean;
+  /** Removing this film from the patient's record, from the editor. */
+  isRemoveRecordOpen: boolean;
   isReportOpen: boolean;
   isSuperimpositionOpen: boolean;
   isSimulationOpen: boolean;
+  /**
+   * Whether the case file dialog is open, and on which half. The editor's Export
+   * menu offers the whole case as a `.wceph` beside the two picture formats —
+   * they are not the same act, and the menu says so. @see components/CaseFile
+   */
+  caseFileMode: CaseFileMode;
 }
 
 const ICON_COLOR = 'currentColor';
 const iconStyle: React.CSSProperties = { width: 18, height: 18 };
 const caretStyle: React.CSSProperties = { width: 18, height: 18, margin: '0 -6px 0 -2px' };
+/** The calibration chip's state mark. @see the chip in `render`. */
+const CHIP_ICON: React.CSSProperties = { width: 14, height: 14 };
 
 // Analysis menu rows carry a title + clinical-focus line, so the mui
 // MenuItem's fixed 48px line-height/font must be reset; the selected row is
@@ -91,10 +128,37 @@ export default class TracingToolbar extends React.PureComponent<Props, State> {
     openMenu: null,
     anchorEl: null,
     isCalibrationOpen: false,
+    isEditRecordOpen: false,
+    isRemoveRecordOpen: false,
     isReportOpen: false,
     isSuperimpositionOpen: false,
     isSimulationOpen: false,
+    caseFileMode: null,
   };
+
+  /**
+   * The two shortcuts the history buttons name in their own tooltips.
+   *
+   * They were named and not wired: the app binds exactly one key (`n`, a new
+   * workspace — see `components/App/shortcuts`), so `Ctrl+Z` over a mis-dragged
+   * landmark did nothing while the button beside it promised that it would.
+   *
+   * Bound here rather than in the app-level `HotKeys` because this toolbar is
+   * mounted only while a tracing is open, and it is the piece that knows whether
+   * there is anything to undo: the same `canUndo`/`canRedo` that grey the buttons
+   * guard the keys, so a shortcut can never do what the button refuses to.
+   *
+   * A keypress made inside a text field is left alone — the note editor, the
+   * record form and the calibration dialog all sit over this surface, and inside
+   * them Ctrl+Z is the browser's own undo of what is being typed.
+   */
+  componentDidMount() {
+    document.addEventListener('keydown', this.handleHistoryKey);
+  }
+
+  componentWillUnmount() {
+    document.removeEventListener('keydown', this.handleHistoryKey);
+  }
 
   render() {
     const {
@@ -109,10 +173,11 @@ export default class TracingToolbar extends React.PureComponent<Props, State> {
       scaleFactor,
       canSuperimpose, superimposeReason,
       canSimulate, simulateReason,
+      record, records,
     } = this.props;
     const {
       openMenu, anchorEl, isCalibrationOpen, isReportOpen,
-      isSuperimpositionOpen, isSimulationOpen,
+      isSuperimpositionOpen, isSimulationOpen, caseFileMode,
     } = this.state;
     const isCalibrated = scaleFactor !== null;
     const hasImage = imageId !== null;
@@ -126,7 +191,7 @@ export default class TracingToolbar extends React.PureComponent<Props, State> {
       <div className={cx(classes.root, className)} role="toolbar" aria-label="Tracing actions">
         <button
           type="button"
-          className={cx(classes.button, {
+          className={cx(classes.button, classes.button__elastic, {
             [classes.button__open]: openMenu === 'analysis',
           })}
           disabled={!hasImage}
@@ -226,6 +291,38 @@ export default class TracingToolbar extends React.PureComponent<Props, State> {
 
         <span className={classes.spacer} />
 
+        {/* What this film *is*, and the two things a record needs done to it when
+            it is wrong. Correction and removal used to live only on the records
+            dashboard and on the read-only viewer, so whether a record could be
+            fixed where it was being looked at depended on its type: a photograph
+            carried both controls, the lateral ceph open in this editor carried
+            neither. */}
+        {record !== null ? (
+          <button
+            type="button"
+            className={cx(
+              classes.button,
+              classes.button__elastic,
+              classes.button__elastic_spare,
+              { [classes.button__open]: openMenu === 'record' },
+            )}
+            title={`This image: ${describeRecord(record)}. ` +
+              'Correct its record details, or remove it from the record.'}
+            aria-label={`Record: ${describeRecord(record)}`}
+            aria-haspopup="true"
+            onClick={this.openRecordMenu}
+          >
+            <IconFilm color={ICON_COLOR} style={iconStyle} />
+            <span className={classes.button_label}>
+              {[
+                getTimepointToken(record.timepoint),
+                getImageTypeShortLabel(record.type),
+              ].filter((part) => part !== null).join(' · ')}
+            </span>
+            <IconArrowUp color={ICON_COLOR} style={caretStyle} />
+          </button>
+        ) : null}
+
         <button
           type="button"
           className={cx(classes.calibration_chip, {
@@ -233,7 +330,7 @@ export default class TracingToolbar extends React.PureComponent<Props, State> {
           })}
           title={
             isCalibrated
-              ? `Calibrated: 1 px = ${formatMmPx(scaleFactor!)} mm. ` +
+              ? `Calibrated · ${formatScale(scaleFactor!)}. ` +
                 'Linear (mm) measurements use this scale; ' +
                 'angular measurements are scale-independent. Click to adjust.'
               : 'No mm calibration is set for this image. ' +
@@ -242,20 +339,33 @@ export default class TracingToolbar extends React.PureComponent<Props, State> {
           }
           aria-label={
             isCalibrated
-              ? `Calibrated · ${formatMmPx(scaleFactor!, 3)} mm/px`
+              ? `Calibrated · ${formatScale(scaleFactor!)}`
               : 'Not calibrated'
           }
           aria-haspopup="dialog"
           onClick={this.openCalibrationDialog}
         >
-          <IconRuler color="currentColor" style={{ width: 14, height: 14 }} />
+          {/* **The state is a shape, not a hue.**
+              Below 1720px the strip drops the word before the figure to make room
+              for named clinical actions (see `.chip_value`), and at 1280 — where
+              this screen is most crowded — the chip then read "0.104 mm/px" in a
+              green pill against "Not calibrated" in an amber one: whether the
+              millimetres on this film mean anything rode on the tint alone, on a
+              clinic monitor, for a clinician who may not distinguish the two. A
+              tick and a warning triangle differ at any colour, at any brightness
+              and in greyscale, and they cost the strip nothing.
+              The mark replaces the ruler rather than joining it: two 14px glyphs
+              in a 24px pill is not a legible chip. */}
+          {isCalibrated
+            ? <IconCalibrated color="currentColor" style={CHIP_ICON} />
+            : <IconNotCalibrated color="currentColor" style={CHIP_ICON} />}
           {/* The number *is* the calibration; the CSS-generated word before it
               (see `.chip_value`) is the first thing to go when the strip has to
-              make room for a named clinical action. The chip's tint, tooltip
+              make room for a named clinical action. The chip's mark, tint, tooltip
               and aria-label keep saying the film is calibrated either way. */}
           {isCalibrated ? (
             <span className={classes.chip_value}>
-              {`${formatMmPx(scaleFactor!, 3)} mm/px`}
+              {formatScale(scaleFactor!)}
             </span>
           ) : 'Not calibrated'}
         </button>
@@ -422,7 +532,7 @@ export default class TracingToolbar extends React.PureComponent<Props, State> {
           onRequestClose={this.closeMenu}
         >
           <Menu desktop width={248} onEscKeyDown={this.closeMenu}>
-            <div className={classes.menu_heading}>Export tracing</div>
+            <div className={classes.menu_heading}>Export this tracing</div>
             <MenuItem
               style={analysisItemStyle}
               innerDivStyle={analysisItemInnerStyle}
@@ -443,8 +553,108 @@ export default class TracingToolbar extends React.PureComponent<Props, State> {
                 <span className={classes.menu_item_focus}>Smaller file — best for sharing</span>
               </span>
             </MenuItem>
+            {/* A picture of one tracing and the case itself are two different
+                things to hand somebody, and this menu used to offer only the
+                first. The heading below says which half of the menu this is. */}
+            <div className={classes.menu_heading}>Export the whole case</div>
+            <MenuItem
+              style={analysisItemStyle}
+              innerDivStyle={analysisItemInnerStyle}
+              onClick={this.openCaseFile}
+            >
+              <span className={classes.menu_item}>
+                <span className={classes.menu_item_title}>Case file (.wceph)</span>
+                <span className={classes.menu_item_focus}>
+                  Every film, tracing, scale and clinical entry — reopenable here
+                </span>
+              </span>
+            </MenuItem>
           </Menu>
         </Popover>
+
+        <Popover
+          open={openMenu === 'record'}
+          style={popoverStyle}
+          anchorEl={anchorEl as any}
+          anchorOrigin={{ horizontal: 'left', vertical: 'top' }}
+          targetOrigin={{ horizontal: 'left', vertical: 'bottom' }}
+          onRequestClose={this.closeMenu}
+        >
+          <Menu desktop width={264} onEscKeyDown={this.closeMenu}>
+            <div className={classes.menu_heading}>
+              {record !== null ? describeRecord(record) : 'Record'}
+            </div>
+            <MenuItem
+              style={analysisItemStyle}
+              innerDivStyle={analysisItemInnerStyle}
+              onClick={this.openEditRecord}
+            >
+              <span className={classes.menu_item}>
+                <span className={classes.menu_item_title}>Edit details…</span>
+                <span className={classes.menu_item_focus}>
+                  Image type, timepoint, capture date
+                </span>
+              </span>
+            </MenuItem>
+            <MenuItem
+              style={analysisItemStyle}
+              innerDivStyle={analysisItemInnerStyle}
+              onClick={this.openRemoveRecord}
+            >
+              <span className={classes.menu_item}>
+                <span className={cx(classes.menu_item_title, classes.menu_item__danger)}>
+                  Remove from record…
+                </span>
+                <span className={classes.menu_item_focus}>
+                  Drops this image and its tracing
+                </span>
+              </span>
+            </MenuItem>
+          </Menu>
+        </Popover>
+
+        {record !== null ? (
+          <EditRecordDialog
+            open={this.state.isEditRecordOpen}
+            initialValue={{
+              type: record.type,
+              timepoint: record.timepoint,
+              captureDate: record.captureDate,
+              // Carried through even here, where the record is a cephalogram and
+              // therefore holds none: the dialog re-files a record, and a
+              // correction to "Intraoral photograph" made from this toolbar must
+              // arrive with the same photographic frame the records dashboard
+              // would have given it, not with the field silently blanked.
+              photoView: record.photoView,
+            }}
+            fileName={record.name}
+            // What a relabelling does to the visit's clinical note, stated by the
+            // same dialog wherever it is opened from.
+            // @see EditRecordDialog#renderNoteEffect
+            visitNote={readVisitNote(
+              this.props.notes[getVisitNoteKey(record.timepoint)],
+            )}
+            isOnlyImageAtVisit={this.countImagesAtVisit(record.timepoint) === 1}
+            hasNoteAt={this.hasNoteAt}
+            onSave={this.handleSaveRecordMeta}
+            onCancel={this.closeEditRecord}
+          />
+        ) : null}
+
+        {record !== null ? (
+          <RemoveRecordDialog
+            open={this.state.isRemoveRecordOpen}
+            type={record.type}
+            timepoint={record.timepoint}
+            captureDate={record.captureDate}
+            fileName={record.name}
+            thumbnail={record.thumbnail}
+            otherRecordCount={Math.max(records.length - 1, 0)}
+            landmarksPlaced={record.landmarksPlaced}
+            onConfirm={this.handleConfirmRemoveRecord}
+            onCancel={this.closeRemoveRecord}
+          />
+        ) : null}
 
         {isReportOpen && (
           <ClinicalReport
@@ -472,6 +682,10 @@ export default class TracingToolbar extends React.PureComponent<Props, State> {
             onRequestClose={this.closeCalibrationDialog}
           />
         )}
+
+        {/* The same dialog the records dashboard opens, on the same connected
+            component: two entry points, one account of what a case file is. */}
+        <CaseFile mode={caseFileMode} onRequestClose={this.closeCaseFile} />
       </div>
     );
   }
@@ -542,6 +756,71 @@ export default class TracingToolbar extends React.PureComponent<Props, State> {
     this.setState({ openMenu: 'export', anchorEl: e.currentTarget });
   };
 
+  private openRecordMenu = (e: React.MouseEvent<HTMLButtonElement>) => {
+    this.setState({ openMenu: 'record', anchorEl: e.currentTarget });
+  };
+
+  private openEditRecord = () => {
+    this.closeMenu();
+    this.setState({ isEditRecordOpen: true });
+  };
+
+  private closeEditRecord = () => this.setState({ isEditRecordOpen: false });
+
+  /** How many images are filed at one visit label, as the record groups them. */
+  private countImagesAtVisit = (timepoint: string | null): number => {
+    const key = getVisitNoteKey(timepoint);
+    return this.props.records
+      .filter((r) => getVisitNoteKey(r.timepoint) === key).length;
+  };
+
+  /** Whether a visit key already holds a clinical note. */
+  private hasNoteAt = (key: string): boolean =>
+    readVisitNote(this.props.notes[key]) !== null;
+
+  /**
+   * Save the corrected details — and carry the visit's clinical note across when
+   * the correction is what moves the visit. The same rule, and the same action, as
+   * the records dashboard's own path (@see RecordsDashboard#handleSaveMeta): a note
+   * is filed under the visit's label, and relabelling the last image of a visit
+   * would otherwise leave a clinician's diagnosis pointing at a label nothing
+   * carries.
+   */
+  private handleSaveRecordMeta = (meta: ImageRecordMeta) => {
+    const { record } = this.props;
+    this.setState({ isEditRecordOpen: false });
+    if (record !== null) {
+      const from = getVisitNoteKey(record.timepoint);
+      const to = getVisitNoteKey(meta.timepoint);
+      if (from !== to && this.hasNoteAt(from) &&
+        this.countImagesAtVisit(record.timepoint) === 1) {
+        this.props.onRefileVisitNote(from, to);
+      }
+    }
+    this.props.onSaveRecordMeta(meta);
+  };
+
+  private openRemoveRecord = () => {
+    this.closeMenu();
+    this.setState({ isRemoveRecordOpen: true });
+  };
+
+  private closeRemoveRecord = () => this.setState({ isRemoveRecordOpen: false });
+
+  private handleConfirmRemoveRecord = () => {
+    const { record, records, onRemoveRecord } = this.props;
+    this.setState({ isRemoveRecordOpen: false });
+    if (record === null) {
+      return;
+    }
+    // Another record's rail tile to land on, if the patient has one — the same
+    // rule the dashboard and the record viewer apply.
+    const fallback = records
+      .filter((r) => r.workspaceId !== record.workspaceId)
+      .map((r) => r.workspaceId)[0];
+    onRemoveRecord(record, fallback !== undefined ? fallback : null);
+  };
+
   private closeMenu = () => {
     this.setState({ openMenu: null, anchorEl: null });
   };
@@ -551,10 +830,54 @@ export default class TracingToolbar extends React.PureComponent<Props, State> {
     this.props.onSelectAnalysis(id);
   };
 
+  /** @see componentDidMount */
+  private handleHistoryKey = (e: KeyboardEvent) => {
+    if (!e.ctrlKey && !e.metaKey) {
+      return;
+    }
+    if (e.key !== 'z' && e.key !== 'Z') {
+      return;
+    }
+    const target = e.target as HTMLElement | null;
+    if (target !== null) {
+      const tag = (target.tagName || '').toUpperCase();
+      if (
+        tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' ||
+        target.isContentEditable
+      ) {
+        return;
+      }
+    }
+    const isRedo = e.shiftKey;
+    if (isRedo ? !this.props.canRedo : !this.props.canUndo) {
+      return;
+    }
+    e.preventDefault();
+    if (isRedo) {
+      this.props.onRedoClick();
+    } else {
+      this.props.onUndoClick();
+    }
+  };
+
   private exportAs = (format: 'png' | 'jpeg') => {
     this.closeMenu();
     this.props.onExportImage(format);
   };
+
+  /**
+   * The whole case as one file, offered from the same menu the picture exports
+   * are — because "Export" is where a clinician looks for it, and because the
+   * distinction between a picture of this tracing and the case file that carries
+   * every film, tracing, scale and clinical entry is exactly what the menu's two
+   * headings and the dialog behind this item are for.
+   */
+  private openCaseFile = () => {
+    this.closeMenu();
+    this.setState({ caseFileMode: 'export' });
+  };
+
+  private closeCaseFile = () => this.setState({ caseFileMode: null });
 
   private zoomIn = () => {
     this.props.onZoomChange(Math.min(this.props.zoom * ZOOM_STEP, ZOOM_MAX));
@@ -568,3 +891,15 @@ export default class TracingToolbar extends React.PureComponent<Props, State> {
     this.props.onZoomChange(1);
   };
 }
+
+/**
+ * One-line identity of the open film for the record control: `T2 · Panoramic
+ * radiograph · 2026-03-19`, with every part omitted rather than guessed. Same
+ * shape the records dashboard and the record viewer use in their own tooltips.
+ */
+const describeRecord = (record: PatientRecord): string =>
+  [
+    record.timepoint,
+    getImageTypeLabel(record.type),
+    formatCaptureDate(record.captureDate),
+  ].filter((part) => part !== null).join(' · ');

@@ -72,24 +72,32 @@ if (!__DEBUG__ && 'serviceWorker' in navigator) {
   });
 }
 
-// import { hasUnsavedWork } from 'store/reducers/workspace';
+import { hasUnsavedProjectChanges } from 'store/middleware/project';
 
 if (__DEBUG__) {
   // Expose store in development
   window.__STORE__ = store;
 }
 
-// window.addEventListener('beforeunload', e => {
-//   const state = store.getState();
-//   if (hasUnsavedWork(state)) {
-//     const confirmationMessage = (
-//       'Are you sure you want to close this window?'
-//     );
-//     e.returnValue = confirmationMessage;
-//     return confirmationMessage;
-//   }
-//   return undefined;
-// });
+/**
+ * Edits autosave (see store/middleware/project), so this guard only speaks up
+ * in the narrow window where clinical work exists in memory that storage does
+ * not have yet: an autosave still waiting on its debounce, or a write still in
+ * flight. Closing the tab then would silently lose the last edit(s), so the
+ * browser is asked to confirm. Once the write lands, the tab closes quietly.
+ */
+window.addEventListener('beforeunload', (e) => {
+  if (hasUnsavedProjectChanges()) {
+    const confirmationMessage = (
+      'Your latest changes are still being saved. ' +
+      'Are you sure you want to close this window?'
+    );
+    e.preventDefault();
+    e.returnValue = confirmationMessage;
+    return confirmationMessage;
+  }
+  return undefined;
+});
 
 const handleConnectionChange = () => {
   console.info('Connection changed', navigator.onLine);

@@ -33,6 +33,27 @@ export const printNorm = displayNorm;
 /** A component's deviation as printed on paper (see `formatDeviation`). */
 export const printDeviation = displayDeviation;
 
+/**
+ * The severity stars, and the one wording every sheet this app prints keys them
+ * with.
+ *
+ * One key, one string. The clinical report's running foot read "Deviation:
+ * * ** *** = over 1 · 2 · 3 SD" while the records sheet's own key read
+ * "DEVIATION * over 1 SD ** over 2 *** over 3" — the same three marks, on the
+ * same data, on two sheets filed in one chart, worded two ways. The stars are
+ * exported as their own steps rather than baked into the sentence because the
+ * records sheet and the Summary draw them in the star colour (see
+ * `.findings_legend_stars`) instead of setting them in running text.
+ */
+export const DEVIATION_STAR_STEPS = ['*', '**', '***'];
+
+/** What the three steps mean, said once. */
+export const DEVIATION_STAR_SCALE = 'over 1 · 2 · 3 SD';
+
+/** The whole key as one run of text, for a surface that sets it in prose. */
+export const deviationStarKey =
+  `${DEVIATION_STAR_STEPS.join(' ')} = ${DEVIATION_STAR_SCALE}`;
+
 /** Landmark symbols listed inline before the list is abbreviated. */
 const MAX_SYMBOLS = 6;
 
@@ -86,4 +107,22 @@ export const missingLandmarksNote = (
     `${landmarkCount(missingSymbols.length)} ` +
     `(${formatSymbolList(missingSymbols)}) — ` +
     `${plotFromStepList(missingSymbols.length)}.`;
+};
+
+/**
+ * The same worklist as a plain statement of record, with the instruction taken
+ * off: what a *filed* sheet can honestly carry. Nobody can plot a landmark from
+ * a step list on a sheet of paper, so the printed chart states what is
+ * outstanding and stops there.
+ */
+export const missingLandmarksFact = (
+  missingCount: number, missingSymbols: string[],
+): string => {
+  if (missingSymbols.length === 0) {
+    return `${measurementsAre(missingCount)} waiting on landmarks that are ` +
+      'not placed yet.';
+  }
+  return `${measurementsAre(missingCount)} waiting on ` +
+    `${landmarkCount(missingSymbols.length)} ` +
+    `(${formatSymbolList(missingSymbols)}).`;
 };

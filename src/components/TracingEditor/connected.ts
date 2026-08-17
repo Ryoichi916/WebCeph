@@ -6,12 +6,11 @@ import {
 
 import { getTracingImageId } from 'store/reducers/workspace/settings';
 import { isSummaryShown } from 'store/reducers/workspace/analyses';
-import {
-  isImageTraceable,
-  getAllImages,
-} from 'store/reducers/workspace/image';
+import { isImageTraceable } from 'store/reducers/workspace/image';
 
-import { getDefaultTimepoint } from 'utils/records';
+import { getPatientRecords } from 'store/reducers/workspace';
+
+import { getNextTimepointLabel } from 'utils/records';
 
 import { importFileRequested, loadImageFromURL } from 'actions/workspace';
 
@@ -30,9 +29,14 @@ const mapStateToProps: MapStateToProps<StateProps, OwnProps, StoreState> =
       imageId,
       isSummaryShown: isSummaryShown(state),
       isImageTraceable: imageId !== null ? isImageTraceable(state)(imageId) : true,
-      // The next timepoint in the series: T1 for the first image on file, T2
-      // for the second, and so on.
-      defaultTimepoint: getDefaultTimepoint(Object.keys(getAllImages(state)).length),
+      // The next *visit* in the series, read off the timepoint labels the
+      // record already carries: T1 on a case with nothing on file, T2 once T1
+      // exists — however many images T1 holds. Counted off the images instead
+      // (the first formulation here), a visit that was both radiographed and
+      // photographed made the app propose T3 for the second visit, and because
+      // the proposal is prefilled it was accepted: the record kept a T2-shaped
+      // hole nobody had skipped on purpose.
+      defaultTimepoint: getNextTimepointLabel(getPatientRecords(state)),
     };
   };
 

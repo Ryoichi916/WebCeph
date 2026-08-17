@@ -74,8 +74,17 @@ export const formatAgeShort = (
 };
 
 /**
- * Clinical age with months, e.g. `28 y 4 m` — months matter when assessing
+ * Clinical age with months, e.g. `28 y 4 mo` — months matter when assessing
  * growth, which is exactly when a cephalometric report is drawn up.
+ *
+ * Months are written `mo`, never the bare `m` this used to print, for two
+ * reasons that are the same reason: every surface that prints an age also prints
+ * an elapsed interval from `utils/records#formatInterval` ("1 y 4 mo"), and most
+ * of them print millimetres beside both. On the records dashboard's case
+ * timeline the two stood 24px apart — a stop reading "AGE 12 y 9 m" under an
+ * interval reading "1 y 4 mo" — and on the clinical report and the
+ * superimposition "12 y 9 m" sat in a column of "+1.7 mm". One form of "month"
+ * per app, and it is the unambiguous one.
  */
 export const formatAgeFull = (
   dateOfBirth: string | undefined,
@@ -86,7 +95,7 @@ export const formatAgeFull = (
     return null;
   }
   return parts.months > 0
-    ? `${parts.years} y ${parts.months} m`
+    ? `${parts.years} y ${parts.months} mo`
     : `${parts.years} y`;
 };
 

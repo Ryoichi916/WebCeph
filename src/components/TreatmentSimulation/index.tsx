@@ -63,7 +63,7 @@ import AboutDisclosure from 'components/AboutDisclosure';
 // Number formatting and unit suffixes are the app's, not this view's.
 import { getUnitSuffix, roundToDisplay } from 'components/AnalysisResultsViewer';
 import { printNumber, printSigned, printNorm } from 'components/ClinicalReport/copy';
-import { formatMmPx } from 'components/TracingToolbar/CalibrationDialog';
+import { formatScale } from 'components/TracingToolbar/CalibrationDialog';
 // The practice identity is the clinical report's, read back here so every
 // printed sheet this app produces is signed to the same standard.
 import { readLetterhead, formatClinicianLine } from 'components/ClinicalReport/letterhead';
@@ -767,7 +767,7 @@ export default class TreatmentSimulation extends React.PureComponent<Props, Stat
       'Millimetres are measured on the planes this tracing supplies — ' +
       planes.join('; ') +
       (scaleFactor !== null
-        ? `. Converted to pixels at this film’s calibration of ${formatMmPx(scaleFactor, 3)} mm/px`
+        ? `. Converted to pixels at this film’s calibration of ${formatScale(scaleFactor)}`
         : '') +
       '.'
     );
@@ -789,7 +789,7 @@ export default class TreatmentSimulation extends React.PureComponent<Props, Stat
       return null;
     }
     return 'Millimetre movements are measured along the plane named under ' +
-      `each control · this film is calibrated at ${formatMmPx(scaleFactor, 3)} mm/px.`;
+      `each control · this film is calibrated at ${formatScale(scaleFactor)}.`;
   }
 
   private renderLegend() {
@@ -1510,7 +1510,7 @@ export default class TreatmentSimulation extends React.PureComponent<Props, Stat
         : 'No movement applied',
       interval: null,
       auditLabel: scaleFactor !== null
-        ? `Film calibrated at ${formatMmPx(scaleFactor, 3)} mm/px`
+        ? `Film calibrated at ${formatScale(scaleFactor)}`
         : 'Film not calibrated — millimetre movements unavailable',
       patientLabel: this.identityLine(),
       caveat: null,

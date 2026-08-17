@@ -1,4 +1,8 @@
 @import 'src/_variables.scss';
+// The house style every sheet this app prints is set in — the masthead, the facts
+// grid and the signature block, shared with the records dashboard's case sheet so
+// two documents filed in one chart cannot look like two different practices.
+@import 'src/components/printsheet';
 
 // ---- Full-screen preview shell ---------------------------------------------
 
@@ -193,14 +197,10 @@
 // ---- Masthead --------------------------------------------------------------
 
 .masthead {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  // Wide enough that a two-line practice name can never touch the kicker: the
-  // clinic name now wraps, and 16px of air read as a collision at 24px type.
-  gap: 32px;
-  padding-bottom: 14px;
-  border-bottom: 2px solid $primary-700;
+  // @see components/_printsheet.scss — the shared masthead. (Wide enough that a
+  // two-line practice name can never touch the kicker: the clinic name wraps, and
+  // 16px of air read as a collision at 24px type.)
+  @include ps-masthead;
 }
 
 // No practice name stored (the default state). Printing the kicker and date
@@ -231,17 +231,11 @@
 }
 
 .clinic_name {
-  font-size: 24px;
-  font-weight: 700;
-  letter-spacing: -.01em;
-  line-height: 1.15;
-  color: $primary-900;
+  @include ps-masthead-practice;
 }
 
 .clinic_line {
-  margin-top: 4px;
-  font-size: 12.5px;
-  color: $text-secondary;
+  @include ps-masthead-clinician;
 }
 
 // Screen-only wayfinding for the two fields that are typed further down.
@@ -265,18 +259,11 @@
 }
 
 .doc_kicker {
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: .14em;
-  color: $primary-700;
+  @include ps-masthead-kicker;
 }
 
 .doc_date {
-  margin-top: 3px;
-  font-size: 12px;
-  color: $text-secondary;
-  font-variant-numeric: tabular-nums;
+  @include ps-masthead-date;
 }
 
 // ---- Letterhead editable fields --------------------------------------------
@@ -415,74 +402,48 @@
 // ---- Patient block ---------------------------------------------------------
 
 .patient_block {
-  display: flex;
-  flex-direction: column;
-  margin-top: 14px;
-  border: 1px solid $border;
-  border-radius: 8px;
-  background: #FAFBFC;
-  overflow: hidden;
+  @include ps-facts-block;
 }
 
 // Two rows of three aligned columns: identity on top, demographics below.
 .patient_row {
-  display: flex;
-
-  + .patient_row {
-    border-top: 1px solid $border;
-  }
+  @include ps-facts-row;
 }
 
 .patient_cell {
-  flex: 1 1 0;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  padding: 10px 16px 11px;
-
-  + .patient_cell {
-    border-left: 1px solid $border;
-  }
+  @include ps-facts-cell;
 }
 
 .patient_label {
-  font-size: 10px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: .1em;
-  color: $text-tertiary;
+  @include ps-facts-label;
 }
 
 .patient_value {
-  font-size: 14.5px;
-  font-weight: 600;
-  color: $text-primary;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  @include ps-facts-value;
+
+  // An image scale that cannot be right is not printed as a plain fact: the
+  // records dashboard demotes the same film's chip to amber, and a sheet that
+  // certified it in black gave one film two verdicts on its own scale.
+  &__warn {
+    color: $warn;
+  }
+}
+
+// A reading the value cannot carry itself — what a mm/px scale means in
+// millimetres of film.
+.patient_note {
+  @include ps-facts-note;
+
+  &__warn {
+    font-weight: 600;
+    color: $warn;
+  }
 }
 
 // ---- Section labels --------------------------------------------------------
 
 .section_label {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin: 26px 0 10px;
-  font-size: 10.5px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: .13em;
-  color: $text-secondary;
-
-  // Hairline rule filling the rest of the row.
-  &::after {
-    content: '';
-    flex: 1;
-    height: 1px;
-    background: $border;
-  }
+  @include ps-section-label;
 }
 
 .section_badge {
@@ -1510,6 +1471,18 @@ $cont-line-height: 13px;
   min-height: 250mm;
   justify-content: space-between;
 
+  // **The writing area takes whatever the entry leaves**, and the count that fills
+  // it is worked out from the entry itself — see
+  // `ClinicalReport#getOwnSheetRuleCount`, whose arithmetic these two numbers (the
+  // 7.5 mm pitch, and the 250 mm the block is given) are the other half of.
+  //
+  // Not done in CSS. A flex box cannot be told "fill the sheet, and clip the rules
+  // that do not fit" without a definite height, and giving this block one would
+  // put a long entry's own text under the certification instead of the rules: a
+  // signed sheet must never be able to clip a clinician's words to make room for
+  // ruled lines. The count is chosen before layout instead, so nothing on the sheet
+  // is ever cropped and the rules simply stop where the signature block begins.
+
   // Full-width rules at a writing pitch, not the two-column shorthand the
   // flowing tail uses: there is room here for lines somebody can actually write
   // a plan on.
@@ -1528,6 +1501,86 @@ $cont-line-height: 13px;
   font-weight: 500;
   text-transform: none;
   letter-spacing: 0;
+  color: $text-tertiary;
+}
+
+// ---- The entry recorded in the patient's record ----------------------------
+//
+// The practice's own words, printed where this sheet used to print blank rules
+// (see `ClinicalReport#renderClinicalNotes`). Set as a labelled entry rather than
+// as prose: a referrer reading a report looks for the diagnosis and the plan, and
+// a label column is what makes those two findable in one glance.
+.note_entry {
+  break-inside: avoid;
+  page-break-inside: avoid;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 0 2px;
+}
+
+// When the entry was recorded, and whether it has been amended since. A printed
+// copy of a clinical note that does not state this is not a copy of a record.
+.note_stamp {
+  font-size: 9px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: .02em;
+  color: $text-tertiary;
+}
+
+.note_fields {
+  margin: 0;
+  display: grid;
+  // 32mm: fits the longest of the five labels ("Treatment plan") on one line at
+  // 8.5px caps — a wrapped label in a two-column entry reads as a squeezed table
+  // on a signed document.
+  grid-template-columns: 32mm minmax(0, 1fr);
+  gap: 4px 8px;
+  align-items: baseline;
+}
+
+.note_field {
+  display: contents;
+}
+
+.note_label {
+  margin: 0;
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  line-height: 1.5;
+  color: $text-tertiary;
+}
+
+// The clinician's text, and only that. `pre-wrap`: their own line breaks are part
+// of what they wrote.
+.note_value {
+  margin: 0;
+  min-width: 0;
+  font-size: 10px;
+  line-height: 1.5;
+  color: $text-primary;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.note_retracted {
+  margin: 0;
+  font-size: 9.5px;
+  font-style: italic;
+  color: $text-secondary;
+}
+
+// The rules under a printed entry are for additions to it, and say so — without
+// this the sheet showed an entry and then three unexplained lines.
+.notes_more {
+  margin-top: 4px;
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: .1em;
+  text-transform: uppercase;
   color: $text-tertiary;
 }
 
@@ -1559,22 +1612,15 @@ $cont-line-height: 13px;
 }
 
 .sig_section {
-  page-break-inside: avoid;
-  margin-top: 18px;
+  @include ps-sig-section;
 }
 
 .sig_row {
-  display: flex;
-  align-items: flex-end;
-  gap: 28px;
-  margin-top: 14px;
+  @include ps-sig-row;
 }
 
 .sig_field {
-  flex: 1 1 0;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
+  @include ps-sig-field;
 }
 
 .sig_field__wide {
@@ -1583,14 +1629,7 @@ $cont-line-height: 13px;
 
 // The ruled line a clinician signs on. Ink-colored, prints exactly.
 .sig_line {
-  display: flex;
-  align-items: flex-end;
-  min-height: 30px;
-  padding: 0 2px 4px;
-  border-bottom: 1px solid $text-secondary;
-  font-size: 13px;
-  font-weight: 600;
-  color: $text-primary;
+  @include ps-sig-line;
 
   // The rule itself is the affordance here — the editable's own dashed
   // underline would double up with it on screen.
@@ -1610,12 +1649,7 @@ $cont-line-height: 13px;
 }
 
 .sig_caption {
-  margin-top: 5px;
-  font-size: 9.5px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: .09em;
-  color: $text-tertiary;
+  @include ps-sig-caption;
 }
 
 // ---- Footer ----------------------------------------------------------------

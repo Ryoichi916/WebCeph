@@ -22,9 +22,16 @@ import {
 
 // One measurement, one row — shared with the printed report so the same
 // tracing is typeset the same way on screen and on paper.
-import { groupFindings, alsoFindingLabel, AlsoFinding } from './grouping';
+import {
+  groupFindings, alsoFindingLabel, AlsoFinding, chipToneFor,
+} from './grouping';
 
-import { formatCaptureDate } from 'utils/records';
+import {
+  formatCaptureDate,
+  getTimepointToken,
+  getImpliedFilmSize,
+  FILM_SIZE_BAND,
+} from 'utils/records';
 
 import {
   hasNorm, isSdBand, normSd, rangeExcess,
@@ -238,38 +245,19 @@ export const displayDeviation = (
   unit: string, band?: NormBand,
 ): string => displayMinus(formatDeviation(value, mean, min, max, unit, band));
 
-/**
- * Whether a finding's conclusion is a clinically *normal* one. Drives the chip
- * colour on every surface that prints a finding — the Summary dialog, the
- * report's tables and its findings overview — so that one conclusion cannot
- * appear in three tints on three pages of one document.
- */
-export const isNormalIndication = (indication: Indication<Category>): boolean => (
-  indication === 'normal' ||
-  indication === 'class1' ||
-  indication === 'within_norm'
-);
-
-/**
- * Chip tone for a finding. Driven by the **indication**, never by the worst
- * severity in the group: the report used to tint the chip by the group's worst
- * star count, so "Growth pattern — Horizontal" printed amber under Björk and
- * red under Jarabak, one above the other on the same page, from the same
- * tracing. Severity still shows — on the value and deviation of the individual
- * row that carries it, where it belongs.
- */
-export type ChipTone = 'success' | 'neutral' | 'warn';
-
-export const chipToneFor = (indication: Indication<Category>): ChipTone => {
-  if (isNormalIndication(indication)) {
-    return 'success';
-  }
-  // A measurement this app states no norm for is not abnormal; it is ungraded.
-  if (indication === 'not_graded') {
-    return 'neutral';
-  }
-  return 'warn';
-};
+// The chip tone of a finding, and the order a list of them is read in, now live
+// beside `groupFindings` (see `./grouping`) — a pure module the records
+// dashboard's panel can import without pulling a dialog in with it. Re-exported
+// here because this is where every surface has always imported them from.
+export {
+  ChipTone,
+  HeadlineFinding,
+  FindingOrder,
+  isNormalIndication,
+  chipToneFor,
+  orderFindings,
+  findingOrderOf,
+} from './grouping';
 
 /**
  * The one-line citation for an analysis' norms: author, year and the sample
@@ -446,8 +434,16 @@ const neutralEntries = (
   return entries;
 };
 
-/** Symbol → footnote marker for the analysis' caveats (see `AnalysisCaveat`). */
-const caveatMarkers = (
+/**
+ * Symbol → footnote marker for the analysis' caveats (see `AnalysisCaveat`).
+ *
+ * Exported so every surface that tabulates these measurements marks the same
+ * rows with the same symbol: the records dashboard's findings panel showed
+ * NSAr, SArGo and ArGoMe as a film's top three findings *unmarked*, with the
+ * articulare caveat printed under them — three amber starred numbers met before
+ * the sentence saying they may be an artefact.
+ */
+export const caveatMarkers = (
   caveats: AnalysisCaveat[],
 ): { [symbol: string]: string | undefined } => {
   const markers: { [symbol: string]: string | undefined } = {};
@@ -481,7 +477,7 @@ const AlsoFindings = ({ also }: { also: AlsoFinding[] }) => (
             {/* The break opportunity is before the dash, not after it: in a
                 120px FINDING column the attribution wraps, and a dash left
                 hanging at the end of the heading reads as an unfinished line. */}
-            {` \u2014\u00A0${alsoFindingLabel(f.symbols)}`}
+            {` —\u00A0${alsoFindingLabel(f.symbols)}`}
           </span>
         </span>
         <span
@@ -573,6 +569,33 @@ const secondaryIconStyle: React.CSSProperties = {
   marginLeft: 10,
 };
 
+/**
+ * The app's timepoint badge: a filled pill carrying the label's first token,
+ * with the rest of a free-text label written beside it in caption type.
+ *
+ * One construction for one fact. This is the badge the records dashboard's
+ * timeline stamp uses; the whole label set inside a single pill (what this title
+ * row used to do) is the version that breaks on the labels a clinician actually
+ * types — "T2 post-treatment, post-RME" filled the pill, pushed the film date
+ * off the row, and read as a different kind of thing from the same timepoint on
+ * the dashboard.
+ */
+const renderTimepointBadge = (timepoint: string) => {
+  const token = getTimepointToken(timepoint);
+  if (token === null) {
+    return null;
+  }
+  const rest = timepoint.trim().slice(token.length).trim();
+  return (
+    <span className={classes.title_timepoint_group} title={timepoint}>
+      <span className={classes.title_timepoint}>{token}</span>
+      {rest !== '' ? (
+        <span className={classes.title_timepoint_note}>{rest}</span>
+      ) : null}
+    </span>
+  );
+};
+
 interface ViewerState {
   copied: boolean;
 }
@@ -599,8 +622,13 @@ export class AnalysisResultsViewer extends React.PureComponent<Props, ViewerStat
     const {
       open, onRequestClose, results, analysisId, landmarksBySymbol,
       needsScaleForLinear, timepoint, captureDate, provenance,
-      caveats, analysisContext,
+      caveats, analysisContext, scaleFactor, imageWidth, imageHeight,
     } = this.props;
+    // What this film's scale says it physically measures, and whether that is
+    // possible: the millimetre rows of this table are all derived from that
+    // number, and the records dashboard already flags it on the same film.
+    const filmSize = getImpliedFilmSize(imageWidth, imageHeight, scaleFactor);
+    const isScaleSuspect = filmSize !== null && !filmSize.isPlausible;
     const markers = caveatMarkers(caveats);
     const patientNote =
       provenance !== null && typeof provenance.patientNote === 'function'
@@ -640,10 +668,14 @@ export class AnalysisResultsViewer extends React.PureComponent<Props, ViewerStat
                   <span className={classes.title_badge}>{analysisName}</span>
                 ) : null}
                 {/* Which film these numbers came from — read off the record, so
-                    it is absent rather than invented when unrecorded. */}
-                {timepoint !== null ? (
-                  <span className={classes.title_timepoint}>{timepoint}</span>
-                ) : null}
+                    it is absent rather than invented when unrecorded.
+                    One timepoint badge across the app: the pill carries the
+                    label's first token ("T2" out of "T2 post-treatment"), the
+                    rest of it is written beside the pill. Set whole in the pill,
+                    a free-text label pushed the film date off the title row and
+                    disagreed with the records dashboard's own stamp for the same
+                    timepoint. */}
+                {timepoint !== null ? renderTimepointBadge(timepoint) : null}
                 {formatCaptureDate(captureDate) !== null ? (
                   <span className={classes.title_filmdate}>
                     Film {formatCaptureDate(captureDate)}
@@ -867,6 +899,19 @@ export class AnalysisResultsViewer extends React.PureComponent<Props, ViewerStat
                   {caveat.text}
                 </span>
               ))}
+              {isScaleSuspect && filmSize !== null ? (
+                // The mm rows above are present but derived from a scale that
+                // cannot be right — stated here rather than left for the reader
+                // to discover on the records dashboard.
+                <span className={classes.legend_note}>
+                  The image scale makes this film {filmSize.label} — outside the
+                  {' '}{FILM_SIZE_BAND.minMm}–{FILM_SIZE_BAND.maxMm} mm a
+                  cephalogram measures. Every millimetre value above is derived
+                  from that scale and is wrong by the same factor if it is; angles
+                  and ratios are unaffected. Re-calibrate from the ruler chip in
+                  the toolbar.
+                </span>
+              ) : null}
               {needsScaleForLinear ? (
                 // The mm measurements of this analysis are missing above, not
                 // normal — account for them instead of leaving a silent gap.

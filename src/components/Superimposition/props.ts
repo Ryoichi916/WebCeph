@@ -43,6 +43,20 @@ export type DispatchProps = { };
 
 export interface OwnProps {
   className?: string;
+  /**
+   * The pair this view should open on — the image ids of the earlier and the
+   * later film. The records dashboard passes the two visits whose interval was
+   * clicked, so a superimposition started from the chart arrives already
+   * comparing *those* two timepoints instead of the record's first and last.
+   *
+   * They are **initial** values only: they seed the view's own T1/T2 selection
+   * (see `State`), which the pickers in the chrome then own exactly as they do
+   * when the view is opened from the editor's toolbar. There is no second
+   * picker anywhere, and no id is trusted — one that is not on file falls back
+   * to the default pair through `getPair`.
+   */
+  initialT1Id?: string | null;
+  initialT2Id?: string | null;
   onRequestClose(): any;
 }
 

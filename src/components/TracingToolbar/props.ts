@@ -1,5 +1,30 @@
+import { PatientRecord } from 'store/reducers/workspace';
+
 export interface StateProps {
   canAutoPlot: boolean;
+  /**
+   * The record this image *is* — its type, timepoint, capture date, file name and
+   * thumbnail — so the editor can correct or remove it where it is being looked
+   * at. Correction and removal used to be mounted only on the records dashboard
+   * and on the read-only RecordViewer, which made "can this record be fixed from
+   * here?" a property of its *type*: a photograph carried both controls, the
+   * lateral cephalogram open in the tracing editor carried neither.
+   *
+   * Null while the open image is not part of the patient's record (no patient
+   * registered yet).
+   */
+  record: PatientRecord | null;
+  /** Every image of the open patient — the fallback tile a removal lands on. */
+  records: PatientRecord[];
+  /**
+   * The clinical notes of the open patient, keyed by the visit's timepoint label
+   * (@see StoreEntries['records.notes']).
+   *
+   * Read for one reason: the record menu's "Edit details" edits that very label,
+   * so it has to state what a relabelling does to the note filed at the visit —
+   * and carry the note across with the image. @see RecordsDashboard#handleSaveMeta
+   */
+  notes: { [timepointKey: string]: VisitNote };
   isAutoPlotting: boolean;
   /** Whether both reference points (Sella and Nasion) are placed. */
   canPlotFromReferences: boolean;
@@ -61,6 +86,16 @@ export interface DispatchProps {
   onSetScaleFactor(value: number): any;
   /** Clear the calibration for the current image. */
   onUnsetScaleFactor(): any;
+  /** Correct this image's type / timepoint / capture date. */
+  onSaveRecordMeta(meta: ImageRecordMeta): any;
+  /**
+   * Carry a visit's clinical note, with its whole amendment trail, onto the visit
+   * label this image has just been given — the same action the records dashboard
+   * dispatches. @see Events['REFILE_VISIT_NOTE']
+   */
+  onRefileVisitNote(from: string, to: string): any;
+  /** Drop this image from the record; see RecordsDashboard/props. */
+  onRemoveRecord(record: PatientRecord, fallbackWorkspaceId: string | null): any;
 };
 
 export type ConnectableProps = StateProps & DispatchProps;
