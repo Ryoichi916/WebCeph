@@ -237,10 +237,14 @@ export const buildOutlines = (
       pts.push([Ar.x, Ar.y]); // condyle / articulare (top of ramus)
     }
     pts.push([Go.x, Go.y]);
-    // Inferior border sags below the straight Go–Me chord.
-    const midx = (Go.x + Me.x) / 2;
-    const midy = (Go.y + Me.y) / 2;
-    pts.push([midx + f.h * 0.09 * f.down.x, midy + f.h * 0.09 * f.down.y]);
+    // Inferior border: on a real film the border runs close to the straight
+    // Go–Me chord — checked against the bundled sample, where the bone edge
+    // stays within ~2% of facial height of the chord (slightly above it near
+    // the antegonial region). The old 9% sag drew a bulge no mandible has.
+    const t = 0.6; // control point biased toward Me, where the border dips most
+    const cx = Go.x + (Me.x - Go.x) * t;
+    const cy = Go.y + (Me.y - Go.y) * t;
+    pts.push([cx + f.h * 0.02 * f.down.x, cy + f.h * 0.02 * f.down.y]);
     pts.push([Me.x, Me.y]);
     if (Gn) {
       pts.push([Gn.x, Gn.y]);
@@ -271,9 +275,12 @@ export const buildOutlines = (
     const f = facialFrame(N, Me);
     const k = f.h / 388; // demo-calibrated pixel offsets, scaled to face size
     const off = (dx: number, dy: number): Point2 => [S.x + dx * k, S.y + dy * k];
+    // Sized against the bundled sample's own fossa (~10 mm wide, ~6 mm deep at
+    // that film's scale): the previous offsets drew a U half again larger than
+    // the anatomy it was supposed to trace.
     outlines.push({
       id: 'sella',
-      points: [off(-23, -12), off(-20, 18), off(-2, 33), off(22, 20), off(26, -14)],
+      points: [off(-17, -13), off(-15, 8), off(-1, 17), off(14, 9), off(18, -15)],
       closed: false,
     });
   }

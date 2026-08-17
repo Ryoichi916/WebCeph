@@ -79,8 +79,12 @@ export class TracingViewer extends React.PureComponent<Props, State> {
       isHighlightMode,
       getPropsForLandmark,
     } = this.props;
-    const minHeight = Math.max(canvasHeight, imageHeight);
-    const minWidth = Math.max(canvasWidth, imageWidth);
+    // Surface = max(canvas, rendered film) — the raw image dimensions must not
+    // leak in here, or a fitted high-resolution film inflates the svg beyond
+    // the viewport and the visible area shows a corner of empty canvas.
+    const { scale } = this.props;
+    const minHeight = Math.max(canvasHeight, imageHeight * scale);
+    const minWidth = Math.max(canvasWidth, imageWidth * scale);
     return (
       <div className={className} style={{ height: minHeight, width: minWidth }}>
         <svg
@@ -185,8 +189,12 @@ export class TracingViewer extends React.PureComponent<Props, State> {
     // Center the (scaled) image inside the drawing surface so the radiograph
     // is the visual hero instead of hugging the top-left corner. Mouse math is
     // unaffected: all conversions use the image element's bounding rect.
-    const surfaceWidth = Math.max(canvasWidth, imageWidth);
-    const surfaceHeight = Math.max(canvasHeight, imageHeight);
+    // The surface is the larger of the canvas and the *rendered* film
+    // (image × scale) — sizing it by the raw image put a fitted high-resolution
+    // film (e.g. the 1578×2089 bundled sample) inside a surface bigger than the
+    // viewport, and the viewport then showed one corner of mostly-empty canvas.
+    const surfaceWidth = Math.max(canvasWidth, imageWidth * scale);
+    const surfaceHeight = Math.max(canvasHeight, imageHeight * scale);
     const translateX = Math.max(0, (surfaceWidth - imageWidth * scale) / 2);
     const translateY = Math.max(0, (surfaceHeight - imageHeight * scale) / 2);
     transform += ` translate(${translateX}, ${translateY}) `;
