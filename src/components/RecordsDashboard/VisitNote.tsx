@@ -121,9 +121,16 @@ export default class VisitNoteBlock
             <span>Clinical note</span>
           </span>
           {/* When it was written, who by, and — only when it has been — that it
-              was amended, how often, and when last. On screen and on paper. */}
-          <span className={classes.note_stamp}>
+              was amended, how often, and when last. On screen and on paper — in
+              two versions, because an entry with **no** stored author says so
+              here on screen (with the field that closes the gap one press away in
+              the amendment dialog) and says it once for the whole sheet on paper.
+              @see utils/visitNotes#formatVisitNoteProvenance */}
+          <span className={cx(classes.note_stamp, classes.note_stamp__screen)}>
             {formatVisitNoteProvenance(reading)}
+          </span>
+          <span className={cx(classes.note_stamp, classes.note_stamp__print)}>
+            {formatVisitNoteProvenance(reading, false)}
           </span>
           <span className={classes.note_spacer} />
           <button
@@ -427,8 +434,10 @@ export const UnmatchedVisitNotes = (
       </h4>
       <p className={classes.orphans_hint}>
         Each was written against the timepoint named below, and no image on file
-        carries that label now — a visit relabelled, or its images removed. Nothing
-        has been deleted: file each note at the visit it belongs to.
+        carries that label now — a visit relabelled, its images removed, or an
+        entry that arrived with a case file for a visit that already had one of
+        this chart's own. Nothing has been deleted or overwritten: file each note
+        at the visit it belongs to.
       </p>
     </div>
     {notes.map(({ key, note }) => {
@@ -465,7 +474,24 @@ export const UnmatchedVisitNotes = (
               ))}
             </dl>
           )}
-          {destinations.length > 0 ? (
+          {destinations.length === 0 ? (
+            /**
+             * Nowhere to file it — and said so, because the heading above tells
+             * the reader to "file each note at the visit it belongs to" and the
+             * panel rendered no control and no explanation underneath it. This
+             * is exactly the state a merge import produces when every visit on
+             * file already holds an entry of this chart's own: the incoming
+             * entry has nowhere to go, and no path in this app overwrites a
+             * clinician's note to make room for one.
+             */
+            <p className={classes.orphan_nowhere}>
+              Every visit on file already holds an entry of its own, so there is
+              nowhere to file this without replacing one — and nothing here
+              replaces a written entry. To fold this into the record, amend that
+              visit's entry with what this one says. Nothing is deleted meanwhile:
+              this entry stays here, in full, with its own trail.
+            </p>
+          ) : (
             <div className={classes.orphan_refile}>
               <span className={classes.orphan_refile_label}>File this note at</span>
               {destinations.map((destination) => (
@@ -482,7 +508,7 @@ export const UnmatchedVisitNotes = (
                 </button>
               ))}
             </div>
-          ) : null}
+          )}
         </div>
       );
     })}

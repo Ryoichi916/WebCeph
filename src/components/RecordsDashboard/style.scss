@@ -1,4 +1,8 @@
 @import 'src/_variables.scss';
+// The house style every sheet this app prints is set in — the masthead, the facts
+// grid and the signature block this case sheet now shares with the clinical
+// report. @see components/_printsheet.scss
+@import 'src/components/printsheet';
 
 // The page column: one width and one gutter, shared by the page bar and the page
 // so the two can never disagree about where the left edge of this surface is.
@@ -37,6 +41,17 @@ $page-gutter-narrow: 12px;
 // fluid so the column lands on a small set of known widths a layout can be judged
 // at, each step keeping ≥30px of page margin either side, and capped at 1720
 // because a records table set 1900px wide stops being one reading.
+// …and the first step is at 1440 itself, the width a clinic monitor is most
+// often set to and the width this surface was reviewed at: capped at 1340 flat
+// there, the page left 50px of white down each side while the nine-frame
+// composite beside the coverage rail was drawn at 852px. 1380 keeps the 30px
+// margin every step below promises and hands the difference to the frames.
+@media (min-width: 1440px) {
+  .surface {
+    --page-max: 1380px;
+  }
+}
+
 @media (min-width: 1500px) {
   .surface {
     --page-max: 1440px;
@@ -75,9 +90,32 @@ $page-gutter-narrow: 12px;
   margin: 0 auto;
   display: flex;
   align-items: center;
-  gap: 14px;
-  height: 56px;
-  padding: 0 $page-gutter;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  // A **floor**, not a height: the bar's controls are allowed to wrap to a second
+  // line at a narrow window (see `.pagebar_actions`), and a fixed 56px box turned
+  // that into a row of buttons hanging out of the bar.
+  min-height: 56px;
+  padding: 6px $page-gutter;
+}
+
+// The bar's controls, as one group.
+//
+// Held as loose flex children of the bar, the last of them — the surface's primary
+// action — was the one that paid for every width the bar did not have: measured at
+// 1024 and 1152, its wrapper stood 62px tall against the 36px button inside it and
+// bottomed 3px below the bar's own edge, so a shadowed white shelf hung out of the
+// toolbar, and the label clipped to "Add". Grouped, the four controls wrap
+// together, keep the bar's own baseline, and give up their labels (below) before
+// anything is cut.
+.pagebar_actions {
+  flex: 0 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .back {
@@ -176,6 +214,37 @@ $page-gutter-narrow: 12px;
   flex: 1 1 auto;
 }
 
+// ---- What the bar gives up, and in what order ------------------------------
+// A page bar has one job at every window: name where you are, and get you out.
+// Measured at 1280–1366 — an ordinary clinic laptop — it truncated three things at
+// once: the exit's destination, the surface's own subtitle mid-word ("its images
+// and its clinic…", scrollWidth 291 against clientWidth 253) and the primary
+// action's label. So the order is stated here rather than left to whichever flex
+// item happened to be last.
+//
+// 1. Below ~1400px the subtitle goes. It is a sentence about the surface, read
+//    once; ellipsised mid-word it is neither read nor readable, and the heading
+//    above it and the page below both say what this screen is.
+@media (max-width: 1399px) {
+  .pagebar_caption {
+    display: none;
+  }
+}
+
+// 2. Below ~1200px the three secondary actions keep their marks and drop their
+//    labels. Each carries an `aria-label` and a tooltip naming the act, which is
+//    what a mark-only control owes its reader; the primary action keeps its label
+//    at every width, because "Add" is not an act.
+@media (max-width: 1199px) {
+  .action_label {
+    display: none;
+  }
+
+  .print_action {
+    padding: 0 9px;
+  }
+}
+
 // A flex column, so the page inside it can be handed the window's full height
 // (see `.page`) instead of resolving a percentage against nothing.
 .scroll {
@@ -231,6 +300,85 @@ $page-gutter-narrow: 12px;
 // at the foot of this file.
 .print_head {
   display: none;
+}
+
+// ---- The letterhead --------------------------------------------------------
+// Whose practice this chart is printed under: the one identity this app stores
+// (`ClinicalReport/letterhead`), typed with the report's own field, on the
+// surface a clinic actually prints its charts from.
+//
+// A quiet strip and not a card: it is a property of the *document*, not of the
+// patient, and it must not read as a fourth demographic beside date of birth and
+// sex. It sits directly under the identity band because that is where the
+// printed sheet carries it — the running head, above the record itself.
+//
+// Screen only. On paper the running head prints these very words on every sheet
+// (see `renderPrintHead`), and an editable field's dashed rule is a control.
+.letterhead {
+  flex: 0 0 auto;
+  box-sizing: border-box;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  padding: 0 4px;
+  margin-top: -8px;
+  font-family: $font-stack;
+}
+
+.letterhead_key {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: $text-tertiary;
+  white-space: nowrap;
+}
+
+.letterhead_fields {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  min-width: 0;
+}
+
+// The practice name carries the weight the printed masthead gives it — a chart
+// reader has to see whose record this is (the same argument `.ps_practice`
+// makes on paper).
+.letterhead_clinic {
+  font-size: 13px;
+  font-weight: 600;
+  color: $primary-700;
+}
+
+.letterhead_person {
+  font-size: 12.5px;
+  color: $text-secondary;
+}
+
+.letterhead_license {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.letterhead_license_key {
+  font-size: 11px;
+  color: $text-tertiary;
+}
+
+.letterhead_sep {
+  font-size: 12px;
+  color: $text-disabled;
+}
+
+.letterhead_note {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: $text-tertiary;
 }
 
 .identity {
@@ -567,7 +715,15 @@ $page-gutter-narrow: 12px;
   }
 }
 
+// mui's `RaisedButton` root is an `inline-block` with no height of its own, so its
+// box was the *line box* of the 36px button inside it — 62px, measured, hanging
+// 3px out of a 57px bar with a shadow under it. It is given the button's own
+// height and made a flex item of the group, which is all this ever needed.
 .primary_action {
+  flex: 0 0 auto;
+  display: inline-flex !important;
+  align-items: center;
+  height: 36px;
   border-radius: 6px !important;
 
   button {
@@ -1650,14 +1806,60 @@ $band-gap-pad: 4px;
   display: none;
 }
 
+// **Why this pane sticks instead of being given back to the photographs.**
+// The 244px it costs is paid once per window, and at 1440 the chronology beside
+// it still draws a nine-frame composite at 852px (199px per facial frame). Give
+// the column back and the frames grow by roughly a quarter — worth having, but
+// bought by deleting the one reading of the record that no other element on this
+// surface gives: "does this case have a panoramic at all", answered across every
+// visit at once. The per-visit slot rows answer only "what is missing at T2".
+//
+// What was actually broken is that the pane stopped answering as soon as it was
+// scrolled past: a 3100px chronology left ~245px × the whole scroll of empty
+// white down the right of the window, and the reader had to scroll back to the
+// top to consult a summary of the case they were in the middle of reading. So it
+// sticks — it is a rail, and a rail that scrolls away is a header. The frames get
+// their width from the page column instead, which steps with the window (see
+// `--page-max`, now including a step at 1440 itself).
+//
+// Sticky on an inner box, not on `.coverage` itself: the pane is a `stretch` flex
+// item precisely so its border and its ground run the full height of the well,
+// and a sticky element cannot both stretch to its container and move inside it.
 @media (min-width: 1200px) {
+  .coverage_sticky {
+    position: sticky;
+    // The divider between the records and the rail. @see `.coverage`
+    padding-left: 16px;
+    margin-left: -16px;
+    border-left: 1px solid $border;
+    // Clear of the panel's own floating head (`.records_head`), which is sticky
+    // at the top of the same scrollport and would otherwise cut this pane's
+    // heading in half.
+    top: 45px;
+    display: flex;
+    flex-direction: column;
+    // A case with more image types than window keeps its own scrollbar rather
+    // than pushing its closing qualifier off the bottom of the screen.
+    max-height: calc(100vh - 200px);
+    overflow-y: auto;
+  }
+
+  // …and the **rule travels with the rail**, rather than running the whole height
+  // of the well.
+  //
+  // The pane still has to stretch — a sticky box cannot both fill its container
+  // and move inside it — but a 1px divider down 244 × 850px of white beside a case
+  // is what made the column read as a dead one: a bordered, empty box. The rail's
+  // own content carries the rule now (`.coverage_sticky`), so what lies below it is
+  // the panel's own ground and nothing else. The reading it holds grew at the same
+  // time — the case's tracing, calibration, scale-check and clinical-entry state
+  // (see `renderCoverageWork`), which is what a rail beside a long case is for.
   .coverage {
     box-sizing: border-box;
     flex: 0 0 244px;
     display: flex;
     flex-direction: column;
     padding: 14px 16px 16px;
-    border-left: 1px solid $border;
     background: $bg-surface;
   }
 }
@@ -1690,6 +1892,27 @@ $band-gap-pad: 4px;
 .coverage_list {
   margin: 0;
   padding: 0;
+}
+
+// The rail's second block — what has been *done* to this case, under what it holds
+// (see `renderCoverageWork`). Its own head, so the two readings are not one list of
+// nine rows with two vocabularies in it.
+.coverage_work {
+  margin-top: 14px;
+}
+
+.coverage_work_value {
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: $text-secondary;
+  text-align: right;
+
+  // A scale that cannot be right is the one thing in this column that is not a
+  // count: it is the same amber the film's own chip and the panel's tally wear.
+  &__warn {
+    color: $warn;
+  }
 }
 
 // The type, and the visits that hold it. The tokens drop to a line of their own
@@ -2298,20 +2521,24 @@ $tp-gap: 16px;       // gutter -> cards
   color: $text-tertiary;
 }
 
-// Three columns inside the row: the film, what the film is and how far it has
-// got, and the file's own technicals pulled to the row's right edge.
+// Three columns inside the row: the film, everything the row says about it, and
+// the chevron that opens it.
 //
-// The main column is `max-content`, not `1fr`: given the fraction it resolved to
-// ~659px at 1440 while holding ~355px of content, so ~300px of void opened in the
-// middle of every row — mid-sentence, between a film's name and its scale, on
-// every line of the page. The `1fr` is now the *gap* track, so the slack falls at
-// the margin where slack belongs and the technicals line up down the page.
+// It was four, with the technicals anchored to the row's right edge behind a
+// page-wide hairline — which is how ~280px of void came to sit in the middle of
+// every image row on the page, at every window. What the record says about a film
+// is one run of type now (`.card_facts`), and the row's slack falls once, before
+// the chevron, where a list row's slack belongs.
 .card_open {
   flex: 1 1 auto;
   min-width: 0;
   display: grid;
-  grid-template-columns: auto minmax(0, max-content) 1fr auto;
-  grid-template-areas: 'thumb main tech go';
+  // Three tracks now, not four: the film, everything the row says about it, and
+  // the chevron. The technicals used to be a right-anchored fourth track behind a
+  // page-wide hairline, which put ~280px of nothing across the middle of every
+  // image row on the page (see `.card_facts`).
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas: 'thumb main go';
   align-items: center;
   gap: 0 12px;
   padding: 8px;
@@ -2409,10 +2636,34 @@ $tp-gap: 16px;       // gutter -> cards
   grid-area: main;
   min-width: 0;
   display: flex;
-  flex-direction: row;
-  align-items: baseline;
+  // A column of two rows — what the film is, then what it is in and what it
+  // measures — rather than one wrapping row of blocks. @see `.card_facts`
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+// The film's state and its technicals, on one wrapping row and reading left to
+// right from the title above them: "Traced · 16 of 16 Downs landmarks ·
+// Calibrated · SCALE 0.104 mm/px film 83 × 100 mm · PIXELS 800 × 960 ·
+// test-ceph.jpg".
+//
+// This is the hole the row used to carry. The technicals were a right-anchored
+// column with a 240px floor and a hairline down their left edge, so that the rule
+// would be one page-wide column rather than landing wherever each row's own facts
+// happened to end — which fixed a ragged rule and bought a fixed one: the title
+// and chips ended at x≈940, the column began at x≈1225, and ~280px of every row on
+// the page was empty. (At *every* window, because the page column is capped: the
+// gap was the same on a 1440 laptop as on a 1920 monitor.) On one row there is
+// nothing to align and nothing to leave empty; the slack falls once, between the
+// facts and the chevron, where a list row's slack belongs.
+.card_facts {
+  align-self: stretch;
+  min-width: 0;
+  display: flex;
+  align-items: center;
   flex-wrap: wrap;
-  gap: 6px 12px;
+  gap: 4px 16px;
 }
 
 .card_head {
@@ -2457,27 +2708,17 @@ $tp-gap: 16px;       // gutter -> cards
 // separates what the record *is* from what the file is. Right-anchored
 // (`justify-self: end`), so the row's slack falls between the film's state and
 // this rule instead of inside the sentence that names the film.
+// The technicals, as a run of the facts row rather than a column at the row's
+// right: no floor, no hairline, no anchor. Each fact keeps its own key and value
+// (see `.fact`), which is what makes them readable in a line — the rule was never
+// what separated them.
 .card_tech {
-  grid-area: tech;
-  justify-self: end;
-  // One column for the whole page, not one per row: right-anchored alone, the
-  // hairline landed wherever that row's own facts happened to end — 1029px on a
-  // ceph, 1137px on the photograph directly beneath it inside the *same* visit
-  // panel, so the panel had a ragged rule down its middle. The floor is the
-  // widest technicals a record carries ("SCALE 0.104 mm/px · film 83 × 100 mm"),
-  // so every rule on the page is one line and the row's slack falls to the left
-  // of it.
-  min-width: 240px;
-  // Stretched, so the hairline is the height of the row rather than a 50px stub
-  // floating in the middle of it.
-  align-self: stretch;
+  min-width: 0;
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: center;
-  gap: 4px;
-  padding-left: 16px;
-  border-left: 1px solid $border;
+  flex-direction: row;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 2px 14px;
 }
 
 .fact {
@@ -2549,11 +2790,9 @@ $tp-gap: 16px;       // gutter -> cards
 // Where the value came from, where that is not this film: "copied from T1 ·
 // 2024-04-10" under a scale carried over from a sibling film.
 //
-// A whole line of the row (`flex-basis: 100%`) and not a third clause on it. The
-// technicals column is one width for the whole page (see `.card_tech`), and a
-// second qualifier on the SCALE line widened one card's column and left the panel
-// with a ragged rule down its middle — the exact defect that column's floor exists
-// to prevent. Quiet, because it qualifies the number rather than competing with it,
+// A whole line of the row (`flex-basis: 100%`) and not a third clause on it: a
+// second qualifier set inline after "film 83 × 100 mm" reads as part of the film's
+// size. Quiet, because it qualifies the number rather than competing with it,
 // and it prints: on a filed chart the difference between a measured scale and an
 // inherited one is chart integrity, not a screen affordance.
 .fact_origin {
@@ -5349,35 +5588,13 @@ $tc-band-outer: #F1F7FC;
     gap: 12px 24px;
   }
 
-  // Below a clinic monitor's width a technicals column at the row's right edge
-  // would take the chip row's space, so the row becomes two lines in one column
-  // beside the film: the record above, the file's own facts as a line under it.
-  // Same DOM, same reading order — this is also the layout the printed sheet
-  // gets, whose page box is ~700px wide.
+  // The card's row needs nothing of its own here any more: the technicals are a
+  // run of the facts row at *every* width now (see `.card_facts`), so a narrow
+  // window simply wraps that row where it always would. What was here was a second
+  // grid layout ('thumb tech go' under 'thumb main go') that existed only because
+  // the wide layout anchored the technicals to the row's right edge.
   .card_open {
-    grid-template-columns: auto minmax(0, 1fr) auto;
-    grid-template-areas:
-      'thumb main go'
-      'thumb tech go';
     gap: 4px 12px;
-  }
-
-  .card_tech {
-    justify-self: stretch;
-    align-self: auto;
-    // The technicals are a line under the record here, not a column beside it,
-    // so the wide layout's column floor goes with the axis.
-    min-width: 0;
-    flex-direction: row;
-    flex-wrap: wrap;
-    align-items: baseline;
-    // …packed against the card's text column, not centred in it: `center` is
-    // what the wide layout needs vertically and is exactly wrong once the axis
-    // turns, where it indented the facts line 90px off the film's name.
-    justify-content: flex-start;
-    gap: 2px 14px;
-    padding-left: 0;
-    border-left: none;
   }
 
   .records_head {
@@ -5632,67 +5849,78 @@ $tc-band-outer: #F1F7FC;
   }
 
   .print_head_inner {
+    display: block;
+    padding: 0 0 6pt;
+  }
+
+  // ---- The sheet's masthead and facts grid --------------------------------
+  // Set by the shared print stylesheet (`components/_printsheet.scss`), at the
+  // scale a **running head** can afford: this block repeats on every sheet of the
+  // chart, so its height is paid once per side of paper. The report's own sheet
+  // sets the identical mixins at 1.
+  //
+  // What it replaces: a 8pt grey run of dot-separated facts under an uppercase
+  // "CASE RECORDS" label, with the practice as the third and palest line — beside
+  // a report whose first sheet opens with a 17pt blue practice masthead and a
+  // bordered patient grid. Two documents from one app, filed side by side in one
+  // chart, that read as paperwork from two different practices.
+  $ps: .62;
+
+  .ps_masthead {
+    @include ps-masthead($ps);
+  }
+
+  .ps_mast_left {
     display: flex;
-    align-items: baseline;
-    flex-wrap: wrap;
-    gap: 2pt 10pt;
-    padding: 0 0 5pt;
-    margin-bottom: 7pt;
-    border-bottom: 1px solid $border-strong;
+    flex-direction: column;
+    min-width: 0;
   }
 
-  .print_head_label {
-    font-size: 8pt;
-    font-weight: 600;
-    letter-spacing: .08em;
-    text-transform: uppercase;
-    color: $text-tertiary;
+  .ps_mast_right {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    flex: 0 0 auto;
   }
 
-  .print_head_name {
-    font-size: 11pt;
-    font-weight: 600;
-    color: $text-primary;
+  .ps_practice {
+    @include ps-masthead-practice($ps);
   }
 
-  .print_head_facts {
-    font-size: 9pt;
-    font-variant-numeric: tabular-nums;
-    color: $text-secondary;
+  .ps_clinician {
+    @include ps-masthead-clinician($ps);
   }
 
-  // Whose practice holds the record — the one letterhead this app stores, the
-  // same the report's masthead and the superimposition's signature block print.
-  // Its own line of the running head, because it is a fact about the *document*
-  // rather than about the patient. (When this copy was printed is in the running
-  // foot; see `renderPrintPageStyle`.)
-  .print_head_clinic {
-    flex: 1 1 100%;
-    font-size: 8.5pt;
-    color: $text-tertiary;
+  .ps_kicker {
+    @include ps-masthead-kicker($ps);
   }
 
-  // …and the practice itself is not a footnote. Set inside that line as one run
-  // of 8.5pt tertiary grey with the clinician and the license number, the name of
-  // the practice holding the record was the smallest, palest type on the sheet —
-  // while the report's first sheet gives the same practice a masthead. A chart
-  // reader has to be able to see whose record this is, so the practice takes the
-  // report's masthead colour and a weight, and the clinician's line stays quiet
-  // behind it.
-  .print_head_practice {
-    font-size: 9.5pt;
-    font-weight: 600;
-    color: $primary-700;
+  .ps_date {
+    @include ps-masthead-date($ps);
   }
 
-  .print_head_clinician {
-    color: $text-tertiary;
+  .ps_facts {
+    @include ps-facts-block($ps);
   }
 
-  .print_head_practice + .print_head_clinician::before {
-    content: '·';
-    margin: 0 4pt;
-    color: $text-disabled;
+  .ps_row {
+    @include ps-facts-row;
+  }
+
+  .ps_cell {
+    @include ps-facts-cell($ps);
+  }
+
+  .ps_label {
+    @include ps-facts-label($ps);
+  }
+
+  .ps_value {
+    @include ps-facts-value($ps);
+  }
+
+  .ps_note {
+    @include ps-facts-note($ps);
   }
 
   // Chrome: the way out of a screen, and the actions that change the record.
@@ -5713,6 +5941,11 @@ $tc-band-outer: #F1F7FC;
   .pagebar,
   .band,
   .identity,
+  // …and the letterhead strip with them: the running head prints the practice,
+  // the clinician and the license on *every* sheet, so printing the editable
+  // strip as well would set the same three facts twice on sheet 1 — the second
+  // time under an uppercase key and a dashed edit rule nobody can type into.
+  .letterhead,
   .primary_action,
   .add_entry,
   .card_actions,
@@ -5741,9 +5974,6 @@ $tc-band-outer: #F1F7FC;
     box-shadow: none !important;
   }
 
-  .group_cards {
-    box-shadow: none;
-  }
 
   // …and where a control was standing in for a missing value, the value's
   // absence is printed instead.
@@ -5839,8 +6069,33 @@ $tc-band-outer: #F1F7FC;
     page-break-inside: avoid;
   }
 
-  .records {
+  // ---- (3) A box on paper may not fall off the bottom of the sheet ---------
+  //
+  // Both of this surface's boxes — the records panel and each visit's own group of
+  // cards — are rounded, bordered, elevated *screen* panels. Fragmented by a page
+  // break, a bordered box prints its left and right rules to the sheet's edge and
+  // reopens on the next sheet with no top rule at all: measured on a dense case,
+  // two rules ran off the foot of sheet 1 at x≈50 and x≈780 and the continuation
+  // opened borderless. To whoever the chart is sent, that is not a box that
+  // continues — it is a printing failure.
+  //
+  // `box-decoration-break: clone` is the other answer and Blink does not implement
+  // it for block fragmentation, so the **side rules come off** and the horizontal
+  // ones stay: a top rule where the box opens, a bottom rule where it closes, and
+  // nothing to run off an edge. Those two survive fragmentation correctly by
+  // definition (the top prints on the first fragment, the bottom on the last), and
+  // a visit is separated from the next by its own stamp line — which repeats the
+  // visit's label, its day and the patient's age at it, so a run continuing onto a
+  // fresh sheet is readable where it lands.
+  .records,
+  .group_cards {
+    border-left: none;
+    border-right: none;
+    border-radius: 0;
     box-shadow: none;
+    // …and nothing to clip: `overflow: hidden` on a fragmented box is one more way
+    // for a rule to be cut rather than ended.
+    overflow: visible;
   }
 
   // Screen devices: the coverage pane is a wide-window reading of the record that
@@ -5887,23 +6142,20 @@ $tc-band-outer: #F1F7FC;
     display: none;
   }
 
-  // The document is titled by the running head at the top of every sheet
-  // ("CASE RECORDS"), so the panel's own heading 12mm below it — "Case
-  // records" — printed the name of the document twice on every first sheet. On
-  // the empty chart those were two of the three lines of ink on an otherwise
-  // blank A4. The running head owns the document's name, exactly as it owns the
-  // patient's identity (which is why the identity band is print-hidden above);
-  // the count chip beside this heading stays, because "2 on file" is a fact the
-  // head does not carry.
-  .records_title {
-    display: none;
-  }
-
-  // …and with the heading gone the bar is one line — the count — so it is set as
-  // one line rather than keeping the 9pt/12pt a screen bar needs to clear a 15px
-  // heading.
+  // **The panel's head comes off the sheet entirely.**
+  //
+  // The document is titled by the running head at the top of every sheet, which
+  // also carries the patient's identity — so the panel's own heading 12mm below it
+  // ("Case records") printed the name of the document twice on every first sheet.
+  // With the heading hidden, what was left of the bar was the *screen's* count
+  // chip: a rounded blue pill reading "12 images on file", alone inside a
+  // full-width bordered strip, 730 × 34px of sheet 1 spent on one piece of web
+  // chrome. A UI pill is not a printed fact — and the count itself now prints in
+  // the running head's facts grid, on every sheet, keyed and set as the fact it is
+  // (see `renderPrintHead`).
+  .records_title,
   .records_head {
-    padding: 3pt 12pt 2pt;
+    display: none !important;
   }
 
   // The panel's closing block, printed inside the last visit's own group so it
@@ -5956,6 +6208,42 @@ $tc-band-outer: #F1F7FC;
     letter-spacing: .06em;
     text-transform: uppercase;
     color: $text-tertiary;
+  }
+
+  // ---- (6) The sheet's signature block -------------------------------------
+  // The clinical report's certification, at the tail of the case sheet, set by the
+  // same shared mixins (`components/_printsheet.scss`). A document a practice
+  // sends to a referrer with three clinical entries on it and nothing to sign is
+  // not a signed copy of anything. @see renderPrintCertification
+  .ps_sig {
+    @include ps-sig-section($ps);
+  }
+
+  .ps_sig_label {
+    @include ps-section-label($ps);
+    // A run of the tail rather than a heading with the report's 26px of air over
+    // it: this block closes a sheet that has just tallied itself.
+    margin: 4pt 0 0;
+  }
+
+  .ps_sig_row {
+    @include ps-sig-row($ps);
+  }
+
+  .ps_sig_field {
+    @include ps-sig-field;
+  }
+
+  .ps_sig_field__wide {
+    flex: 1.7 1 0;
+  }
+
+  .ps_sig_line {
+    @include ps-sig-line($ps);
+  }
+
+  .ps_sig_caption {
+    @include ps-sig-caption($ps);
   }
 
   // See `.chip_more`: the instruction comes off the chip, and the reason prints
@@ -6147,12 +6435,74 @@ $tc-band-outer: #F1F7FC;
     font-size: 8pt;
   }
 
-  // The technicals give up a little of their floor to the chips above: the column
-  // is sized on paper to the widest line it actually holds ("SCALE 0.104 mm/px ·
-  // film 83 × 100 mm"), not to the 240px a 1440px window needs.
+  // ---- (4) Nothing clinical on this sheet is carried by colour alone --------
+  //
+  // A practice prints its charts on the mono laser in the corridor. Greyscaled,
+  // every chip on this sheet was the same object: "Calibrated" (green) printed
+  // identically to "Traced" (green) and — the one that matters — to "Not
+  // calibrated" (amber), and the amber "film 83 × 100 mm" that says the millimetre
+  // values may be wrong was indistinguishable from ordinary bold text. A chart's
+  // one warning about its own measurements cannot be a hue.
+  //
+  // So each state carries a **shape**: a settled reading is a hairline neutral
+  // outline at normal weight; a reading that needs work is a rule in its own ink at
+  // full weight, opened by a warning mark; a film that can never be measured is
+  // dashed. The tints stay — they are what makes a film findable in a stack of
+  // sheets on a colour printer — but nothing depends on them.
+  .card_chips > .chip__ok {
+    border: 1px solid $border-strong;
+    font-weight: 500;
+  }
+
+  .card_chips > .chip__muted {
+    border: 1px dashed $border-strong;
+    font-weight: 500;
+  }
+
+  .card_chips > .chip__partial,
+  .card_chips > .chip__todo {
+    border: 1px solid currentColor;
+    font-weight: 700;
+  }
+
+  .card_chips > .chip__partial::before,
+  .card_chips > .chip__todo::before {
+    content: '\26A0';
+    margin-right: 3pt;
+    font-weight: 700;
+  }
+
+  // …and the flagged reading itself: the implied film size printed in amber under
+  // a calibration that cannot be right. The mark is the same one the chips carry,
+  // and the sheet's closing CHECK SCALE note (see `renderRecordsNotes`) is what
+  // names it — one mark, explained once, on the one sheet-wide claim that a
+  // millimetre on this film may not be a millimetre.
+  .fact_note__warn::before {
+    content: '\26A0';
+    margin-right: 2.5pt;
+  }
+
+  .fact_note__warn {
+    // Bold *and* ruled: at 7.5pt an amber note greyscales to the same ink as the
+    // bold value beside it.
+    font-weight: 700;
+    text-decoration: underline;
+    text-decoration-style: dotted;
+    text-underline-offset: 1.5pt;
+  }
+
+  // On paper the technicals are the same run of the facts row the screen sets
+  // (see `.card_facts`) — a floor on them here would only force the row to wrap
+  // where it need not.
   .card_tech {
     gap: 1pt 10pt;
-    min-width: 150pt;
+    min-width: 0;
+  }
+
+  // …and the row itself closes up: 8pt between the state of the film and what it
+  // measures, where the screen sets 16.
+  .card_facts {
+    gap: 1pt 8pt;
   }
 
   // Without the pills' edges, five type names in a row are one run of words:

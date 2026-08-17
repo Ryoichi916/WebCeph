@@ -200,6 +200,23 @@ export const hasImportFailed = createSelector(
   (getSettings) => (workspaceId: string) => getSettings(workspaceId).importError !== null,
 );
 
+/**
+ * Why the last import into this rail tile failed, or null.
+ *
+ * `IMPORT_FILE_FAILED` was being stored here and read by nothing that renders —
+ * so a case file that broke halfway through changed the chart not at all and
+ * said nothing at all. The case-file dialog reads this and stays open until the
+ * import resolves, so the reason reaches the person who chose the file.
+ * @see components/CaseFile
+ */
+export const getImportError = createSelector(
+  getWorkspaceSettingsById,
+  (getSettings) => (workspaceId: string) => {
+    const settings = getSettings(workspaceId);
+    return settings !== undefined ? settings.importError : null;
+  },
+);
+
 export const isImporting = createSelector(
   getWorkspaceSettingsById,
   (getSettings) => (workspaceId: string) => getSettings(workspaceId).isImporting,

@@ -88,6 +88,27 @@ export const getScaleOrigin = (state: StoreState) => state[KEY_SCALE_ORIGIN];
 const STEPPER_WIDTH = 320; // .stepper in TracingEditor/style.scss
 const TOOLBAR_HEIGHT = 44; // .root in TracingToolbar/style.scss
 
+/**
+ * How wide the stepper panel is at this window width — **mirrors the media
+ * queries on `.stepper` in `TracingEditor/style.scss`**, which is the authority.
+ *
+ * The panel takes the surplus width of a wide monitor because the film cannot: a
+ * canvas fits its image with `min(w/iw, h/ih)`, so a 4:5 cephalogram in a 16:9
+ * canvas is bound by the height and renders at the same size at 1280 as at 1920.
+ * The two values have to move together — the canvas is sized by subtracting this
+ * from the measured content box, and a panel wider than the subtraction would let
+ * a *landscape* film (a panoramic) be fitted to a canvas partly under the panel.
+ */
+const stepperWidth = (windowWidth: number): number => {
+  if (windowWidth >= 1800) {
+    return 440;
+  }
+  if (windowWidth >= 1600) {
+    return 400;
+  }
+  return STEPPER_WIDTH;
+};
+
 // The space available to the tracing canvas. Preferably the measured size of
 // the active workspace's content area (kept up to date by ResizeObservable via
 // CANVAS_RESIZED) minus the stepper/toolbar; the window size is only a
@@ -122,7 +143,7 @@ export const getCanvasDimensions = (state: StoreState): { width: number; height:
     const winW = typeof window !== 'undefined' ? window.innerWidth : rect.width;
     const winH = typeof window !== 'undefined' ? window.innerHeight : rect.height;
     return {
-      width: Math.max(Math.min(rect.width, winW) - STEPPER_WIDTH, 0),
+      width: Math.max(Math.min(rect.width, winW) - stepperWidth(winW), 0),
       height: Math.max(Math.min(rect.height, winH) - TOOLBAR_HEIGHT, 0),
     };
   }

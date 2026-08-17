@@ -4,7 +4,6 @@ import {
   MapDispatchToPropsFunction,
 } from 'react-redux';
 
-import uniqueId from 'lodash/uniqueId';
 
 import WorkspaceSwitcher from './index';
 import {
@@ -54,6 +53,7 @@ import {
 import { getRecordFilingIntent } from 'store/reducers/workspace/records';
 
 import { TabCaption } from './props';
+import { mintWorkspaceId } from 'utils/ids';
 
 const mapStateToProps: MapStateToProps<StateProps, OwnProps, StoreState> =
   (state: StoreState) => {
@@ -81,6 +81,8 @@ const mapStateToProps: MapStateToProps<StateProps, OwnProps, StoreState> =
         const view = getImagePhotoView(state)(firstImageId);
         captions[workspaceId] = {
           timepoint,
+          // The day, as the record stores it — the rail groups its tiles by it.
+          captureDate: date,
           typeLabel: view !== null
             ? getPhotoViewShortLabel(view) : getImageTypeShortLabel(type),
           fullLabel: [
@@ -111,6 +113,9 @@ const mapStateToProps: MapStateToProps<StateProps, OwnProps, StoreState> =
       pendingWorkspaceId: isPending ? activeTabId : null,
       pendingCaption: isPending && intent !== null ? {
         timepoint: intent.timepoint,
+        // The day the filing intent carries, so the waiting tile stands in the
+        // visit it is being filed into rather than at the foot of the rail.
+        captureDate: intentDate,
         typeLabel: getImageTypeShortLabel(intent.type),
         fullLabel: [
           `Filing ${getImageTypeLabelWithArticle(intent.type)}`,
@@ -126,7 +131,7 @@ const mapDispatchToProps: MapDispatchToPropsFunction<DispatchProps, OwnProps> =
   (dispatch) => (
     {
       onAddNewTab: () => {
-        const id = uniqueId('workspace_');
+        const id = mintWorkspaceId();
         dispatch(addNewWorkspace({ id }));
         dispatch(setActiveWorkspace({ id }));
       },

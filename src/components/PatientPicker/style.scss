@@ -177,6 +177,48 @@
 // Filled primary because it is the only thing on this screen that creates
 // anything — and it is never on screen at the same time as the well's own
 // Register, so the surface still has exactly one primary.
+// The two ways a case gets onto this device, kept on one line at the top right.
+.header_actions {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+// Restoring a case from its file: a peer of registration, and secondary to it on
+// a practice's own machine — but never absent, because on a machine that has
+// never seen the case it is the only way in.
+.open_btn {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  height: 36px;
+  padding: 0 14px;
+  border: 1px solid $border-strong;
+  border-radius: 6px;
+  background: $bg-surface;
+  font-family: $font-stack;
+  font-size: 14px;
+  font-weight: 600;
+  color: $primary-700;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease;
+
+  &:hover {
+    background: $bg-sunken;
+    border-color: $primary-600;
+  }
+
+  &:focus {
+    outline: none;
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: $focus-ring;
+  }
+}
+
 .new_btn {
   flex: 0 0 auto;
   display: inline-flex;
@@ -1116,6 +1158,65 @@ $row-inset: 4px;
   font-family: $font-stack;
   font-size: 13px;
   font-weight: 500;
+  color: $text-primary;
+  cursor: pointer;
+
+  &:hover {
+    background: $primary-050;
+    border-color: $primary-600;
+    color: $primary-700;
+  }
+
+  &:focus {
+    outline: none;
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: $focus-ring;
+  }
+}
+
+// ---- A restore that did not land ------------------------------------------
+// The case list is where a failed restore puts the clinician back: the chart it
+// registered has been removed again, and this is the only surface left that can
+// say so. @see StoreState['patients.restoreError']
+
+.restore_failed {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0 0 12px;
+  padding: 12px 14px;
+  border: 1px solid rgba(198, 40, 40, .28);
+  border-radius: 8px;
+  background: $error-bg;
+}
+
+.restore_failed_title {
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.35;
+  color: $error;
+}
+
+.restore_failed_text {
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: #7F1D1D;
+}
+
+.restore_failed_action {
+  margin-top: 4px;
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid $border-strong;
+  border-radius: 6px;
+  background: $bg-surface;
+  font-family: $font-stack;
+  font-size: 13px;
+  font-weight: 600;
   color: $text-primary;
   cursor: pointer;
 

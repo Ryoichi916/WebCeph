@@ -4,6 +4,7 @@ import idb from 'idb-keyval';
 import { isActionOfType } from 'utils/store';
 import {
   loadProjectSucceeded, setPatientCaseSummary, saveProject,
+  importFileRequested, removePatient, restoreFromCaseFileFailed,
 } from 'actions/workspace';
 import { defaultWorkspaceId, defaultWorkspaceSettings } from 'utils/config';
 import { getPatientRecords } from 'store/reducers/workspace';
@@ -55,6 +56,22 @@ const storageKey = (patientId: string) => `project:${patientId}`;
  * to happen from it while it is still blank.
  */
 let unbackedPatientId: string | null = null;
+
+/**
+ * The chart a case file is being restored **into**, while that is happening —
+ * or null, which is every other moment.
+ *
+ * A restore is two acts in one press: register the chart the file names, then
+ * read the file into it. If the second fails, the first must not stand. Nothing
+ * of the case reached the record (the wceph importer builds every action before
+ * it dispatches one, so a file that breaks breaks whole), and the clinician is
+ * otherwise left with an empty chart on the case list, their only copy
+ * apparently refused, and nothing said anywhere.
+ *
+ * So the registration is reversed here and the reason is put where the case list
+ * can state it. @see StoreState['patients.restoreError']
+ */
+let restoringPatientId: string | null = null;
 
 // ---- The case list's index --------------------------------------------------
 
@@ -209,6 +226,33 @@ const middleware = ({ getState, dispatch }: Store<StoreState>) =>
       if (loaded) {
         await refreshCaseSummary(getState(), patientId, dispatch, existing);
       }
+      /**
+       * …and, where the chart was opened in order to restore a case file into
+       * it, read the file in now that the project slices are in place.
+       *
+       * Sequenced here rather than beside the open because `loadProjectSucceeded`
+       * replaces those slices wholesale (see store/index#enableLoadingProject):
+       * an import dispatched in the same tick would have its images replaced by
+       * the empty project a moment later, and the clinician would watch their
+       * only copy be read in and then vanish.
+       */
+      const { restoreFromCaseFile } = action.payload;
+      if (restoreFromCaseFile !== undefined) {
+        const workspaceId = getState()['workspaces.activeWorkspaceId'];
+        if (workspaceId !== null) {
+          // Which chart this file is being restored into, so a restore that does
+          // not land can be undone rather than leaving a brand-new empty chart
+          // on the case list. @see restoringPatientId
+          restoringPatientId = patientId;
+          dispatch(importFileRequested({
+            file: restoreFromCaseFile,
+            workspaceId,
+            // Read through the case file path deliberately: this *is* the case
+            // file surface. @see store/middleware/import
+            isCaseFile: true,
+          }));
+        }
+      }
       return;
     }
 
@@ -268,6 +312,58 @@ const middleware = ({ getState, dispatch }: Store<StoreState>) =>
       const patientId = getState()['patients.activeId'];
       if (patientId !== null) {
         dispatch(saveProject({ patientId }));
+      }
+      return;
+    }
+
+    /**
+     * A case file that has just been read into a chart is on disk immediately.
+     *
+     * The same reasoning as the note above, one step harder: an import is very
+     * often a *restore* — the machine changed, the browser was cleared, the case
+     * came from a colleague — and the file the clinician is holding may be the
+     * only copy there is. The dialog tells them in so many words that "12 images
+     * are added to this chart"; until this branch existed nothing wrote them
+     * anywhere, so a refresh put the chart back to "No images on file yet" and
+     * the restore had to be done again from a file they may already have closed.
+     *
+     * Through SAVE_PROJECT_REQUESTED for the same reason the note is: one write
+     * path, one set of guards, one place the case list's row is re-counted.
+     */
+    if (isActionOfType(action, 'IMPORT_FILE_SUCCEEDED')) {
+      next(action);
+      restoringPatientId = null;
+      const patientId = getState()['patients.activeId'];
+      if (patientId !== null) {
+        dispatch(saveProject({ patientId }));
+      }
+      return;
+    }
+
+    /**
+     * A restore that did not land: the chart it registered comes back off the
+     * list, and the reason goes where the list can state it.
+     *
+     * Only for a restore — an import into a chart that already exists is
+     * reported by the case file dialog, which stays open for exactly this, and
+     * that chart is the clinician's and stays. @see restoringPatientId
+     */
+    if (isActionOfType(action, 'IMPORT_FILE_FAILED')) {
+      next(action);
+      const patientId = restoringPatientId;
+      restoringPatientId = null;
+      if (patientId !== null) {
+        const { error } = action.payload;
+        console.warn(
+          `The case file being restored into patient ${patientId} could not be ` +
+          `read, so that chart is being removed again: nothing of the case was ` +
+          `written to it.`,
+          error,
+        );
+        // Through the ordinary removal, which is also what drops the chart's
+        // (empty) project and its row from the case index — one path.
+        dispatch(removePatient({ id: patientId }));
+        dispatch(restoreFromCaseFileFailed({ error }));
       }
       return;
     }

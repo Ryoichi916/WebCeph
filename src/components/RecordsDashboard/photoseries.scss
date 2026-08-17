@@ -30,12 +30,48 @@
 // the window (see `--page-max` in `style.scss`), which is what actually turns a
 // wider monitor into bigger photographs: ~299px facial frames at 1920 and ~269px
 // at 1700, off these very same floors and this very same `width: 100%`.
+//
+// …and *filling* the card is not the same as spending its width on photographs.
+// Measured on a dense case, the whole records page was 4177px tall at 1440 and
+// **4402px at 1920** — a wider monitor bought a *longer* page, because the only
+// thing the surplus width did was inflate the frames (a facial frame 207 → 292px,
+// an occlusal 424 → 594px, each pixel of width costing ~1.3px of height). Four and
+// a half screens of scroll on every monitor in the practice.
+//
+// So the frame is a **contact sheet cell**: one size, capped (see the `minmax()`
+// ceilings below), with the enlargement one click away on every cell
+// (`.cell_zoom` → `PhotoViewer`) — which is where a frame is actually assessed.
+// The width a wide monitor gives goes to the *bands*, which now flow beside one
+// another as soon as two of them fit: the intraoral and occlusal rows share a row
+// of the tile at ~1500px and up, so a wide window makes the record **shorter**
+// instead of taller. The head keeps a row of its own, and so does every strip
+// that reads as a sentence (`.missing`, `.unplaced`).
 .series {
   position: relative;
   box-sizing: border-box;
   width: 100%;
   padding: 12px 12px 14px 20px;
   font-family: $font-stack;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  // Column gap only: each band carries its own top margin (see `.band`).
+  gap: 0 18px;
+
+  // Everything in the tile is a full-width row of it by default — its head, the
+  // "not photographed" strip, the unplaced list. Only a band of frames is sized
+  // to its own frames (below), which is what lets two bands share a row.
+  //
+  // `min-width: 0` is for those rows and **not** for a band: a flex item that may
+  // shrink below its own content stops being a contact sheet. Measured on the
+  // printed sheet, where the page box is ~740px: with all three bands allowed to
+  // shrink to nothing they all fitted one row, and the nine frames printed 57px
+  // wide — 15mm, which is not a photographic record of anything. A band carries its
+  // own floor instead (see `.band`), so it wraps rather than squashes.
+  > * {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
 
   // Inside the comparison viewer the tile is one of two columns and carries no
   // head of its own (the viewer's chrome names the visit): it fills its column.
@@ -174,7 +210,18 @@
   }
 }
 
+// A band is sized to the frames it holds, not to the tile: `flex: 0 1 auto` off a
+// max-content basis, so a four-frame extraoral band asks for four capped cells and
+// no more, and two bands that both fit share a row of the tile. It still shrinks
+// (down to the per-band floors below) before it wraps, so a narrow window gets the
+// band it always had rather than a horizontal scrollbar.
 .band {
+  flex: 0 1 auto;
+  // …and it shrinks only as far as its own frames allow — `min-content` here is
+  // the band's per-cell floors (below), so four facial frames never print or
+  // render narrower than a facial frame can be assessed at. Past that the band
+  // wraps onto a row of its own, which is what it always did.
+  min-width: min-content;
   margin-top: 10px;
 }
 
@@ -188,21 +235,38 @@
   color: $text-tertiary;
 }
 
+// Which visit's series this band belongs to. Paper only — see `renderBandAt`,
+// and the print block below, which is what makes a band able to start a sheet.
+.band_at {
+  display: none;
+}
+
+// **The contact sheet's cell width.** One number for every band, so a visit's
+// frames are one size and the tile reads as a contact sheet rather than as three
+// grids that each happen to fill the card. It is a *ceiling*: below it the bands
+// still shrink to their own floors, which is what keeps a frame assessable in the
+// comparison viewer's narrow column.
+$cell-max: 240px;
+
 .band_cells {
   display: grid;
   gap: 8px;
+  // …and the row is as wide as its cells, left-aligned in the tile: a capped grid
+  // that still declared `1fr` tracks stretched the last frame of every band to
+  // swallow the surplus.
+  justify-content: start;
 }
 
 // Four facial frames across. The floor is what a facial frame stops being
 // assessable below; past it the band wraps rather than shrinking further.
 .band_cells__extraoral {
-  grid-template-columns: repeat(4, minmax(126px, 1fr));
+  grid-template-columns: repeat(4, minmax(126px, $cell-max));
 }
 
 // Right buccal → centre → left buccal: the patient's right on the left of the
 // sheet, the convention every clinical photograph set follows.
 .band_cells__intraoral {
-  grid-template-columns: repeat(3, minmax(150px, 1fr));
+  grid-template-columns: repeat(3, minmax(150px, $cell-max));
 }
 
 // The two occlusals close the tile's width, half each, like the two bands above
@@ -212,7 +276,7 @@
 // views are also the frames arch form and transverse width are judged on, so the
 // width the ragged edge was wasting goes to them.
 .band_cells__occlusal {
-  grid-template-columns: repeat(2, minmax(150px, 1fr));
+  grid-template-columns: repeat(2, minmax(150px, $cell-max));
 }
 
 // A sparsely photographed visit's one row (see `renderSparse`): the extraoral
@@ -220,7 +284,7 @@
 // composite — the tile is shorter because it draws fewer rows, never because it
 // draws smaller photographs.
 .band_cells__sparse {
-  grid-template-columns: repeat(4, minmax(126px, 1fr));
+  grid-template-columns: repeat(4, minmax(126px, $cell-max));
   // Mixed shapes in one row (a portrait facial frame beside a landscape buccal
   // one): each cell keeps its own aspect and sits at the top of the row rather
   // than being stretched to the tallest one.
@@ -737,13 +801,90 @@ button.missing_item:hover .missing_plus {
 // records sheet is for — but not its controls: nobody can press an empty frame on
 // paper. The empty positions stay drawn (a gap in the series is a fact about the
 // visit, and the sheet's own qualifier says once that a case is complete without
-// a photographic series), at a size that keeps a visit's block on one page.
+// a photographic series).
+//
+// **The composite flows across sheets, band by band.** It used to carry
+// `break-inside: avoid`, which is the right rule for a block that fits a page and
+// a trap for one that does not: a nine-frame series is ~150mm of paper, so
+// wherever less than that was left, Chrome pushed the whole tile to a fresh sheet
+// — ~55% of sheet 1 and ~40% of sheet 3 came out blank, and a four-sheet chart
+// printed as six. (The visit's own group made exactly this mistake once and had
+// it taken out for exactly this reason; see `.group` in `style.scss`.)
+//
+// What must stay whole are the units that can: a band of frames (four facial
+// frames, three intraoral, two occlusal — none taller than ~55mm), and inside it
+// every cell with its caption, so a photograph is never cut in half and never
+// parted from the position it was shot at. The head is bound to the first band,
+// and each band carries the visit it belongs to in its own label
+// (`renderBandAt`), so a band that starts a sheet is readable where it stands.
 @media print {
   .series {
     max-width: none;
     padding: 8px 0 4px 0;
+    break-inside: auto;
+    page-break-inside: auto;
+  }
+
+  // "PHOTOGRAPHIC SERIES · 9 of 9 positions" never ends a sheet on its own.
+  .series_head {
     break-inside: avoid;
     page-break-inside: avoid;
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+
+  // A band is **allowed to flow across sheets**, and this is the other half of the
+  // same argument the series itself makes above.
+  //
+  // Held whole, a band was an atom the size of its own frames — and the occlusal
+  // band is the tallest of the three. Measured on a dense case: sheet 1 of the
+  // printed chart ended at y≈915 of 1115 and sheet 2 at y≈955, because neither
+  // sheet had room for the whole occlusal row, so ~20% of two consecutive sides of
+  // A4 was blank paper inside a filed record — twice the cost of the break it was
+  // avoiding. The unit that must stay whole is the one that means something on its
+  // own: a **figure** — one photograph with the position it was shot at
+  // (`.cell`, below). A band split 3 + 1 is still a contact sheet; a page 20%
+  // blank is a printing failure to whoever the chart is sent to.
+  //
+  // The band's own label still cannot be left behind (`break-after: avoid`), and
+  // it carries the visit (`renderBandAt`), so the continuation is readable where
+  // it lands.
+  .band,
+  .band_cells {
+    break-inside: auto;
+    page-break-inside: auto;
+    // A row of frames is a run of grid items: at least two of them stay together
+    // on each side of a break, so a band never leaves one lone photograph behind
+    // or opens a sheet with one.
+    orphans: 2;
+    widows: 2;
+  }
+
+  .band_label {
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+
+  .cell {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  // The band's own heading carries the visit on paper: with the composite free to
+  // break, the series' head and the visit's stamp may both be a sheet back, and a
+  // band of four faces under the single word EXTRAORAL names no patient's visit.
+  .band_at {
+    display: inline;
+    margin-left: 8px;
+    font-weight: 500;
+    letter-spacing: 0;
+    text-transform: none;
+    font-variant-numeric: tabular-nums;
+    color: #7B8794;
+  }
+
+  .band_at::before {
+    content: '— ';
   }
 
   .series_compare,
@@ -783,16 +924,21 @@ button.missing_item:hover .missing_plus {
     margin-top: 8px;
     padding-top: 6px;
     gap: 4px 8px;
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
 
   .missing_label {
     font-size: 8.5px;
   }
 
-  // …and it does not name the visit: the strip prints inside the visit's own block,
-  // under the stamp three lines above it (the rule `.slots_at_print` argues).
+  // …and it names the visit after all. It used to print without one, on the
+  // argument that the visit's stamp was three lines above it — true while the
+  // composite was one unbreakable block, and no longer true now that it flows:
+  // the strip can begin a sheet whose stamp is on the sheet before. A list of
+  // positions "not on file" that does not say whose visit is not a record entry.
   .missing_at {
-    display: none;
+    display: inline;
   }
 
   .missing_item {
@@ -809,6 +955,19 @@ button.missing_item:hover .missing_plus {
     display: none;
   }
 
+  // A photograph carrying no position is one record entry: its frame, its name
+  // and its meta stay together on one sheet even though the list they sit in may
+  // break — the same rule a film's card follows (`.card` in `style.scss`).
+  .unplaced_item {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .unplaced_label {
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+
   // The photographs with no position recorded print at a size the sheet can spare:
   // the 80px frame is what makes the *screen's* "Set position" answerable, and the
   // sheet carries no such control.
@@ -817,23 +976,21 @@ button.missing_item:hover .missing_plus {
     height: 48px;
   }
 
-  // On paper the composite has the page's width and no floor can be honoured by
-  // shrinking, so the floors come off and the bands stay the bands.
-  .band_cells__extraoral {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-
-  .band_cells__intraoral {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
-  .band_cells__occlusal {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .band_cells__sparse {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
+  // **The bands keep their floors and their ceiling on paper.**
+  //
+  // They used to lose them here, on the reasoning that a sheet has one width and a
+  // floor a grid cannot honour by shrinking only makes it overflow. That stopped
+  // being true when the tile became a wrapping row of bands (see `.series`): a
+  // floor is honoured by **wrapping** now, and without one the three bands all
+  // fitted one line of the ~740px page box and the nine frames printed 57px wide —
+  // 15mm, which is not a photographic record of anything. With the floors back,
+  // each band takes as much of the sheet's measure as it needs and the next one
+  // starts a row: 4 facial frames across the measure, then the intraoral row, then
+  // the two occlusals, each frame capped at the same 240px the screen caps it at
+  // (≈63mm on A4).
+  //
+  // No override at all, therefore — the screen's own `minmax()` tracks are what
+  // print. Only the gap tightens (below).
 
   // Hover and focus are facts about a screen, not about the chart: a sheet
   // printed while the cursor happened to be resting on a cell must not print that

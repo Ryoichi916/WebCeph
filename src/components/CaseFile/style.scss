@@ -1,0 +1,302 @@
+@import 'src/_variables.scss';
+
+// The case file dialog — what a .wceph carries, in both directions. Same dialog
+// chrome as "Apply this scale to other films" and "Edit patient details": one
+// dialog idiom across this app.
+
+.no_print {
+  @media print {
+    display: none !important;
+  }
+}
+
+.title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-family: $font-stack;
+}
+
+.title_heading {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: $text-primary;
+}
+
+.title_caption {
+  font-size: 12.5px;
+  font-weight: 400;
+  color: $text-tertiary;
+  font-variant-numeric: tabular-nums;
+}
+
+.body {
+  font-family: $font-stack;
+}
+
+.lead {
+  margin: 8px 0 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: $text-secondary;
+}
+
+// Choosing the file to read. The native input is kept in the DOM (it is what
+// actually opens the picker) but never shown — the mui button is the control.
+.pick {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+// Off screen, unclickable, and — with `tabindex="-1"` on the element itself —
+// **out of the tab order**: a keyboard user tabbing through this dialog used to
+// land on this invisible control, with no focus ring and no way to tell where
+// they were. It stays in the DOM because it is what actually opens the picker;
+// the button beside it is the control. @see components/CaseFile#renderImport
+.pick_input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.pick_name {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: $text-secondary;
+  word-break: break-all;
+}
+
+.error {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(198, 40, 40, .28);
+  border-radius: 6px;
+  background: $error-bg;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: $error;
+}
+
+// Writing, or reading in — an act in progress, stated while it lasts.
+.note_busy {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border: 1px solid $border;
+  border-radius: 6px;
+  background: $bg-sunken;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: $text-secondary;
+}
+
+// The file was written: named, because a browser download confirms nothing.
+.written {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(27, 122, 62, .28);
+  border-radius: 6px;
+  background: $success-bg;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: $success;
+}
+
+.written_name {
+  font-weight: 700;
+  word-break: break-all;
+}
+
+// The file names another patient — promoted out of the comparison table, where
+// it was one 12px chip among five rows, and acknowledged before Import runs.
+.alien {
+  margin-top: 16px;
+  padding: 12px 14px;
+  border: 1px solid rgba(178, 106, 0, .38);
+  border-radius: 6px;
+  background: $warn-bg;
+}
+
+.alien_heading {
+  margin: 0 0 6px;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.35;
+  color: $warn;
+}
+
+.alien_text {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: $text-primary;
+}
+
+.alien_ack {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 10px;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.45;
+  color: $text-primary;
+  cursor: pointer;
+
+  input {
+    margin: 2px 0 0;
+    flex: 0 0 auto;
+  }
+}
+
+// A computed consequence of importing *this* file into *this* chart, said
+// directly under the file picker — the rank the collision earns, rather than the
+// foot of a rules list below the fold. @see components/CaseFile#renderImport
+.collide {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(178, 106, 0, .28);
+  border-radius: 6px;
+  background: $warn-bg;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.5;
+  color: $warn;
+}
+
+// One clause of a rule that says something specific about *this* file.
+.rule_emphasis {
+  font-weight: 600;
+  color: $warn;
+}
+
+.block {
+  margin-top: 18px;
+}
+
+.block_heading {
+  margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: $text-tertiary;
+}
+
+.note {
+  margin: 0 0 10px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: $text-secondary;
+}
+
+.warn {
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(178, 106, 0, .28);
+  border-radius: 6px;
+  background: $warn-bg;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: $warn;
+}
+
+// The counted facts: a label column and the reading beside it.
+.facts {
+  margin: 0;
+  border: 1px solid $border;
+  border-radius: 6px;
+  overflow: hidden;
+  background: $bg-surface;
+}
+
+.fact {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 8px 12px;
+  border-bottom: 1px solid $border;
+
+  &:last-child {
+    border-bottom: 0;
+  }
+}
+
+.fact_key {
+  flex: 0 0 116px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  color: $text-tertiary;
+}
+
+.fact_value {
+  flex: 1 1 auto;
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: $text-primary;
+  font-variant-numeric: tabular-nums;
+}
+
+// One demographic field, read three ways: what the file says, what this chart
+// says, and what will happen to it.
+.compare {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+}
+
+.compare_side {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+}
+
+.compare_who {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  color: $text-disabled;
+}
+
+.compare_what {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: $text-primary;
+}
+
+.outcome {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: $text-tertiary;
+
+  &__fill {
+    color: $success;
+  }
+
+  &__keep {
+    color: $warn;
+  }
+}
+
+.rules {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: $text-secondary;
+
+  li + li {
+    margin-top: 6px;
+  }
+}

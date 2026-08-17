@@ -1,11 +1,18 @@
 @import 'src/_variables.scss';
 
-// 64px rail with 48px tiles: 56px could not hold an "Add image" label or a
-// legible image-type caption without dropping under the 11px type floor.
+// The rail is the tracing editor's index of the case: every image on file, in
+// the order a case is read in, grouped into the visits it was captured at.
+//
+// 104px with 76px tiles. It was 64px with 48px tiles, which is a width at which
+// a caption is not a caption: "Frontal (centre)" — the one word that tells one
+// intraoral frame from the next four — printed as "Frontal (c…", and a 21-image
+// case scrolled as one strip of identical thumbnails with no visit boundary
+// anywhere in it. The 40px this takes back from the canvas is the difference
+// between a rail a clinician can read and a rail they have to hover.
 .root {
-  width: 64px;
-  min-width: 64px;
-  padding: 8px 0;
+  width: 104px;
+  min-width: 104px;
+  padding: 0 0 8px;
   background-color: $bg-sunken;
   border-right: 1px solid $border;
   display: flex;
@@ -13,16 +20,69 @@
   flex-wrap: nowrap;
   align-items: center;
   justify-content: flex-start;
-  gap: 10px;
+  gap: 4px;
   overflow-y: auto;
   overflow-x: hidden;
   font-family: $font-stack;
 }
 
+// One visit's run of tiles.
+.group {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 6px;
+}
+
+// …and the day it was captured, stuck to the top of the rail for as long as any
+// of its tiles is in view: a run of nine photographs is taller than the rail, so
+// a heading that scrolled away left the reader back where they started.
+.group_head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  box-sizing: border-box;
+  width: 100%;
+  padding: 6px 8px 5px;
+  margin-bottom: 2px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  background: $bg-sunken;
+  border-bottom: 1px solid $border;
+}
+
+// The visit's handle — the same token the dashboard's stamps and the timeline's
+// stops carry, at the app's 11px micro-label floor.
+.group_tp {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  line-height: 1.1;
+  color: $primary-700;
+}
+
+// The day itself, as the record stores it (ISO): a capture date is a fact about
+// the film and is printed and shown the one way everywhere in this app.
+.group_date {
+  font-size: 10.5px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+  color: $text-tertiary;
+
+  &__none {
+    font-style: italic;
+  }
+}
+
 // A page tab: a generous thumbnail tile with its index caption *below* the
 // image (never cramped into a corner of the miniature).
 .tab_item {
-  width: 60px;
+  width: 88px;
   padding: 0;
   margin: 0;
   border: none;
@@ -80,7 +140,8 @@
       background: $primary-050;
     }
 
-    .tab_number {
+    .tab_add_glyph,
+    .tab_add_label {
       color: $primary-600;
     }
 
@@ -95,8 +156,8 @@
 // has been uploaded yet).
 .tab_preview {
   position: relative;
-  width: 48px;
-  height: 48px;
+  width: 76px;
+  height: 76px;
   border-radius: 6px;
   overflow: hidden;
   background: $canvas-bg;
@@ -125,19 +186,29 @@
   pointer-events: none;
 }
 
-// Placeholder page number (or the pending tile's plus) shown inside the tile
-// before an image exists. On the empty tile's light ground, so it is set in the
-// page's own secondary ink rather than the canvas's.
-.tab_number {
-  font-size: 14px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  line-height: 1;
+// …and its face is a column: the plus over the words, centred, exactly as the
+// rail's own ghost tile sets them.
+.tab_preview__empty {
+  flex-direction: column;
+  gap: 2px;
+  color: $text-secondary;
+}
+
+// The empty tile's position in the rail, under the tile rather than inside it:
+// the tile's face says what pressing it does ("+ Add image") and this says where
+// it stands. Quiet, and quieter than a visit label — a position is the least of
+// what this rail says. @see `renderTab`
+.tab_index__ordinal {
+  font-weight: 500;
   color: $text-tertiary;
 }
 
 // Primary caption under the tile — the record's timepoint (T1, T2, …), or the
 // tile index while the image carries no timepoint. Outside the image area.
+//
+// Printed only where the group heading above has *not* already named the visit
+// (see `isNamedByHead`): under a heading that says "T1 · 2024-04-12", nine tiles
+// repeating "T1" said nothing and crowded out the caption that identifies them.
 .tab_index {
   max-width: 100%;
   font-size: 11.5px;
@@ -151,25 +222,30 @@
   transition: color 120ms ease;
 }
 
-// Secondary caption: the image type, abbreviated to fit the rail. At the
-// brief's 11px micro-label floor — a 9px caption is not readable clinical text.
+// Secondary caption: the image type, or — for a photograph — the position in the
+// series it was shot at, which is the only thing that tells five intraoral
+// frames apart. Wraps to two lines rather than ellipsizing: a caption clipped to
+// "Frontal (c…" names no frame at all, and the rail is 104px precisely so that
+// this one can be read.
 .tab_type {
   max-width: 100%;
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 600;
-  line-height: 1.1;
+  line-height: 1.15;
   letter-spacing: .01em;
+  text-align: center;
   color: $text-tertiary;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 // "Add image" ghost tile: dashed border + explicit label, obviously clickable.
 .tab_item_placeholder {
-  width: 60px;
-  min-height: 48px;
-  padding: 6px 2px;
+  width: 88px;
+  min-height: 56px;
+  padding: 8px 2px;
   margin: 0;
   border: 1px dashed $border-strong;
   border-radius: 6px;
@@ -207,11 +283,11 @@
 }
 
 .tab_add_label {
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 600;
   line-height: 1.1;
   letter-spacing: 0;
   text-align: center;
-  // One line at 60px — "Add image" used to break across two cramped rows.
+  // One line at 88px — "Add image" used to break across two cramped rows.
   white-space: nowrap;
 }

@@ -42,11 +42,23 @@ function isV1GeometricalObject(object: any) {
 const isTrue = (value: any) => value === true;
 const isDefined = negate(isUndefined);
 
+/**
+ * One entry of `data`, safe to read fields off.
+ *
+ * Every rule below reads an image's fields, and a hand-edited (or foreign) file
+ * can hold a `null` where an image should be. Destructuring that threw a
+ * TypeError out of `validateIndexJSON` — and a validator that throws reports no
+ * errors at all, so the caller was left holding "this file is fine" about a file
+ * it could not read. An entry that is not an object simply has no fields: the
+ * rules then report it as invalid image data, which is what it is.
+ */
+const imageFields = (image: any): any => (isPlainObject(image) ? image : {});
+
 type Rule<T> = (data: T) => true | false;
 type ErrorMaker<T> = (data: T) => ValidationError;
 type Fixer<T> = (data: T, error: ValidationError) => T;
 
-enum ValidationErrorType {
+export enum ValidationErrorType {
   UNSPECIFIED_FILE_VERSION,
   NO_REFS,
   MISSING_REFS,
@@ -63,21 +75,134 @@ enum ValidationErrorType {
   INVALID_IMAGE_NAME,
   INVALID_RECORD_METADATA,
   INVALID_VISIT_NOTES,
+  INVALID_PATIENT_DETAILS,
+  /**
+   * The file states a format version and it is not the one this app reads.
+   *
+   * Split off `UNSPECIFIED_FILE_VERSION`, which both version rules used to
+   * point at: a file that plainly said `"version": 2` was reported to the
+   * clinician as "Unspecified file version", which is not true and is the
+   * opposite of the useful thing to say — that the file is newer than this app.
+   */
+  WRONG_FILE_VERSION,
+  /** A `refs.images` path the zip does not actually contain. */
+  MISSING_IMAGE_FILE,
 }
 
-const getMessageForError = (type: ValidationErrorType, _data?: any) => {
+/**
+ * Whether an error means "this is not a WebCeph case file at all".
+ *
+ * A renamed zip with somebody else's `index.json` trips every structural rule at
+ * once, and listing them is a list of this app's own identifiers. One sentence
+ * is the whole of what a reader can act on. @see summarizeValidationErrors
+ */
+const isStructuralError = (type: ValidationErrorType): boolean => (
+  type === ValidationErrorType.NO_REFS ||
+  type === ValidationErrorType.MISSING_REFS ||
+  type === ValidationErrorType.MISSING_DATA ||
+  type === ValidationErrorType.UNSPECIFIED_FILE_VERSION
+);
+
+/**
+ * What each failure means, **in a sentence a clinician can act on**.
+ *
+ * Every one of them, because the fallback was `ValidationErrorType[type]` — the
+ * enum's own identifier — and a foreign zip therefore reported itself as
+ * "(Unspecified file version, Unspecified file version, NO_REFS, MISSING_DATA,
+ * Invalid file format)": the same phrase twice and three developer names, in
+ * front of somebody deciding whether to trust a file with a patient's record.
+ *
+ * Each sentence says what is wrong with the *file*, never what the code checked.
+ */
+const getMessageForError = (type: ValidationErrorType, data?: any): string => {
   switch (type) {
     case ValidationErrorType.UNSPECIFIED_FILE_VERSION:
-      return (
-        `Unspecified file version`
-      );
+      return 'the file does not state which case file format it was written in';
+    case ValidationErrorType.WRONG_FILE_VERSION: {
+      const version = data !== undefined && data !== null &&
+        (typeof data.version === 'number' || typeof data.version === 'string')
+        ? String(data.version) : null;
+      return version !== null
+        ? `it was written for case file format version ${version}, and this ` +
+          'app reads version 1 — it was probably written by a newer version of ' +
+          'WebCeph'
+        : 'it was written for a case file format version this app does not read';
+    }
+    case ValidationErrorType.NO_REFS:
+      return 'the file has no list of the images it carries';
     case ValidationErrorType.MISSING_REFS:
-      return (
-        `Invalid file format`
-      );
+      return 'the file describes an image it does not list';
+    case ValidationErrorType.MISSING_IMAGE_FILE:
+      return 'an image the file lists is not inside it';
+    case ValidationErrorType.MISSING_DATA:
+      return 'the file carries no case records at all';
+    case ValidationErrorType.INCOMPATIBLE_IMAGE_TYPE:
+      return 'an image is filed as a record type this app does not have';
+    case ValidationErrorType.INCOMPATIBLE_BRIGHTNESS_VALUE:
+      return 'an image carries a brightness outside the range this app uses';
+    case ValidationErrorType.INCOMPATIBLE_CONTRAST_VALUE:
+      return 'an image carries a contrast outside the range this app uses';
+    case ValidationErrorType.INVALID_IMAGE_DATA:
+      return 'an image\'s display settings are not in the form this app stores';
+    case ValidationErrorType.INVALID_TRACING_DATA:
+      return 'a tracing\'s mm/px scale is not a number';
+    case ValidationErrorType.INVALID_ANALYSIS_ID:
+      return 'an image names an analysis in a form this app cannot read';
+    case ValidationErrorType.INVALID_TRACING_MODE:
+      return 'a tracing states a tracing mode this app does not have';
+    case ValidationErrorType.INVALID_MANUAL_LANDMARKS:
+      return 'a tracing\'s plotted landmarks are not points, lines or angles';
+    case ValidationErrorType.INVALID_SKIPPED_STEPS:
+      return 'a tracing\'s list of skipped steps is not in the form this app stores';
+    case ValidationErrorType.INVALID_IMAGE_NAME:
+      return 'an image\'s file name is not text';
+    case ValidationErrorType.INVALID_RECORD_METADATA:
+      return 'an image\'s visit label, capture date or series position is not ' +
+        'in the form this app records';
+    case ValidationErrorType.INVALID_VISIT_NOTES:
+      return 'a clinical entry is not in the form this app stores — its ' +
+        'versions, their timestamps or their text';
+    case ValidationErrorType.INVALID_PATIENT_DETAILS:
+      return 'the patient details are not in the form this app records — a ' +
+        'date of birth must be a YYYY-MM-DD day and a sex must be male or female';
     default:
-      return ValidationErrorType[type];
+      return 'the file does not match the case file format this app writes';
   }
+};
+
+/**
+ * The one sentence a clinician is given about a file this app will not read.
+ *
+ * De-duplicated, and collapsed to "this is not one of ours" the moment the
+ * failures are structural — which is what a renamed zip, a PDF or a truncated
+ * download actually is. Anything else reads as a list of what is wrong with a
+ * file that *is* one of ours, which is the case where the detail helps.
+ */
+export const summarizeValidationErrors = (
+  errors: ValidationError[],
+): string => {
+  const seen: { [message: string]: true } = {};
+  const reasons: string[] = [];
+  let structural = false;
+  errors.forEach((error) => {
+    if (isStructuralError(error.type)) {
+      structural = true;
+    }
+    if (seen[error.message] === true) {
+      return;
+    }
+    seen[error.message] = true;
+    reasons.push(error.message);
+  });
+  if (structural || reasons.length === 0) {
+    return 'This is not a WebCeph case file.';
+  }
+  if (reasons.length === 1) {
+    return `This case file could not be read: ${reasons[0]}.`;
+  }
+  return 'This case file could not be read: ' +
+    reasons.slice(0, -1).join('; ') + '; and ' +
+    reasons[reasons.length - 1] + '.';
 };
 
 function createErrorMaker<T>(type: ValidationErrorType): ErrorMaker<T> {
@@ -100,8 +225,11 @@ const rules: Array<[
     undefined,
   ],
   [
-    ({ version }) => version === 1,
-    createErrorMaker(ValidationErrorType.UNSPECIFIED_FILE_VERSION),
+    // A version that is *stated* and is not 1 is a different failure from a
+    // version that is not stated, and the reader needs the difference: one is
+    // "this is not one of ours", the other is "this is newer than this app".
+    ({ version }) => isUndefined(version) || version === 1,
+    createErrorMaker(ValidationErrorType.WRONG_FILE_VERSION),
     undefined,
   ],
   [
@@ -119,16 +247,24 @@ const rules: Array<[
     undefined,
   ],
   [
+    // Guarded on `refs` itself, not just on `refs.images`: this validator is the
+    // first thing a *foreign* file meets — a zip somebody renamed to `.wceph`,
+    // with an index.json of its own — and reaching into an absent `refs` threw a
+    // TypeError out of validation instead of returning "this is not one of ours".
+    // A validator that crashes on invalid input is not validating.
     ({ data, refs }) => {
-      return isPlainObject(refs.images) && every(keys(data), key => has(refs.images, key));
+      return isPlainObject(refs) && isPlainObject(refs.images) &&
+        every(keys(data), key => has(refs.images, key));
     },
     createErrorMaker(ValidationErrorType.MISSING_REFS),
     undefined,
   ],
   [
     ({ data }) => {
-      return every(values(data), (image) => {
+      return every(values(data), (entry) => {
+        const image = imageFields(entry);
         return (
+          isPlainObject(entry) &&
           isBoolean(image.flipX) &&
           isBoolean(image.flipY) &&
           isBoolean(image.invertColors) &&
@@ -142,7 +278,8 @@ const rules: Array<[
   ],
   [
     ({ data }) => {
-      return every(values(data), ({ name }) => {
+      return every(values(data), (entry) => {
+        const { name } = imageFields(entry);
         return (
           isString(name) || name === null
         );
@@ -159,7 +296,8 @@ const rules: Array<[
     // nine frames this app names (an unknown one is a file claiming a frame no
     // surface here can place or label).
     ({ data }) => {
-      return every(values(data), ({ timepoint, captureDate, photoView }) => {
+      return every(values(data), (entry) => {
+        const { timepoint, captureDate, photoView } = imageFields(entry);
         const isValidTimepoint = (
           isUndefined(timepoint) || timepoint === null || isString(timepoint)
         );
@@ -220,11 +358,55 @@ const rules: Array<[
     undefined,
   ],
   [
+    // The patient the case belongs to (@see WCephJSON#patient). Optional — a
+    // file written before it existed, or by a device with nobody registered,
+    // carries none. Present, each field is checked for *type* only, plus the one
+    // thing a reader has to be able to trust: a date of birth is either an ISO
+    // day or it is absent. A malformed one would silently produce a wrong age on
+    // every age-indexed norm in the receiving chart.
+    ({ patient }) => {
+      if (isUndefined(patient) || patient === null) {
+        return true;
+      }
+      if (!isPlainObject(patient)) {
+        return false;
+      }
+      const isTextOrAbsent = (value: any) =>
+        isUndefined(value) || value === null || isString(value);
+      const { dateOfBirth, sex, trendPlot } = patient;
+      return (
+        isTextOrAbsent(patient.name) &&
+        isTextOrAbsent(patient.chartId) &&
+        isTextOrAbsent(patient.reading) &&
+        // The measurements the patient's trend board plots, where the file
+        // states a board: a list of measurement symbols and nothing else.
+        // @see WCephJSON#patient.trendPlot
+        (
+          isUndefined(trendPlot) || trendPlot === null || (
+            Array.isArray(trendPlot) && every(trendPlot, isString)
+          )
+        ) &&
+        (
+          isUndefined(dateOfBirth) || dateOfBirth === null ||
+          dateOfBirth === '' || (
+            isString(dateOfBirth) && /^\d{4}-\d{2}-\d{2}$/.test(dateOfBirth)
+          )
+        ) &&
+        (
+          isUndefined(sex) || sex === null ||
+          sex === '' || sex === 'male' || sex === 'female'
+        )
+      );
+    },
+    createErrorMaker(ValidationErrorType.INVALID_PATIENT_DETAILS),
+    undefined,
+  ],
+  [
     ({ data }) => {
-      return every(values(data), ({ tracing }) => {
+      return every(values(data), (entry) => {
+        const { tracing } = imageFields(entry);
         return (
           isPlainObject(tracing) &&
-          isString(tracing.mode) &&
           (
             isNumber(tracing.scaleFactor) ||
             tracing.scaleFactor === null
@@ -237,9 +419,30 @@ const rules: Array<[
   ],
 
   [
+    // The tracing mode, where the file states one. Optional since this app
+    // stopped tracking it (@see WCephJSON#data.tracing.mode) — required, it made
+    // every export this app could produce invalid, because the store it was read
+    // from has held no mode for years. A file that states one must still state a
+    // mode this app knows.
+    //
+    // The tracing itself is read before the mode is, and never destructured:
+    // `({ tracing: { mode } })` threw `Cannot read properties of undefined` on
+    // an image that carries no tracing at all, which took the whole validator
+    // down — and a validator that throws returns no errors, so the file that
+    // could not be validated was presented as a file with nothing wrong with
+    // it. The rule above already reports the absent tracing
+    // (INVALID_TRACING_DATA); this one simply has nothing to say about it.
     ({ data }) => {
-      return every(values(data), ({ tracing: { mode } }) => {
+      return every(values(data), (image) => {
+        const tracing = image !== null && image !== undefined
+          ? image.tracing : undefined;
+        if (tracing === undefined || tracing === null) {
+          return true;
+        }
+        const mode = tracing.mode;
         return (
+          isUndefined(mode) ||
+          mode === null ||
           mode === 'auto' ||
           mode === 'assisted' ||
           mode === 'manual'
@@ -250,8 +453,17 @@ const rules: Array<[
     undefined,
   ],
   [
+    // Read through the tracing rather than destructured, for the same reason as
+    // the mode above: an image with no tracing is a file this validator has to
+    // be able to *report*, not one it may crash on.
     ({ data }) => {
-      return every(values(data), ({ tracing: { manualLandmarks } }) => {
+      return every(values(data), (image) => {
+        const tracing = image !== null && image !== undefined
+          ? image.tracing : undefined;
+        if (tracing === undefined || tracing === null) {
+          return true;
+        }
+        const manualLandmarks = tracing.manualLandmarks;
         return (
           isPlainObject(manualLandmarks) &&
           every(values(manualLandmarks), isV1GeometricalObject)
@@ -263,7 +475,13 @@ const rules: Array<[
   ],
   [
     ({ data }) => {
-      return every(values(data), ({ tracing: { skippedSteps } }) => {
+      return every(values(data), (image) => {
+        const tracing = image !== null && image !== undefined
+          ? image.tracing : undefined;
+        if (tracing === undefined || tracing === null) {
+          return true;
+        }
+        const skippedSteps = tracing.skippedSteps;
         return (
           isPlainObject(skippedSteps) &&
           every(values(skippedSteps), isTrue)
@@ -275,7 +493,8 @@ const rules: Array<[
   ],
   [
     ({ data }) => {
-      return every(values(data), ({ type }) => {
+      return every(values(data), (entry) => {
+        const { type } = imageFields(entry);
         return (
           type === null ||
           type === 'ceph_lateral' ||
@@ -292,7 +511,8 @@ const rules: Array<[
   ],
   [
     ({ data }) => {
-      return every(values(data), ({ brightness }) => {
+      return every(values(data), (entry) => {
+        const { brightness } = imageFields(entry);
         return brightness >= 0 && brightness <= 1;
       });
     },
@@ -301,7 +521,8 @@ const rules: Array<[
   ],
   [
     ({ data }) => {
-      return every(values(data), ({ contrast }) => {
+      return every(values(data), (entry) => {
+        const { contrast } = imageFields(entry);
         return contrast >= 0 && contrast <= 1;
       });
     },
@@ -310,7 +531,8 @@ const rules: Array<[
   ],
   [
     ({ data }) => {
-      return every(values(data), ({ analysis }) => {
+      return every(values(data), (entry) => {
+        const { analysis } = imageFields(entry);
         return (
           isPlainObject(analysis) &&
           (isString(analysis.activeId) || analysis.activeId === null)

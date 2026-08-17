@@ -1,6 +1,5 @@
 import { connect } from 'react-redux';
 
-import uniqueId from 'lodash/uniqueId';
 
 import RecordsDashboard from './index';
 
@@ -33,6 +32,8 @@ import {
 } from 'store/reducers/patients';
 
 import { PatientDetails } from 'components/PatientFields';
+
+import { mintWorkspaceId } from 'utils/ids';
 
 import {
   setRecordsDashboardShown,
@@ -104,6 +105,16 @@ const mapDispatchToProps = (dispatch: GenericDispatch): DispatchProps => ({
     }));
     dispatch(setRecordsDashboardShown({ isShown: false }));
   },
+  // The same two dispatches without the third: the workspace behind this surface
+  // is put back onto a record of the chart, and the clinician stays on the
+  // dashboard they were working. @see DispatchProps#onRestoreActiveRecord
+  onRestoreActiveRecord: (record: PatientRecord) => {
+    dispatch(setActiveWorkspace({ id: record.workspaceId }));
+    dispatch(setActiveImageId({
+      workspaceId: record.workspaceId,
+      imageId: record.imageId,
+    }));
+  },
   // Exactly the rail ghost tile's path (see VerticalTabBar/connected), reusing
   // an already-empty tile when one exists rather than stacking blank tiles.
   //
@@ -119,7 +130,7 @@ const mapDispatchToProps = (dispatch: GenericDispatch): DispatchProps => ({
     if (emptyWorkspaceId !== null) {
       dispatch(setActiveWorkspace({ id: emptyWorkspaceId }));
     } else {
-      const id = uniqueId('workspace_');
+      const id = mintWorkspaceId();
       dispatch(addNewWorkspace({ id }));
       dispatch(setActiveWorkspace({ id }));
     }
@@ -155,7 +166,7 @@ const mapDispatchToProps = (dispatch: GenericDispatch): DispatchProps => ({
     entries.forEach(({ file, meta }, index) => {
       const workspaceId = index === 0 && emptyWorkspaceId !== null
         ? emptyWorkspaceId
-        : uniqueId('workspace_');
+        : mintWorkspaceId();
       if (workspaceId !== emptyWorkspaceId) {
         dispatch(addNewWorkspace({ id: workspaceId }));
       }

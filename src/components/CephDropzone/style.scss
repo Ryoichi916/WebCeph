@@ -63,6 +63,27 @@
   margin: -8px 0 24px;
 }
 
+// A case file handed to an image input, refused in words at the input itself.
+.dropzone_refused {
+  max-width: 560px;
+  margin: 18px 0 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(178, 106, 0, .28);
+  border-radius: 6px;
+  background: $warn-bg;
+  font-size: 12.5px;
+  line-height: 1.55;
+  text-align: left;
+  color: $warn;
+}
+
+.dropzone_refused_name {
+  display: block;
+  margin-bottom: 2px;
+  font-weight: 700;
+  word-break: break-all;
+}
+
 .dropzone_load_demo {
   display: flex;
   flex-direction: column;

@@ -2,6 +2,7 @@ import { handleActions } from 'utils/store';
 
 import {
   appendVisitNoteEntry, readVisitNote, refileVisitNoteEntry,
+  getImportedVisitNoteKey,
 } from 'utils/visitNotes';
 
 const KEY_DASHBOARD_SHOWN: StoreKey = 'records.dashboard.isShown';
@@ -28,6 +29,18 @@ const reducers: Partial<ReducerMap> = {
       const images = payload['images.props'];
       return images !== undefined && Object.keys(images).length > 0;
     },
+    /**
+     * A whole case has just arrived — the records page is where it is read.
+     *
+     * Only for a case file, never for an ordinary upload: a clinician who has
+     * just added one film to the tile they are working on is working on that
+     * film. A case file is a dozen images across three visits with their notes,
+     * and the one surface that shows those as a case is this one — a restore
+     * that landed on the upload screen while the rail silently filled up read as
+     * though nothing had happened.
+     */
+    IMPORT_FILE_SUCCEEDED: (state, { payload: { isCaseFile } }) =>
+      isCaseFile === true ? true : state,
   }, false),
   /**
    * The slot the next upload is filing into. Written by the dashboard's empty
@@ -99,16 +112,29 @@ const reducers: Partial<ReducerMap> = {
     },
     /**
      * Notes arriving with an imported wceph file: they fill in the visits that
-     * have none and leave every note already on file untouched.
-     * @see Events['LOAD_VISIT_NOTES']
+     * have none, and **nothing already on file is touched or lost**.
+     *
+     * The first half is unchanged and is the rule: an import can never replace an
+     * entry a clinician wrote in this chart. The second half is what this used to
+     * get wrong — a colliding entry was simply skipped, so the file's own note,
+     * with its versions, its authors and its timestamps, vanished without
+     * appearing anywhere, on a screen that had just counted it. It is kept now,
+     * under a key of its own, which puts it in the unfiled-notes panel where it
+     * is read in full and can be re-filed by hand.
+     * @see utils/visitNotes#getImportedVisitNoteKey, Events['LOAD_VISIT_NOTES']
      */
     LOAD_VISIT_NOTES: (state, { payload: { notes } }) => {
       const next = { ...state };
       Object.keys(notes).forEach((key) => {
-        if (readVisitNote(next[key]) === null &&
-          readVisitNote(notes[key]) !== null) {
-          next[key] = notes[key];
+        if (readVisitNote(notes[key]) === null) {
+          // Nothing written in it: there is no entry to keep or to collide with.
+          return;
         }
+        if (readVisitNote(next[key]) === null) {
+          next[key] = notes[key];
+          return;
+        }
+        next[getImportedVisitNoteKey(key, next)] = notes[key];
       });
       return next;
     },

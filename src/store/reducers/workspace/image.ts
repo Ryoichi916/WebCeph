@@ -111,11 +111,42 @@ const imagesReducer = handleActions<typeof KEY_IMAGES>(
       };
     },
     LOAD_IMAGE_SUCCEEDED: (state, { payload }) => {
+      /**
+       * A stored film is never written over by a different one.
+       *
+       * This action *merges* onto whatever the id already holds, which is what
+       * lets a re-read of the same file keep the record's type, timepoint and
+       * tracing. Handed a **different** film under an id already in use it did
+       * the opposite: the new pixels landed inside the old record, so the chart
+       * showed a photograph's bitmap labelled "Lateral cephalogram", filed at the
+       * old record's visit, still offering the tracing editor — one record where
+       * there had been two, with no error anywhere.
+       *
+       * The collision is prevented upstream now (ids are minted from the clock —
+       * see `utils/ids`) and refused at the import boundary with a message the
+       * clinician sees (see `store/middleware/import`). This is the last line: a
+       * reducer that cannot lose a record whatever reaches it. Different is
+       * judged on the bitmap, because that is the one field that *is* the film.
+       */
+      const existing = state[payload.id];
+      if (
+        existing !== undefined &&
+        typeof existing.data === 'string' && existing.data !== '' &&
+        typeof payload.data === 'string' && payload.data !== existing.data
+      ) {
+        console.error(
+          `Refused to load an image onto ${payload.id}: that id already holds a ` +
+          `different film (${existing.name || 'unnamed'}). Nothing was ` +
+          `overwritten; the incoming image (${payload.name || 'unnamed'}) was ` +
+          `not filed.`,
+        );
+        return state;
+      }
       return {
         ...state,
         [payload.id]: reconcileViewWithType(reconcileAnalysisWithType({
           ...defaultImageProps,
-          ...state[payload.id],
+          ...existing,
           ...payload,
         } as ImageEntry)),
       };
@@ -300,8 +331,14 @@ const reducers: Partial<ReducerMap> = {
 
 export default reducers;
 
-export const getAllImages = (state: StoreState) => state[KEY_IMAGES];
-export const getAllImagesStatus = (state: StoreState) => state[KEY_IMAGES_LOAD_STATUS];
+// The three image slices, read defensively. They are always present in a store
+// this app assembled — but not in one a spec assembles, and not in a partial
+// state handed to an exporter, and every selector below indexes straight into
+// them. `undefined[imageId]` is how the case file's own exporter used to fail.
+export const getAllImages = (state: StoreState) =>
+  state[KEY_IMAGES] || {};
+export const getAllImagesStatus = (state: StoreState) =>
+  state[KEY_IMAGES_LOAD_STATUS] || {};
 
 export const getImageProps = createSelector(
   getAllImages,
@@ -433,7 +470,7 @@ export const isImageTraceable = createSelector(
   (getType) => (id: string): boolean => isTraceableImageType(getType(id)),
 );
 
-export const getAllTracingData = (state: StoreState) => state[KEY_TRACING];
+export const getAllTracingData = (state: StoreState) => state[KEY_TRACING] || {};
 export const getTracingDataByImageId = createSelector(
   getAllTracingData,
   (all) => (id: string) => all[id],

@@ -22,6 +22,12 @@ import {
   reconcilePhotoView,
 } from 'utils/records';
 
+// A case file is not an image, and this input does not take one — the sentence
+// and the test are the middleware's, so the refusal cannot drift from it.
+import {
+  isCaseFileName, CASE_FILE_AT_IMAGE_INPUT,
+} from 'store/middleware/import';
+
 type InjectedIntlProps = {
   intl: InjectedIntl;
 };
@@ -313,7 +319,19 @@ const CephIllustration = ({ mark }: { mark: IllustrationMark }) => (
   </svg>
 );
 
-type State = ImageRecordMeta;
+type State = ImageRecordMeta & {
+  /**
+   * The name of a **case file** that was handed to this image input, or null.
+   *
+   * A `.wceph` is not an image and this form must not accept one as one: routed
+   * on its extension alone it used to merge a whole foreign case here — twelve
+   * films, three visits and another patient's clinical entries — with no
+   * manifest and no confirmation. It is refused at the input the clinician used,
+   * in the words `CASE_FILE_AT_IMAGE_INPUT` states, pointing at the surface that
+   * does read one. @see store/middleware/import
+   */
+  refusedCaseFile: string | null;
+};
 
 /**
  * The record details this upload starts on.
@@ -359,7 +377,7 @@ const getStartingMeta = (props: Props): ImageRecordMeta => {
 class CephDropzone extends React.PureComponent<Props & InjectedIntlProps, State> {
   dropzone: null | React.ReactInstance & { open: Function };
 
-  state: State = getStartingMeta(this.props);
+  state: State = { ...getStartingMeta(this.props), refusedCaseFile: null };
 
   /**
    * Re-open the form on the details the app now proposes.
@@ -389,7 +407,7 @@ class CephDropzone extends React.PureComponent<Props & InjectedIntlProps, State>
       // form — and therefore the record — on the position that was not asked for.
       before.photoView !== after.photoView
     ) {
-      this.setState(after);
+      this.setState({ ...after, refusedCaseFile: null });
     }
   }
 
@@ -401,7 +419,7 @@ class CephDropzone extends React.PureComponent<Props & InjectedIntlProps, State>
       filingIntent,
       intl: { formatMessage },
     } = this.props;
-    const { type } = this.state;
+    const { type, refusedCaseFile } = this.state;
     const isTraceable = isTraceableImageType(type);
     // Where this form came from, when it came from a slot: the clinician pressed
     // "Add profile photo" under T2 on the records dashboard and arrived here, so
@@ -464,6 +482,14 @@ class CephDropzone extends React.PureComponent<Props & InjectedIntlProps, State>
               labelStyle={{ textTransform: 'none', fontWeight: 600 }}
               onClick={this.openFilePicker}
             />
+            {refusedCaseFile !== null ? (
+              <p className={classes.dropzone_refused}>
+                <strong className={classes.dropzone_refused_name}>
+                  {refusedCaseFile}
+                </strong>
+                {CASE_FILE_AT_IMAGE_INPUT}
+              </p>
+            ) : null}
             {isOffline ? null : (
               <div className={classes.dropzone_load_demo}>
                 <span className={classes.dropzone_hint}>
@@ -490,9 +516,28 @@ class CephDropzone extends React.PureComponent<Props & InjectedIntlProps, State>
 
   private getMeta = (): ImageRecordMeta => normalizeRecordMeta(this.state);
 
-  private handleMetaChange = (value: ImageRecordMeta) => this.setState(value);
+  private handleMetaChange = (value: ImageRecordMeta) =>
+    this.setState({ ...value, refusedCaseFile: null });
 
-  private handleDrop = (files: File[]) => this.props.onFilesDrop(files, this.getMeta());
+  /**
+   * A case file chosen here is refused here.
+   *
+   * The import middleware refuses it too — that is the choke point no surface can
+   * bypass — but its refusal reaches a store slice this screen does not render,
+   * and a clinician who has just chosen a file is owed the sentence at the input
+   * they used. Anything that is not a case file goes on exactly as before, so a
+   * mixed drop still files its images. @see store/middleware/import
+   */
+  private handleDrop = (files: File[]) => {
+    const caseFiles = files.filter(({ name }) => isCaseFileName(name));
+    const images = files.filter(({ name }) => !isCaseFileName(name));
+    this.setState({
+      refusedCaseFile: caseFiles.length > 0 ? caseFiles[0].name : null,
+    });
+    if (images.length > 0) {
+      this.props.onFilesDrop(images, this.getMeta());
+    }
+  }
 
   // The sample is a lateral cephalogram; its type is not taken from the form.
   // Filing it as whatever the select showed produced a record that called an

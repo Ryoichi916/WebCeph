@@ -60,6 +60,12 @@ export const setActivePatient = createActionCreator('SET_ACTIVE_PATIENT_REQUESTE
 export const setPatientTrendPlot = createActionCreator(
   'SET_PATIENT_TREND_PLOT_REQUESTED',
 );
+// A restore from a case file that did not land — the chart it registered is
+// taken off the list again and the case list says why.
+// @see StoreState['patients.restoreError']
+export const restoreFromCaseFileFailed = createActionCreator(
+  'RESTORE_FROM_CASE_FILE_FAILED',
+);
 // What a patient's saved project holds — counted off the project when it is
 // written or opened, so the case list can be sorted and filtered on a case
 // without reading megabytes of film for every row. @see PatientCaseSummary

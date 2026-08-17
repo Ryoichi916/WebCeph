@@ -7,11 +7,14 @@ import {
   setActiveImageId,
 } from 'actions/workspace';
 
-import uniqueId from 'lodash/uniqueId';
+import { mintImageId } from 'utils/ids';
 
 const importFile: Importer = async (fileToImport, options) => {
   const {
-    ids = [uniqueId('imported_image_')],
+    // Minted from the clock, never from a module counter that restarts at 1 on
+    // every page load: an id that restarts overwrites the film already stored
+    // under it. @see utils/ids
+    ids = [mintImageId()],
     workspaceId,
     meta,
   } = options;

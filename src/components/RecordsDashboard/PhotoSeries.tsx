@@ -275,7 +275,10 @@ export default class PhotoSeries extends React.PureComponent<PhotoSeriesProps, D
           ? this.renderSparse(series, isCompare)
           : series.rows.map(({ row, cells }) => (
             <div key={row.key} className={classes.band}>
-              <span className={classes.band_label}>{row.label}</span>
+              <span className={classes.band_label}>
+                {row.label}
+                {this.renderBandAt()}
+              </span>
               <div
                 className={cx(classes.band_cells, classes[`band_cells__${row.key}`])}
               >
@@ -325,6 +328,34 @@ export default class PhotoSeries extends React.PureComponent<PhotoSeriesProps, D
   };
 
   /**
+   * Paper only: which visit's series this band belongs to, written into the
+   * band's own label ("EXTRAORAL — T1 · 2024-04-12").
+   *
+   * The composite is allowed to break across sheets now (see the stylesheet's
+   * print block): held together, a nine-frame series taller than what was left of
+   * a sheet was pushed whole to the next one, and a four-sheet chart printed as
+   * six with ~55% of sheet 1 blank. What a band that starts a fresh sheet needs is
+   * enough heading to be read — which is the visit it belongs to, since the
+   * series' own head ("PHOTOGRAPHIC SERIES · 9 of 9 positions") may be two sheets
+   * back. It is the one fact worth repeating three times: the band labels
+   * themselves (EXTRAORAL / INTRAORAL / OCCLUSAL) already name the rest.
+   *
+   * Never inside the comparison viewer, whose chrome names both visits, and never
+   * on screen, where the visit's stamp is 20mm to the left of every band.
+   */
+  private renderBandAt = () => {
+    if (this.props.variant === 'compare') {
+      return null;
+    }
+    const token = this.visitToken();
+    const day = this.props.group.firstDate;
+    const at = [token, day].filter((part) => part !== null).join(' · ');
+    return at !== '' ? (
+      <span className={classes.band_at} aria-hidden="true">{at}</span>
+    ) : null;
+  };
+
+  /**
    * A sparsely photographed visit: the frames it actually holds, in the series'
    * own reading order, on the extraoral band's own four-column grid — and nothing
    * else (the positions it has not got are named in `renderMissing` below).
@@ -361,7 +392,10 @@ export default class PhotoSeries extends React.PureComponent<PhotoSeriesProps, D
     }
     return (
       <div className={classes.band}>
-        <span className={classes.band_label}>On file</span>
+        <span className={classes.band_label}>
+          On file
+          {this.renderBandAt()}
+        </span>
         <div className={cx(classes.band_cells, classes.band_cells__sparse)}>
           {filled.map((cell) => this.renderCell(cell, isCompare))}
         </div>

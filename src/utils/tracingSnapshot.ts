@@ -229,7 +229,7 @@ const drawLabels = (
  * film), in image coordinates, which is also the coordinate space the caller
  * has already translated the context into.
  */
-const drawScaleBar = (
+export const drawScaleBar = (
   ctx: CanvasRenderingContext2D,
   box: Crop,
   mmPerPx: number,

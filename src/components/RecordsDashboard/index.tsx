@@ -6,6 +6,9 @@ import { Helmet } from 'react-helmet';
 
 import RaisedButton from 'material-ui/RaisedButton';
 import IconPrint from 'material-ui/svg-icons/action/print';
+// The case file's two directions — the same marks the editor's Export menu uses.
+import IconExportFile from 'material-ui/svg-icons/file/file-download';
+import IconImportFile from 'material-ui/svg-icons/file/file-upload';
 import IconChevron from 'material-ui/svg-icons/navigation/chevron-right';
 import IconPrev from 'material-ui/svg-icons/navigation/chevron-left';
 import IconBack from 'material-ui/svg-icons/navigation/arrow-back';
@@ -42,6 +45,10 @@ import TrendChart from './TrendChart';
 // whose visit is no longer on file.
 import VisitNoteBlock, { UnmatchedVisitNotes } from './VisitNote';
 import VisitNoteDialog from './VisitNoteDialog';
+// The one file a case leaves this device in, and everything it does and does not
+// carry, said before it is written or read. @see components/CaseFile
+import CaseFile from 'components/CaseFile/connected';
+import { CaseFileMode } from 'components/CaseFile/props';
 
 // The three views this surface launches. Each is the connected component the
 // editor's toolbar opens, opened here with the record the dashboard is pointing
@@ -64,6 +71,9 @@ import { formatScale } from 'components/TracingToolbar/CalibrationDialog';
 import {
   readLetterhead,
   formatClinicianLine,
+  STORAGE_KEY_CLINIC,
+  STORAGE_KEY_CLINICIAN,
+  STORAGE_KEY_LICENSE,
 } from 'components/ClinicalReport/letterhead';
 
 // …and the printed page's own plumbing, from the view that established it: the
@@ -76,6 +86,9 @@ import {
   PRINT_FONT,
   cssString,
   documentDate,
+  // The report's own letterhead field, reused rather than re-implemented: one
+  // field, one storage key, one identity on every sheet this app prints.
+  StoredEditable,
 } from 'components/ClinicalReport';
 
 import {
@@ -645,6 +658,12 @@ interface State {
    */
   photoQueue: Array<{ file: File; meta: ImageRecordMeta }>;
   /**
+   * The visit a photographic batch was filed at while that batch is still
+   * landing, and null once the workspace behind this surface has been settled on
+   * one of the chart's own records. @see settleAfterPhotoBatch
+   */
+  settleVisitAfterBatch: string | null;
+  /**
    * The visit whose clinical note is being written or amended, or null — held as
    * the note's own **timepoint key** (@see utils/visitNotes#getVisitNoteKey), which
    * is what the note is filed under.
@@ -654,6 +673,28 @@ interface State {
    * that day would make the entry depend on which film was clicked.
    */
   editingNoteFor: string | null;
+  /**
+   * Which half of the case file dialog is open, or null — writing this chart out
+   * as a `.wceph`, or reading one into it. @see components/CaseFile
+   *
+   * It lives on this surface because this is where a case *is* a case: the whole
+   * record on one page. The editor's Export menu opens the same dialog on the same
+   * component, so the two entry points cannot describe the file differently.
+   */
+  caseFileMode: CaseFileMode;
+  /**
+   * The practice identity this device prints under, mirrored from the stored
+   * letterhead so an edit in the strip below the identity band re-renders the
+   * running head that prints it. @see renderLetterhead
+   */
+  letterhead: { clinic: string; clinician: string; license: string };
+  /**
+   * Bumped whenever the stored letterhead may have been changed by another view
+   * (the clinical report types the same three fields). The strip's fields are
+   * uncontrolled — they read storage once, at mount — so this is what remounts
+   * them on a value they did not write. @see closeReport
+   */
+  letterheadEpoch: number;
 }
 
 /**
@@ -704,7 +745,11 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
     photoViewer: null,
     photoBatch: null,
     photoQueue: [],
+    settleVisitAfterBatch: null,
     editingNoteFor: null,
+    caseFileMode: null,
+    letterhead: readLetterhead(),
+    letterheadEpoch: 0,
   };
 
   private root: HTMLElement | null = null;
@@ -746,6 +791,13 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
       && prev.records.length !== this.props.records.length) {
       this.pumpPhotoQueue();
     }
+    // …and the last of them has landed: put the workspace behind this surface
+    // back onto a record of the chart. @see settleAfterPhotoBatch
+    if (this.state.photoQueue.length === 0
+      && this.state.settleVisitAfterBatch !== null
+      && prev.records.length !== this.props.records.length) {
+      this.settleAfterPhotoBatch();
+    }
   }
 
   componentWillUnmount() {
@@ -767,6 +819,19 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
     const destination = active !== undefined
       ? [active.timepoint, getImageTypeLabel(active.type)]
         .filter((part) => part !== null).join(' · ')
+      : null;
+    // …and the *label* names only the visit.
+    //
+    // "Back to T3 Debond · Lateral cepha…" was one of three labels this bar
+    // truncated at once at 1280 — a normal clinic laptop — and truncating the
+    // destination of the only way out of a screen is the worst of the three. The
+    // timepoint is what identifies where Esc lands (the film's type is on the row
+    // this control returns to, and in the title), so the label carries the
+    // timepoint and the tooltip still carries both.
+    const destinationShort = active !== undefined
+      ? ((active.timepoint !== null
+        ? getTimepointToken(active.timepoint) : null) ||
+        getImageTypeShortLabel(active.type))
       : null;
     const note = this.getTraceableNote();
     const { isHeadFloating } = this.state;
@@ -809,8 +874,8 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
               <span className={classes.back_label}>
                 {/* With no record open the surface behind this one is the upload
                     screen, not an editor — the label says what the title says. */}
-                {destination === null
-                  ? 'Back to the workspace' : `Back to ${destination}`}
+                {destinationShort === null
+                  ? 'Back to the workspace' : `Back to ${destinationShort}`}
               </span>
               <kbd className={classes.back_key}>Esc</kbd>
             </button>
@@ -841,17 +906,56 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
                 screen is for. Same mark and same wording as the report, the
                 simulation and the superimposition, because it is the same act.
                 Offered once there is a record to print. */}
+            {/* One group, so the bar's controls wrap together instead of the last
+                of them being squeezed: below ~1200px the three secondary actions
+                keep their marks and drop their labels (each states itself through
+                `aria-label` and its tooltip, which is what a mark-only control
+                owes a reader), and the group wraps to a second line before
+                anything is clipped. The primary action's label is the one that
+                must survive every width — "Add" is not an act. */}
+            <div className={classes.pagebar_actions}>
             {records.length > 0 ? (
               <button
                 type="button"
                 className={classes.print_action}
                 title="Print this patient's case records, or save them as a PDF"
+                aria-label="Print the case records, or save them as a PDF"
                 onClick={this.handlePrint}
               >
                 <IconPrint color="currentColor" style={actionIconStyle} />
-                <span>Print / Save as PDF</span>
+                <span className={classes.action_label}>Print / Save as PDF</span>
               </button>
             ) : null}
+            {/* The case file, both ways. This chart is held in this browser and
+                nowhere else, which makes the `.wceph` the only way it ever moves
+                to another machine, gets kept off it, or reaches a colleague — and
+                until now it could not be reached from the surface that shows the
+                whole case at all. Both open the same dialog, which states what
+                the file carries and what it does not before anything is written
+                or read. Same mark and same weight as Print: neither is what this
+                screen is *for*. */}
+            {records.length > 0 ? (
+              <button
+                type="button"
+                className={classes.print_action}
+                title="Write this whole case — its images, tracings, scales and clinical entries — to one .wceph file"
+                aria-label="Export this case as a .wceph case file"
+                onClick={this.openCaseFileExport}
+              >
+                <IconExportFile color="currentColor" style={actionIconStyle} />
+                <span className={classes.action_label}>Export case file</span>
+              </button>
+            ) : null}
+            <button
+              type="button"
+              className={classes.print_action}
+              title="Read a .wceph case file into this chart — nothing already on it is replaced"
+              aria-label="Open a .wceph case file into this chart"
+              onClick={this.openCaseFileImport}
+            >
+              <IconImportFile color="currentColor" style={actionIconStyle} />
+              <span className={classes.action_label}>Open case file</span>
+            </button>
             {/* One primary action per view: with nothing on file the empty state
                 below owns it, and repeating it here would give the screen two.
                 The wrapper carries the surface's own focus ring — mui's pale
@@ -866,6 +970,7 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
                 onClick={this.handleAddImage}
               />
             ) : null}
+            </div>
           </div>
         </div>
 
@@ -892,6 +997,9 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
             <tr className={classes.page_row}>
             <td className={classes.page_cell}>
             {this.renderIdentity()}
+            {/* …the practice the chart is printed under, typed here or in the
+                report — one letterhead, one standard, both documents. */}
+            {this.renderLetterhead()}
             {/* …then the case as one horizontal line of time: every visit as a
                 stop on a rail, the elapsed interval written on the rail between
                 consecutive stops, and the cross-timepoint action that lives in
@@ -986,8 +1094,17 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
                       />
                     </span>
                     <div className={cx(classes.slots, classes.slots__empty)}>
+                      {/* One vocabulary for one control row. The identical row
+                          read "OR FILE AT T1" on the empty chart and "NOT FILED AT
+                          T2" under a populated visit — two names for the same
+                          control, 400px apart on the same surface. It is a
+                          statement of what is not on file, wherever it stands, and
+                          each pill in it files exactly the type it names. */}
                       <span className={classes.slots_label}>
-                        Or file at {getDefaultTimepoint(0)}
+                        {'Not filed at '}
+                        <span className={classes.slots_at}>
+                          {getDefaultTimepoint(0)}
+                        </span>
                       </span>
                       <span className={classes.slots_list}>
                         {IMAGE_TYPE_OPTIONS
@@ -1069,7 +1186,18 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
                               inline palette colour, not the button's — state the
                               colour outright. */}
                           <IconAdd color="#52616F" style={actionIconStyle} />
-                          <span>Add another image to this record</span>
+                          {/* **"Record" means one image on this surface, and
+                              nothing else.** Within 400px of each other the word
+                              named three different things: the chart ("add another
+                              image to this record"), one image ("remove … from the
+                              record", "RECORD DETAILS" in the upload form) and the
+                              section ("Case records"). A clinician reading this row
+                              could not tell whether it filed into the last visit or
+                              opened a new one — which is the one thing the row has
+                              to say. So the row says what it does: it opens the
+                              upload form with no visit chosen, which is how an image
+                              is filed at a visit the chart has not got yet. */}
+                          <span>File an image at a new visit</span>
                         </span>
                       </button>
                     </div>
@@ -1390,44 +1518,23 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
    * there.
    */
   private renderPrintHead = () => {
-    const { patient } = this.props;
+    const { patient, records } = this.props;
     const name = patient !== null && patient.name ? patient.name : null;
     const chartId = patient !== null && patient.chartId ? patient.chartId : null;
     const dob = patient !== null ? formatDisplayDate(patient.dateOfBirth) : null;
     const sex = patient !== null ? formatSexFull(patient.sex) : null;
     const heading = name !== null ? name
       : (chartId !== null ? chartId : '(unnamed patient)');
-    const parts: string[] = [];
-    if (name !== null) {
-      parts.push(chartId !== null ? `Chart ${chartId}` : 'No chart ID');
-    }
-    if (patient !== null) {
-      parts.push(dob !== null ? `DOB ${dob}` : 'Date of birth not recorded');
-      parts.push(sex !== null ? sex : 'Sex not recorded');
-    }
     // What the record covers, on the same terms the band states it on screen.
     const {
       groups, timepointCount, unlabelled, span, notedVisits,
     } = this.getRecordFacts();
-    if (groups.length > 1) {
-      const labelled = timepointCount > 0
-        ? `${timepointCount} timepoints` : 'No timepoint labels';
-      parts.push(unlabelled > 0
-        ? `${labelled} + ${unlabelled} unlabelled ` +
-          `${unlabelled === 1 ? 'image' : 'images'}`
-        : labelled);
-    }
-    if (span !== null) {
-      parts.push(span.interval !== null
-        ? `${span.dates} (${span.interval})` : span.dates);
-    }
-    // …and how much of it is written up, where anything is. The entries themselves
-    // print with their visits; this says at a glance whether the sheet in hand is
-    // a complete record or an imaging record with the notes still to come.
-    if (notedVisits > 0) {
-      parts.push(`Notes at ${notedVisits} of ${groups.length} ` +
-        `${groups.length === 1 ? 'visit' : 'visits'}`);
-    }
+    const timepoints = groups.length === 0
+      ? null
+      : (timepointCount > 0 ? String(timepointCount) : 'None labelled');
+    const unlabelledNote = unlabelled > 0
+      ? `+ ${unlabelled} unlabelled ${unlabelled === 1 ? 'image' : 'images'}`
+      : null;
     // Whose practice holds the record. Read from the one letterhead this app
     // stores — the same practice, clinician and license the clinical report's
     // masthead and the superimposition's signature block print — so a records
@@ -1435,41 +1542,185 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
     // be signed to two different standards. Never invented: with nothing stored
     // the line is simply not there, and the printed-on date in the running foot
     // still says which copy this is.
+    //
+    // Read from storage at every render — never from this component's mirror of
+    // it — because this is the copy that goes on paper: whatever is stored when
+    // the sheet is printed is what the sheet must say. (The mirror in state is
+    // only what makes this re-render when the strip below the identity band is
+    // typed into; see `renderLetterhead`.)
     const letterhead = readLetterhead();
     const clinicianLine = formatClinicianLine(letterhead);
-    // …and the practice is the first thing on that line, at a weight a chart
-    // reader can see it at. Set as one run of 8.5pt tertiary grey with the
-    // clinician's name and license, the practice that holds the record was the
-    // third, smallest, greyest line of the sheet — while the report's first sheet
-    // gives the same practice a masthead. Whose record this is is not a footnote.
     const clinic = letterhead.clinic !== '' ? letterhead.clinic : null;
+    // One cell of the facts grid: the key, the value, and — where the value needs
+    // one — the quiet reading under it. An absent optional value prints an
+    // em-dash, exactly as the report's own grid does: a chart that simply leaves
+    // the date of birth out cannot be told from one belonging to a patient who has
+    // one, and every norm in this app is age- and sex-corrected.
+    const cell = (label: string, value: string | null, note?: string | null) => (
+      <span key={label} className={classes.ps_cell}>
+        <span className={classes.ps_label}>{label}</span>
+        <span className={classes.ps_value}>{value !== null ? value : '—'}</span>
+        {note !== undefined && note !== null ? (
+          <span className={classes.ps_note}>{note}</span>
+        ) : null}
+      </span>
+    );
     return (
       <thead className={classes.print_head} aria-hidden="true">
         <tr>
           <th className={classes.print_head_cell} scope="col">
             <span className={classes.print_head_inner}>
-              <span className={classes.print_head_label}>Case records</span>
-              <span className={classes.print_head_name}>{heading}</span>
-              {parts.length > 0 ? (
-                <span className={classes.print_head_facts}>{parts.join(' · ')}</span>
-              ) : null}
-              {clinic !== null || clinicianLine !== '' ? (
-                <span className={classes.print_head_clinic}>
-                  {clinic !== null ? (
-                    <span className={classes.print_head_practice}>{clinic}</span>
-                  ) : null}
+              {/* The masthead the clinical report opens with, in the same ink and
+                  the same register — practice on the left, the document and the
+                  day it was printed on the right, over the letterhead's 2pt rule.
+                  Shared, literally: both sheets are set by the same mixins (see
+                  `components/_printsheet.scss`), so a chart holding a case sheet
+                  and a report cannot look like a chart holding two practices'
+                  paperwork. */}
+              <span className={classes.ps_masthead}>
+                <span className={classes.ps_mast_left}>
+                  <span className={classes.ps_practice}>
+                    {clinic !== null ? clinic : 'Practice not named'}
+                  </span>
                   {clinicianLine !== '' ? (
-                    <span className={classes.print_head_clinician}>
-                      {clinicianLine}
-                    </span>
+                    <span className={classes.ps_clinician}>{clinicianLine}</span>
                   ) : null}
                 </span>
-              ) : null}
+                <span className={classes.ps_mast_right}>
+                  <span className={classes.ps_kicker}>Case records</span>
+                  <span className={classes.ps_date}>
+                    {documentDate(new Date())}
+                  </span>
+                </span>
+              </span>
+              {/* …and the facts as the report's bordered grid rather than as a run
+                  of 8pt grey text separated by dots. Two rows: who the record
+                  belongs to, then what it holds — including the count that used to
+                  print as a rounded blue screen chip alone in a full-width strip
+                  at the head of sheet 1 (see `.records_head` in the print block).
+                  It repeats on every sheet, with the patient's identity, because a
+                  loose sheet of somebody's imaging records is a records defect in
+                  its own right. */}
+              <span className={classes.ps_facts}>
+                <span className={classes.ps_row}>
+                  {cell('Patient', heading, name === null && chartId !== null
+                    ? 'Name not recorded' : null)}
+                  {cell('Chart ID', chartId)}
+                  {cell('Date of birth', dob, sex !== null ? sex : 'Sex not recorded')}
+                </span>
+                <span className={classes.ps_row}>
+                  {cell(
+                    records.length === 1 ? 'Image on file' : 'Images on file',
+                    String(records.length),
+                    notedVisits > 0
+                      ? `Notes at ${notedVisits} of ${groups.length} ` +
+                        `${groups.length === 1 ? 'visit' : 'visits'}`
+                      : 'No clinical entry written',
+                  )}
+                  {cell('Timepoints', timepoints, unlabelledNote)}
+                  {cell(
+                    'Record span',
+                    span !== null ? span.dates : null,
+                    span !== null ? span.interval : null,
+                  )}
+                </span>
+              </span>
             </span>
           </th>
         </tr>
       </thead>
     );
+  };
+
+  /**
+   * The practice this chart is printed under — and the one place on this surface
+   * where it can be typed.
+   *
+   * The letterhead is the *practice's* identity, not the patient's and not this
+   * document's: it is stored once per device and read back by every printable
+   * view (`ClinicalReport/letterhead`). The clinical report offered the fields —
+   * "+ Add clinic name", and the clinician and license in its certification block
+   * — and every other printed view read them. The case sheet read them too, but a
+   * clinic that works from the records page and prints from the records page had
+   * no way to *enter* them: the sheet's running head then said "CASE RECORDS ·
+   * 田中 美咲" and nothing about whose practice held the record, which is not a
+   * document to file in a chart or send to a referrer.
+   *
+   * The very same field component, storage keys and wording as the report, so
+   * neither sheet can be signed to a standard the other is not. Screen only: on
+   * paper this is the running head, printed on every sheet (see
+   * `renderPrintHead`), and printing an editable field's dashed rule would be
+   * printing a control.
+   */
+  private renderLetterhead = () => {
+    const { clinic, clinician, license } = this.state.letterhead;
+    const epoch = this.state.letterheadEpoch;
+    return (
+      <div className={classes.letterhead}>
+        <span className={classes.letterhead_key}>Letterhead</span>
+        <span className={classes.letterhead_fields}>
+          <StoredEditable
+            key={`clinic-${epoch}`}
+            storageKey={STORAGE_KEY_CLINIC}
+            className={classes.letterhead_clinic}
+            placeholder="+ Add clinic name"
+            ariaLabel="Clinic name, printed on every sheet of this chart (click to edit)"
+            onChange={this.handleClinicChange}
+          />
+          <span className={classes.letterhead_sep} aria-hidden="true">·</span>
+          <StoredEditable
+            key={`clinician-${epoch}`}
+            storageKey={STORAGE_KEY_CLINICIAN}
+            className={classes.letterhead_person}
+            placeholder="+ Add clinician name"
+            ariaLabel="Clinician name, printed on every sheet of this chart (click to edit)"
+            onChange={this.handleClinicianChange}
+          />
+          <span className={classes.letterhead_sep} aria-hidden="true">·</span>
+          <span className={classes.letterhead_license}>
+            <span className={classes.letterhead_license_key}>License no.</span>
+            <StoredEditable
+              key={`license-${epoch}`}
+              storageKey={STORAGE_KEY_LICENSE}
+              className={classes.letterhead_person}
+              placeholder="—"
+              ariaLabel="Clinician license number (click to edit)"
+              onChange={this.handleLicenseChange}
+            />
+          </span>
+        </span>
+        {/* What typing here does, said once and honestly: it is device-local
+            presentation identity, not patient data, and it is the same identity
+            the analysis report prints. A clinic that has entered nothing is told
+            what the sheet will be missing rather than left to find out at the
+            printer. */}
+        <span className={classes.letterhead_note}>
+          {clinic === '' && clinician === '' && license === ''
+            ? 'Prints at the head of every sheet of this chart, and on the ' +
+              'analysis report. Stored on this device only.'
+            : 'Prints at the head of every sheet of this chart, and on the ' +
+              'analysis report.'}
+        </span>
+      </div>
+    );
+  };
+
+  private handleClinicChange = (clinic: string) => {
+    this.setState(({ letterhead }) => ({
+      letterhead: { ...letterhead, clinic },
+    }));
+  };
+
+  private handleClinicianChange = (clinician: string) => {
+    this.setState(({ letterhead }) => ({
+      letterhead: { ...letterhead, clinician },
+    }));
+  };
+
+  private handleLicenseChange = (license: string) => {
+    this.setState(({ letterhead }) => ({
+      letterhead: { ...letterhead, license },
+    }));
   };
 
   /**
@@ -1914,8 +2165,59 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
         <p className={classes.records_tail_line}>{this.renderTallyItems()}</p>
       ) : null}
       {this.renderRecordsNotes(groups)}
+      {this.renderPrintCertification()}
     </div>
   );
+
+  /**
+   * The sheet's signature block — the report's own certification, at the tail of
+   * the case sheet.
+   *
+   * A case sheet carries three clinical entries and every film's findings and had
+   * **nothing to sign**: no compiler, no countersignature, no date, on a document a
+   * practice sends to a referrer and files in a chart — while the clinical report
+   * printed from the same app closes with exactly such a block. So it is the same
+   * block, set by the same shared print stylesheet
+   * (`components/_printsheet.scss`): ruled lines, the stored clinician and license
+   * printed on them where this device has them, and the day signed by hand.
+   *
+   * "Compiled by", not "Examined by": this sheet is a *copy of the record* — it
+   * asserts who put the copy together and when, and nothing about who wrote the
+   * entries inside it (which each carry their own stamp, and which no signature
+   * here may claim). Paper only, and only under a record that has something in it;
+   * printed inside the closing block, so it travels with the tallies it follows
+   * rather than opening a sheet of its own.
+   */
+  private renderPrintCertification = () => {
+    const letterhead = readLetterhead();
+    const clinician = letterhead.clinician !== '' ? letterhead.clinician : null;
+    const license = letterhead.license !== '' ? letterhead.license : null;
+    return (
+      <div className={classes.ps_sig}>
+        <span className={classes.ps_sig_label}>Certification</span>
+        <span className={classes.ps_sig_row}>
+          <span className={cx(classes.ps_sig_field, classes.ps_sig_field__wide)}>
+            <span className={classes.ps_sig_line}>
+              {clinician !== null ? clinician : ''}
+            </span>
+            <span className={classes.ps_sig_caption}>
+              Compiled by — name &amp; signature
+            </span>
+          </span>
+          <span className={classes.ps_sig_field}>
+            <span className={classes.ps_sig_line}>
+              {license !== null ? `License no. ${license}` : ''}
+            </span>
+            <span className={classes.ps_sig_caption}>License no.</span>
+          </span>
+          <span className={classes.ps_sig_field}>
+            <span className={classes.ps_sig_line} />
+            <span className={classes.ps_sig_caption}>Date</span>
+          </span>
+        </span>
+      </div>
+    );
+  };
 
   /**
    * The printed sheet's closing notes — paper only, and the two facts the sheet
@@ -1958,7 +2260,21 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
       return record.isTraceable && record.isCalibrated &&
         size !== null && !size.isPlausible;
     }).length;
-    if (!hasOmissions && suspect === 0) {
+    // …and how many of the clinical entries on this sheet carry no stored author.
+    //
+    // On paper the phrase comes off each entry's own provenance line (@see
+    // utils/visitNotes#formatVisitNoteProvenance) and is stated here, once: three
+    // entries each printing "author not recorded" under a running head that names
+    // the practice, the clinician and their license number is one document giving
+    // two answers to "who wrote this". Counted off the notes themselves, and it
+    // never asserts who *did* write them — an entry saved before a clinician was
+    // entered on this device has no author on file, and no sheet may imply
+    // otherwise.
+    const unattributed = groups.reduce((total, group) => {
+      const reading = readVisitNote(this.props.notes[group.key]);
+      return reading !== null && reading.recordedBy === null ? total + 1 : total;
+    }, 0);
+    if (!hasOmissions && suspect === 0 && unattributed === 0) {
       return null;
     }
     return (
@@ -1969,10 +2285,29 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
             {COVERAGE_QUALIFIER}
           </p>
         ) : null}
+        {unattributed > 0 ? (
+          <p className={classes.records_note_line}>
+            <span className={classes.records_note_key}>Author</span>
+            {(unattributed === 1
+              ? 'One clinical entry on this sheet records no author'
+              : `${unattributed} clinical entries on this sheet record no ` +
+                'author') +
+              ' — each was written before a clinician was entered on this ' +
+              'device, and this record is append-only, so the entries cannot be ' +
+              'attributed after the fact. The practice and clinician in the head ' +
+              'of this sheet sign this copy of the record, not those entries.'}
+          </p>
+        ) : null}
         {suspect > 0 ? (
           <p className={classes.records_note_line}>
             <span className={classes.records_note_key}>Check scale</span>
-            {`The amber size beside a film's scale is what that scale says the ` +
+            {/* …and the mark is named, because on paper it is a mark and not a
+                colour: a chart printed on the practice's mono laser loses every
+                tint on this sheet, and this is the one note that says the
+                millimetre values may be wrong. @see the print block's chip and
+                `.fact_note__warn` rules. */}
+            {`A \u26A0 mark flags a reading to check. Beside a film's scale it ` +
+             `is what that scale says the ` +
              `film physically measures. A cephalogram's sides fall between ` +
              `${FILM_SIZE_BAND.minMm} and ${FILM_SIZE_BAND.maxMm} mm; outside ` +
              `that band the calibration is wrong, and every millimetre measured ` +
@@ -2032,7 +2367,12 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
           title={`Nothing is filed at a timepoint yet — these slots open the ` +
             `upload form filed at ${first}`}
         >
-          <span className={classes.slots_label}>Or file at {first}</span>
+          {/* …and the same words on the untimepointed group's own offer row.
+              @see the empty state's row above. */}
+          <span className={classes.slots_label}>
+            {'Not filed at '}
+            <span className={classes.slots_at}>{first}</span>
+          </span>
           <span className={classes.slots_list}>
             {IMAGE_TYPE_OPTIONS
               // …and the photographs are one slot, the series itself (see the
@@ -2366,6 +2706,11 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
       + (series.length > 0 ? 1 : 0);
     return (
       <aside className={classes.coverage} aria-label="What this case holds">
+        {/* The pane's content is a rail: it sticks to the top of the scrollport
+            so the case-wide reading is still there halfway down a 3000px
+            chronology (see `.coverage_sticky`, which argues why the width is
+            kept rather than handed back to the photographs). */}
+        <div className={classes.coverage_sticky}>
         <div className={classes.coverage_head}>
           <span className={classes.coverage_title}>Across all visits</span>
           <span className={classes.coverage_count}>
@@ -2420,7 +2765,97 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
             on file, not a checklist a case can fail. (One string, printed at the
             panel's foot on paper — see `COVERAGE_QUALIFIER`.) */}
         <p className={classes.coverage_note}>{COVERAGE_QUALIFIER}</p>
+        {this.renderCoverageWork(groups)}
+        </div>
       </aside>
+    );
+  };
+
+  /**
+   * The second half of the rail: **what has been done to this case**, as against
+   * what it holds.
+   *
+   * The pane was a dead column. Five type rows and a closing sentence ended after
+   * ~250px and left 244 × 600+px of empty white down the right of a case that runs
+   * to four screens — measured at both 1440 and 1920. The width was defensible and
+   * the emptiness was not, so the column holds the readings that were only ever
+   * available in places that move: the two tallies live in a bar that floats over
+   * the foot of the well, the entry count lives in the identity band at the very
+   * top, and the scale flag lives in a chip per card. This is a rail — it sticks
+   * while the case is scrolled — so halfway down a 3000px chronology it is still
+   * answering "how far along is this case, and is anything wrong with it".
+   *
+   * Every figure is the same figure the bar and the band print, off the same two
+   * readings (`getRecordsTally`, `getRecordFacts`) — never a second count of the
+   * same films.
+   */
+  private renderCoverageWork = (groups: TimepointGroup<PatientRecord>[]) => {
+    const { total, traced, calibrated, suspect, copied, noun } =
+      this.getRecordsTally();
+    const { notedVisits } = this.getRecordFacts();
+    // Nothing traceable on file: the two tracing tallies would both read "0 of 0",
+    // and a case of photographs alone is not a case with tracing outstanding.
+    if (total === 0 && groups.length === 0) {
+      return null;
+    }
+    const row = (
+      label: string, value: string, isWarn: boolean = false, title?: string,
+    ) => (
+      <div key={label} className={classes.coverage_row}>
+        <dt className={classes.coverage_type}>{label}</dt>
+        <dd className={classes.coverage_at} title={title}>
+          <span
+            className={cx(classes.coverage_work_value, {
+              [classes.coverage_work_value__warn]: isWarn,
+            })}
+          >
+            {value}
+          </span>
+        </dd>
+      </div>
+    );
+    return (
+      <div className={classes.coverage_work}>
+        <div className={classes.coverage_head}>
+          <span className={classes.coverage_title}>Work on this case</span>
+        </div>
+        <dl className={classes.coverage_list}>
+          {total > 0 ? row(
+            'Traced', `${traced} of ${total} ${noun}`, false,
+            'Tracing is offered on lateral cephalograms only, so this is ' +
+            'counted over the record\'s lateral cephalograms.',
+          ) : null}
+          {total > 0 ? row(
+            'Calibrated',
+            copied > 0
+              ? `${calibrated} of ${total} · ${copied} copied`
+              : `${calibrated} of ${total} ${noun}`,
+            false,
+            copied > 0
+              ? 'A copied scale was carried over from another film of this ' +
+                'record rather than measured on the film itself. Each card names ' +
+                'the film its scale came from.'
+              : undefined,
+          ) : null}
+          {total > 0 ? row(
+            'Scale check',
+            suspect === 0
+              ? 'None flagged'
+              : (suspect === 1 ? '1 scale' : `${suspect} scales`),
+            suspect > 0,
+            suspect > 0
+              ? `The scale on ${suspect === 1 ? 'this film makes it' : 'these films makes them'} ` +
+                `smaller or larger than the ${FILM_SIZE_BAND.minMm}–` +
+                `${FILM_SIZE_BAND.maxMm} mm a cephalogram measures.`
+              : undefined,
+          ) : null}
+          {groups.length > 0 ? row(
+            'Clinical entries',
+            `${notedVisits} of ${groups.length} ` +
+              `${groups.length === 1 ? 'visit' : 'visits'}`,
+          ) : null}
+        </dl>
+      </div>
     );
   };
 
@@ -3598,7 +4033,21 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
   private handleOpenReport = (record: PatientRecord) => () =>
     this.setState({ reportImageId: record.imageId });
 
-  private closeReport = () => this.setState({ reportImageId: null });
+  /**
+   * …and the report is the *other* place this device's letterhead is typed, so
+   * the strip and the running head re-read it on the way out. Without this, a
+   * clinic name entered in the report's masthead left the case sheet's own field
+   * showing the name it had at mount — and the two documents would then have been
+   * signed differently by the same app on the same device, which is the whole
+   * fault this letterhead exists to prevent. The epoch remounts the uncontrolled
+   * fields (they read storage once, at mount); it is bumped only here, never
+   * while the fields are being typed into, so it cannot take the caret.
+   */
+  private closeReport = () => this.setState(({ letterheadEpoch }) => ({
+    reportImageId: null,
+    letterhead: readLetterhead(),
+    letterheadEpoch: letterheadEpoch + 1,
+  }));
 
   private handleOpenSimulation = (record: PatientRecord) => () =>
     this.setState({ simulationImageId: record.imageId });
@@ -3969,6 +4418,17 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
                 )
               ) : null}
             </span>
+            {/* The film's state and its technicals on **one** wrapping row,
+                left-aligned against the chips.
+                They used to be two blocks at opposite ends of the row: the title
+                and its chips ended at x≈940 and the SCALE/PIXELS column began at
+                x≈1225, so every image row on the page carried ~280px of nothing
+                across its middle — at every window, because the page column is
+                capped. The hairline that column stood behind was a page-wide rule,
+                which is what made the hole page-wide too. Read as a list row now:
+                what the film is, what state it is in, what it measures, in reading
+                order, and the row's slack falls once, before the chevron. */}
+            <span className={classes.card_facts}>
             <span className={classes.card_chips}>
               {/* The analysis is named inside the tracing count (it is that
                   analysis's count), so the card no longer carries a separate
@@ -4012,13 +4472,9 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
                 </span>
               ) : null}
             </span>
-          </span>
-          {/* What the file actually is, as a column at the card's right rather
-              than a fourth line under the chips: the cards of a visit are one
-              width, so pixel size and scale line up down the page and the row's
-              slack falls in one place instead of stretching the gap between a
-              film's name and its date to 700px. Every value is read off the
-              store; an item is omitted, not guessed. */}
+          {/* What the file actually is — the scale it was calibrated at, the
+              pixels it holds and the name it was filed under. Every value is read
+              off the store; an item is omitted, not guessed. */}
           <span className={classes.card_tech}>
             {/* The scale leads this column, and the pixel size follows it quietly.
                 Set the other way round and at one weight, the *file's* dimensions
@@ -4072,6 +4528,8 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
               </span>
             ) : null}
           </span>
+          </span>
+          </span>
           <span className={classes.card_go} aria-hidden="true">
             <IconChevron color="#7B8794" style={{ width: 20, height: 20 }} />
           </span>
@@ -4089,8 +4547,11 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
           <button
             type="button"
             className={cx(classes.icon_button, classes.icon_button__danger)}
-            title={`Remove ${identity} from this patient's record`}
-            aria-label={`Remove ${identity} from the record`}
+            // "…from this chart", never "from the record": on this surface a
+            // *record* is one image, and this control removes one. @see the
+            // trailing add row for the whole argument.
+            title={`Remove ${identity} from this chart`}
+            aria-label={`Remove ${identity} from this chart`}
             onClick={this.handleRemoveClick(record)}
           >
             <IconDelete color="currentColor" style={actionIconStyle} />
@@ -4277,8 +4738,26 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
             wrong visit from a page of six — and it states, before saving, that an
             amendment keeps what is on file. */}
         {this.renderVisitNoteDialog()}
+        {/* Writing the case out as one file, or reading one in — with what the
+            format carries, and what it does not, stated first. */}
+        <CaseFile
+          mode={this.state.caseFileMode}
+          onRequestClose={this.closeCaseFile}
+        />
       </div>
     );
+  };
+
+  private openCaseFileExport = () => {
+    this.setState({ caseFileMode: 'export' });
+  };
+
+  private openCaseFileImport = () => {
+    this.setState({ caseFileMode: 'import' });
+  };
+
+  private closeCaseFile = () => {
+    this.setState({ caseFileMode: null });
   };
 
   /**
@@ -4623,9 +5102,56 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
     if (entries.length === 0) {
       return;
     }
-    this.setState({ photoQueue: entries.slice(1) });
+    this.setState({
+      photoQueue: entries.slice(1),
+      // Which visit the sitting was filed at, so the surface behind this one can
+      // be settled on that visit's own film once the batch lands.
+      // @see settleAfterPhotoBatch
+      settleVisitAfterBatch: entries[0].meta.timepoint !== undefined
+        ? entries[0].meta.timepoint : null,
+    });
     this.props.onAddPhotographs(this.props.emptyWorkspaceId, [entries[0]]);
     this.armPhotoQueue();
+  };
+
+  /**
+   * The photographs are all in — now the workspace behind this surface.
+   *
+   * Every photograph of a sitting is filed onto a rail tile of its own, and the
+   * tile left active when the batch finished was an empty one: Esc from a
+   * fully-populated twelve-image chart landed on the upload prompt, "To start
+   * tracing, drop a cephalogram or photograph here", which says to a clinician
+   * looking at twelve filed images that there is nothing on file. (Opening a film
+   * explicitly and pressing Esc was always correct; this was specific to the
+   * batch, which navigates nowhere by design.)
+   *
+   * What it lands on, in order: the film the sitting's own visit already holds —
+   * a lateral cephalogram, so Esc opens the tracing editor on the visit just
+   * photographed — then the chart's most recent traceable film, then simply its
+   * most recent record, which the read-only viewer shows honestly. Nothing is
+   * invented and nothing is opened that the chart does not hold; with no records
+   * at all (an impossible state here, since a batch just landed) it does nothing.
+   */
+  private settleAfterPhotoBatch = () => {
+    const { records, onRestoreActiveRecord } = this.props;
+    const visit = this.state.settleVisitAfterBatch;
+    this.setState({ settleVisitAfterBatch: null });
+    if (records.length === 0) {
+      return;
+    }
+    // Already on a record of this chart: the batch did not strand the workspace,
+    // and moving it would take the clinician off the film they had open.
+    if (records.some((record) => record.isActive)) {
+      return;
+    }
+    const atVisit = visit !== null
+      ? records.filter((record) => record.timepoint === visit) : [];
+    const target =
+      atVisit.filter((record) => record.isTraceable).slice(-1)[0] ||
+      records.filter((record) => record.isTraceable).slice(-1)[0] ||
+      atVisit.slice(-1)[0] ||
+      records[records.length - 1];
+    onRestoreActiveRecord(target);
   };
 
   /** The next photograph of the batch. */

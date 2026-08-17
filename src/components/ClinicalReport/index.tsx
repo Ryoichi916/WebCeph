@@ -224,8 +224,14 @@ interface StoredEditableProps {
  * the initial text is read once from localStorage and every edit is written
  * back, so the identity re-appears on the next report without any dialog.
  * Empty fields render nothing in print — just the ruled signature line.
+ *
+ * Exported because the letterhead belongs to the practice and not to this one
+ * document: the records sheet prints the same masthead (see
+ * `RecordsDashboard#renderLetterhead`) and now offers the same field to type it
+ * into, so a clinic that starts from the case sheet is not left with a chart
+ * document signed by nobody while the report offers "+ Add clinic name".
  */
-class StoredEditable extends React.PureComponent<StoredEditableProps> {
+export class StoredEditable extends React.PureComponent<StoredEditableProps> {
   /** Read once; the DOM owns the text afterwards (uncontrolled). */
   private initialText = readStored(this.props.storageKey);
 

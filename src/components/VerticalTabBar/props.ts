@@ -2,6 +2,13 @@
 export interface TabCaption {
   /** Timepoint label (`T1`, `T2`, …), or null when not recorded. */
   timepoint: string | null;
+  /**
+   * The day the image was captured (`2026-01-12`), or null when the record
+   * carries none. The rail groups its tiles by this — a chart is a patient and
+   * their dated images, and a 21-image case scrolled as one undifferentiated
+   * strip until the rail said where one visit ended and the next began.
+   */
+  captureDate: string | null;
   /** Rail-sized image type label, e.g. `Lat ceph`. */
   typeLabel: string;
   /** Full sentence used as the tile's tooltip / accessible name. */

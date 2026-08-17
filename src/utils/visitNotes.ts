@@ -390,9 +390,25 @@ export const formatVisitNoteDay = (at: number): string => {
  */
 export const formatVisitNoteProvenance = (
   reading: VisitNoteReading,
+  /**
+   * Whether an entry with no stored author says so **here**.
+   *
+   * On screen it must: the phrase is the app's own idiom for a value that is not
+   * on file, and the amendment dialog offers the field that closes the gap right
+   * beside it. On paper it must not, once per entry: a case sheet carrying three
+   * clinical entries printed "author not recorded" three times under a running head
+   * naming the practice, the clinician and their license number — one document
+   * giving two answers to "who wrote this". The sheet states it **once**, in its
+   * closing notes, for however many of its entries are unattributed (see
+   * `RecordsDashboard#renderRecordsNotes`), and the signature block at the tail is
+   * what carries the name of whoever compiled the copy.
+   */
+  statesMissingAuthor: boolean = true,
 ): string => {
   const by = (who: string | null) =>
-    (who !== null ? ` by ${who}` : ' · author not recorded');
+    (who !== null
+      ? ` by ${who}`
+      : (statesMissingAuthor ? ' · author not recorded' : ''));
   const written =
     `Recorded ${formatVisitNoteStamp(reading.recordedAt)}${by(reading.recordedBy)}`;
   if (reading.amendmentCount === 0) {
@@ -507,6 +523,39 @@ export const refileVisitNoteEntry = (
   refiledFrom: note.refiledFrom !== undefined ? note.refiledFrom : from,
   refiledAt,
 });
+
+/**
+ * How a note that **arrived with a case file** is labelled when the visit it
+ * names already holds an entry of this chart's own.
+ *
+ * The rule that nothing on file is overwritten is right and stays. What was
+ * wrong was the other half: the incoming entry — its text, its versions, its
+ * authors and its timestamps — was simply dropped, appeared on no surface, and
+ * the clinician who had just been told "3 visits written up · 4 versions in all,
+ * every amendment kept" had no way to know one of them was gone.
+ *
+ * So it is filed under a key of its own, which no image on file carries, and it
+ * therefore lands in the panel this app already has for exactly this — the
+ * unfiled notes list, where it is read in full and can be re-filed.
+ * @see getUnmatchedVisitNoteKeys, components/RecordsDashboard/VisitNote#UnmatchedVisitNotes
+ */
+export const IMPORTED_NOTE_SUFFIX = 'from an imported case file';
+
+export const getImportedVisitNoteKey = (
+  key: string,
+  taken: { [key: string]: any },
+): string => {
+  const base = `${getVisitNoteVisitName(key)} · ${IMPORTED_NOTE_SUFFIX}`;
+  if (taken[base] === undefined) {
+    return base;
+  }
+  // A chart that has taken two case files naming the same visit keeps both.
+  let n = 2;
+  while (taken[`${base} (${n})`] !== undefined) {
+    n += 1;
+  }
+  return `${base} (${n})`;
+};
 
 /**
  * The note keys of a chart that no visit on file carries — a note whose visit

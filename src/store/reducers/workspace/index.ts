@@ -23,8 +23,14 @@ import image, {
 } from './image';
 import settings, {
   getWorkspaceImageIds, getWorkspaceMode, getTracingImageId,
-  isImporting, getWorkspaceSettingsById,
+  isImporting, getImportError,
 } from './settings';
+import fileExport, {
+  isExportingFile,
+  getFileExportProgress,
+  getExportedFileName,
+  getFileExportError,
+} from './fileExport';
 import workers from './workers';
 import order from './order';
 import activeId, { getActiveWorkspaceId } from './activeId';
@@ -48,6 +54,7 @@ export default {
   ...treatment,
   ...records,
   ...settings,
+  ...fileExport,
   ...order,
   ...activeId,
 };
@@ -116,16 +123,6 @@ export const getSortedLandmarksToDisplay = createSelector(
   },
 );
 
-// export const workspaceHasError = createSelector(
-//   hasExportError,
-//   (exportError) => exportError,
-// );
-
-// export const getWorkspaceErrorMessage = createSelector(
-//   getExportError,
-//   (error) => error !== null ? error.message : null,
-// );
-
 // Undo/redo history of the tracing slice; maintained by the enableUndoRedo
 // reducer enhancer (see store/index.ts).
 export const canUndo = (state: StoreState) =>
@@ -141,12 +138,43 @@ export const hasUnsavedWork = createSelector(
   (getManual, imageId) => imageId !== null && !isEmpty(getManual(imageId)),
 );
 
-// Whether an export is in progress for the active workspace.
-export const isExporting = createSelector(
-  getWorkspaceSettingsById,
+/**
+ * Whether a case file is being written at this moment.
+ *
+ * Read off the export's own state (@see store/reducers/workspace/fileExport),
+ * not off the active workspace's settings: an export is the whole chart, and the
+ * `WorkspaceSettings.isExporting` this used to read was written by no reducer at
+ * all — so the toolbar's spinner and the dialog's "Writing…" were unreachable
+ * and a failure was silent.
+ */
+export const isExporting = isExportingFile;
+
+export {
+  getFileExportProgress,
+  getExportedFileName,
+  getFileExportError,
+};
+
+/**
+ * Whether a file is being read into the rail tile the app is looking at, and why
+ * the last one failed — the two the case-file dialog waits on before it closes.
+ *
+ * The dialog aims its import at the tile it made active a tick earlier (see
+ * components/CaseFile/connected#onImport), so the *active* workspace is the one
+ * the file is landing in.
+ */
+export const isImportingIntoActiveWorkspace = createSelector(
+  isImporting,
   getActiveWorkspaceId,
-  (getSettings, workspaceId) =>
-    workspaceId !== null ? getSettings(workspaceId).isExporting : false,
+  (getIsImporting, workspaceId) =>
+    workspaceId !== null ? getIsImporting(workspaceId) === true : false,
+);
+
+export const getActiveWorkspaceImportError = createSelector(
+  getImportError,
+  getActiveWorkspaceId,
+  (getError, workspaceId) =>
+    workspaceId !== null ? getError(workspaceId) : null,
 );
 
 export { getWorkspaceImageIds };

@@ -16,6 +16,12 @@ import IconChevronRight from 'material-ui/svg-icons/hardware/keyboard-arrow-righ
 
 import Props from './props';
 
+// Restoring a case from the one file it leaves this device in — the other way
+// onto this screen, and the only way in on a machine that has never seen the
+// case. @see ./RestoreFromCaseFile
+import RestoreFromCaseFile from './RestoreFromCaseFile';
+import { PatientDetails } from 'components/PatientFields';
+
 // The registration fields live with the edit-patient form so both surfaces ask
 // for demographics in exactly one way — see components/PatientFields.
 import {
@@ -329,6 +335,14 @@ interface State extends ListView {
    */
   registerOpen: boolean;
   /**
+   * Whether the "Open a case file" dialog is up.
+   *
+   * It is a peer of registration, not a step inside it: a case file names its own
+   * patient, so restoring one *is* how that chart gets registered here.
+   * @see ./RestoreFromCaseFile
+   */
+  restoreOpen: boolean;
+  /**
    * Whether the browser is laying this screen out for paper. Set from
    * `beforeprint` (and from the `print` media query, which is what Safari and a
    * headless print pass raise), and it is what makes the sheet carry the whole
@@ -441,6 +455,17 @@ const getInitials = (text: string): string => {
     return tokens[0].charAt(0);
   }
   return tokens.slice(0, 2).map((t) => t.charAt(0).toUpperCase()).join('');
+};
+
+/**
+ * A stored error, reduced to the sentence it holds — the reader gets the
+ * reason, never an empty box where one should be.
+ */
+const readErrorMessage = (error: GenericError): string => {
+  const message = typeof error.message === 'string' ? error.message.trim() : '';
+  return message !== ''
+    ? message
+    : 'The file could not be read as a WebCeph case file.';
 };
 
 /** What a case is called on screen. A record with neither says so in words. */
@@ -692,6 +717,7 @@ export default class PatientPicker extends React.PureComponent<Props, State> {
     pendingRemoval: null,
     // Open only where there is nothing else to do — see `registerOpen`.
     registerOpen: this.props.patients.length === 0,
+    restoreOpen: false,
     printing: false,
     // Where the user left the list — see `readView`.
     ...readView(),
@@ -863,6 +889,25 @@ export default class PatientPicker extends React.PureComponent<Props, State> {
       reading: '',
       error: null,
     });
+  };
+
+  private openRestore = () => this.setState({ restoreOpen: true });
+
+  private closeRestore = () => this.setState({ restoreOpen: false });
+
+  /**
+   * Register the chart the file names and read the case into it.
+   *
+   * One press, two acts, in that order and no other: the patient has to exist
+   * before there is a project to read a case into. The file travels *with* the
+   * open (see store/middleware/project) so the import cannot race the project
+   * slices being replaced.
+   */
+  private handleRestore = (
+    details: PatientDetails, file: File, trendPlot: string[] | null,
+  ) => {
+    this.setState({ restoreOpen: false, query: '' });
+    this.props.onRestoreFromCaseFile(details, file, trendPlot);
   };
 
   private handleKeyDown = (e: React.KeyboardEvent<{}>) => {
@@ -1621,6 +1666,16 @@ export default class PatientPicker extends React.PureComponent<Props, State> {
           Register the first patient above — a name and a chart ID are all it
           takes. Their films and photographs are filed after that.
         </span>
+        {/* The other way in, and the one that matters on a machine that has
+            never seen the case: a .wceph names its own patient. The control for
+            it is the header's "Open a case file" button, and this points at it
+            rather than repeating it 370px lower — the same rule `registerOpen`
+            applies to registration, which likewise has one control at a time. */}
+        <span className={classes.empty_hint}>
+          Restoring a case you already have as a file? Use <strong>Open a case
+          file</strong> at the top right — it registers the chart the file names
+          and files everything in it.
+        </span>
         <ol className={classes.empty_steps}>
           <li>
             <span className={classes.empty_step_no}>1</span>
@@ -1733,6 +1788,12 @@ export default class PatientPicker extends React.PureComponent<Props, State> {
 
     return (
       <div className={classes.screen}>
+        <RestoreFromCaseFile
+          open={this.state.restoreOpen}
+          existingChartIds={patients.map((p) => p.chartId)}
+          onCancel={this.closeRestore}
+          onRestore={this.handleRestore}
+        />
         <div
           className={cx(classes.card, {
             [classes.card__empty]: isFirstRun,
@@ -1776,19 +1837,62 @@ export default class PatientPicker extends React.PureComponent<Props, State> {
                   screen, and while the well is open the well's own Register is
                   the primary — so this button is not on screen at the same
                   time. @see toggleRegister */}
-              {!isFirstRun && !registerOpen ? (
+              {/* Two ways a case gets onto this device, side by side: a chart
+                  registered here, or a chart restored from the one file a case
+                  leaves this device in. The second is not a lesser path — on a
+                  new machine it is the only one, and the case list offering
+                  registration alone made a clinician invent a patient from
+                  memory before the app would read the file that names them.
+                  @see ./RestoreFromCaseFile */}
+              <div className={classes.header_actions}>
                 <button
                   type="button"
-                  className={classes.new_btn}
-                  onClick={this.toggleRegister}
+                  className={classes.open_btn}
+                  onClick={this.openRestore}
                 >
-                  <span className={classes.new_btn_plus} aria-hidden="true">
-                    +
-                  </span>
-                  Register patient
+                  Open a case file
                 </button>
-              ) : null}
+                {!isFirstRun && !registerOpen ? (
+                  <button
+                    type="button"
+                    className={classes.new_btn}
+                    onClick={this.toggleRegister}
+                  >
+                    <span className={classes.new_btn_plus} aria-hidden="true">
+                      +
+                    </span>
+                    Register patient
+                  </button>
+                ) : null}
+              </div>
             </div>
+
+            {/* A restore that did not land — said here because this is where it
+                leaves the clinician: the chart the file named was registered,
+                the file could not be read into it, and the chart has been taken
+                off this list again. Silence here was a clinician holding what
+                may be their only copy of a case with no idea why it was
+                refused. @see StoreState['patients.restoreError'] */}
+            {this.props.restoreError !== null ? (
+              <div className={classes.restore_failed} role="alert">
+                <span className={classes.restore_failed_title}>
+                  That case file was not read in, and no chart was created
+                </span>
+                <span className={classes.restore_failed_text}>
+                  {`${readErrorMessage(this.props.restoreError)} `}
+                  The chart the file names was registered and has been removed
+                  again, so nothing of the case is on this device. No other case
+                  on this device was touched, and the file itself is unchanged.
+                </span>
+                <button
+                  type="button"
+                  className={classes.restore_failed_action}
+                  onClick={this.openRestore}
+                >
+                  Open a case file again
+                </button>
+              </div>
+            ) : null}
 
             {registerOpen ? (
             <div className={classes.form}>

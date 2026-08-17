@@ -563,9 +563,12 @@ type WorkspaceMode = 'tracing' | 'superimposition';
 type SuperimpositionMode = 'auto' | 'manual';
 type WorkspaceSettings = {
   isImporting: boolean;
-  isExporting: boolean;
   importError: GenericError | null;
-  exportError: GenericError | null;
+  // Exporting is deliberately NOT here: a case file is written from the whole
+  // chart, not from one rail tile, and the `isExporting`/`exportError` fields
+  // that used to sit here were written by no reducer — so the toolbar's spinner
+  // and the case-file dialog's "Writing…" could never render and a failed export
+  // was silent. @see StoreEntries['file.export']
   mode: WorkspaceMode;
   contentRect: ContentRect | null;
   images: string[];
@@ -786,6 +789,21 @@ interface StoreState {
    * @see PatientCaseSummary
    */
   'patients.caseIndex': { [id: string]: PatientCaseSummary };
+  /**
+   * Why the last **restore from a case file** failed, or null.
+   *
+   * Restoring registers a chart and reads a file into it, in that order, and the
+   * case list unmounts the moment the chart opens — so an import that failed
+   * after the registration left a brand-new empty chart on the list, the
+   * clinician's only copy apparently refused, and not one word anywhere. The
+   * chart is taken off the list again (nothing of it was ever written) and the
+   * reason is put here, where the case list can state it and offer the file
+   * again.
+   *
+   * Not persisted: it describes an act that has just failed, never a record.
+   * @see store/middleware/project, components/PatientPicker
+   */
+  'patients.restoreError': GenericError | null;
   'app.init.isInitialized': boolean;
   'app.status.isUpdating': boolean;
   'app.status.isInstalling': boolean;
@@ -908,6 +926,25 @@ interface StoreState {
   'workspaces.activeWorkspaceId': string | null;
   'workspaces.settings': {
     [id: string]: WorkspaceSettings;
+  };
+  /**
+   * Writing the case out as one `.wceph` — the whole chart, not one workspace,
+   * which is why this is a key of its own and not a field of `WorkspaceSettings`
+   * (where `isExporting` sat for years, written by nothing and therefore always
+   * false: a failed export was completely silent and the clinician was left
+   * believing their only copy had been written).
+   *
+   * Not persisted: it describes an act in progress, never a record.
+   * @see store/reducers/workspace/fileExport
+   */
+  'file.export': {
+    isExporting: boolean;
+    /** How far the zip is written, 0–100, or null when nothing is being written. */
+    progress: number | null;
+    /** The name the last successful export was written under, or null. */
+    fileName: string | null;
+    /** Why the last export failed, or null. */
+    error: GenericError | null;
   };
   'treatment.stages.order': string[];
   /** User-specified order of treatment stages */
@@ -1067,7 +1104,14 @@ interface Events {
     format: ExportFileFormat;
     options?: ExportFileOptions;
   };
-  EXPORT_FILE_SUCCEEDED: void;
+  /**
+   * A case file finished being written — carrying **the name it was written
+   * under**, because that is the only thing that tells a clinician the export
+   * happened and where to look for it. @see components/CaseFile
+   */
+  EXPORT_FILE_SUCCEEDED: {
+    fileName: string;
+  };
   EXPORT_FILE_FAILED: GenericError;
   EXPORT_PROGRESS_CHANGED: {
     value: number;
@@ -1082,9 +1126,39 @@ interface Events {
      * metadata, e.g. a .wceph project file.
      */
     meta?: Partial<ImageRecordMeta>;
+    /**
+     * Whether this request came from the **case file dialog** — the one surface
+     * that reads a `.wceph`'s manifest, states what it will do to the chart and
+     * asks first. @see components/CaseFile
+     *
+     * Absent (false) everywhere else, and the import middleware refuses a
+     * `.wceph` without it: choosing a case file at the ordinary "Add image"
+     * input used to merge a whole foreign case — twelve films, its visits and
+     * another patient's clinical notes — with no dialog and no confirmation.
+     * An image upload adds an image.
+     */
+    isCaseFile?: boolean;
+    /**
+     * Demographic fields to write onto the open patient **if and only if this
+     * import succeeds** — the fill-in-the-blanks patch the case file dialog
+     * computed and showed field by field. @see components/CaseFile
+     *
+     * It travels with the import rather than being dispatched beside it because
+     * it used to go *first*: a file that broke halfway through left the chart
+     * carrying the file's date of birth and sex although not one image had been
+     * imported, and a date of birth is what all nine analyses index their norms
+     * by. Carried here, one path applies it and only after the images are in.
+     */
+    patientPatch?: Partial<Patient>;
   };
   IMPORT_FILE_SUCCEEDED: {
     workspaceId: string;
+    /**
+     * Whether what landed was a whole **case file** rather than one image — so
+     * the surfaces that care can react to a case arriving (the records page
+     * opens on it) without having to guess from the number of images.
+     */
+    isCaseFile?: boolean;
   };
   IMPORT_FILE_FAILED: {
     workspaceId: string;
@@ -1410,6 +1484,16 @@ interface Events {
     symbols: string[] | null;
   };
   /**
+   * A restore from a case file did not land, so the chart it registered has been
+   * taken off the case list again and this is why.
+   *
+   * Dispatched by the project middleware, which is the one place that knows a
+   * given import was a restore. @see StoreState['patients.restoreError']
+   */
+  RESTORE_FROM_CASE_FILE_FAILED: {
+    error: GenericError;
+  };
+  /**
    * Records what a patient's saved project holds, for the case list's row.
    * Counted off the project by the project middleware when it is written or
    * loaded — never typed in, and never for a patient who is not on file.
@@ -1425,6 +1509,17 @@ interface Events {
   /** Open a patient's project: make them active and load their saved tracing. */
   OPEN_PATIENT_REQUESTED: {
     patientId: string;
+    /**
+     * A case file to read into the chart **as soon as it has opened** — how a
+     * clinician restores their only copy onto a machine that has never seen the
+     * case. @see components/PatientPicker/RestoreFromCaseFile
+     *
+     * It travels with the open rather than being dispatched beside it because
+     * opening a patient replaces the project slices wholesale
+     * (`LOAD_PROJECT_SUCCEEDED`): an import dispatched in the same tick races
+     * that replacement and loses every image it had just read in.
+     */
+    restoreFromCaseFile?: File;
   };
   /** Persist the current project (images + tracings) under a patient. */
   SAVE_PROJECT_REQUESTED: {

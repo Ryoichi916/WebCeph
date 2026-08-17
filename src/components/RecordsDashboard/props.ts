@@ -74,6 +74,20 @@ export interface DispatchProps {
     emptyWorkspaceId: string | null,
     entries: Array<{ file: File; meta: ImageRecordMeta }>,
   ): any;
+  /**
+   * Put the workspace behind this surface back onto a record of this chart,
+   * without leaving the surface.
+   *
+   * A photographic batch is the reason it exists. Every photograph of a sitting
+   * is filed onto a rail tile of its own, and the tile that ends up active after
+   * the batch was an empty one — so Esc from a fully-populated twelve-image chart
+   * landed on "To start tracing, drop a cephalogram or photograph here", which
+   * tells a clinician looking at twelve filed images that the chart is empty.
+   * Called once the batch has settled with the film the visit itself holds (or,
+   * failing that, the chart's most recent record), so the surface behind the
+   * dashboard is always something the chart actually holds.
+   */
+  onRestoreActiveRecord(record: PatientRecord): any;
   /** Correct the patient's own demographics (name, chart ID, DOB, sex). */
   onSavePatient(id: string, details: PatientDetails): any;
   /** Correct a record's type / timepoint / capture date. */

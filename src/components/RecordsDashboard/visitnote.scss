@@ -85,6 +85,18 @@
   color: $text-tertiary;
 }
 
+// Two copies of that one line, one per medium, because they differ by one clause:
+// an entry with no stored author says "· author not recorded" on screen — where the
+// amendment dialog's own field closes the gap — and says nothing here on paper,
+// because the sheet states it once in its closing notes for however many of its
+// entries are unattributed. Printed per entry, a chart with three entries gave two
+// answers to "who wrote this" on one sheet: three "author not recorded" lines under
+// a running head naming the practice, the clinician and the license number.
+// @see utils/visitNotes#formatVisitNoteProvenance
+.note_stamp__print {
+  display: none;
+}
+
 .note_none {
   flex: 0 1 auto;
   min-width: 0;
@@ -463,6 +475,18 @@
   font-weight: 400;
   font-style: italic;
   color: $text-tertiary;
+}
+
+// No visit this entry could be filed at — the panel's heading tells the reader
+// to file each note somewhere, and this is where it says when there is nowhere.
+.orphan_nowhere {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: $bg-sunken;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: $text-secondary;
 }
 
 .orphan_refile {
@@ -928,6 +952,15 @@
   .note_stamp {
     font-size: 7.5pt;
     color: $text-secondary;
+  }
+
+  // …and on paper it is the print copy of the line that prints. @see above
+  .note_stamp__screen {
+    display: none;
+  }
+
+  .note_stamp__print {
+    display: inline;
   }
 
   .note_none {

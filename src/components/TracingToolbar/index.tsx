@@ -14,6 +14,10 @@ import { LATERAL_ANALYSES } from 'analyses/lateral';
 import { PatientRecord } from 'store/reducers/workspace';
 
 import EditRecordDialog from 'components/RecordMetaFields/EditRecordDialog';
+// The whole case as one file — what it carries and what it does not, stated
+// before it is written. @see components/CaseFile
+import CaseFile from 'components/CaseFile/connected';
+import { CaseFileMode } from 'components/CaseFile/props';
 import RemoveRecordDialog from 'components/RecordMetaFields/RemoveRecordDialog';
 
 import {
@@ -41,7 +45,11 @@ import IconArrowUp from 'material-ui/svg-icons/navigation/arrow-drop-up';
 import IconZoomIn from 'material-ui/svg-icons/action/zoom-in';
 import IconZoomOut from 'material-ui/svg-icons/action/zoom-out';
 import IconZoomFit from 'material-ui/svg-icons/maps/zoom-out-map';
-import IconRuler from 'material-ui/svg-icons/image/straighten';
+// The two states of the calibration chip, told apart by **shape** and not only by
+// tint: a tick for a film that carries a scale, a warning triangle for one that
+// does not. @see the chip below.
+import IconCalibrated from 'material-ui/svg-icons/action/check-circle';
+import IconNotCalibrated from 'material-ui/svg-icons/alert/warning';
 import IconFilm from 'material-ui/svg-icons/image/crop-original';
 import IconUndo from 'material-ui/svg-icons/content/undo';
 import IconRedo from 'material-ui/svg-icons/content/redo';
@@ -69,11 +77,19 @@ interface State {
   isReportOpen: boolean;
   isSuperimpositionOpen: boolean;
   isSimulationOpen: boolean;
+  /**
+   * Whether the case file dialog is open, and on which half. The editor's Export
+   * menu offers the whole case as a `.wceph` beside the two picture formats —
+   * they are not the same act, and the menu says so. @see components/CaseFile
+   */
+  caseFileMode: CaseFileMode;
 }
 
 const ICON_COLOR = 'currentColor';
 const iconStyle: React.CSSProperties = { width: 18, height: 18 };
 const caretStyle: React.CSSProperties = { width: 18, height: 18, margin: '0 -6px 0 -2px' };
+/** The calibration chip's state mark. @see the chip in `render`. */
+const CHIP_ICON: React.CSSProperties = { width: 14, height: 14 };
 
 // Analysis menu rows carry a title + clinical-focus line, so the mui
 // MenuItem's fixed 48px line-height/font must be reset; the selected row is
@@ -117,6 +133,7 @@ export default class TracingToolbar extends React.PureComponent<Props, State> {
     isReportOpen: false,
     isSuperimpositionOpen: false,
     isSimulationOpen: false,
+    caseFileMode: null,
   };
 
   /**
@@ -160,7 +177,7 @@ export default class TracingToolbar extends React.PureComponent<Props, State> {
     } = this.props;
     const {
       openMenu, anchorEl, isCalibrationOpen, isReportOpen,
-      isSuperimpositionOpen, isSimulationOpen,
+      isSuperimpositionOpen, isSimulationOpen, caseFileMode,
     } = this.state;
     const isCalibrated = scaleFactor !== null;
     const hasImage = imageId !== null;
@@ -328,10 +345,23 @@ export default class TracingToolbar extends React.PureComponent<Props, State> {
           aria-haspopup="dialog"
           onClick={this.openCalibrationDialog}
         >
-          <IconRuler color="currentColor" style={{ width: 14, height: 14 }} />
+          {/* **The state is a shape, not a hue.**
+              Below 1720px the strip drops the word before the figure to make room
+              for named clinical actions (see `.chip_value`), and at 1280 — where
+              this screen is most crowded — the chip then read "0.104 mm/px" in a
+              green pill against "Not calibrated" in an amber one: whether the
+              millimetres on this film mean anything rode on the tint alone, on a
+              clinic monitor, for a clinician who may not distinguish the two. A
+              tick and a warning triangle differ at any colour, at any brightness
+              and in greyscale, and they cost the strip nothing.
+              The mark replaces the ruler rather than joining it: two 14px glyphs
+              in a 24px pill is not a legible chip. */}
+          {isCalibrated
+            ? <IconCalibrated color="currentColor" style={CHIP_ICON} />
+            : <IconNotCalibrated color="currentColor" style={CHIP_ICON} />}
           {/* The number *is* the calibration; the CSS-generated word before it
               (see `.chip_value`) is the first thing to go when the strip has to
-              make room for a named clinical action. The chip's tint, tooltip
+              make room for a named clinical action. The chip's mark, tint, tooltip
               and aria-label keep saying the film is calibrated either way. */}
           {isCalibrated ? (
             <span className={classes.chip_value}>
@@ -502,7 +532,7 @@ export default class TracingToolbar extends React.PureComponent<Props, State> {
           onRequestClose={this.closeMenu}
         >
           <Menu desktop width={248} onEscKeyDown={this.closeMenu}>
-            <div className={classes.menu_heading}>Export tracing</div>
+            <div className={classes.menu_heading}>Export this tracing</div>
             <MenuItem
               style={analysisItemStyle}
               innerDivStyle={analysisItemInnerStyle}
@@ -521,6 +551,22 @@ export default class TracingToolbar extends React.PureComponent<Props, State> {
               <span className={classes.menu_item}>
                 <span className={classes.menu_item_title}>JPG image</span>
                 <span className={classes.menu_item_focus}>Smaller file — best for sharing</span>
+              </span>
+            </MenuItem>
+            {/* A picture of one tracing and the case itself are two different
+                things to hand somebody, and this menu used to offer only the
+                first. The heading below says which half of the menu this is. */}
+            <div className={classes.menu_heading}>Export the whole case</div>
+            <MenuItem
+              style={analysisItemStyle}
+              innerDivStyle={analysisItemInnerStyle}
+              onClick={this.openCaseFile}
+            >
+              <span className={classes.menu_item}>
+                <span className={classes.menu_item_title}>Case file (.wceph)</span>
+                <span className={classes.menu_item_focus}>
+                  Every film, tracing, scale and clinical entry — reopenable here
+                </span>
               </span>
             </MenuItem>
           </Menu>
@@ -636,6 +682,10 @@ export default class TracingToolbar extends React.PureComponent<Props, State> {
             onRequestClose={this.closeCalibrationDialog}
           />
         )}
+
+        {/* The same dialog the records dashboard opens, on the same connected
+            component: two entry points, one account of what a case file is. */}
+        <CaseFile mode={caseFileMode} onRequestClose={this.closeCaseFile} />
       </div>
     );
   }
@@ -814,6 +864,20 @@ export default class TracingToolbar extends React.PureComponent<Props, State> {
     this.closeMenu();
     this.props.onExportImage(format);
   };
+
+  /**
+   * The whole case as one file, offered from the same menu the picture exports
+   * are — because "Export" is where a clinician looks for it, and because the
+   * distinction between a picture of this tracing and the case file that carries
+   * every film, tracing, scale and clinical entry is exactly what the menu's two
+   * headings and the dialog behind this item are for.
+   */
+  private openCaseFile = () => {
+    this.closeMenu();
+    this.setState({ caseFileMode: 'export' });
+  };
+
+  private closeCaseFile = () => this.setState({ caseFileMode: null });
 
   private zoomIn = () => {
     this.props.onZoomChange(Math.min(this.props.zoom * ZOOM_STEP, ZOOM_MAX));
