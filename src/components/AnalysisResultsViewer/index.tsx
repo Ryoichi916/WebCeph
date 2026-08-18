@@ -405,7 +405,17 @@ const buildReportRows = (
         ? interpretOwn(value, min, max, mean)
           .filter((r) => r.category === category)
         : [];
-      const rowIndication = category === NEUTRAL_CATEGORY || !graded
+      // The diagnostic-triangle group's verdict is *collective* by design —
+      // within Tweed's norms only when every graded angle of it is (see
+      // `analyses/tweed`) — and none of its rows' landmarks emit a reading of
+      // that category, so a row that inherited the group's verdict exported a
+      // claim its own value contradicts: FMPA at 21.0°, inside its 20–30
+      // band, exported `Outside norm` two lines above a `Mandibular rotation
+      // · Normal` row for the same angle in the same file. Rows of the
+      // collective group therefore export their **own** grading against their
+      // own norm, exactly as the neutral bucket's rows do.
+      const isCollectiveVerdict = category === 'tweedTriangle';
+      const rowIndication = category === NEUTRAL_CATEGORY || isCollectiveVerdict || !graded
         ? gradeAgainstNorm(value, min, max, mean)
         : (own.length > 0 ? own[0].indication : indication);
       const borrowed = normSource;

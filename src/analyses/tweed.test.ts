@@ -75,15 +75,16 @@ describe('Tweed diagnostic triangle', () => {
       expect(
         results[0].relevantComponents.map(({ symbol }) => symbol),
       ).toEqual(['FMPA', 'IMPA', 'FMIA', 'FMPA+IMPA+FMIA']);
-      // FMA 21.1° and IMPA 84.4° both fall below their bands.
+      // IMPA 84.4° and FMIA 74.5° both fall outside their bands (FMA 21.1°
+      // sits inside its 20–30), so the collective verdict is outside-norm.
       expect(results[0].indication).toBe('outside_norm');
 
       // The per-angle conclusions survive as their own findings, drawn from
       // the same measurements (the shared table layout renders them as named
-      // conclusions on the triangle's group).
+      // conclusions on the triangle's group). FMA at 21.1° is within its
+      // band, so the rotation reads normal — as the Summary and the CSV say.
       const indexed = indexAnalysisResults(results);
-      expect(indexed['mandibularRotation']!.indication)
-        .toBe('counterclockwise');
+      expect(indexed['mandibularRotation']!.indication).toBe('normal');
       expect(indexed['lowerIncisorInclination']!.indication).toBe('lingual');
       expect(indexed['growthPattern']).toExist();
       // The closure row is tabulated once, inside the triangle.
@@ -125,5 +126,37 @@ describe('Tweed diagnostic triangle', () => {
   it('falls back to the default grouping while nothing is computed', () => {
     const { values, objects } = evaluate({});
     expect(tweed.interpret(values, objects)).toEqual([]);
+  });
+
+  it('does not certify an incomplete triangle', () => {
+    // The lower incisor removed: of the triangle only FMPA computes. One angle
+    // of three is not a triangle, so no "Diagnostic triangle" group (and no
+    // collective within/outside-norm chip) may be emitted — the computed angle
+    // keeps its own per-angle finding instead.
+    const withoutIncisor: Landmarks = { ...sampleFilm };
+    delete withoutIncisor['L1 Apex'];
+    delete withoutIncisor['L1 Incisal Edge'];
+    const { values, objects } = evaluate(withoutIncisor);
+    expect(typeof values['FMPA']).toBe('number');
+    expect(typeof values['IMPA']).toBe('undefined');
+    expect(typeof values['FMIA']).toBe('undefined');
+    const indexed = indexAnalysisResults(tweed.interpret(values, objects));
+    expect(indexed['tweedTriangle']).toNotExist();
+    expect(indexed['mandibularRotation']!.indication).toBe('normal');
+  });
+
+  it('declares the triangle\'s ± 5° latitudes as ranges, not as SD bands', () => {
+    // Tweed published targets with a conventional clinical latitude, not
+    // standard deviations of 5 — so the three angles must carry
+    // `band: 'range'` (no manufactured SD, no stars), while Downs' borrowed
+    // Y-axis figure keeps his real mean ± 1 SD band.
+    tweed.components.forEach(({ landmark: { symbol }, band }) => {
+      if (['FMPA', 'IMPA', 'FMIA'].indexOf(symbol) !== -1) {
+        expect(band).toBe('range');
+      }
+      if (symbol === 'Y-FH Angle') {
+        expect(band).toNotBe('range');
+      }
+    });
   });
 });

@@ -960,8 +960,14 @@
   border-top: 3px solid #FFFFFF;
 }
 
+// The swatch states what the film now actually carries: a ~1pt fully opaque
+// desaturated-blue rule (utils/tracingSnapshot `PLANE_COLOR` at
+// `planeStrokeWidth`), distinctly lighter and thinner than the anatomical
+// tracing's 3px white. Keep the two in agreement — a key whose swatch is
+// bolder or fainter than the rendering it explains is a small lie on a
+// signed sheet.
 .figkey_plane::after {
-  border-top: 1px solid #7E97AE;
+  border-top: 2px solid #93AEC6;
 }
 
 .figkey_point {

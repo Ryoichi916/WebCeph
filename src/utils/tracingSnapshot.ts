@@ -26,8 +26,22 @@ import {
  * lines over somebody's face, and a saturated cyan web of them buries the
  * tracing the reader came for.
  */
-/** Analysis planes / construction lines: thin, desaturated, behind everything. */
+/**
+ * Analysis planes / construction lines: desaturated and behind everything, but
+ * **not** a hairline. At A4 print density the previous 0.72-alpha stroke of
+ * `max(0.9, width * 0.0017)` px reproduced at roughly half a point and nearly
+ * vanished into the radiograph — a Tweed clinician could not check Po-Or,
+ * Go-Me, the L1 axis or S-Gn off the signed sheet, while the figure key showed
+ * a solid rule for them. The stroke now prints at about a full point, fully
+ * opaque, in the same desaturated blue the key's swatch carries
+ * (`ClinicalReport/style.scss` `.figkey_plane`); the dark casing under it keeps
+ * it legible over bright bone. Still visibly lighter than the near-white
+ * anatomical outline, so the hierarchy of the figure is preserved.
+ */
 export const PLANE_COLOR = '#93AEC6';
+/** Construction-line width for a film reproduced at `width` px. */
+export const planeStrokeWidth = (width: number): number =>
+  Math.max(1.4, width * 0.0030);
 export const POINT_FILL = '#FFC400';
 export const POINT_STROKE = '#14181D';
 /** Colour of the landmark tag and of its dark halo. */
@@ -79,7 +93,7 @@ export const drawTracingOverlay = (
   options: TracingOverlayOptions = NO_OPTIONS,
 ): void => {
   const { pointLandmarks = manual, labels = false } = options;
-  const planeWidth = Math.max(0.9, width * 0.0017);
+  const planeWidth = planeStrokeWidth(width);
   const outlineWidth = Math.max(1.8, width * 0.0042);
   const pointRadius = Math.max(2, width * 0.0052);
 
@@ -99,7 +113,6 @@ export const drawTracingOverlay = (
       ctx.stroke();
     });
     ctx.strokeStyle = PLANE_COLOR;
-    ctx.globalAlpha = 0.72;
     ctx.lineWidth = planeWidth;
     segments.forEach((s) => {
       ctx.beginPath();

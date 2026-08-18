@@ -4,7 +4,7 @@ import {
 import { tweedTriangleSum } from 'analyses/landmarks/other/skeletal';
 
 import {
-  defaultInterpretAnalysis, hasNorm, NO_NORM,
+  defaultInterpretAnalysis, hasNorm, NO_NORM, RANGE,
 } from 'analyses/helpers';
 
 /**
@@ -27,8 +27,15 @@ import {
  * which is why they are presented as **one finding** (see `interpret` below)
  * rather than as three unrelated rows scattered across the table.
  *
- * The triangle's three angles carry Tweed's norms (FMA 25° ± 5, FMIA 65° ± 5,
- * IMPA 90° ± 5) and are interpreted: FMPA grades the mandibular rotation, while
+ * The triangle's three angles carry Tweed's norms — his targets of FMA 25°,
+ * IMPA 90° and FMIA 65°, each with the conventional ± 5° clinical latitude —
+ * **declared as published ranges, not as mean ± 1 SD bands** (see `RANGE`).
+ * Tweed stated target values and acceptable ranges; he did not publish a
+ * standard deviation of 5° for any of the three, and this app's rule for such
+ * norms (Björk's gonial halves, Jarabak's ratio) is that no surface may
+ * manufacture one by halving the range: the tables mark these rows *range*,
+ * grade them in or out of it, and print no stars against an SD nobody stated.
+ * They are interpreted: FMPA grades the mandibular rotation, while
  * FMIA and IMPA — read together, as Tweed intended — grade the inclination of
  * the lower incisor. Both conclusions are named *on* the triangle's group, with
  * the measurements they were read from, so the finding a clinician acts on
@@ -60,23 +67,29 @@ import {
  */
 const components: AnalysisComponent[] = [
   // The triangle, in the order its sum line reads: FMA + IMPA + FMIA = 180°.
+  // Declared as published *ranges* (target ± the conventional 5° latitude),
+  // because Tweed stated targets and ranges, never a standard deviation — see
+  // the module doc above. `mean` keeps the target for the interpreters.
   {
     landmark: FMPA,
     mean: 25,
     max: 30,
     min: 20,
+    ...RANGE,
   },
   {
     landmark: IMPA,
     mean: 90,
     max: 95,
     min: 85,
+    ...RANGE,
   },
   {
     landmark: FMIA,
     mean: 65,
     max: 70,
     min: 60,
+    ...RANGE,
   },
   {
     // The closure row — 180° identically (see `tweedTriangleSum`). An identity
@@ -120,6 +133,13 @@ const TRIANGLE_SYMBOLS = [
  * The group's own chip states the one thing true of the triangle as a whole:
  * within Tweed's norms when every graded angle of it is, outside them
  * otherwise. The specific conclusions stay with the per-angle findings.
+ *
+ * **The group only exists while the whole triangle is measured.** With an
+ * angle of the three missing (a removed incisor landmark leaves only FMPA)
+ * there is no triangle to certify, and a chip that read "Within norm" off one
+ * angle of three was a verdict on a figure two-thirds unmeasured. In that
+ * state the default grouping stands: the angles that are computed keep their
+ * own honest per-angle findings, and no collective claim is printed at all.
  */
 const interpret: InterpretAnalysis<Category> = (values, objects, context) => {
   const results = defaultInterpretAnalysis(components)(values, objects, context);
@@ -142,9 +162,14 @@ const interpret: InterpretAnalysis<Category> = (values, objects, context) => {
   const gradedRows = triangleRows.filter(
     ({ mean, min, max }) => hasNorm(mean, min, max),
   );
-  // No angle of the triangle computed yet (an untraced film): nothing to pull
-  // together, the default grouping stands.
-  if (gradedRows.length === 0) {
+  // The triangle is pulled together only when all three of its angles are
+  // measured (the graded rows are exactly the three angles — the closure row
+  // carries no norm). Anything less is not a triangle: on a film with the
+  // lower incisor removed only FMPA computes, and a group chip would then
+  // certify "Within norm" from one angle of three. The default grouping
+  // stands instead, which keeps every computed angle's own per-angle finding
+  // and asserts nothing about the figure as a whole.
+  if (gradedRows.length < 3) {
     return results;
   }
 
@@ -193,7 +218,11 @@ const analysis: Analysis<'ceph_lateral'> = {
       'independently — the closure row above is that identity, computed from ' +
       'this tracing, not a normed measurement — and his FMIA target moves ' +
       'with FMPA (65° on a high angle, 68° on a low one) rather than staying ' +
-      'at the single mean printed here. The Y axis is Downs\' measurement ' +
+      'at a single figure. His norms are targets with a conventional ' +
+      'clinical latitude — FMA 25°, IMPA 90°, FMIA 65°, each read ± 5° — ' +
+      'not means with a published standard deviation, so the three are ' +
+      'printed as ranges (20–30, 85–95, 60–70) and graded in or out of ' +
+      'them. The Y axis is Downs\' measurement ' +
       'and Downs\' norm, borrowed here because it is read off the same ' +
       'Frankfort horizontal; the occlusal-plane cant is not printed in this ' +
       'section at all, since the only published norm for it is Downs\' and ' +
