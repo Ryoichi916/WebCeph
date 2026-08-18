@@ -229,7 +229,14 @@ export function getStepsForAnalysis<T extends ImageType>(
 };
 
 export function flipVector(vector: CephLine) {
-  return line(vector.components[1], vector.components[0]);
+  // The flipped line keeps the original's clinical name (the symbol stays
+  // directional — it is the storage key and signed angles depend on the two
+  // directions staying distinct). To the person tracing the film both
+  // directions are the same physical stroke, and an analysis that happens to
+  // declare only the flipped variant used to title its step by the raw
+  // endpoint symbol — Steiner read "Draw line L1 Incisal Edge-L1 Apex" four
+  // rows from a named "Draw line Upper Incisor Axis".
+  return line(vector.components[1], vector.components[0], vector.name);
 };
 
 export function isCephPoint(object: any): object is CephPoint {

@@ -61,6 +61,11 @@ export const descriptions: { [id: string]: string } = {
   'Go-N': 'Björk\'s dividing line, splitting the gonial angle into its ramus (Ar-Go-N) and corpus (N-Go-Me) halves',
   'U1 Incisal Edge-U1 Apex': 'Upper incisor axis — the long axis of the most prominent upper incisor',
   'L1 Incisal Edge-L1 Apex': 'Lower incisor axis — the long axis of the most prominent lower incisor',
+  // The *named* axis variants (symbols `U1`/`L1`, apex → edge) teach the same
+  // definition as their directed duplicates above, so the row reads identically
+  // whichever variant an analysis happens to declare (see connected.ts).
+  'U1': 'Upper incisor axis — the long axis of the most prominent upper incisor',
+  'L1': 'Lower incisor axis — the long axis of the most prominent lower incisor',
 
   // ---- constructed lines whose symbol alone does not teach the line --------
   // One physical construction, one clinical name on both panels: the palatal
@@ -158,15 +163,26 @@ export const getCommandForStep = (landmark: CephLandmark): string => {
   } else if (landmark.type === 'line') {
     return `Draw line ${displayName}`;
   } else if (landmark.type === 'angle') {
-    // One convention for every angle step: "Calculate <Name> Angle" in title
-    // case — unless the measurement name already carries the word ("Facial
-    // Angle", "Angle of Convexity") or the abbreviation expands to it (FMPA
-    // = Frankfort Mandibular Plane Angle). Yields "Calculate SNA Angle",
+    // One convention for every angle step: "Calculate <Name> Angle" — unless
+    // the base actually printed already carries the word ("Facial Angle",
+    // "Angle of Convexity") or it is an initialism whose expansion carries it
+    // (FMPA = Frankfort Mandibular Plane Angle). Yields "Calculate SNA Angle",
     // "Calculate SN-MP Angle", "Calculate Facial Angle", "Calculate FMPA".
+    //
+    // The decision is made on the *base actually displayed*, not on the full
+    // name alone: "Nasolabial angle (Pn-Sn-Ls)" abbreviates to the symbol
+    // `Nasolabial`, and skipping the suffix because the hidden name said
+    // "angle" printed the clipped phrase "Calculate Nasolabial". Only a
+    // wordless initialism (no lowercase letters — FMPA, IMPA, MMPA) is allowed
+    // to speak for its expansion; a word-like symbol gets the noun back.
     const base = shouldAbbreviate(landmark) ? landmark.symbol : displayName;
+    const isInitialism = !/[a-zà-öø-ÿ]/.test(base);
     const alreadySaysAngle =
       /angle/i.test(base) ||
-      (typeof landmark.name === 'string' && /angle/i.test(landmark.name));
+      (
+        isInitialism &&
+        typeof landmark.name === 'string' && /angle/i.test(landmark.name)
+      );
     return alreadySaysAngle ? `Calculate ${base}` : `Calculate ${base} Angle`;
   } else if (landmark.type === 'distance') {
     // A named measurement is named, not described by its first two components:
@@ -200,7 +216,13 @@ export const getCommandForStep = (landmark: CephLandmark): string => {
     }
     return `Measure distance between ${from.symbol} and ${to.symbol}`;
   } else if (landmark.type === 'sum') {
-    return `Calculate ${shouldAbbreviate(landmark) ? landmark.symbol : displayName}`;
+    // Same rule as the angles: the noun survives abbreviation. "Sum of the
+    // saddle, articular and gonial angles" abbreviates to the symbol `Björk`,
+    // and printing that bare read as a clipped phrase — the row calculates
+    // Björk's *sum*. A symbol that already states what it adds
+    // ("FMPA+IMPA+FMIA") or says "sum" itself stays as it is.
+    const base = shouldAbbreviate(landmark) ? landmark.symbol : displayName;
+    return /sum|\+/i.test(base) ? `Calculate ${base}` : `Calculate ${base} sum`;
   } else if (landmark.type === 'ratio') {
     const base = shouldAbbreviate(landmark) ? landmark.symbol : displayName;
     // "Calculate ratio Holdaway ratio (…)" says it twice.
