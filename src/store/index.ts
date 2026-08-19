@@ -11,6 +11,7 @@ import autoPlotMiddleware from './middleware/autoPlot';
 import analysisSwitchMiddleware from './middleware/analysisSwitch';
 import referencePlotMiddleware from './middleware/referencePlot';
 import exportImageMiddleware from './middleware/exportImage';
+import analysisDefaultMiddleware from './middleware/analysisDefault';
 import projectMiddleware from './middleware/project';
 import compatibilityMiddleware from './middleware/compatibility';
 import fetchLocaleMiddleware from './middleware/fetchLocale';
@@ -39,6 +40,7 @@ const middlewares: Middleware[] = [
   analysisSwitchMiddleware,
   referencePlotMiddleware,
   exportImageMiddleware,
+  analysisDefaultMiddleware,
   projectMiddleware,
   saveStateMiddleware,
 ];

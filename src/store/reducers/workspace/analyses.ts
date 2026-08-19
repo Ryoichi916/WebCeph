@@ -82,14 +82,27 @@ const analysisLoadStatusReducer = handleActions<typeof KEY_ANALYSIS_LOAD_STATUS>
 const reducers: Partial<ReducerMap> = {
   [KEY_ANALYSIS_LOAD_STATUS]: analysisLoadStatusReducer,
   [KEY_LAST_USED_ID]: handleActions<typeof KEY_LAST_USED_ID>({
-    SET_ANALYSIS_REQUESTED: (state, { payload: { imageType, analysisId } }) => {
+    // Not `SET_ANALYSIS_REQUESTED` itself: `fetchAnalysis` middleware sits
+    // ahead of the reducers and never forwards that raw request through —
+    // only its eventual `FETCH_ANALYSIS_SUCCEEDED`/`FETCH_ANALYSIS_FAILED`
+    // reach here (see `store/middleware/fetchAnalysis`). Keying off the
+    // *succeeded* outcome is if anything more honest: this only remembers a
+    // choice once the analysis module actually loaded.
+    FETCH_ANALYSIS_SUCCEEDED: (state, { payload: { imageType, analysisId } }) => {
       return {
         ...state,
         [imageType]: analysisId,
       };
     },
   }, {
-    ceph_lateral: 'ricketts_lateral',
+    // ceph_lateral's seed matches `defaultImageProps.analysis` (see
+    // store/reducers/workspace/image) rather than an arbitrary analysis, so a
+    // virgin install — where the clinician has never explicitly chosen one —
+    // is indistinguishable from "no choice yet" to `analysisDefault`'s
+    // middleware: applying this seed to a freshly filed film is a no-op,
+    // exactly the behaviour a fresh install always had, until the clinician's
+    // first explicit pick overwrites it for real.
+    ceph_lateral: 'downs',
     ceph_pa: 'ricketts_frontal',
     photo_frontal: 'frontal_face_proportions',
     photo_lateral: 'soft_tissues_photo_lateral',
@@ -104,6 +117,21 @@ const reducers: Partial<ReducerMap> = {
 export default reducers;
 
 export const isSummaryShown = (state: StoreState) => state[KEY_SUMMARY_SHOWN];
+
+/**
+ * The analysis most recently explicitly chosen for this image type — via the
+ * tracing toolbar's switcher (see `store/middleware/analysisDefault`, which
+ * is what keeps this in sync with `SET_ACTIVE_ANALYSIS_REQUESTED`) or the
+ * records dashboard's own selector. Persisted app-wide (see
+ * `store/middleware/persistence`), so it survives a reload.
+ */
+export const getLastActiveAnalysisId = createSelector(
+  (state: StoreState) => state[KEY_LAST_USED_ID],
+  (lastUsedByType) => <T extends ImageType>(imageType: T): AnalysisId<T> | null => {
+    const id = lastUsedByType[imageType];
+    return id !== undefined ? id : null;
+  },
+);
 
 export const isAnalysisSet = createSelector(
   getAnalysisId,
