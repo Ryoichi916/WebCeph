@@ -31,13 +31,17 @@ import {
   SuperimpositionAnnotations,
   formatInterval,
   basisSymbols,
+  missingBasisSymbols,
+  orphanSymbols,
+  orphanOutlineIds,
+  IDENTITY,
   PLOTTING_ERROR,
   ChangeRow,
   ChangeTable,
   BarScale,
   Box,
 } from 'analyses/superimposition';
-import { buildOutlines, outlineToSvgPath } from 'components/TracingViewer/outlines';
+import { buildOutlines, outlineToSvgPath, Outline } from 'components/TracingViewer/outlines';
 // The honest account of what the registration means, condensed on screen and
 // printed in full — the same affordance the treatment simulation uses.
 import AboutDisclosure from 'components/AboutDisclosure';
@@ -73,6 +77,7 @@ import { printDocumentTitle } from 'utils/printTitle';
 import {
   renderSuperimpositionSnapshot,
 } from 'utils/superimpositionSnapshot';
+import { sanitizeFilenameStem } from 'utils/tracingSnapshot';
 
 const classes = require('./style.scss');
 
@@ -201,6 +206,37 @@ const uncalibratedFilms = (t1: TimepointRecord, t2: TimepointRecord): string => 
     return `${missing[0]} is not calibrated`;
   }
   return 'a measurement is missing a scale on one film';
+};
+
+/**
+ * What a basis needs, and — when it is unavailable — precisely which of those
+ * landmarks are missing and from which film. Naming only the full requirement
+ * ("needs S, N on both tracings") is true but not actionable when a film is
+ * short a single point: the reader has to open both tracings and compare
+ * point lists by hand to find it. This names the film and the point, so the
+ * segmented control's tooltip and the hint line beneath it are both
+ * answerable from the sentence alone.
+ */
+const basisMissingSummary = (
+  basis: RegistrationBasis, t1: TimepointRecord, t2: TimepointRecord,
+): string => {
+  const need = basisSymbols(basis).join(', ');
+  const missing1 = missingBasisSymbols(basis, t1.landmarks);
+  const missing2 = missingBasisSymbols(basis, t2.landmarks);
+  const clauses: string[] = [];
+  if (missing1.length > 0) {
+    clauses.push(`${slotToken(t1, 'T1')} is missing ${missing1.join(', ')}`);
+  }
+  if (missing2.length > 0) {
+    clauses.push(`${slotToken(t2, 'T2')} is missing ${missing2.join(', ')}`);
+  }
+  // The fallback cannot be reached from `renderControls` — a basis only lands
+  // in its `unavailable` list when at least one film is short a landmark —
+  // but stays honest rather than silently mis-stating a basis whose
+  // unavailability comes from anywhere else in the future.
+  return clauses.length > 0
+    ? `needs ${need} on both tracings — ${clauses.join('; ')}`
+    : `needs ${need} on both tracings`;
 };
 
 /**
@@ -755,8 +791,7 @@ export default class Superimposition extends React.PureComponent<Props, State> {
               const isShared = shared.indexOf(b.id) !== -1;
               const title = isShared
                 ? `${b.name} — ${b.description}`
-                : `${b.name} is unavailable: both tracings must carry ` +
-                  `${basisSymbols(b).join(', ')}.`;
+                : `${b.name} is unavailable: ${basisMissingSummary(b, t1, t2)}.`;
               return (
                 // The tooltip lives on an enabled wrapper, not on the button:
                 // browsers do not fire hover on a disabled control.
@@ -783,7 +818,7 @@ export default class Superimposition extends React.PureComponent<Props, State> {
           <p className={classes.seg_hint}>
             Unavailable:{' '}
             {unavailable.map((b) => (
-              `${b.label} needs ${basisSymbols(b).join(', ')} on both tracings`
+              `${b.label} ${basisMissingSummary(b, t1, t2)}`
             )).join(' · ')}. Auto-plot does not place these — plot them on each
             film to unlock the registration.
           </p>
@@ -797,7 +832,10 @@ export default class Superimposition extends React.PureComponent<Props, State> {
    * framed region, dimmed, purely as anatomical context; both tracings are
    * drawn from `buildOutlines` — the same curves the editor draws — over it, T1
    * solid cyan and T2 dashed orange, so a segment where the two coincide still
-   * shows T1 through T2's gaps.
+   * shows T1 through T2's gaps. A landmark or synthesised shape with no
+   * counterpart on the other tracing — plotted for one film's analysis but not
+   * the other's — is drawn dimmed (see `orphanSymbols`/`orphanOutlineIds`)
+   * rather than at full weight, so it reads as context instead of clutter.
    */
   private renderSvg(
     t1: TimepointRecord,
@@ -806,10 +844,14 @@ export default class Superimposition extends React.PureComponent<Props, State> {
     frame: Box,
     basis: RegistrationBasis,
   ) {
-    const t1Points = transformLandmarks(t1.landmarks, {
-      a: 1, b: 0, c: 0, d: 1, e: 0, f: 0,
-    });
+    const t1Points = transformLandmarks(t1.landmarks, IDENTITY);
     const t2Points = transformLandmarks(t2.landmarks, transform);
+    const t1Outlines = buildOutlines(t1Points);
+    const t2Outlines = buildOutlines(t2Points);
+    const t1OrphanSymbols = orphanSymbols(t1Points, t2Points);
+    const t2OrphanSymbols = orphanSymbols(t2Points, t1Points);
+    const t1OrphanOutlineIds = orphanOutlineIds(t1Outlines, t2Outlines);
+    const t2OrphanOutlineIds = orphanOutlineIds(t2Outlines, t1Outlines);
     const dotRadius = frame.width / 190;
     const annotations = buildAnnotations(
       basis, t1Points, t2Points, frame, t1.scaleFactor,
@@ -870,8 +912,14 @@ export default class Superimposition extends React.PureComponent<Props, State> {
         ) : null}
         {this.renderBasisLine(annotations.t1Basis, classes.basis_line__t1)}
         {this.renderBasisLine(annotations.t2Basis, classes.basis_line__t2)}
-        {this.renderTracing(t1Points, dotRadius, classes.t1)}
-        {this.renderTracing(t2Points, dotRadius, classes.t2)}
+        {this.renderTracing(
+          t1Points, t1Outlines, dotRadius, classes.t1,
+          t1OrphanOutlineIds, t1OrphanSymbols,
+        )}
+        {this.renderTracing(
+          t2Points, t2Outlines, dotRadius, classes.t2,
+          t2OrphanOutlineIds, t2OrphanSymbols,
+        )}
         {this.renderAnnotations(annotations, dotRadius, frame, offset)}
       </svg>
     );
@@ -961,18 +1009,32 @@ export default class Superimposition extends React.PureComponent<Props, State> {
     );
   }
 
+  /**
+   * One tracing's curves and landmark dots. `orphanOutlineIdList` and
+   * `orphanSymbolList` name the geometry this tracing carries that the other
+   * timepoint does not — dimmed via `.geometry__orphan` rather than omitted,
+   * so a landmark plotted for only one film's analysis stays visible as
+   * context without competing with the paired geometry the change table
+   * actually reads (see `orphanSymbols`/`orphanOutlineIds`).
+   */
   private renderTracing(
     points: { [symbol: string]: GeoPoint },
+    outlines: Outline[],
     dotRadius: number,
     hueClass: string,
+    orphanOutlineIdList: string[],
+    orphanSymbolList: string[],
   ) {
-    const outlines = buildOutlines(points);
     return (
       <g className={hueClass}>
         {outlines.map((outline) => {
           const d = outlineToSvgPath(outline);
+          const isOrphan = orphanOutlineIdList.indexOf(outline.id) !== -1;
           return (
-            <g key={outline.id}>
+            <g
+              key={outline.id}
+              className={cx({ [classes.geometry__orphan]: isOrphan })}
+            >
               <path className={classes.casing} d={d} />
               <path className={classes.outline} d={d} />
             </g>
@@ -981,7 +1043,9 @@ export default class Superimposition extends React.PureComponent<Props, State> {
         {Object.keys(points).map((symbol) => (
           <circle
             key={symbol}
-            className={classes.dot}
+            className={cx(classes.dot, {
+              [classes.geometry__orphan]: orphanSymbolList.indexOf(symbol) !== -1,
+            })}
             cx={points[symbol].x}
             cy={points[symbol].y}
             r={dotRadius}
@@ -1055,9 +1119,12 @@ export default class Superimposition extends React.PureComponent<Props, State> {
             region; T2 contributes its tracing only, drawn dashed so a
             coincident T1 stays visible beneath it. The straight cyan and orange
             line is the {basis.from}–{basis.to} reference whose direction was
-            matched: where the two coincide, the registration is exact. Both
-            tracings are the plotted landmarks — nothing here is predicted or
-            simulated.
+            matched: where the two coincide, the registration is exact. A
+            landmark or curve plotted on one tracing with no counterpart on the
+            other — carried over from a different analysis, say — is drawn
+            faded rather than at full weight: it has nothing to compare
+            against. Both tracings are the plotted landmarks — nothing here is
+            predicted or simulated.
           </p>
           {/* How the Change table is to be read. It is stated here, in the
               column the figure leaves free, rather than under the table: five
@@ -1356,13 +1423,16 @@ export default class Superimposition extends React.PureComponent<Props, State> {
     const identity = patient !== null
       ? [patient.chartId, patient.name].filter((p) => !!p).join(' · ')
       : '';
+    const t1Points = transformLandmarks(t1.landmarks, IDENTITY);
+    const t2Points = transformLandmarks(t2.landmarks, registration.transform);
     const annotations = buildAnnotations(
-      basis,
-      transformLandmarks(t1.landmarks, { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 }),
-      transformLandmarks(t2.landmarks, registration.transform),
-      frame,
-      t1.scaleFactor,
+      basis, t1Points, t2Points, frame, t1.scaleFactor,
     );
+    // The exported PNG dims the same orphan geometry the screen does (see
+    // `renderSvg`), from the same pure helpers — an export must read the same
+    // comparison the screen shows, not a second, undimmed one.
+    const t1Outlines = buildOutlines(t1Points);
+    const t2Outlines = buildOutlines(t2Points);
     this.setState({ isExporting: true, exportError: null });
     renderSuperimpositionSnapshot({
       filmSrc: t1.src,
@@ -1373,6 +1443,10 @@ export default class Superimposition extends React.PureComponent<Props, State> {
       transform: registration.transform,
       frame,
       annotations,
+      t1OrphanDotSymbols: orphanSymbols(t1Points, t2Points),
+      t2OrphanDotSymbols: orphanSymbols(t2Points, t1Points),
+      t1OrphanOutlineIds: orphanOutlineIds(t1Outlines, t2Outlines),
+      t2OrphanOutlineIds: orphanOutlineIds(t2Outlines, t1Outlines),
       t1Label: shortLabel(t1, 'T1'),
       t2Label: shortLabel(t2, 'T2'),
       registrationLabel: `Registered on ${basis.name}`,
@@ -1404,19 +1478,16 @@ export default class Superimposition extends React.PureComponent<Props, State> {
   };
 
   /**
-   * File-name stem for the export. Characters a file system cannot carry —
-   * every CJK name among them — collapse to a single separator and are then
-   * trimmed away, so a Japanese name yields `C-0001-superimposition.png` rather
-   * than the malformed `C-0001__-superimposition.png`.
+   * File-name stem for the export. Only characters an actual filesystem path
+   * cannot carry are sanitised away — same rule as the `.wceph` case file
+   * export, via the shared `sanitizeFilenameStem` — so a Japanese name yields
+   * `C-0001 山田 太郎-superimposition.png` rather than losing the name entirely.
    */
   private exportStem(): string {
     const { patient } = this.props;
-    const stem = (patient !== null
-      ? [patient.chartId, patient.name].filter((p) => !!p).join('_')
-      : '')
-      .replace(/[^\w.\-]+/g, '_')
-      .replace(/_{2,}/g, '_')
-      .replace(/^[_.\-]+|[_.\-]+$/g, '');
+    const stem = patient !== null
+      ? sanitizeFilenameStem([patient.chartId, patient.name])
+      : '';
     return stem !== '' ? stem : 'superimposition';
   }
 }

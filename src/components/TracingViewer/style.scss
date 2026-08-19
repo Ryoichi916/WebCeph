@@ -142,3 +142,18 @@
 .unhighlighted {
   opacity: 0;
 }
+
+// A point being dragged keeps the stepper row it belongs to lit the whole
+// gesture (the dot tracks the cursor in real time — see
+// TracingViewer#getRenderedLandmarks — so it never actually leaves the
+// invisible hit-circle under the pointer, and that circle's own mouseleave,
+// which is what clears the highlight, never fires mid-drag). Without this
+// rule `.highlighted.point` (fill #40C4FF, specificity 0,2,0) always beat
+// `.point_dragged` declared above (specificity 0,1,0) regardless of DOM
+// class order, so the dragged dot silently stayed the hover-blue of the row
+// instead of ever showing its own #FF6E40 "being moved" color. Matched here
+// at the same 0,2,0 specificity and placed after `.highlighted`, so the
+// cascade's own tie-break (source order) — not `!important` — settles it.
+.highlighted.point_dragged {
+  fill: #FF6E40;
+}

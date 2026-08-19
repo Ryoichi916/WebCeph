@@ -118,21 +118,6 @@ export default reducers;
 
 export const isSummaryShown = (state: StoreState) => state[KEY_SUMMARY_SHOWN];
 
-/**
- * The analysis most recently explicitly chosen for this image type — via the
- * tracing toolbar's switcher (see `store/middleware/analysisDefault`, which
- * is what keeps this in sync with `SET_ACTIVE_ANALYSIS_REQUESTED`) or the
- * records dashboard's own selector. Persisted app-wide (see
- * `store/middleware/persistence`), so it survives a reload.
- */
-export const getLastActiveAnalysisId = createSelector(
-  (state: StoreState) => state[KEY_LAST_USED_ID],
-  (lastUsedByType) => <T extends ImageType>(imageType: T): AnalysisId<T> | null => {
-    const id = lastUsedByType[imageType];
-    return id !== undefined ? id : null;
-  },
-);
-
 export const isAnalysisSet = createSelector(
   getAnalysisId,
   (getId) => (imageId: string) => getId(imageId) !== null,

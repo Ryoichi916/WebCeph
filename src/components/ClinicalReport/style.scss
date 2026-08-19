@@ -1281,8 +1281,29 @@ $cont-line-height: 13px;
   color: $text-tertiary;
 }
 
+// The clinical-latitude range under a *target* norm (see `isTarget`) — e.g.
+// "20.0–30.0" under Tweed's "25.0". `.cell_numeric` sets `white-space: nowrap`
+// on the whole column so a plain number never wraps, but this line is prose
+// wide enough to overflow that at that setting. Allowed to wrap here instead,
+// onto a second line inside its own cell — matches
+// AnalysisResultsViewer/style.scss's `.norm_target_bounds` so the printed
+// sheet and the Summary dialog agree.
+.norm_target_bounds {
+  display: block;
+  margin-top: 1px;
+  font-size: 9.5px;
+  white-space: normal;
+  color: $text-disabled;
+}
+
 .cell_deviation {
   color: $text-tertiary;
+}
+
+// "in range": a statement, not a measurement — set quieter than the numbers.
+.cell_deviation__muted {
+  color: $text-disabled;
+  font-style: italic;
 }
 
 .cell_deviation__warn {

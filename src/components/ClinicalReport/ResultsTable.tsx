@@ -11,6 +11,8 @@ import {
   getSeverityStars,
   chipToneFor,
   STARS,
+  formatRange,
+  displayMinus,
 } from 'components/AnalysisResultsViewer';
 import {
   hasNorm, isSdBand, rangeExcess,
@@ -338,7 +340,9 @@ const ResultsTable = (props: ResultsTableProps) => {
                     </tr>
                   );
                 }
-                const { symbol, value, mean, min, max, band } = entry.component;
+                const {
+                  symbol, value, mean, min, max, band, isTarget,
+                } = entry.component;
                 const landmark = landmarksBySymbol[symbol];
                 const unit = getUnitSuffix(landmark);
                 const stars = getSeverityStars(value, mean, min, max, band);
@@ -383,18 +387,35 @@ const ResultsTable = (props: ResultsTableProps) => {
                     {symbolCell}
                     {valueCell}
                     <td className={cx(classes.cell_numeric, classes.cell_norm)}>
-                      {printNorm(mean, min, max, band)}
+                      {/* A target's main line is the target alone (its range
+                          travels on its own line below, see
+                          `.norm_target_bounds`) — `printNorm` still carries
+                          the combined "25.0 · range 20–30" text, kept only
+                          because there is no second line to print it on
+                          elsewhere it is used. Matches
+                          AnalysisResultsViewer/index.tsx's on-screen table so
+                          the printed sheet and the Summary dialog agree. */}
+                      {isTarget ? printNumber(mean) : printNorm(mean, min, max, band)}
                       {graded && !isSdBand(band) ? (
-                        <span className={classes.norm_kind}>range</span>
+                        <span className={classes.norm_kind}>
+                          {isTarget ? 'target' : 'range'}
+                        </span>
+                      ) : null}
+                      {isTarget ? (
+                        <span className={classes.norm_target_bounds}>
+                          {displayMinus(formatRange(min, max))}
+                        </span>
                       ) : null}
                     </td>
                     <td
                       className={cx(classes.cell_numeric, classes.cell_deviation, {
                         [classes.cell_deviation__warn]: stars === 1 || outOfRange,
                         [classes.cell_deviation__error]: stars >= 2,
+                        [classes.cell_deviation__muted]:
+                          graded && !isSdBand(band) && !outOfRange && !isTarget,
                       })}
                     >
-                      {printDeviation(value, mean, min, max, unit, band)}
+                      {printDeviation(value, mean, min, max, unit, band, isTarget)}
                       <span className={classes.deviation_stars}>
                         {stars > 0 ? STARS[stars] : ''}
                       </span>

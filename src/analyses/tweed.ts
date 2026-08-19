@@ -4,7 +4,7 @@ import {
 import { tweedTriangleSum } from 'analyses/landmarks/other/skeletal';
 
 import {
-  defaultInterpretAnalysis, hasNorm, NO_NORM, RANGE,
+  defaultInterpretAnalysis, hasNorm, NO_NORM, TARGET_RANGE,
 } from 'analyses/helpers';
 
 /**
@@ -35,6 +35,11 @@ import {
  * norms (Björk's gonial halves, Jarabak's ratio) is that no surface may
  * manufacture one by halving the range: the tables mark these rows *range*,
  * grade them in or out of it, and print no stars against an SD nobody stated.
+ * Unlike Björk's and Jarabak's ranges, Tweed's 25/90/65 **are** the figures a
+ * clinician treats toward, not merely the midpoint of a bound — so they are
+ * declared with `TARGET_RANGE`, not plain `RANGE`, and the norm cell keeps the
+ * target visible beside the range ("25.0 · range 20–30") instead of hiding it
+ * in the provenance prose, where the deviation-beyond-bound column left it.
  * They are interpreted: FMPA grades the mandibular rotation, while
  * FMIA and IMPA — read together, as Tweed intended — grade the inclination of
  * the lower incisor. Both conclusions are named *on* the triangle's group, with
@@ -69,27 +74,28 @@ const components: AnalysisComponent[] = [
   // The triangle, in the order its sum line reads: FMA + IMPA + FMIA = 180°.
   // Declared as published *ranges* (target ± the conventional 5° latitude),
   // because Tweed stated targets and ranges, never a standard deviation — see
-  // the module doc above. `mean` keeps the target for the interpreters.
+  // the module doc above. `mean` keeps the target for the interpreters and
+  // `TARGET_RANGE` keeps it printed for the clinician.
   {
     landmark: FMPA,
     mean: 25,
     max: 30,
     min: 20,
-    ...RANGE,
+    ...TARGET_RANGE,
   },
   {
     landmark: IMPA,
     mean: 90,
     max: 95,
     min: 85,
-    ...RANGE,
+    ...TARGET_RANGE,
   },
   {
     landmark: FMIA,
     mean: 65,
     max: 70,
     min: 60,
-    ...RANGE,
+    ...TARGET_RANGE,
   },
   {
     // The closure row — 180° identically (see `tweedTriangleSum`). An identity

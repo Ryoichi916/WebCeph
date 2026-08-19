@@ -330,6 +330,21 @@
   color: $text-disabled;
 }
 
+// The clinical-latitude range under a *target* norm (see `isTarget`) — e.g.
+// "20.0–30.0" under Tweed's "25.0". `.cell_numeric` sets `white-space: nowrap`
+// on the whole column so a plain number never wraps, but this line is prose
+// wide enough to overflow the 104px column at that setting: on a fixed-layout
+// table (see `.table`) an overflowing nowrap line does not widen its column,
+// it bleeds into the DEVIATION column beside it. Allowed to wrap here instead,
+// onto a second line inside its own cell.
+.norm_target_bounds {
+  display: block;
+  margin-top: 1px;
+  font-size: 10.5px;
+  white-space: normal;
+  color: $text-disabled;
+}
+
 .cell_deviation {
   color: $text-tertiary;
 }

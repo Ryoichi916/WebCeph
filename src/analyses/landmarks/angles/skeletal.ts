@@ -303,8 +303,8 @@ export const downsIncisorOcclusalPlaneAngle: CephAngle = {
 export const facialAxisAngle: CephAngle = {
   ...angleBetweenLines(
     line(N, Ba), line(Pt, Gn),
-    'Facial axis (Ba-N to Pt-Gn)',
-    'Facial axis',
+    'Facial Axis (Ba-N to Pt-Gn)',
+    'Facial Axis',
   ),
   interpret: defaultInterpetLandmark(
     'growthPattern',

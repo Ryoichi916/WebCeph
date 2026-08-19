@@ -612,3 +612,25 @@ export const renderTracingSnapshot = (
     img.src = src;
   });
 };
+
+/**
+ * File-name stem shared by every raster export (tracing, superimposition,
+ * treatment simulation): the patient's chart ID and/or name, joined and made
+ * safe to write to disk.
+ *
+ * Only characters an actual filesystem path cannot carry are touched — the
+ * reserved Windows/NTFS separators and glob characters, plus control
+ * characters — exactly what `utils/importers/wceph/v1/export.ts` strips for
+ * the `.wceph` case file. A Japanese name (the target clinic's own patients)
+ * is not one of those characters: modern filesystems and browser downloads
+ * carry Unicode filenames natively, so `parts` such as `['C-0001', '山田 太郎']`
+ * survive intact rather than being reduced to `C-0001` alone.
+ */
+export const sanitizeFilenameStem = (parts: (string | null | undefined)[]): string => {
+  const joined = parts.filter((p) => !!p && p.trim() !== '').join(' ').trim();
+  return joined
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\\/:*?"<>|\x00-\x1f]+/g, '_')
+    .replace(/_{2,}/g, '_')
+    .replace(/^[_.\-]+|[_.\-]+$/g, '');
+};

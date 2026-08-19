@@ -99,6 +99,19 @@ export interface SuperimpositionSnapshotInput {
   t2Outlines?: Outline[];
   /** Symbols to dot on the overlaid layer. Defaults to every placed point. */
   t2DotSymbols?: string[];
+  /**
+   * Landmark symbols and outline ids, per layer, with no counterpart on the
+   * other layer — drawn at reduced opacity rather than full weight, matching
+   * the on-screen `.geometry__orphan` treatment
+   * (`components/Superimposition/style.scss`) so the exported PNG reads the
+   * same comparison the screen does. Defaults to nothing dimmed, which is what
+   * every other caller of this back-end (the treatment simulation) wants: a
+   * displaced plan has no second tracing to be an orphan against.
+   */
+  t1OrphanDotSymbols?: string[];
+  t2OrphanDotSymbols?: string[];
+  t1OrphanOutlineIds?: string[];
+  t2OrphanOutlineIds?: string[];
   /** Displacement arrows drawn over the figure, in the frame's coordinates. */
   vectors?: Array<{ from: GeoPoint; to: GeoPoint }>;
   /**
@@ -125,6 +138,14 @@ const outputWidthFor = (frame: Box): number => Math.round(Math.max(
   MIN_OUTPUT_WIDTH, Math.min(MAX_OUTPUT_WIDTH, frame.width),
 ));
 
+/**
+ * Opacity an orphan dot or outline is drawn at — a landmark or synthesised
+ * shape with no counterpart on the other layer. Kept in step with
+ * `.geometry__orphan`'s opacity in `components/Superimposition/style.scss`:
+ * the two renderers draw the same dimming, so they must agree on the number.
+ */
+const ORPHAN_ALPHA = 0.34;
+
 const drawTracing = (
   ctx: CanvasRenderingContext2D,
   points: { [symbol: string]: GeoPoint },
@@ -134,24 +155,37 @@ const drawTracing = (
   isDashed: boolean,
   builtOutlines?: Outline[],
   dotSymbols?: string[],
+  orphanOutlineIds?: string[],
+  orphanDotSymbols?: string[],
 ) => {
   const outlines = builtOutlines !== undefined
     ? builtOutlines
     : buildOutlines(points);
+  const orphanOutlineSet = orphanOutlineIds !== undefined ? orphanOutlineIds : [];
+  const orphanDotSet = orphanDotSymbols !== undefined ? orphanDotSymbols : [];
+  const alphaFor = (isOrphan: boolean) => (isOrphan ? ORPHAN_ALPHA : 1);
+
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
   // Dark casing under the light stroke so both tracings read over bright bone.
   ctx.setLineDash([]);
   ctx.strokeStyle = CASING;
   ctx.lineWidth = 4.4 / scale;
-  outlines.forEach((outline) => strokeOutlineOnCanvas(ctx, outline));
+  outlines.forEach((outline) => {
+    ctx.globalAlpha = alphaFor(orphanOutlineSet.indexOf(outline.id) !== -1);
+    strokeOutlineOnCanvas(ctx, outline);
+  });
   if (isDashed) {
     ctx.setLineDash([T2_DASH[0] / scale, T2_DASH[1] / scale]);
   }
   ctx.strokeStyle = color;
   ctx.lineWidth = 2.1 / scale;
-  outlines.forEach((outline) => strokeOutlineOnCanvas(ctx, outline));
+  outlines.forEach((outline) => {
+    ctx.globalAlpha = alphaFor(orphanOutlineSet.indexOf(outline.id) !== -1);
+    strokeOutlineOnCanvas(ctx, outline);
+  });
   ctx.setLineDash([]);
+  ctx.globalAlpha = 1;
 
   ctx.fillStyle = color;
   ctx.strokeStyle = CANVAS_BG;
@@ -161,11 +195,13 @@ const drawTracing = (
     if (p === undefined) {
       return;
     }
+    ctx.globalAlpha = alphaFor(orphanDotSet.indexOf(symbol) !== -1);
     ctx.beginPath();
     ctx.arc(p.x, p.y, dotRadius, 0, 2 * Math.PI);
     ctx.fill();
     ctx.stroke();
   });
+  ctx.globalAlpha = 1;
 };
 
 /**
@@ -483,12 +519,14 @@ const compose = (
   drawTracing(ctx, transformLandmarks(input.t1, {
     a: 1, b: 0, c: 0, d: 1, e: 0, f: 0,
   }), input.t1Color !== undefined ? input.t1Color : T1_COLOR,
-    scale, dotRadius, false);
+    scale, dotRadius, false, undefined, undefined,
+    input.t1OrphanOutlineIds, input.t1OrphanDotSymbols);
   drawTracing(
     ctx, transformLandmarks(input.t2, input.transform),
     input.t2Color !== undefined ? input.t2Color : T2_COLOR,
     scale, dotRadius, true,
     input.t2Outlines, input.t2DotSymbols,
+    input.t2OrphanOutlineIds, input.t2OrphanDotSymbols,
   );
   ctx.restore();
 

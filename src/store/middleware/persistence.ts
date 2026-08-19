@@ -52,6 +52,17 @@ const PERSISTABLE_KEYS: StoreKey[] = [
   'env.compat.check.ignored',
   'env.compat.check.results',
   'analyses.lastUsedId',
+  // The clinician's most recently explicitly-chosen analysis (the switcher),
+  // read by `store/middleware/analysisDefault` to default the next brand-new
+  // lateral cephalogram. Deliberately *not* added to `PERSISTABLE_EVENTS`
+  // below — switching analyses is a frequent, lightweight action (a
+  // clinician comparing Downs against Tweed on the same film), and this
+  // project's own case-summary/active-patient split above is explicit that
+  // such actions must not re-serialise the whole patient list (thumbnails
+  // included) on every occurrence. It rides along the next time something
+  // else persists (registering or updating a patient, which happens often
+  // enough in a real session) rather than forcing an extra write of its own.
+  'workspace.analysis.lastActiveId',
   'user.preferences.preferredLocale',
   // Patient records persist; the active patient does not, so every launch
   // starts at the patient picker.

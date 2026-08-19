@@ -217,6 +217,15 @@
     background: $primary-050;
     box-shadow: inset 3px 0 0 $primary-600;
   }
+
+  // The reverse of `&__done:hover` above: this row's own landmark is being
+  // hovered directly on the film (TracingViewer → highlightStep), rather than
+  // the row itself being hovered. Same background as a hovered done row —
+  // one "this is the thing on screen" treatment, reachable from either side —
+  // and it wins over `__current` on the rare row that is somehow both.
+  &__highlighted {
+    background: $bg-sunken;
+  }
 }
 
 .step_icon {

@@ -389,6 +389,18 @@
   .dot { fill: #FF8A65; }
 }
 
+// A landmark or synthesised shape plotted on one tracing with no counterpart
+// on the other — carried over from a different analysis, or simply not yet
+// plotted on that film — has nothing to compare against, so it recedes rather
+// than littering the frame at full weight. The same idiom `.row__within`
+// already uses in the Change table for a difference too small to be a
+// finding: still visible, no longer competing for attention. Kept in step
+// with `ORPHAN_ALPHA` in `utils/superimpositionSnapshot.ts`, so the exported
+// PNG dims the same geometry the same amount.
+.geometry__orphan {
+  opacity: .34;
+}
+
 // The reference line whose direction the registration matched, at each
 // timepoint: two coincident lines are the visible proof that the fit is right.
 .basis_line {

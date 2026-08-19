@@ -439,6 +439,19 @@ export const hasNorm = (mean: number, min: number, max: number): boolean => (
  */
 export const RANGE = { band: 'range' as NormBand };
 
+/**
+ * Spread into an `AnalysisComponent` whose range **is** centred on a published
+ * target, not merely on a bound's midpoint (see `AnalysisComponent.isTarget`).
+ * Tweed's FMA/IMPA/FMIA are the only norms in this app that qualify — 25°,
+ * 90°, 65°, each with the conventional ± 5° clinical latitude, are figures he
+ * names as targets, not endpoints he happened to publish. Use plain `RANGE`
+ * for a component whose author published bounds and nothing else (Björk's
+ * gonial halves, Jarabak's ratio): reaching for this instead would print a
+ * "target" nobody stated, exactly the invented-figure problem `RANGE` exists
+ * to prevent.
+ */
+export const TARGET_RANGE = { band: 'range' as NormBand, isTarget: true };
+
 /** Whether a component's min/max are a real ± 1 SD band (see `NormBand`). */
 export const isSdBand = (band?: NormBand): boolean => band !== 'range';
 
@@ -628,6 +641,7 @@ export const defaultInterpretAnalysis =
       const results = flatten(
         map(components, ({
           landmark: { symbol, interpret }, max, min, mean, band, normSource,
+          isTarget,
         }) => {
           const value = values[symbol];
           if (typeof value !== 'number' || !isFinite(value)) {
@@ -639,14 +653,14 @@ export const defaultInterpretAnalysis =
           if (typeof interpret === 'function' && hasNorm(mean, min, max)) {
             return map(
               interpret(value, min, max, mean),
-              r => ({ ...r, symbol, band, normSource }),
+              r => ({ ...r, symbol, band, normSource, isTarget }),
             );
           }
           measured.push({
             symbol,
             category: NEUTRAL_CATEGORY as 'measurement',
             indication: gradeAgainstNorm(value, min, max, mean),
-            value, mean, max, min, band, normSource,
+            value, mean, max, min, band, normSource, isTarget,
           });
           return [];
         }),
@@ -660,7 +674,7 @@ export const defaultInterpretAnalysis =
           severity: resolveSeverity(group),
           relevantComponents: map(
             group,
-            (({ symbol, value, mean, max, min, band, normSource }) => ({
+            (({ symbol, value, mean, max, min, band, normSource, isTarget }) => ({
               symbol,
               value,
               mean,
@@ -668,6 +682,7 @@ export const defaultInterpretAnalysis =
               min,
               band,
               normSource,
+              isTarget,
             })),
           ),
         }),
@@ -693,8 +708,8 @@ export const defaultInterpretAnalysis =
         severity: 'none' as Severity,
         relevantComponents: map(
           ordered,
-          ({ symbol, value, mean, max, min, band, normSource }) => ({
-            symbol, value, mean, max, min, band, normSource,
+          ({ symbol, value, mean, max, min, band, normSource, isTarget }) => ({
+            symbol, value, mean, max, min, band, normSource, isTarget,
           }),
         ),
       };

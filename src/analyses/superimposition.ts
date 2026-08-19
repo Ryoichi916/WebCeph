@@ -4,7 +4,7 @@ import { evaluateAnalysis, getReportableSymbols } from 'analyses/evaluate';
 import { LATERAL_ANALYSES } from 'analyses/lateral';
 // Pure geometry module (no React, no DOM) — the same one the editor's SVG
 // overlay and the raster exports draw from.
-import { buildOutlines } from 'components/TracingViewer/outlines';
+import { buildOutlines, Outline } from 'components/TracingViewer/outlines';
 
 /**
  * Cephalometric superimposition: the geometry that brings two timepoints of the
@@ -386,6 +386,42 @@ export const superimpositionFrame = (
     width: (maxX - minX) + padX * 2,
     height: (maxY - minY) + padY * 2,
   };
+};
+
+// ---- Orphan geometry ---------------------------------------------------------
+
+/**
+ * Landmark symbols placed on this tracing with no counterpart on the other —
+ * the ones a hand superimposition on an acetate overlay would never carry,
+ * because nothing on the other film exists to compare them against. Both
+ * renderers (the on-screen SVG and the exported PNG) draw these dimmed rather
+ * than at full weight: the same idiom the change table already uses for a
+ * difference too small to be a finding (`isWithinPlottingError`) — still
+ * visible, no longer competing for attention with the geometry both tracings
+ * actually share. Left at full weight, a tracing plotted for a different
+ * analysis than its partner reads as noise scattered over the posterior skull
+ * rather than as the two clean tracings it should be.
+ */
+export const orphanSymbols = (
+  own: { [symbol: string]: GeoPoint }, other: { [symbol: string]: GeoPoint },
+): string[] => Object.keys(own).filter((symbol) => other[symbol] === undefined);
+
+/**
+ * Outline ids drawn for this tracing with no counterpart on the other — the
+ * same "nothing to compare against" rule applied to the small synthesised
+ * shapes (the sella fossa, the orbital rim arc, the ear-rod ring, an incisor
+ * lozenge) rather than to individual landmark dots. `buildOutlines` already
+ * omits an outline whose defining landmarks are not all placed on *this*
+ * tracing; this only asks whether the *other* tracing drew the same outline.
+ */
+export const orphanOutlineIds = (
+  ownOutlines: Outline[], otherOutlines: Outline[],
+): string[] => {
+  const otherIds: { [id: string]: true } = {};
+  otherOutlines.forEach((o) => { otherIds[o.id] = true; });
+  return ownOutlines
+    .filter((o) => otherIds[o.id] !== true)
+    .map((o) => o.id);
 };
 
 // ---- Figure annotation ------------------------------------------------------

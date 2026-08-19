@@ -12,6 +12,7 @@ import { isTraceableImageType, reconcilePhotoView } from 'utils/records';
 const KEY_IMAGES: StoreKey = 'images.props';
 const KEY_IMAGES_LOAD_STATUS: StoreKey = 'images.status';
 const KEY_TRACING: StoreKey = 'images.tracing';
+const KEY_LAST_ACTIVE_ANALYSIS: StoreKey = 'workspace.analysis.lastActiveId';
 
 // Default props applied to a freshly loaded image, then overridden by any
 // existing state and the action payload.
@@ -200,6 +201,22 @@ const imagesReducer = handleActions<typeof KEY_IMAGES>(
   {},
 );
 
+/**
+ * The most recently *explicitly chosen* analysis (via the switcher) —
+ * independent of any one image, so it survives to inform the next record.
+ * Consulted only by `store/middleware/analysisDefault` to default a brand-new
+ * lateral cephalogram, which is why picking an analysis on the film you are
+ * already looking at (this reducer's own write) never rewrites that film's
+ * own `analysis.activeId` a second time — it just remembers the choice for
+ * whichever record comes next. Null until the clinician has picked an
+ * analysis at least once in this project, so a fresh install keeps today's
+ * 'downs' default (see `defaultImageProps`) rather than inventing a history
+ * that never happened.
+ */
+const lastActiveAnalysisReducer = handleActions<typeof KEY_LAST_ACTIVE_ANALYSIS>({
+  SET_ACTIVE_ANALYSIS_REQUESTED: (_, { payload: { analysisId } }) => analysisId,
+}, null);
+
 const loadStatusReducer = handleActions<typeof KEY_IMAGES_LOAD_STATUS>({
   LOAD_IMAGE_FAILED: (state, { payload: { id, error } }) => {
     return {
@@ -327,6 +344,7 @@ const reducers: Partial<ReducerMap> = {
   [KEY_IMAGES_LOAD_STATUS]: loadStatusReducer,
   [KEY_IMAGES]: imagesReducer,
   [KEY_TRACING]: tracingReducer,
+  [KEY_LAST_ACTIVE_ANALYSIS]: lastActiveAnalysisReducer,
 };
 
 export default reducers;
@@ -505,6 +523,14 @@ export const getAnalysisId = createSelector(
     return props && props.analysis ? props.analysis.activeId : null;
   },
 );
+
+/**
+ * The clinician's most recently chosen analysis, project-wide. @see
+ * `lastActiveAnalysisReducer` above and `store/middleware/analysisDefault`,
+ * its only reader.
+ */
+export const getLastActiveAnalysisId = (state: StoreState) =>
+  state[KEY_LAST_ACTIVE_ANALYSIS];
 
 export const getScaleFactor = createSelector(
   getImageProps,

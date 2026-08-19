@@ -123,6 +123,8 @@ interface LandmarkInterpretation<T extends Category> {
   band?: NormBand;
   /** See `AnalysisComponent.normSource`. */
   normSource?: string;
+  /** See `AnalysisComponent.isTarget`. */
+  isTarget?: boolean;
 }
 
 interface AnalysisInterpretation<T extends Category> extends LandmarkInterpretation<T> {
@@ -320,6 +322,21 @@ type AnalysisComponent = {
   perYearFrom?: NormAgeCorrection;
   /** The author's sex-specific means for this component (see `NormSexMeans`). */
   sexMeans?: NormSexMeans;
+  /**
+   * `mean` is a **published target**, not a manufactured range midpoint — true
+   * of Tweed's FMA/IMPA/FMIA (his 25°/90°/65°, each read ± 5° of clinical
+   * latitude) and of no other range-band component in this app. Björk's gonial
+   * halves and Jarabak's facial-height ratio are also declared with `RANGE`,
+   * but their `mean` is only the arithmetic midpoint of a bound their authors
+   * published as a bound, not as a figure a clinician treats toward — showing
+   * it as a target would resurrect exactly the invented-figure problem `RANGE`
+   * exists to prevent (see `NormBand`).
+   *
+   * Only meaningful when `band` is `'range'`; ignored for a mean ± SD band,
+   * which already shows its mean. Absent (the default) means the range has no
+   * published target and the norm cell prints the bounds alone.
+   */
+  isTarget?: boolean;
 };
 
 /**
@@ -342,7 +359,7 @@ type CategorizedAnalysisResult<T extends Category> = {
   relevantComponents: Array<
     Pick<
       LandmarkInterpretation<T>,
-      'mean' | 'max' | 'min' | 'value' | 'band' | 'normSource'
+      'mean' | 'max' | 'min' | 'value' | 'band' | 'normSource' | 'isTarget'
     > &
     { symbol: string }
   >;
@@ -445,8 +462,20 @@ interface NormsProvenance {
    * file", and those are two different documents.
    *
    * Returns undefined when there is nothing extra to say.
+   *
+   * `computedSymbols`, when the caller has it, is the set of symbols this
+   * particular reading actually tabulated — so a note that describes a row
+   * ("the Wits appraisal above is graded against...") can tell whether that
+   * row is above. Jacobson's Wits distance needs an image scale like any other
+   * millimetre reading; on an uncalibrated film it is absent from the table,
+   * and a note that still said "the Wits appraisal above" was a claim about a
+   * row that was not there. Omitted by a caller that does not track computed
+   * symbols — a `patientNote` must still degrade sensibly with nothing but
+   * `context`, which is every existing implementation's contract.
    */
-  patientNote?(context?: AnalysisContext): string | undefined;
+  patientNote?(
+    context?: AnalysisContext, computedSymbols?: Set<string>,
+  ): string | undefined;
   /**
    * The same reading as its *figures* — the corrected norms themselves, set as a
    * compact run a clinician can scan ("Age 22 y · facial depth 90.0° · mand.
@@ -898,6 +927,12 @@ interface StoreState {
   'images.tracing': {
     [imageId: string]: CephImageTracingData;
   };
+  /**
+   * The clinician's most recently explicitly-chosen analysis (via the
+   * switcher), independent of any one image. @see
+   * `store/reducers/workspace/image#getLastActiveAnalysisId`
+   */
+  'workspace.analysis.lastActiveId': AnalysisId<ImageType> | null;
   /**
    * Undo/redo history of the tracing slice. Managed by the enableUndoRedo
    * reducer enhancer (see store/index.ts); the registered reducers for these

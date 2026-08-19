@@ -78,6 +78,12 @@ interface State {
   isSuperimpositionOpen: boolean;
   isSimulationOpen: boolean;
   /**
+   * Mirrors mui 0.20 Menu's own internal `focusIndex` for the analysis list, so
+   * Enter/Space can select the item the keyboard has landed on. @see
+   * `handleAnalysisMenuKeyDown` for why the menu needs this tracked at all.
+   */
+  analysisMenuFocusIndex: number;
+  /**
    * Whether the case file dialog is open, and on which half. The editor's Export
    * menu offers the whole case as a `.wceph` beside the two picture formats —
    * they are not the same act, and the menu says so. @see components/CaseFile
@@ -134,6 +140,7 @@ export default class TracingToolbar extends React.PureComponent<Props, State> {
     isSuperimpositionOpen: false,
     isSimulationOpen: false,
     caseFileMode: null,
+    analysisMenuFocusIndex: 0,
   };
 
   /**
@@ -498,7 +505,13 @@ export default class TracingToolbar extends React.PureComponent<Props, State> {
           targetOrigin={{ horizontal: 'left', vertical: 'bottom' }}
           onRequestClose={this.closeMenu}
         >
-          <Menu desktop width={264} onEscKeyDown={this.closeMenu}>
+          <Menu
+            desktop
+            width={264}
+            onEscKeyDown={this.closeMenu}
+            onKeyDown={this.handleAnalysisMenuKeyDown}
+            onMenuItemFocusChange={this.handleAnalysisMenuFocusChange}
+          >
             <div className={classes.menu_heading}>Analysis</div>
             {ANALYSES.map((a) => {
               const isSelected = a.id === activeAnalysisId;
@@ -828,6 +841,49 @@ export default class TracingToolbar extends React.PureComponent<Props, State> {
   private selectAnalysis = (id: string) => {
     this.closeMenu();
     this.props.onSelectAnalysis(id);
+  };
+
+  /**
+   * mui 0.20's desktop `Menu` moves the focus pill on ArrowUp/ArrowDown (and
+   * reports it via `onMenuItemFocusChange`, see below) but never wires Enter
+   * or Space to anything — `MenuItem` renders on a plain `<span>`
+   * (`ListItem`'s default `containerElement`), not a native `<button>`, so
+   * there is no element for the browser to auto-activate on a keypress, and
+   * `Menu`'s own `handleKeyDown` has no `case` for either key. A menu a mouse
+   * can drive but a keyboard cannot operate is not keyboard-accessible at
+   * all — only Escape worked. This picks the currently keyboard-focused
+   * analysis directly instead, the same list `ANALYSES.map` below renders in
+   * and `analysisMenuFocusIndex` (kept in step via `onMenuItemFocusChange`)
+   * indexes into.
+   *
+   * `Menu` forwards this same `onKeyDown` prop straight through onto the
+   * inner `List` element (see its `other` passthrough) *in addition to*
+   * invoking it itself from its own wrapping handler, so one keypress can
+   * reach this handler twice; `e.preventDefault()` on the first pass makes
+   * the second a no-op via the `defaultPrevented` guard below rather than a
+   * second dispatch.
+   */
+  private handleAnalysisMenuKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.defaultPrevented) {
+      return;
+    }
+    if (e.key !== 'Enter' && e.key !== ' ' && e.key !== 'Spacebar') {
+      return;
+    }
+    const analysis = ANALYSES[this.state.analysisMenuFocusIndex];
+    if (analysis === undefined) {
+      return;
+    }
+    e.preventDefault();
+    this.selectAnalysis(analysis.id);
+  };
+
+  /** @see handleAnalysisMenuKeyDown */
+  private handleAnalysisMenuFocusChange = (
+    _e: React.SyntheticEvent<{}> | null,
+    newFocusIndex: number,
+  ) => {
+    this.setState({ analysisMenuFocusIndex: newFocusIndex });
   };
 
   /** @see componentDidMount */

@@ -17,7 +17,7 @@ import { buildProfilogram, Segment } from 'analyses/profilogram';
 import { isGeoVector } from 'utils/math';
 // The overlay composition (colors + drawing) is shared with the printable
 // clinical report — see utils/tracingSnapshot.ts.
-import { drawTracingOverlay, drawScaleBar } from 'utils/tracingSnapshot';
+import { drawTracingOverlay, drawScaleBar, sanitizeFilenameStem } from 'utils/tracingSnapshot';
 
 const baseName = (name: string | null): string => {
   if (!name) {
@@ -74,17 +74,13 @@ const middleware = ({ getState }: Store<StoreState>) =>
     // filed against the patient; fall back to the image name.
     const patient = getActivePatient(state);
     const ext = format === 'jpeg' ? 'jpg' : 'png';
-    // Sanitising drops every character a file name cannot carry — which is
-    // every CJK name among them. Collapse the runs of separators that leaves
-    // and trim them off the ends, so a Japanese name yields `C-0001-tracing.png`
-    // rather than the malformed `C-0001__-tracing.png`. Same rule as the
-    // superimposition and treatment-simulation exports.
-    const stem = (patient
-      ? [patient.chartId, patient.name].filter(Boolean).join('_')
-      : baseName(getImageName(state)(imageId)))
-      .replace(/[^\w.\-]+/g, '_')
-      .replace(/_{2,}/g, '_')
-      .replace(/^[_.\-]+|[_.\-]+$/g, '');
+    // Only characters an actual filesystem path cannot carry are sanitised
+    // away — same rule as the `.wceph` case file export — so a Japanese
+    // patient's name survives, e.g. `C-0001 山田 太郎-tracing.png` rather than
+    // losing the name entirely. See `sanitizeFilenameStem`.
+    const stem = patient
+      ? sanitizeFilenameStem([patient.chartId, patient.name])
+      : sanitizeFilenameStem([baseName(getImageName(state)(imageId))]);
     const filename = `${stem || 'tracing'}-tracing.${ext}`;
 
     const img = new Image();
