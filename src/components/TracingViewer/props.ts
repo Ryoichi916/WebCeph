@@ -1,10 +1,5 @@
 export interface StateProps {
   src: string;
-  brightness?: number;
-  contrast?: number;
-  isInverted?: boolean;
-  isFlippedX?: boolean;
-  isFlippedY?: boolean;
   canvasSize: {
     height: number;
     width: number;

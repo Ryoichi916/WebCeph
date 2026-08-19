@@ -95,12 +95,6 @@ export const exportFileSucceeded = createActionCreator('EXPORT_FILE_SUCCEEDED');
 export const exportFileFailed = createActionCreator('EXPORT_FILE_FAILED');
 export const setExportProgress = createActionCreator('EXPORT_PROGRESS_CHANGED');
 
-export const flipX = createActionCreator('FLIP_IMAGE_X_REQUESTED');
-export const flipY = createActionCreator('FLIP_IMAGE_Y_REQUESTED');
-export const setBrightness = createActionCreator('SET_IMAGE_BRIGHTNESS_REQUESTED');
-export const setContrast = createActionCreator('SET_IMAGE_CONTRAST_REQUESTED');
-export const invertColors = createActionCreator('INVERT_IMAGE_REQUESTED');
-
 export const resetWorkspace = createActionCreator('RESET_WORKSPACE_REQUESTED');
 export const canvasResized = createActionCreator('CANVAS_RESIZED');
 export const setMousePosition = createActionCreator('MOUSE_POSITION_CHANGED');

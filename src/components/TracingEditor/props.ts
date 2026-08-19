@@ -1,7 +1,13 @@
 export interface StateProps {
   imageId: string | null;
-  imageSrc?: string;
-  isDemoImageLoading?: boolean;
+  /**
+   * Whether a file just dropped or chosen for this workspace (including the
+   * bundled demo) is still being read and decoded — there is no `imageId` yet
+   * to switch the editor onto, so without this the dropzone would otherwise
+   * sit showing nothing happening for however long a large hi-res scan takes
+   * to decode. @see store/reducers/workspace#shouldShowLoadingFileIndicator
+   */
+  isLoadingFile: boolean;
   /** Whether the analysis results summary dialog is open. */
   isSummaryShown: boolean;
   /**

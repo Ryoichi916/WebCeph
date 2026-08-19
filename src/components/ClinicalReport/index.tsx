@@ -462,7 +462,7 @@ export default class ClinicalReport extends React.PureComponent<Props, State> {
   private renderReport() {
     const {
       patient, results, analysisId, imageType, timepoint, captureDate,
-      scaleFactor, imageSrc, landmarksBySymbol,
+      scaleFactor, scaleCopiedFrom, imageSrc, landmarksBySymbol,
     } = this.props;
     const { snapshotUrl, scope, clinic, clinician, license } = this.state;
     const isCombined = scope === 'all';
@@ -791,6 +791,29 @@ export default class ClinicalReport extends React.PureComponent<Props, State> {
                     >
                       film {filmSize.label}
                       {isScaleSuspect ? ' · check scale' : ''}
+                    </span>
+                  ) : null}
+                  {/* Not a measurement taken on this film: the number was
+                      carried over from another film of the record (same image
+                      type, same pixel size). A signed report may not let the
+                      reader assume every mm claim here was measured on the
+                      radiograph it appears under — see `scaleCopiedFrom`. */}
+                  {scaleCopiedFrom !== null ? (
+                    <span
+                      className={classes.patient_note}
+                      title={
+                        `This film was not calibrated against a distance ` +
+                        `measured on it: the scale was copied from ` +
+                        `${scaleCopiedFrom.label}` +
+                        `${formatCaptureDate(scaleCopiedFrom.captureDate) !== null
+                          ? ` (${formatCaptureDate(scaleCopiedFrom.captureDate)})`
+                          : ''}.`
+                      }
+                    >
+                      copied from {scaleCopiedFrom.label}
+                      {formatCaptureDate(scaleCopiedFrom.captureDate) !== null
+                        ? ` · ${formatCaptureDate(scaleCopiedFrom.captureDate)}`
+                        : ''}
                     </span>
                   ) : null}
                 </div>

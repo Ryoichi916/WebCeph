@@ -1,10 +1,47 @@
 @import 'src/_variables.scss';
 
 .main {
+  position: relative;
   flex-grow: 1;
   min-width: 0;
   overflow: auto;
   order: 1;
+}
+
+// The dropzone fills the same box `.main` used to give it directly; moved onto
+// its own class once a loading overlay needed a sibling to sit over it.
+.dropzone_fill {
+  position: absolute;
+  inset: 0;
+}
+
+// Shown over the dropzone while a just-dropped/chosen file is still being read
+// and decoded — there is no traced image yet to switch the editor onto, and
+// without this a large scan's decode reads as nothing happening rather than
+// as work in progress.
+.import_overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(244, 246, 249, 0.82);
+}
+
+.import_overlay_card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 28px 36px;
+  border-radius: 12px;
+  background: $bg-surface;
+  box-shadow: $shadow-2;
+}
+
+.import_overlay_text {
+  font-size: 13.5px;
+  color: $text-secondary;
 }
 
 // DOM-first (primary controls) but visually docked at the bottom.

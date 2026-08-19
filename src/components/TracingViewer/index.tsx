@@ -1,11 +1,5 @@
 import * as React from 'react';
 
-import BrightnessFilter from './filters/Brightness';
-import ContrastFilter from './filters/Contrast';
-import DropShadow from './filters/DropShadow';
-import InvertFilter from './filters/Invert';
-import GlowFilter from './filters/Glow';
-
 import * as cx from 'classnames';
 
 import Props from './props';
@@ -21,6 +15,7 @@ import {
   OUTLINE_WIDTH,
   OUTLINE_OPACITY,
   LandmarkMap,
+  SOFT_TISSUE_PROFILE_LANDMARKS,
 } from './outlines';
 // The label layer is shared with the rasterised tracing (image export and the
 // printed clinical report) so the film on paper carries the same, identically
@@ -51,14 +46,30 @@ const LENS_MARGIN = 16;
 const LENS_MAGNIFICATION = 3.5;
 const LENS_CLIP_ID = 'tracing-lens-clip';
 
+/**
+ * Landmarks whose correct position sits right where the soft-tissue silhouette
+ * meets the film's dark background — the profile points (nose, lips, chin) and
+ * the skeletal chin point directly beneath them. There the crop the lens shows
+ * is mostly flat dark (skin shadow against film background), which is exactly
+ * where the fixed 3.5x/no-boost view is least useful for placing the point to
+ * the pixel. Reuses the same sourced soft-tissue set the outline tracing is
+ * drawn through (@see SOFT_TISSUE_PROFILE_LANDMARKS) rather than a second,
+ * separately-maintained list; `Pog` is added because the skeletal chin sits on
+ * the same dark edge one landmark short of its soft-tissue counterpart `Pog'`.
+ */
+const LENS_EDGE_LANDMARKS: ReadonlyArray<string> = [
+  ...SOFT_TISSUE_PROFILE_LANDMARKS, 'Pog',
+];
+const LENS_EDGE_BOOST_ID = 'tracing-lens-edge-boost';
+
 function isMouseEvent<T>(e: any): e is React.MouseEvent<T> {
   return e.touches === undefined;
 };
 
 /**
  * A wrapper around a canvas element.
- * Provides a declarative API for viewing landmarks on a cephalomertic image
- * and performing common edits like brightness and contrast.
+ * Provides a declarative API for viewing and editing landmarks on a
+ * cephalometric image (pan/zoom, drag-to-adjust, the precision lens).
  */
 interface State {
   /** Symbol of the manual landmark currently being dragged, if any. */
@@ -95,7 +106,6 @@ export class TracingViewer extends React.PureComponent<Props, State> {
       className,
       src,
       imageHeight, imageWidth,
-      contrast = 50, brightness = 50,
       isHighlightMode,
       getPropsForLandmark,
     } = this.props;
@@ -124,34 +134,22 @@ export class TracingViewer extends React.PureComponent<Props, State> {
           onMouseMove={this.handleSvgMouseMove}
           onMouseUp={this.commitDrag}
         >
-          <defs>
-            <BrightnessFilter id="brightness" value={brightness} />
-            <DropShadow id="shadow" />
-            <InvertFilter id="invert" />
-            <ContrastFilter id="contrast" value={contrast} />
-            <GlowFilter id="glow" />
-          </defs>
           <g>
-            <g filter="">
-              <g filter="">
-                <image
-                  ref={this.setImageRef}
-                  className={classes.image}
-                  xlinkHref={src}
-                  x={0}
-                  y={0}
-                  width={imageWidth}
-                  height={imageHeight}
-                  onMouseDown={this.handleClick}
-                  onMouseMove={this.handleCanvasMouseMove}
-                  onTouchMove={this.handleCanvasMouseMove}
-                  transform={this.getTransformAttribute()}
-                  filter={this.getFilterAttribute()}
-                  opacity={dimImage ? 0.5 : 1 }
-                  style={{ cursor: this.getCanvasCursor() }}
-                />
-              </g>
-            </g>
+            <image
+              ref={this.setImageRef}
+              className={classes.image}
+              xlinkHref={src}
+              x={0}
+              y={0}
+              width={imageWidth}
+              height={imageHeight}
+              onMouseDown={this.handleClick}
+              onMouseMove={this.handleCanvasMouseMove}
+              onTouchMove={this.handleCanvasMouseMove}
+              transform={this.getTransformAttribute()}
+              opacity={dimImage ? 0.5 : 1 }
+              style={{ cursor: this.getCanvasCursor() }}
+            />
             <g transform={this.getTransformAttribute()}>
               {this.renderOutlines()}
               <GeoViewer
@@ -203,23 +201,9 @@ export class TracingViewer extends React.PureComponent<Props, State> {
     const elementLeft = (rect.left) + scrollLeft;
     const elementTop = (rect.top) + scrollTop;
     const { pageX, pageY } = isMouseEvent(e) ? e : e.touches.item(0);
-    let x = (pageX - elementLeft) / scaleX;
-    let y = (pageY - elementTop)  / scaleY;
-    if (this.props.isFlippedX) {
-      x = imageWidth - x;
-    }
-    if (this.props.isFlippedY) {
-      y = imageHeight - y;
-    }
+    const x = (pageX - elementLeft) / scaleX;
+    const y = (pageY - elementTop)  / scaleY;
     return { x: Math.round(x), y: Math.round(y) };
-  }
-
-  private getFilterAttribute = () => {
-    let f = '';
-    if (this.props.isInverted) {
-      f += ' url(#invert)';
-    }
-    return f;
   }
 
   private getTransformAttribute = () => {
@@ -242,12 +226,6 @@ export class TracingViewer extends React.PureComponent<Props, State> {
     const translateY = Math.max(0, (surfaceHeight - imageHeight * scale) / 2);
     transform += ` translate(${translateX}, ${translateY}) `;
     transform += ` scale(${scale}, ${scale})`;
-    if (this.props.isFlippedX) {
-      transform += ` scale(-1, 1) translate(-${this.props.imageWidth}, 0)`;
-    }
-    if (this.props.isFlippedY) {
-      transform += ` scale(1, -1) translate(0, -${this.props.imageHeight})`;
-    }
     return transform;
   }
 
@@ -306,14 +284,8 @@ export class TracingViewer extends React.PureComponent<Props, State> {
     const scaleY = rect.height / imageHeight;
     const scrollTop = document.documentElement.scrollTop;
     const scrollLeft = document.documentElement.scrollLeft;
-    let x = (pageX - (rect.left + scrollLeft)) / scaleX;
-    let y = (pageY - (rect.top + scrollTop)) / scaleY;
-    if (this.props.isFlippedX) {
-      x = imageWidth - x;
-    }
-    if (this.props.isFlippedY) {
-      y = imageHeight - y;
-    }
+    const x = (pageX - (rect.left + scrollLeft)) / scaleX;
+    const y = (pageY - (rect.top + scrollTop)) / scaleY;
     return {
       x: Math.min(Math.max(x, 0), imageWidth),
       y: Math.min(Math.max(y, 0), imageHeight),
@@ -635,38 +607,56 @@ export class TracingViewer extends React.PureComponent<Props, State> {
    * pan/zoom transform.
    */
   private renderLens = () => {
-    const { activeTool, src, imageWidth, imageHeight, scale, isFlippedX, isFlippedY } = this.props;
+    const { activeTool, src, imageWidth, imageHeight, scale } = this.props;
     if (activeTool.shouldShowLens !== true) {
       return null;
     }
-    const { draggedSymbol, dragX, dragY, cursorImagePos } = this.state;
+    const { draggedSymbol, dragX, dragY, hoveredSymbol, cursorImagePos } = this.state;
     const target = draggedSymbol !== null ? { x: dragX, y: dragY } : cursorImagePos;
     if (target === null) {
       return null;
     }
+    // The landmark the lens is currently centered on, if any — a drag names it
+    // directly, a bare hover over its (larger, invisible) hit circle names it
+    // too (@see handleLandmarkMouseEnter). Neither is set while simply moving
+    // the cursor over open film, which is fine: the boost below only matters
+    // once an actual landmark is the thing being placed to the pixel.
+    const targetSymbol = draggedSymbol !== null ? draggedSymbol : hoveredSymbol;
+    const isEdgeLandmark = targetSymbol !== null &&
+      LENS_EDGE_LANDMARKS.indexOf(targetSymbol) !== -1;
     const { width: surfaceWidth } = this.getSurfaceSize();
     const radius = LENS_DIAMETER / 2;
     const cx = surfaceWidth - radius - LENS_MARGIN;
     const cy = radius + LENS_MARGIN;
     const lensScale = scale * LENS_MAGNIFICATION;
-    // Same construction as getTransformAttribute (center-then-scale, flip
-    // appended last), just centering the cursor's point instead of the whole
-    // image — kept consistent so a flipped film (once wired up) magnifies the
-    // same way it is displayed, not mirrored against it.
-    let lensTransform = `translate(${cx - target.x * lensScale}, ${cy - target.y * lensScale}) ` +
+    // Same construction as getTransformAttribute (center-then-scale), just
+    // centering the cursor's point instead of the whole image.
+    const lensTransform = `translate(${cx - target.x * lensScale}, ${cy - target.y * lensScale}) ` +
       `scale(${lensScale}, ${lensScale})`;
-    if (isFlippedX) {
-      lensTransform += ` scale(-1, 1) translate(-${imageWidth}, 0)`;
-    }
-    if (isFlippedY) {
-      lensTransform += ` scale(1, -1) translate(0, -${imageHeight})`;
-    }
     return (
       <g pointerEvents="none">
         <defs>
           <clipPath id={LENS_CLIP_ID}>
             <circle cx={cx} cy={cy} r={radius} />
           </clipPath>
+          {/* Lifts shadow detail so a crop that is mostly the dark
+              skin-against-background edge (@see LENS_EDGE_LANDMARKS)
+              separates into readable structure instead of flat black. A
+              gamma curve (exponent < 1) lifts the near-black range hard while
+              leaving the mid/high tones comparatively alone — plain
+              slope+intercept was tried first and left true-black pixels
+              barely distinguishable from very-dark skin, because a fixed
+              intercept cannot add proportionally more to the pixels that most
+              need it. Applied only to the lens's own crop, never to the film
+              itself, so it never changes what is actually being measured —
+              only what this one placement aid shows. */}
+          <filter id={LENS_EDGE_BOOST_ID}>
+            <feComponentTransfer>
+              <feFuncR type="gamma" amplitude="1" exponent="0.45" offset="0.04" />
+              <feFuncG type="gamma" amplitude="1" exponent="0.45" offset="0.04" />
+              <feFuncB type="gamma" amplitude="1" exponent="0.45" offset="0.04" />
+            </feComponentTransfer>
+          </filter>
         </defs>
         {/* Dark backing so a crop near the film's own edge reads as "nothing
             here" rather than flashing the page background through. */}
@@ -679,6 +669,7 @@ export class TracingViewer extends React.PureComponent<Props, State> {
             width={imageWidth}
             height={imageHeight}
             transform={lensTransform}
+            filter={isEdgeLandmark ? `url(#${LENS_EDGE_BOOST_ID})` : undefined}
           />
         </g>
         {/* Crosshair pinpointing the exact pixel a click would land on. */}

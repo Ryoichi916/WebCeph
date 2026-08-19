@@ -8,6 +8,8 @@ import AnalysisStepper from 'components/AnalysisStepper/connected';
 import AnalysisResultsViewer from 'components/AnalysisResultsViewer/connected';
 import RecordViewer from 'components/RecordViewer/connected';
 
+import CircularProgress from 'material-ui/CircularProgress';
+
 const classes = require('./style.scss');
 
 export default class TracingEditor extends React.PureComponent<Props, { }> {
@@ -15,6 +17,7 @@ export default class TracingEditor extends React.PureComponent<Props, { }> {
     const {
       imageId,
       className,
+      isLoadingFile,
       isSummaryShown,
       isImageTraceable,
       defaultTimepoint,
@@ -48,12 +51,29 @@ export default class TracingEditor extends React.PureComponent<Props, { }> {
             <AnalysisStepper className={classes.stepper} />
           </div>
         ) : (
-          <CephDropzone
-            defaultTimepoint={defaultTimepoint}
-            onFilesDrop={onFilesDrop}
-            onDemoButtonClick={onDemoButtonClick}
-            className={classes.main}
-          />
+          <div className={classes.main}>
+            <CephDropzone
+              defaultTimepoint={defaultTimepoint}
+              onFilesDrop={onFilesDrop}
+              onDemoButtonClick={onDemoButtonClick}
+              className={classes.dropzone_fill}
+            />
+            {/* Reading a file off disk and decoding it (a large hi-res scan
+                can take a real, visible moment on a clinic PC) has no
+                `imageId` to switch the editor onto yet — without this the
+                dropzone would otherwise just sit there through the whole
+                wait, indistinguishable from a drop that silently failed. */}
+            {isLoadingFile ? (
+              <div className={classes.import_overlay} role="status" aria-live="polite">
+                <div className={classes.import_overlay_card}>
+                  <CircularProgress size={32} thickness={2.5} />
+                  <span className={classes.import_overlay_text}>
+                    Reading and decoding the image…
+                  </span>
+                </div>
+              </div>
+            ) : null}
+          </div>
         )}
         <AnalysisResultsViewer open={isSummaryShown} />
       </div>

@@ -897,6 +897,21 @@
     display: inline;
   }
 
+  // ---- Empty states ------------------------------------------------------------
+
+  // The screen palette ($canvas-text and its faded variant) is tuned for the
+  // app's dark canvas and is nearly invisible on white paper. If a clinician
+  // prints while a pair is unregistered or unplotted, this copy is the only
+  // content on the sheet, so it has to read at the same ink strength as the
+  // rest of the printed page.
+  .empty_title {
+    color: $text-primary;
+  }
+
+  .empty_hint {
+    color: $text-secondary;
+  }
+
   // ---- Letterhead ------------------------------------------------------------
 
   .print_head {

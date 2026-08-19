@@ -1293,6 +1293,66 @@ $row-inset: 4px;
   user-select: none;
 }
 
+// ---- Storage strip ---------------------------------------------------------
+// The honest answer to "how full is this browser" — every case here lives only
+// in this profile's IndexedDB, and a clinic filing films into it for years is
+// exactly who needs to see the room running out before a save fails on the one
+// day it matters. Reported straight from `navigator.storage.estimate()`
+// (@see refreshStorage); never a figure this screen invents from the case
+// index. Sits directly under the "stays in this browser" line — the two
+// sentences are one fact stated twice, in prose and then in a measurement.
+
+.storage_strip {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 6px;
+  font-size: 11.5px;
+  color: $text-tertiary;
+  user-select: none;
+}
+
+.storage_text {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.storage_warn_text {
+  color: $warn;
+  font-weight: 600;
+}
+
+// A slim track rather than a labelled meter: the words beside it already carry
+// the two numbers, so the bar's whole job is to make "70% full" readable at a
+// glance without doing the division yourself.
+.storage_bar {
+  flex: 0 0 96px;
+  display: block;
+  height: 5px;
+  border-radius: 3px;
+  background: $bg-sunken;
+  border: 1px solid $border;
+  overflow: hidden;
+}
+
+.storage_bar_fill {
+  display: block;
+  height: 100%;
+  min-width: 2px;
+  border-radius: 2px;
+  background: $primary-500;
+  transition: width .3s ease;
+}
+
+.storage_bar_fill__warn {
+  background: $warn;
+}
+
+.storage_bar_fill__critical {
+  background: $error;
+}
+
 // ----------------------------------------------------------------- responsive
 // Three tiers, and the width is always reclaimed from the chrome before it is
 // taken out of the list: the brand panel narrows, then the Sex column stands
@@ -1541,6 +1601,7 @@ $row-inset: 4px;
   .new_btn,
   .toolbar,
   .footnote,
+  .storage_strip,
   .header,
   .pager,
   .row_delete,

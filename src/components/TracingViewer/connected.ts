@@ -147,12 +147,7 @@ const mapStateToProps: MapStateToProps<StateProps, OwnProps, StoreState> =
       imageHeight,
       // The stored scale is the user's zoom factor (1 = fit, wheel-adjusted).
       scale: getFitScale(canvasSize, imageWidth, imageHeight) * getScale(state),
-      // brightness: getImageBrightness(state),
-      // contrast: getImageContrast(state),
-      // isFlippedX: isImageFlippedX(state),
-      // isFlippedY: isImageFlippedY(state),
       landmarks: getSortedLandmarksToDisplay(state),
-      // isInverted: isImageInverted(state),
       isHighlightMode: isHighlightMode(state),
       highlightedLandmarks: getHighlightedLandmarks(state),
       activeTool: getActiveTool(state),

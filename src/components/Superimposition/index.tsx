@@ -1406,6 +1406,7 @@ export default class Superimposition extends React.PureComponent<Props, State> {
     const shared = sharedBasisIds(t1.availableBasisIds, t2.availableBasisIds);
     const basisId = this.resolveBasisId(shared);
     if (basisId === undefined) {
+      this.setState({ exportError: 'These two tracings share no registration.' });
       return;
     }
     const basis = getBasis(basisId);

@@ -96,10 +96,16 @@ const collidingImageIds = (
 };
 
 const fail = (error: Error, workspaceId: string) => {
-  console.error(
-    `Failed to import file.`,
-    error,
-  );
+  // Diagnostic only, and only in development — see the matching note in
+  // `store/middleware/export.ts`. The clinician's answer is the dispatched
+  // `importFileFailed` below, which the dialog renders as its own sentence
+  // (@see utils/importers/wceph/v1/import's own messages); an unconditional
+  // `console.error` here turned every *handled* refusal — a corrupt file, a
+  // collision, a case file that could not be read — into a browser-console
+  // error, which is the one thing a graceful, worded refusal is not.
+  if (__DEBUG__) {
+    console.warn('Failed to import file.', error);
+  }
   return importFileFailed({ workspaceId, error });
 };
 

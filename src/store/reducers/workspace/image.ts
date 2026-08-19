@@ -378,11 +378,6 @@ export const getImageHeight = createSelector(
   (getProps) => (id: string) => getProps(id).height,
 );
 
-export const isImageFlippedX = createSelector(
-  getImageProps,
-  (getProps) => (id: string) => getProps(id).flipX,
-);
-
 export const getImageStatus = createSelector(
   getAllImagesStatus,
   (all) => (imageId: string) => all[imageId],

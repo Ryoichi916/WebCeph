@@ -8,7 +8,10 @@ import { getTracingImageId } from 'store/reducers/workspace/settings';
 import { isSummaryShown } from 'store/reducers/workspace/analyses';
 import { isImageTraceable } from 'store/reducers/workspace/image';
 
-import { getPatientRecords } from 'store/reducers/workspace';
+import {
+  getPatientRecords,
+  shouldShowLoadingFileIndicator,
+} from 'store/reducers/workspace';
 
 import { getNextTimepointLabel } from 'utils/records';
 
@@ -27,6 +30,7 @@ const mapStateToProps: MapStateToProps<StateProps, OwnProps, StoreState> =
     const imageId = getTracingImageId(state)(workspaceId);
     return {
       imageId,
+      isLoadingFile: shouldShowLoadingFileIndicator(state)(workspaceId),
       isSummaryShown: isSummaryShown(state),
       isImageTraceable: imageId !== null ? isImageTraceable(state)(imageId) : true,
       // The next *visit* in the series, read off the timepoint labels the

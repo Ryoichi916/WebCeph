@@ -96,6 +96,10 @@ const ANNOTATION_PX_PRINT = 9.5;
 const CURRENT_HUE = '#40C4FF';
 const SIM_HUE = '#C08BFF';
 
+/** "1 landmark moved" / "3 landmarks moved" — singular only at exactly one. */
+const movedCountLabel = (count: number): string =>
+  `${count} ${count === 1 ? 'landmark' : 'landmarks'} moved`;
+
 interface State {
   plan: SimulationPlan;
   isExporting: boolean;
@@ -541,7 +545,7 @@ export default class TreatmentSimulation extends React.PureComponent<Props, Stat
           'The current tracing with the simulated tracing overlaid' +
           (simulation.movedSymbols.length === 0
             ? ' — no movement applied yet'
-            : `, ${simulation.movedSymbols.length} landmarks moved`)
+            : `, ${movedCountLabel(simulation.movedSymbols.length)}`)
         }
       >
         {src !== null && width !== null && height !== null ? (
@@ -890,7 +894,7 @@ export default class TreatmentSimulation extends React.PureComponent<Props, Stat
           <span className={classes.panel_sub}>
             {isPlanEmpty(plan)
               ? 'Nothing moved yet'
-              : `${simulation.movedSymbols.length} landmarks moved`}
+              : movedCountLabel(simulation.movedSymbols.length)}
           </span>
         </div>
         <div className={classes.panel_scroll}>

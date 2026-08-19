@@ -44,10 +44,16 @@ const middleware = ({ getState }: Store<StoreState>) =>
         saveAs(file, file.name);
         return next(exportFileSucceeded({ fileName: file.name }));
       } catch (e) {
-        console.error(
-          `Failed to export file.`,
-          e,
-        );
+        // Diagnostic only, and only in development: the clinician's answer is
+        // the dispatched `exportFileFailed` above, which the dialog already
+        // renders as its own sentence (see `utils/importers/wceph/v1/export`'s
+        // own message). An unconditional `console.error` here duplicated that
+        // as a browser-console error on every refused export — including the
+        // ordinary, handled case of a chart the writer declines to write — the
+        // opposite of "zero console errors" for a *handled* failure.
+        if (__DEBUG__) {
+          console.warn('Failed to export file.', e);
+        }
         return next(exportFileFailed(e));
       }
     }

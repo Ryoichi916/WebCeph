@@ -349,6 +349,29 @@ interface State extends ListView {
    * filtered list instead of only the page on screen.
    */
   printing: boolean;
+  /**
+   * What this browser profile's own storage looks like right now — bytes this
+   * origin is actually using, and the quota the browser is willing to grow it
+   * to — or null where the browser will not say. Every case here lives only in
+   * this profile's IndexedDB (@see store/middleware/project), so "how much
+   * room is left" is a real clinical question with a real answer this API
+   * gives, not a guess this screen is entitled to make up. @see refreshStorage
+   */
+  storage: { usageBytes: number; quotaBytes: number | null } | null;
+  /**
+   * Whether the storage estimate has resolved once (successfully or not), so
+   * the strip can stay blank on the very first paint instead of flashing
+   * "not available" for the one tick before the promise settles.
+   */
+  storageChecked: boolean;
+  /**
+   * Whether this origin's storage has been granted "persistent" treatment —
+   * true, false, or null where the browser exposes no such API and the
+   * question cannot be answered either way. A clinic keeping a growing chart
+   * only on this device is exactly who needs to be told the browser may still
+   * clear it under storage pressure if this reads false.
+   */
+  persisted: boolean | null;
 }
 
 /** One row of the case list: the patient, their summary, and what sorts them. */
@@ -523,6 +546,30 @@ const searchTerms = (query: string): string[] =>
 
 const plural = (count: number, one: string, many: string): string =>
   `${count} ${count === 1 ? one : many}`;
+
+/**
+ * Bytes as a clinician reads them — one or two significant figures past the
+ * point, the unit that keeps the number between 1 and 1024, and never more
+ * precision than the browser's own estimate carries (the spec allows it to
+ * pad the true figure for privacy, so a strip reading "41.29 MB" would be
+ * false precision over a number that was never exact to begin with).
+ */
+const formatBytes = (bytes: number): string => {
+  if (!isFinite(bytes) || bytes < 0) {
+    return '—';
+  }
+  if (bytes < 1024) {
+    return `${Math.round(bytes)} B`;
+  }
+  const units = ['KB', 'MB', 'GB', 'TB'];
+  let value = bytes / 1024;
+  let unitIndex = 0;
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+  return `${value < 10 ? value.toFixed(1) : Math.round(value)} ${units[unitIndex]}`;
+};
 
 /** "3 images in 3 visits" — what the Records column says, spelled out. */
 const describeRecords = (summary: PatientCaseSummary | undefined): string => {
@@ -719,6 +766,9 @@ export default class PatientPicker extends React.PureComponent<Props, State> {
     registerOpen: this.props.patients.length === 0,
     restoreOpen: false,
     printing: false,
+    storage: null,
+    storageChecked: false,
+    persisted: null,
     // Where the user left the list — see `readView`.
     ...readView(),
   };
@@ -747,7 +797,16 @@ export default class PatientPicker extends React.PureComponent<Props, State> {
   /** The `print` media query, watched so the sheet can carry the whole list. */
   private printQuery: MediaQueryList | null = null;
 
+  /**
+   * Whether this component is still mounted — the picker unmounts the moment a
+   * case is opened (@see class doc), and `navigator.storage.estimate()` is a
+   * promise that can easily resolve after that. Checked before every setState
+   * the estimate schedules.
+   */
+  private isMounted_ = false;
+
   componentDidMount() {
+    this.isMounted_ = true;
     window.addEventListener('resize', this.syncTableHeight);
     // Chrome and Firefox raise these around the print dialog; Safari does not,
     // and neither does a headless print pass — hence the media query below as
@@ -762,6 +821,12 @@ export default class PatientPicker extends React.PureComponent<Props, State> {
       this.printQuery = null;
     }
     this.syncTableHeight();
+    // A clinic works this screen across a whole day with the tab left open, and
+    // storage this app's own autosave has written since the last measurement is
+    // exactly what makes the strip stale — refreshed on mount and whenever the
+    // tab is looked at again, never polled while it is not.
+    this.refreshStorage();
+    document.addEventListener('visibilitychange', this.handleVisibilityChange);
   }
 
   componentDidUpdate(_: Props, prevState: State) {
@@ -773,13 +838,79 @@ export default class PatientPicker extends React.PureComponent<Props, State> {
   }
 
   componentWillUnmount() {
+    this.isMounted_ = false;
     window.removeEventListener('resize', this.syncTableHeight);
     window.removeEventListener('beforeprint', this.enterPrint);
     window.removeEventListener('afterprint', this.exitPrint);
+    document.removeEventListener('visibilitychange', this.handleVisibilityChange);
     if (this.printQuery !== null) {
       this.printQuery.removeListener(this.handlePrintQuery);
     }
   }
+
+  private handleVisibilityChange = () => {
+    if (document.visibilityState === 'visible') {
+      this.refreshStorage();
+    }
+  };
+
+  /**
+   * Measures this origin's own storage — never a figure derived from the case
+   * index. The case index counts *records*, not the bytes a saved project
+   * actually occupies on disk (compression, IndexedDB overhead and the
+   * autosave debounce all put daylight between the two), so the only honest
+   * source for "how full is this browser" is the browser's own accounting.
+   * Where it declines to give one (Safari < 15.2, a `file://` origin, a
+   * disabled Storage API) the strip says so instead of estimating — a wrong
+   * number here is worse than none, on a screen a practice reads before
+   * deciding whether to keep filing films into this browser.
+   */
+  private refreshStorage = () => {
+    const storageManager = navigator.storage;
+    if (
+      storageManager === undefined ||
+      typeof storageManager.estimate !== 'function'
+    ) {
+      this.setState({ storageChecked: true, storage: null, persisted: null });
+      return;
+    }
+    storageManager.estimate()
+      .then((estimate) => {
+        if (!this.isMounted_) {
+          return;
+        }
+        if (typeof estimate.usage !== 'number') {
+          this.setState({ storageChecked: true, storage: null });
+          return;
+        }
+        this.setState({
+          storageChecked: true,
+          storage: {
+            usageBytes: estimate.usage,
+            quotaBytes: typeof estimate.quota === 'number'
+              ? estimate.quota : null,
+          },
+        });
+      })
+      .catch(() => {
+        if (this.isMounted_) {
+          this.setState({ storageChecked: true, storage: null });
+        }
+      });
+    if (typeof storageManager.persisted === 'function') {
+      storageManager.persisted()
+        .then((persisted) => {
+          if (this.isMounted_) {
+            this.setState({ persisted });
+          }
+        })
+        .catch(() => {
+          if (this.isMounted_) {
+            this.setState({ persisted: null });
+          }
+        });
+    }
+  };
 
   private enterPrint = () => {
     this.setState({ printing: true });
@@ -1015,6 +1146,10 @@ export default class PatientPicker extends React.PureComponent<Props, State> {
     const { pendingRemoval } = this.state;
     if (pendingRemoval !== null) {
       this.props.onRemove(pendingRemoval.id);
+      // The deletion itself is an async IndexedDB write; a measurement taken
+      // in the same tick would still be reading the space it used to occupy.
+      // Best-effort only — nothing on this screen depends on the timing.
+      window.setTimeout(this.refreshStorage, 1200);
     }
     this.setState({ pendingRemoval: null });
   };
@@ -1724,6 +1859,87 @@ export default class PatientPicker extends React.PureComponent<Props, State> {
     );
   }
 
+  /**
+   * The strip that answers "how full is this browser" — honestly: only what
+   * `navigator.storage.estimate()` actually reports, never a figure derived
+   * from the case index (@see refreshStorage). Screen-only, like the toolbar
+   * above it; a printed work queue has no use for a live storage reading.
+   */
+  private renderStorageStrip() {
+    const { storage, storageChecked, persisted } = this.state;
+    if (!storageChecked) {
+      // Nothing yet, rather than a state that is about to be wrong for one
+      // tick — the estimate is normally back within a frame or two.
+      return null;
+    }
+    if (storage === null) {
+      return (
+        <div className={classes.storage_strip}>
+          <span className={classes.storage_text}>
+            Storage usage isn't reported by this browser.
+          </span>
+        </div>
+      );
+    }
+    const { usageBytes, quotaBytes } = storage;
+    const fraction = quotaBytes !== null && quotaBytes > 0
+      ? Math.min(1, usageBytes / quotaBytes) : null;
+    // Amber past 70%, red past 90% — a practice needs the warning while there
+    // is still headroom to act on it (export cases, free space), not at 100%
+    // when the next save is the one that fails.
+    const tone = fraction === null ? 'ok' : (
+      fraction >= 0.9 ? 'critical' : (fraction >= 0.7 ? 'warn' : 'ok')
+    );
+    const persistedNote = persisted === false
+      ? ' Not marked for persistent storage — the browser may clear this ' +
+        'origin’s data under storage pressure, on its own schedule.'
+      : '';
+    const title =
+      `Reported by this browser for this origin only, not audited against ` +
+      `what WebCeph itself has written; the browser's estimate may be ` +
+      `rounded for privacy.${persistedNote}`;
+    return (
+      <div className={classes.storage_strip} title={title}>
+        <span className={classes.storage_text}>
+          {quotaBytes !== null ? (
+            <span>
+              <strong>{formatBytes(usageBytes)}</strong> used of about{' '}
+              {formatBytes(quotaBytes)} available in this browser
+            </span>
+          ) : (
+            <span>
+              <strong>{formatBytes(usageBytes)}</strong> used in this browser —
+              this browser does not report a quota
+            </span>
+          )}
+          {persisted === false ? (
+            <span className={classes.storage_warn_text}>
+              {' '}· may be cleared under storage pressure
+            </span>
+          ) : null}
+        </span>
+        {fraction !== null ? (
+          <span
+            className={classes.storage_bar}
+            role="progressbar"
+            aria-label="Browser storage used"
+            aria-valuenow={Math.round(fraction * 100)}
+            aria-valuemin={0}
+            aria-valuemax={100}
+          >
+            <span
+              className={cx(classes.storage_bar_fill, {
+                [classes.storage_bar_fill__warn]: tone === 'warn',
+                [classes.storage_bar_fill__critical]: tone === 'critical',
+              })}
+              style={{ width: `${Math.max(2, fraction * 100)}%` }}
+            />
+          </span>
+        ) : null}
+      </div>
+    );
+  }
+
   render() {
     const { patients } = this.props;
     const {
@@ -2021,6 +2237,7 @@ export default class PatientPicker extends React.PureComponent<Props, State> {
               <IconLock color="#A9B4BE" style={{ width: 14, height: 14 }} />
               Patient data stays in this browser — nothing is uploaded.
             </div>
+            {this.renderStorageStrip()}
           </div>
         </div>
 
