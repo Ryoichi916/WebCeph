@@ -1537,7 +1537,7 @@ export default class Superimposition extends React.PureComponent<Props, State> {
         });
         return;
       }
-      saveBlobAs(blob, `${this.exportStem()}-superimposition.png`);
+      saveBlobAs(blob, `${this.exportStem(t1, t2)}-superimposition.png`);
       this.setState({ isExporting: false });
     });
   };
@@ -1547,12 +1547,21 @@ export default class Superimposition extends React.PureComponent<Props, State> {
    * cannot carry are sanitised away — same rule as the `.wceph` case file
    * export, via the shared `sanitizeFilenameStem` — so a Japanese name yields
    * `C-0001 山田 太郎-superimposition.png` rather than losing the name entirely.
+   *
+   * Carries both films' own series tokens (`slotToken` — the same vocabulary
+   * the on-screen legend and column heads use), not just the patient: without
+   * them, exporting more than one comparison for the same patient in a
+   * session (T1→T2, then T1→T3, both legitimate registration pairs on a
+   * multi-visit case) wrote every pair to the identical filename.
    */
-  private exportStem(): string {
+  private exportStem(t1: TimepointRecord, t2: TimepointRecord): string {
     const { patient } = this.props;
+    const visitLabel = sanitizeFilenameStem([
+      slotToken(t1, 'T1'), slotToken(t2, 'T2'),
+    ]);
     const stem = patient !== null
-      ? sanitizeFilenameStem([patient.chartId, patient.name])
-      : '';
+      ? sanitizeFilenameStem([patient.chartId, patient.name, visitLabel])
+      : visitLabel;
     return stem !== '' ? stem : 'superimposition';
   }
 }
