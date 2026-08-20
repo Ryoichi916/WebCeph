@@ -1018,17 +1018,39 @@
     display: block;
   }
 
+  // Not `display: flex`: a flex *row* does not fragment across print pages
+  // the way ordinary block flow does. Once the legend (routinely 2-3 sheets
+  // of copy once the "About this view" disclosure is open — see the comment
+  // on `.legend` below) outgrows the figure's fixed height, Chrome keeps
+  // allocating the *row's* full width to every page the row spans, figure
+  // column included, even though the figure itself finished printing on
+  // sheet 1 — so the next sheet carried nothing but a narrow ribbon of
+  // legend text beside a blank three-quarters of the page, and the sheet
+  // after that could do it again. A float does what the flex row cannot:
+  // the figure sits in its own box while the legend wraps around it (the
+  // ordinary two-column magazine layout), and once the legend outgrows the
+  // figure's height it simply continues at the sheet's full width — plain
+  // block flow, which paginates the way every other block on this sheet
+  // already does. On a short comparison the two still end together near the
+  // figure's foot, exactly as before; a long one no longer strands a nearly
+  // empty sheet to get there.
   .figure_column {
-    display: flex;
-    flex-direction: row;
-    align-items: flex-start;
-    gap: 6mm;
+    display: block;
     padding: 6mm 0 0;
+
+    // Clears the float below so `.panel` (the change table — a sibling of
+    // this element, not of `.figure`) starts under the figure instead of
+    // wrapping up beside its own leftover space.
+    &::after {
+      content: '';
+      display: table;
+      clear: both;
+    }
   }
 
   .figure {
-    flex: 0 0 auto;
-    align-self: flex-start;
+    float: left;
+    margin: 0 6mm 4mm 0;
     // Keep in step with PRINT_FIGURE_HEIGHT_MM in index.tsx, which sizes the
     // figure's annotation type from it. 142mm, not 112: the change table now
     // starts its own sheet (see `.panel` below), so the first sheet is the
@@ -1095,20 +1117,41 @@
   .key__t2 .key_swatch { border-top-color: #C0431A; }
 
   .legend {
-    flex: 1 1 auto;
-    min-width: 0;
+    // No longer a flex sibling of `.figure` (see `.figure_column` above):
+    // it wraps around the floated figure instead, so its measure comes from
+    // the leftover line width rather than from a flex basis — the same
+    // ~50-character column the flex row gave it while the figure is still
+    // running down the page, narrowing to nothing new once the legend
+    // clears the figure's foot and the text drops to the sheet's full width.
     padding: 0;
     // Not `page-break-inside: avoid`: the legend carries the full "About
     // this view" disclosure (every source paragraph, printed open) plus the
     // table notes, which is routinely taller than a single sheet once a
     // magnification warning or a one-sided-measurements note joins the base
     // two paragraphs. "Avoid" on content that cannot possibly fit on one
-    // page is not honoured so much as fought: Chrome pushed the *entire*
-    // figure_column — figure included — past a blank first sheet trying to
-    // find a page the legend would fit on whole, never found one, and still
-    // had to fragment it regardless. Left to flow like ordinary text, the
-    // legend breaks where it runs out of room and nothing upstream of it is
-    // held back waiting for space that was never coming.
+    // page is not honoured so much as fought — it used to fight the *flex
+    // row* itself into pushing the whole figure_column past a blank first
+    // sheet trying to find a page the legend would fit on whole, never
+    // found one, and still had to fragment it regardless. Left to flow like
+    // ordinary text, the legend breaks where it runs out of room and
+    // nothing upstream of it is held back waiting for space that was never
+    // coming.
+  }
+
+  // The screen rule caps both at `92ch` — a sensible width for a paragraph
+  // filling the dark rail's own fixed column, where nothing beside it needs
+  // clearing. Here, while a paragraph still overlaps the floated figure
+  // vertically, that cap is measured from the figure's own left edge (a
+  // wrapping block's box is *not* indented past a float, only the text
+  // inside it is), and 92ch computes only a little wider than the figure
+  // itself — leaving the sliver of line width actually clear of the float
+  // barely wide enough for one short word per line ("Sella" / "held" /
+  // "fixed," / "S–N", each stranded on its own line). Uncapped, the box
+  // reaches the sheet's true right margin, and the same lines read as
+  // ordinary sentences in the space the float leaves free.
+  .legend_note,
+  .legend_about {
+    max-width: none;
   }
 
   .key_text { color: $text-primary; }

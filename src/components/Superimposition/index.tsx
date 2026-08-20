@@ -191,6 +191,36 @@ const slotToken = (t: TimepointRecord, slot: 'T1' | 'T2'): string => {
   return token !== null ? token : slot;
 };
 
+/**
+ * Which of the Change table's two columns holds the chronologically earlier
+ * film — from the films' own capture dates, never from which slot (T1/T2)
+ * they were dropped into.
+ *
+ * The column heads already carry the picker's guarantee that this table's
+ * *left-to-right layout* is T1-then-T2 (see `slotToken`'s comment), but the
+ * words "earlier"/"later" underneath used to be hardcoded to that same
+ * left/right position — true only while the T1 dropdown happens to hold the
+ * chronologically earlier film. Pick the later-dated film into the T1
+ * dropdown (the picker allows it; nothing enforces date order between the
+ * two selects) and the table still printed "earlier" over the later film and
+ * "later" over the earlier one, one line under a subtitle stating the
+ * opposite via the films' own dates. Silent where the comparison cannot be
+ * made honestly: either capture date missing, unparseable, or the two films
+ * share a date.
+ */
+const chronologyCaptions = (
+  t1: TimepointRecord, t2: TimepointRecord,
+): { t1: string | null; t2: string | null } => {
+  const d1 = parseCaptureDate(t1.captureDate);
+  const d2 = parseCaptureDate(t2.captureDate);
+  if (d1 === null || d2 === null || d1.getTime() === d2.getTime()) {
+    return { t1: null, t2: null };
+  }
+  return d1.getTime() < d2.getTime()
+    ? { t1: 'earlier', t2: 'later' }
+    : { t1: 'later', t2: 'earlier' };
+};
+
 /** Which of the two films lack a mm/px calibration, named as prose. */
 const uncalibratedFilms = (t1: TimepointRecord, t2: TimepointRecord): string => {
   const missing: string[] = [];
@@ -446,6 +476,16 @@ export default class Superimposition extends React.PureComponent<Props, State> {
 
   private renderView() {
     const pair = this.getPair();
+    // A pair can exist and still share no registration basis at all (see
+    // `renderNotEnough`'s sibling state inside `renderPair`) — two tracings
+    // with, say, S plotted on one film and N on the other, neither alone.
+    // Export and Print were gated only on `pair === null`, so in that state
+    // both buttons stayed visually identical to the working ones: nothing
+    // told a clinician there was nothing to export before they clicked and
+    // read the in-view error. This mirrors the same shared-basis test
+    // `renderPair` and `handlePrint`/`handleExportPng` already run.
+    const canExport = pair !== null
+      && sharedBasisIds(pair.t1.availableBasisIds, pair.t2.availableBasisIds).length > 0;
 
     return (
       <div
@@ -494,7 +534,7 @@ export default class Superimposition extends React.PureComponent<Props, State> {
             <button
               type="button"
               className={classes.chrome_button}
-              disabled={pair === null || this.state.isExporting}
+              disabled={!canExport || this.state.isExporting}
               onClick={this.handleExportPng}
             >
               <IconImage color="currentColor" style={{ width: 18, height: 18 }} />
@@ -504,7 +544,7 @@ export default class Superimposition extends React.PureComponent<Props, State> {
               type="button"
               className={cx(classes.chrome_button, classes.chrome_button__primary)}
               autoFocus
-              disabled={pair === null}
+              disabled={!canExport}
               onClick={this.handlePrint}
             >
               <IconPrint color="currentColor" style={{ width: 18, height: 18 }} />
@@ -1213,6 +1253,7 @@ export default class Superimposition extends React.PureComponent<Props, State> {
     t2: TimepointRecord,
     interval: string | null,
   ) {
+    const chronology = chronologyCaptions(t1, t2);
     return (
       <div className={classes.panel}>
         <div className={classes.panel_head}>
@@ -1256,14 +1297,22 @@ export default class Superimposition extends React.PureComponent<Props, State> {
                       reading "T2 − T3", and nothing on an exported PNG or a filed
                       sheet said which way round the pair was. Two words, in the
                       head's own quiet register, and the columns state it
-                      themselves. */}
+                      themselves — computed from the films' own capture dates (see
+                      `chronologyCaptions`), not assumed from column position: the
+                      T1 dropdown and the T2 dropdown are two independent selects,
+                      and nothing stops a clinician picking the later-dated film
+                      into the left one. */}
                   <th className={classes.col_num}>
                     {slotToken(t1, 'T1')}
-                    <span className={classes.col_slot}>earlier</span>
+                    {chronology.t1 !== null ? (
+                      <span className={classes.col_slot}>{chronology.t1}</span>
+                    ) : null}
                   </th>
                   <th className={classes.col_num}>
                     {slotToken(t2, 'T2')}
-                    <span className={classes.col_slot}>later</span>
+                    {chronology.t2 !== null ? (
+                      <span className={classes.col_slot}>{chronology.t2}</span>
+                    ) : null}
                   </th>
                   <th className={classes.col_num}>Change</th>
                   <th

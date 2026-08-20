@@ -624,6 +624,9 @@ export interface SimulationReadiness {
   reason: string;
 }
 
+/** Any reference plane at all — the widest preference order this app has. */
+const ANY_REFERENCE: ReferenceId[] = ['occlusal', 'palatal', 'facial'];
+
 export const getSimulationReadiness = (
   map: LandmarkMap, scaleFactor: number | null,
 ): SimulationReadiness => {
@@ -632,7 +635,7 @@ export const getSimulationReadiness = (
   const available = controls.filter((c) => c.isAvailable);
   // Something has to anchor the anterior direction, or no movement has a
   // meaning; and at least one movement has to be possible.
-  const reference = getReference(points, ['occlusal', 'palatal', 'facial']);
+  const reference = getReference(points, ANY_REFERENCE);
   if (reference !== null && available.length > 0) {
     return {
       canSimulate: true,
@@ -642,11 +645,22 @@ export const getSimulationReadiness = (
     };
   }
   if (reference === null) {
+    // Some analyses (Tweed among them) plot every landmark a movement needs
+    // except the ones a *plane* is built from — Tweed's own triangle never
+    // references N, so a clinician who works through its step list exactly as
+    // asked still finds every reference plane absent. Naming a landmark to
+    // plot is only half the remedy on a tracing like that: the other half,
+    // stated explicitly rather than left for the reader to infer, is that
+    // switching to an analysis which already plots one of these planes is
+    // enough — the landmark lives on the tracing, not on the analysis, so it
+    // carries over untouched and nothing already plotted is lost.
     return {
       canSimulate: false,
       reason:
-        'A simulation needs an anatomical reference plane. Plot N and Menton ' +
-        '(or the palatal plane, PNS and ANS) and it becomes available.',
+        'A simulation needs an anatomical reference plane. Plot ' +
+        `${describeReferenceOptions(ANY_REFERENCE)} — or switch to an ` +
+        'analysis that already plots one of these, and the point carries ' +
+        'over: Simulate becomes available either way.',
     };
   }
   // Every movement blocked, and at least one of them only for want of the plane

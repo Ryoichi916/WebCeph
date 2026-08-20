@@ -126,7 +126,7 @@ const wrapName = (name: string): string[] => {
  * mirroring the cross-reference convention of the results table. Measurements
  * without a usable norm (SD ≤ 0) cannot be standardized and are skipped.
  */
-const buildRows = (
+export const buildRows = (
   results: Props['results'],
   landmarksBySymbol: Props['landmarksBySymbol'],
 ): Row[] => {

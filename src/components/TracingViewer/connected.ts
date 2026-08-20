@@ -19,7 +19,7 @@ import {
   getManualLandmarks,
 } from 'store/reducers/workspace/image';
 
-import { addManualLandmark } from 'actions/workspace';
+import { addManualLandmark, moveManualLandmarkLive } from 'actions/workspace';
 
 import {
   getCanvasDimensions
@@ -165,6 +165,8 @@ const mapDispatchToProps: MapDispatchToPropsFunction<DispatchProps, OwnProps> =
     dispatch,
     onLandmarkMoved: (symbol: string, x: number, y: number) =>
       dispatch(addManualLandmark({ imageId, symbol, value: { x, y } })),
+    onLandmarkDragged: (symbol: string, x: number, y: number) =>
+      dispatch(moveManualLandmarkLive({ imageId, symbol, value: { x, y } })),
   });
 
 const connected = connect<StateProps, DispatchProps, OwnProps>(

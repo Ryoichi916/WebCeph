@@ -5,6 +5,10 @@ export const setActiveTool = createActionCreator('SET_ACTIVE_TOOL_REQUESTED');
 export const ignoreWorkspaceError = createActionCreator('IGNORE_WORKSPACE_ERROR_REQUESTED');
 
 export const addManualLandmark = createActionCreator('ADD_MANUAL_LANDMARK_REQUESTED');
+// Transient, non-undoable position update for a landmark still being dragged
+// (mouse still down) — @see MOVE_MANUAL_LANDMARK_LIVE in webceph.d.ts for why
+// this is a separate action type from addManualLandmark above.
+export const moveManualLandmarkLive = createActionCreator('MOVE_MANUAL_LANDMARK_LIVE');
 export const addUnnamedManualLandmark = createActionCreator('ADD_UNKOWN_MANUAL_LANDMARK_REQUESTED');
 export const removeManualLandmark = createActionCreator('REMOVE_MANUAL_LANDMARK_REQUESTED');
 export const addManualLandmarks = createActionCreator('ADD_MANUAL_LANDMARKS_BATCH_REQUESTED');

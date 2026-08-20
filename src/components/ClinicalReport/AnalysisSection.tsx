@@ -6,7 +6,7 @@ import { AnalysisEvaluation } from 'analyses/evaluate';
 import { LateralAnalysisEntry } from 'analyses/lateral';
 
 import ResultsTable from './ResultsTable';
-import Wigglegram from './Wigglegram';
+import NormsCharts from './NormsCharts';
 import NormsNote from './NormsNote';
 import { formatSymbolList, landmarksAre, itOrThem } from './copy';
 
@@ -119,7 +119,7 @@ const AnalysisSection = (props: AnalysisSectionProps) => {
           </span>
         </div>
         {hasResults ? (
-          <Wigglegram
+          <NormsCharts
             results={results}
             landmarksBySymbol={landmarksBySymbol}
             showLabel={false}
