@@ -78,12 +78,6 @@ interface State {
   isSuperimpositionOpen: boolean;
   isSimulationOpen: boolean;
   /**
-   * Mirrors mui 0.20 Menu's own internal `focusIndex` for the analysis list, so
-   * Enter/Space can select the item the keyboard has landed on. @see
-   * `handleAnalysisMenuKeyDown` for why the menu needs this tracked at all.
-   */
-  analysisMenuFocusIndex: number;
-  /**
    * Whether the case file dialog is open, and on which half. The editor's Export
    * menu offers the whole case as a `.wceph` beside the two picture formats —
    * they are not the same act, and the menu says so. @see components/CaseFile
@@ -140,8 +134,22 @@ export default class TracingToolbar extends React.PureComponent<Props, State> {
     isSuperimpositionOpen: false,
     isSimulationOpen: false,
     caseFileMode: null,
-    analysisMenuFocusIndex: 0,
   };
+
+  /**
+   * Mirrors mui 0.20 Menu's own internal `focusIndex` for the analysis list, so
+   * Enter/Space can select the item the keyboard has landed on (@see
+   * `handleAnalysisMenuKeyDown` for why the menu needs this tracked at all).
+   * Deliberately an instance field, not state: `Menu`'s `componentWillReceiveProps`
+   * recomputes its own focus index from its children's `value`/`selected` props
+   * on every re-render of this component (none of the `MenuItem`s here carry
+   * either, so it resolves to -1 and resets focus toward the top) — routing
+   * this through `setState` was exactly what caused that re-render on every
+   * keystroke, silently undoing the ArrowDown that triggered it past the 2nd
+   * item. Nothing here is rendered, so a field the key handler reads
+   * synchronously is all `handleAnalysisMenuFocusChange` needs.
+   */
+  private analysisMenuFocusIndex = 0;
 
   /**
    * The two shortcuts the history buttons name in their own tooltips.
@@ -762,6 +770,9 @@ export default class TracingToolbar extends React.PureComponent<Props, State> {
   };
 
   private openAnalysisMenu = (e: React.MouseEvent<HTMLButtonElement>) => {
+    // Fresh keyboard-focus tracking for this menu session, not whatever a
+    // previous open left behind.
+    this.analysisMenuFocusIndex = 0;
     this.setState({ openMenu: 'analysis', anchorEl: e.currentTarget });
   };
 
@@ -853,8 +864,9 @@ export default class TracingToolbar extends React.PureComponent<Props, State> {
    * can drive but a keyboard cannot operate is not keyboard-accessible at
    * all — only Escape worked. This picks the currently keyboard-focused
    * analysis directly instead, the same list `ANALYSES.map` below renders in
-   * and `analysisMenuFocusIndex` (kept in step via `onMenuItemFocusChange`)
-   * indexes into.
+   * and `analysisMenuFocusIndex` (kept in step via `onMenuItemFocusChange`,
+   * see the instance field's own doc comment for why it isn't state) indexes
+   * into.
    *
    * `Menu` forwards this same `onKeyDown` prop straight through onto the
    * inner `List` element (see its `other` passthrough) *in addition to*
@@ -870,7 +882,7 @@ export default class TracingToolbar extends React.PureComponent<Props, State> {
     if (e.key !== 'Enter' && e.key !== ' ' && e.key !== 'Spacebar') {
       return;
     }
-    const analysis = ANALYSES[this.state.analysisMenuFocusIndex];
+    const analysis = ANALYSES[this.analysisMenuFocusIndex];
     if (analysis === undefined) {
       return;
     }
@@ -883,7 +895,7 @@ export default class TracingToolbar extends React.PureComponent<Props, State> {
     _e: React.SyntheticEvent<{}> | null,
     newFocusIndex: number,
   ) => {
-    this.setState({ analysisMenuFocusIndex: newFocusIndex });
+    this.analysisMenuFocusIndex = newFocusIndex;
   };
 
   /** @see componentDidMount */
