@@ -56,6 +56,13 @@ import {
   formatVisitAge,
 } from 'utils/caseSummary';
 
+// The printed page's own plumbing, from the view that established it: the same
+// font stack in the `@page` margin boxes, the same string escaping, and the date
+// form a *document* of this app states as its own — so a case list and a case
+// sheet filed in the same chart cannot date and number their sheets two ways.
+// @see RecordsDashboard#renderPrintPageStyle, which this mirrors.
+import { PRINT_FONT, cssString, documentDate } from 'components/ClinicalReport';
+
 const classes = require('./style.scss');
 
 /**
@@ -774,7 +781,7 @@ export default class PatientPicker extends React.PureComponent<Props, State> {
   };
 
   /** The scrolling table, whose visible height is quantised to whole rows. */
-  private table: HTMLDivElement | null = null;
+  private table: HTMLTableElement | null = null;
 
   /**
    * The rows as they were last built, with the two props they are built from.
@@ -927,7 +934,7 @@ export default class PatientPicker extends React.PureComponent<Props, State> {
     this.setState({ printing: e.matches });
   };
 
-  private setTable = (el: HTMLDivElement | null) => {
+  private setTable = (el: HTMLTableElement | null) => {
     this.table = el;
     this.syncTableHeight();
   };
@@ -950,7 +957,10 @@ export default class PatientPicker extends React.PureComponent<Props, State> {
     // Measure the height the layout wants first: the clamp from the last pass
     // would otherwise cap it and the table could never grow again.
     el.style.maxHeight = '';
-    const list = el.querySelector('ul');
+    // The row list only — never the empty-state's own `<tbody>` (@see render),
+    // which holds one filler row and would otherwise be read as a one-row table
+    // and clamped to it.
+    const list = el.querySelector(`.${classes.list}`);
     const head = el.firstElementChild as HTMLElement | null;
     if (list === null || head === null || list.children.length === 0) {
       return;
@@ -1326,52 +1336,89 @@ export default class PatientPicker extends React.PureComponent<Props, State> {
     );
   }
 
+  /**
+   * The column heads, as a real `<thead>` — the one construction a browser
+   * repeats *and* reserves the space for across printed pages. A `position:
+   * fixed` div repeats but the flow then runs underneath it from sheet 2 on, and
+   * a div with `display: table-header-group` does not repeat at all (both
+   * probed in Chromium and Firefox, at up to 199 rows over 8 sheets): only a
+   * real `<table><thead>` does. @see RecordsDashboard's own case sheet, which
+   * this mirrors — one `<th>` wide enough to hold the whole header, so the grid
+   * of sortable columns inside it stays exactly the layout it always was.
+   *
+   * Each label prints twice: the on-screen sort `<button>` and a plain,
+   * non-interactive `<span>` twin next to it (`.th_label_print`) — because a
+   * `<button>` inside a `<thead>` turned out not to be the whole answer either.
+   * It paints fine on sheet 1, where the head is laid out as ordinary content,
+   * and is blank on every sheet after, where Chromium is instead repainting a
+   * synthetic copy of the header for the new page: verified in this build by
+   * printing 200 rows to PDF and rasterizing every page. The plain twin has no
+   * such fault, so it is what paper actually shows; the sort affordance stays
+   * screen-only, as it already was (paper is not sortable).
+   */
   private renderHead() {
     const { sortKey, sortDir } = this.state;
     return (
-      <div className={classes.thead}>
-        <div className={classes.thead_grid} role="row" aria-rowindex={1}>
-          {COLUMNS.map((column, index) => {
-            const isSorted = column.key !== null && column.key === sortKey;
-            const cellClass = cx(classes.th, classes[column.cell], {
-              [classes.th__sorted]: isSorted,
-            });
-            if (column.key === null) {
-              return (
-                <span
-                  key={`spacer-${index}`}
-                  className={cellClass}
-                  role="columnheader"
-                />
-              );
-            }
-            const key = column.key;
-            return (
-              <span
-                key={key}
-                className={cellClass}
-                role="columnheader"
-                aria-colindex={index + 1}
-                aria-sort={
-                  isSorted
-                    ? (sortDir === 'asc' ? 'ascending' : 'descending')
-                    : 'none'
+      <thead className={classes.thead}>
+        <tr>
+          <th className={classes.thead_cell} scope="col" colSpan={COLUMNS.length}>
+            <div className={classes.thead_grid} role="row" aria-rowindex={1}>
+              {COLUMNS.map((column, index) => {
+                const isSorted = column.key !== null && column.key === sortKey;
+                const cellClass = cx(classes.th, classes[column.cell], {
+                  [classes.th__sorted]: isSorted,
+                });
+                if (column.key === null) {
+                  return (
+                    <span
+                      key={`spacer-${index}`}
+                      className={cellClass}
+                      role="columnheader"
+                    />
+                  );
                 }
-              >
-                <button
-                  type="button"
-                  className={classes.th_btn}
-                  title={column.title}
-                  onClick={() => this.sortBy(key)}
-                >
-                  {column.label}
-                  {this.renderSortIndicator(key)}
-                </button>
-              </span>
-            );
-          })}
-        </div>
-      </div>
+                const key = column.key;
+                return (
+                  <span
+                    key={key}
+                    className={cellClass}
+                    role="columnheader"
+                    aria-colindex={index + 1}
+                    aria-sort={
+                      isSorted
+                        ? (sortDir === 'asc' ? 'ascending' : 'descending')
+                        : 'none'
+                    }
+                  >
+                    <button
+                      type="button"
+                      className={classes.th_btn}
+                      title={column.title}
+                      onClick={() => this.sortBy(key)}
+                    >
+                      {column.label}
+                      {this.renderSortIndicator(key)}
+                    </button>
+                    {/* Paper's own twin of the same label and arrow — never
+                        shown on screen (`.th_label_print` is print-only, @see
+                        style.scss) and never interactive, because a `<button>`
+                        inside a `<thead>` does not repaint on the REPEATED
+                        copies of a printed table's running head: verified in
+                        this Chromium build (`page.pdf()`) — the button prints
+                        on sheet 1, where the head is part of normal flow, and
+                        is blank on every sheet after, where it is not. A plain
+                        `<span>` carrying the same words has no such fault. */}
+                    <span className={classes.th_label_print} aria-hidden="true">
+                      {column.label}
+                      {this.renderSortIndicator(key)}
+                    </span>
+                  </span>
+                );
+              })}
+            </div>
+          </th>
+        </tr>
+      </thead>
     );
   }
 
@@ -1418,172 +1465,179 @@ export default class PatientPicker extends React.PureComponent<Props, State> {
     const status = row.status;
     const reading = (patient.reading || '').trim();
     return (
-      <li key={patient.id} className={classes.row_item}>
-        {/* The row is one button that opens the case, and a table row to a
-            screen reader: its cells are announced as the columns they are
-            under instead of as one run-on string. Native activation is
-            unaffected by the role. */}
-        <button
-          type="button"
-          className={classes.row}
-          role="row"
-          aria-rowindex={rowIndex}
-          onClick={() => onOpen(patient.id)}
-        >
-          <span className={classes.cell_film} role="cell">
-            {this.renderFilm(row)}
-          </span>
-          <span className={cx(classes.cell_name, classes.cell)} role="cell">
-            {hasName ? (
-              // The full name where the column has to ellipsise it: two
-              // siblings must never be indistinguishable from the list.
-              <span
-                className={classes.row_name}
-                title={reading !== '' ? `${patient.name} (${reading})` : patient.name}
-              >
-                {patient.name}
-              </span>
-            ) : (
-              // A record filed under a chart ID alone. Printing that identifier
-              // here as well would say the same datum twice in one row.
-              <span className={classes.row_unnamed}>(unnamed patient)</span>
-            )}
-            {/* The reading, on the qualifier line every other column uses for
-                one. It is what this column is ORDERED by (kanji carry no
-                reading a collator can find), and a list ordered on a key it
-                never shows is an order the user cannot account for. */}
-            {reading !== '' ? (
-              <span className={classes.cell_sub} title={reading}>
-                {reading}
-              </span>
-            ) : null}
-          </span>
-          <span
-            className={cx(classes.cell_chart, classes.cell)}
-            role="cell"
-            aria-label={
-              patient.chartId !== ''
-                ? `Chart ID ${patient.chartId}` : 'No chart ID on file'
-            }
+      // A real `<tr>`, so the header 190 rows up is a real `<thead>` a printed
+      // page can repeat (@see renderHead) — one `<td>` wide, because the row
+      // beneath it is one button that opens the case and a table row only to a
+      // screen reader (see below), and a `<tr>` may not hold a `<button>`
+      // directly.
+      <tr key={patient.id} className={classes.row_item}>
+        <td className={classes.row_cell} colSpan={COLUMNS.length}>
+          {/* The row is one button that opens the case, and a table row to a
+              screen reader: its cells are announced as the columns they are
+              under instead of as one run-on string. Native activation is
+              unaffected by the role. */}
+          <button
+            type="button"
+            className={classes.row}
+            role="row"
+            aria-rowindex={rowIndex}
+            onClick={() => onOpen(patient.id)}
           >
-            {patient.chartId !== '' ? (
-              <span className={classes.chip_id} title={patient.chartId}>
-                {patient.chartId}
-              </span>
-            ) : (
-              <span className={classes.unset}>—</span>
-            )}
-          </span>
-          <span
-            className={cx(classes.cell_age, classes.cell)}
-            role="cell"
-            aria-label={
-              age !== null && dob !== null
-                ? `Age ${age}, born ${dob}`
-                : 'Age not known — no date of birth on file'
-            }
-          >
-            {age !== null ? (
-              <span className={classes.cell_value}>{age}</span>
-            ) : (
-              <span className={classes.unset}>—</span>
-            )}
-            {dob !== null ? (
-              <span className={classes.cell_sub}>{dob}</span>
-            ) : (
-              <span className={classes.cell_sub}>no date of birth</span>
-            )}
-          </span>
-          <span
-            className={cx(classes.cell_sex, classes.cell)}
-            role="cell"
-            aria-label={formatSexFull(patient.sex) || 'Sex not recorded'}
-          >
-            {sex !== null ? (
-              <span className={classes.cell_value}>{sex}</span>
-            ) : (
-              <span className={classes.unset}>—</span>
-            )}
-          </span>
-          <span
-            className={cx(classes.cell_records, classes.cell)}
-            role="cell"
-            aria-label={describeRecords(summary)}
-            // Where the figure comes from, which is the answer to the one
-            // question this column can raise: the row is counted off the
-            // project as it was last written, not off unsaved work.
-            title={
-              summary !== undefined
-                ? `Counted from the project saved on ` +
-                  `${getTodayISO(new Date(summary.savedAt))}`
-                : 'No project has been saved for this case yet'
-            }
-          >
-            {summary !== undefined && summary.recordCount > 0 ? (
-              <span className={classes.cell_value}>{summary.recordCount}</span>
-            ) : (
-              <span className={classes.unset}>—</span>
-            )}
-            {summary !== undefined && summary.timepointCount > 0 ? (
-              <span className={classes.cell_sub}>
-                {summary.timepointCount === 1
-                  ? '1 visit' : `${summary.timepointCount} visits`}
-              </span>
-            ) : null}
-          </span>
-          <span
-            className={cx(classes.cell_visit, classes.cell)}
-            role="cell"
-            // How long the case has been under records, which is the one figure
-            // the index counts that the row has no column for.
-            title={describeVisitSpan(summary)}
-            aria-label={
-              lastVisit !== null
-                ? `Last visit ${lastVisit}${visitAge !== null ? `, ${visitAge}` : ''}`
-                : 'No dated visit on file'
-            }
-          >
-            {lastVisit !== null ? (
-              <span className={classes.cell_value}>{lastVisit}</span>
-            ) : (
-              <span className={classes.unset}>—</span>
-            )}
-            {visitAge !== null ? (
-              <span className={classes.cell_sub}>{visitAge}</span>
-            ) : null}
-          </span>
-          <span className={cx(classes.cell_status, classes.cell)} role="cell">
-            <span
-              className={cx(classes.chip, classes[STATUS_CHIP_CLASS[status]])}
-              title={getCaseTracingTitle(summary)}
-            >
-              {getCaseTracingLabel(summary)}
+            <span className={classes.cell_film} role="cell">
+              {this.renderFilm(row)}
             </span>
+            <span className={cx(classes.cell_name, classes.cell)} role="cell">
+              {hasName ? (
+                // The full name where the column has to ellipsise it: two
+                // siblings must never be indistinguishable from the list.
+                <span
+                  className={classes.row_name}
+                  title={reading !== '' ? `${patient.name} (${reading})` : patient.name}
+                >
+                  {patient.name}
+                </span>
+              ) : (
+                // A record filed under a chart ID alone. Printing that identifier
+                // here as well would say the same datum twice in one row.
+                <span className={classes.row_unnamed}>(unnamed patient)</span>
+              )}
+              {/* The reading, on the qualifier line every other column uses for
+                  one. It is what this column is ORDERED by (kanji carry no
+                  reading a collator can find), and a list ordered on a key it
+                  never shows is an order the user cannot account for. */}
+              {reading !== '' ? (
+                <span className={classes.cell_sub} title={reading}>
+                  {reading}
+                </span>
+              ) : null}
+            </span>
+            <span
+              className={cx(classes.cell_chart, classes.cell)}
+              role="cell"
+              aria-label={
+                patient.chartId !== ''
+                  ? `Chart ID ${patient.chartId}` : 'No chart ID on file'
+              }
+            >
+              {patient.chartId !== '' ? (
+                <span className={classes.chip_id} title={patient.chartId}>
+                  {patient.chartId}
+                </span>
+              ) : (
+                <span className={classes.unset}>—</span>
+              )}
+            </span>
+            <span
+              className={cx(classes.cell_age, classes.cell)}
+              role="cell"
+              aria-label={
+                age !== null && dob !== null
+                  ? `Age ${age}, born ${dob}`
+                  : 'Age not known — no date of birth on file'
+              }
+            >
+              {age !== null ? (
+                <span className={classes.cell_value}>{age}</span>
+              ) : (
+                <span className={classes.unset}>—</span>
+              )}
+              {dob !== null ? (
+                <span className={classes.cell_sub}>{dob}</span>
+              ) : (
+                <span className={classes.cell_sub}>no date of birth</span>
+              )}
+            </span>
+            <span
+              className={cx(classes.cell_sex, classes.cell)}
+              role="cell"
+              aria-label={formatSexFull(patient.sex) || 'Sex not recorded'}
+            >
+              {sex !== null ? (
+                <span className={classes.cell_value}>{sex}</span>
+              ) : (
+                <span className={classes.unset}>—</span>
+              )}
+            </span>
+            <span
+              className={cx(classes.cell_records, classes.cell)}
+              role="cell"
+              aria-label={describeRecords(summary)}
+              // Where the figure comes from, which is the answer to the one
+              // question this column can raise: the row is counted off the
+              // project as it was last written, not off unsaved work.
+              title={
+                summary !== undefined
+                  ? `Counted from the project saved on ` +
+                    `${getTodayISO(new Date(summary.savedAt))}`
+                  : 'No project has been saved for this case yet'
+              }
+            >
+              {summary !== undefined && summary.recordCount > 0 ? (
+                <span className={classes.cell_value}>{summary.recordCount}</span>
+              ) : (
+                <span className={classes.unset}>—</span>
+              )}
+              {summary !== undefined && summary.timepointCount > 0 ? (
+                <span className={classes.cell_sub}>
+                  {summary.timepointCount === 1
+                    ? '1 visit' : `${summary.timepointCount} visits`}
+                </span>
+              ) : null}
+            </span>
+            <span
+              className={cx(classes.cell_visit, classes.cell)}
+              role="cell"
+              // How long the case has been under records, which is the one figure
+              // the index counts that the row has no column for.
+              title={describeVisitSpan(summary)}
+              aria-label={
+                lastVisit !== null
+                  ? `Last visit ${lastVisit}${visitAge !== null ? `, ${visitAge}` : ''}`
+                  : 'No dated visit on file'
+              }
+            >
+              {lastVisit !== null ? (
+                <span className={classes.cell_value}>{lastVisit}</span>
+              ) : (
+                <span className={classes.unset}>—</span>
+              )}
+              {visitAge !== null ? (
+                <span className={classes.cell_sub}>{visitAge}</span>
+              ) : null}
+            </span>
+            <span className={cx(classes.cell_status, classes.cell)} role="cell">
+              <span
+                className={cx(classes.chip, classes[STATUS_CHIP_CLASS[status]])}
+                title={getCaseTracingTitle(summary)}
+              >
+                {getCaseTracingLabel(summary)}
+              </span>
+            </span>
+            <span
+              className={classes.cell_actions}
+              role="cell"
+              aria-label="Open case"
+            />
+          </button>
+          <span className={classes.row_delete}>
+            <IconButton
+              tooltip="Remove patient"
+              // Above the icon, never below it: a tooltip painted downwards sat
+              // over the *next* patient's row, so on a long list you were
+              // pointing at one name and reading another.
+              tooltipPosition="top-left"
+              style={deleteButtonStyle}
+              iconStyle={deleteIconStyle}
+              onClick={() => this.requestRemoval(patient)}
+            >
+              <IconDelete color="#7B8794" hoverColor="#C62828" />
+            </IconButton>
           </span>
-          <span
-            className={classes.cell_actions}
-            role="cell"
-            aria-label="Open case"
-          />
-        </button>
-        <span className={classes.row_delete}>
-          <IconButton
-            tooltip="Remove patient"
-            // Above the icon, never below it: a tooltip painted downwards sat
-            // over the *next* patient's row, so on a long list you were
-            // pointing at one name and reading another.
-            tooltipPosition="top-left"
-            style={deleteButtonStyle}
-            iconStyle={deleteIconStyle}
-            onClick={() => this.requestRemoval(patient)}
-          >
-            <IconDelete color="#7B8794" hoverColor="#C62828" />
-          </IconButton>
-        </span>
-        <span className={classes.row_chevron} aria-hidden="true">
-          <IconArrow color="#A9B4BE" />
-        </span>
-      </li>
+          <span className={classes.row_chevron} aria-hidden="true">
+            <IconArrow color="#A9B4BE" />
+          </span>
+        </td>
+      </tr>
     );
   }
 
@@ -1727,6 +1781,50 @@ export default class PatientPicker extends React.PureComponent<Props, State> {
       </div>
     );
   }
+
+  /**
+   * The printed sheet's own paper geometry and its running foot — the same
+   * construction the records dashboard's own case sheet uses
+   * (`RecordsDashboard#renderPrintPageStyle`, whose margin boxes and type this
+   * matches exactly), because a chart holding a printed case list alongside a
+   * case sheet or a report cannot date and number its sheets two ways.
+   *
+   * Declared here rather than in the stylesheet for the same two reasons that
+   * component gives: the foot's date is generated at render time, and a static
+   * `@page` in *this* stylesheet would be document-wide the moment this bundle
+   * sits alongside the report's or the superimposition's, which set their own
+   * page box (see the print block at the foot of style.scss, which explains why
+   * it deliberately declares none). Rendered only while this screen is mounted
+   * at all — the app shows the case list or an open case, never both (see
+   * `components/App`) — so the page box this injects is always this surface's
+   * own.
+   *
+   * The header repeats without any of this (a real `<thead>`, @see renderHead)
+   * — this is only what numbers the sheets and dates the print run, which the
+   * header cannot carry since it is the same on every page.
+   */
+  private renderPrintPageStyle = () => {
+    const printed = `Printed ${documentDate(new Date())} · WebCeph`;
+    const box = (align: string) => (
+      `font: 8pt ${PRINT_FONT}; color: #7B8794; text-align: ${align};` +
+      ' vertical-align: top; padding-top: 3mm;'
+    );
+    const css = [
+      '@page {',
+      '  size: A4 portrait;',
+      '  margin: 12mm 12mm 14mm;',
+      '  @bottom-left {',
+      `    content: ${cssString(printed)};`,
+      `    ${box('left')}`,
+      '  }',
+      '  @bottom-right {',
+      '    content: "Page " counter(page) " of " counter(pages);',
+      `    ${box('right')} color: #52616F; font-weight: 600;`,
+      '  }',
+      '}',
+    ].join('\n');
+    return <style type="text/css" dangerouslySetInnerHTML={{ __html: css }} />;
+  };
 
   /**
    * The caption the printed sheet carries instead of the toolbar.
@@ -2004,6 +2102,9 @@ export default class PatientPicker extends React.PureComponent<Props, State> {
 
     return (
       <div className={classes.screen}>
+        {/* Paper only: the sheet's own page box and the running foot that dates
+            and numbers it. @see renderPrintPageStyle */}
+        {this.renderPrintPageStyle()}
         <RestoreFromCaseFile
           open={this.state.restoreOpen}
           existingChartIds={patients.map((p) => p.chartId)}
@@ -2199,13 +2300,18 @@ export default class PatientPicker extends React.PureComponent<Props, State> {
                 {/* Paper carries no controls, so the sheet states what the
                     controls were set to — see `renderPrintCaption`. */}
                 {this.renderPrintCaption(sorted.length)}
-                <div
+                {/* A real `<table>`, so its `<thead>` is one a printed page
+                    repeats — @see renderHead, and the print block at the foot of
+                    style.scss for why the div this replaces never could. On
+                    screen `.table`/`.thead`/`.list` keep the exact flex/grid
+                    layout they always had (see style.scss): the tag changed,
+                    the box model did not. */}
+                <table
                   className={cx(classes.table, {
                     // An empty state is centred in the space the table occupies,
                     // rather than pinned to the top of it.
                     [classes.table__empty]: pageRows.length === 0,
                   })}
-                  role="table"
                   aria-label="Case list"
                   aria-colcount={COLUMNS.length}
                   aria-rowcount={sorted.length + 1}
@@ -2213,18 +2319,27 @@ export default class PatientPicker extends React.PureComponent<Props, State> {
                 >
                   {this.renderHead()}
                   {pageRows.length === 0 ? (
-                    this.renderNoMatches()
+                    // No `.list` class on this one (@see syncTableHeight): it
+                    // holds one filler row, never the rows that method quantises
+                    // the table's height to.
+                    <tbody>
+                      <tr>
+                        <td colSpan={COLUMNS.length}>
+                          {this.renderNoMatches()}
+                        </td>
+                      </tr>
+                    </tbody>
                   ) : (
-                    <ul className={classes.list} role="rowgroup">
+                    <tbody className={classes.list}>
                       {pageRows.map((row, index) => this.renderRow(
                         // aria row indices count the header as row 1 and run
                         // over the whole filtered list, not this page.
                         row,
                         (printing ? 0 : (page - 1) * pageSize) + index + 2,
                       ))}
-                    </ul>
+                    </tbody>
                   )}
-                </div>
+                </table>
                 {/* A pager over a table with nothing in it would read "Page 0 of
                     0" under an empty state that has already said why. */}
                 {sorted.length > 0

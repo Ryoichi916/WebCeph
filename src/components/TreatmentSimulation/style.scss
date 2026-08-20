@@ -38,17 +38,49 @@ $current-hue: #40C4FF;
   padding: 0 20px;
   background: rgba(0, 0, 0, .35);
   border-bottom: 1px solid rgba(255, 255, 255, .08);
+
+  // Below this the view's own name and the patient-identity band ("who this
+  // figure is about") cannot both fit on one line without the two crowding
+  // each other. Two short lines beat one line where an unclipped nowrap
+  // label visually bleeds into its neighbour and, below that, an identity
+  // band that has no room left to shrink into.
+  @media (max-width: 1050px) {
+    flex-wrap: wrap;
+    height: auto;
+    min-height: 52px;
+    row-gap: 8px;
+    padding: 10px 20px;
+  }
 }
 
 .chrome_title {
   display: flex;
   align-items: baseline;
   gap: 10px;
-  min-width: 0;
+  // Never a shrink candidate at the `.chrome` row level: this is a short,
+  // fixed label, and the identity band in `.chrome_actions` is the piece
+  // designed to give way when the row is tight (see `.chrome_identity`).
+  // Without this, flex-shrink's proportional split could still take space
+  // from the label even at a width with plenty of room overall — measured
+  // clipping "Treatment simulation" to "Treatment simul…" at 1440px, where
+  // the four action buttons plus the identity band had not shrunk at all.
+  flex-shrink: 0;
   font-size: 14px;
   font-weight: 600;
-  white-space: nowrap;
   color: $text-on-dark;
+}
+
+// The visible text, in its own box: `.chrome_title` is a flex container, and
+// a nowrap text node painted directly inside it is not clipped by that
+// container's own bounds — it simply overflows, visually, past its box and
+// into whatever is painted next (the identity band). Giving the label its
+// own overflow-guarded box is what actually stops that bleed; ellipsis is
+// the fallback for the width this box is still given once it does.
+.chrome_title_text {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 // The same statement heads the panel and the printed sheet, so on a narrow
@@ -67,9 +99,36 @@ $current-hue: #40C4FF;
   display: flex;
   align-items: center;
   gap: 10px;
+  // Without this, this box's own *automatic* minimum width (its floor when
+  // `.chrome` needs to shrink it) is the sum of its children's raw nowrap
+  // min-content widths — including the identity band's, at its full,
+  // unellipsized length — because that floor is computed independently of
+  // `.chrome_identity`'s own `overflow: hidden`, which only governs how far
+  // *that* element may shrink once *this* box has already been sized. This
+  // is what actually let the identity band get sized at its full natural
+  // width regardless of how little room `.chrome` had left for it.
+  min-width: 0;
+
+  // Forced onto its own full-width line rather than left to compete with
+  // `.chrome_title` for space on one row — see `.chrome`.
+  @media (max-width: 1050px) {
+    flex: 1 1 100%;
+    justify-content: flex-end;
+  }
 }
 
 .chrome_identity {
+  // Shrinks and ellipsizes rather than either painting over its neighbour
+  // (the old failure at 900–950px) or being squeezed to nothing with no
+  // visible trace (the old failure at 850px): the four action buttons are
+  // load-bearing and never shrink, so once the row is tight this band is the
+  // one thing that is allowed to give, visibly. The floor is a few
+  // characters wide, not zero — this band should thin down to "an
+  // ellipsized sliver", never disappear outright.
+  flex: 1 1 auto;
+  min-width: 64px;
+  overflow: hidden;
+  text-overflow: ellipsis;
   font-size: 12.5px;
   color: rgba(199, 208, 217, .78);
   white-space: nowrap;
@@ -392,10 +451,36 @@ $current-hue: #40C4FF;
 }
 
 .panel_scroll {
-  flex: 1 1 48%;
+  // The controls pane, not the table pane, gets the larger share: five
+  // sliders plus their per-control help text and any amber "why disabled"
+  // block routinely run well past a screen's worth of height, while the
+  // table below has its own independent scroller and a protected minimum.
+  // (Was 48% — measured truncating over 60% of this pane's content on a
+  // 900px-tall viewport with no cue that anything was cut off.)
+  flex: 1 1 58%;
   min-height: 0;
   overflow-y: auto;
   padding: 14px 16px 20px;
+
+  // A CSS-only scroll shadow: the two `local`-attached cover layers scroll
+  // with the content and blank the shadow the instant there is nothing left
+  // to reveal past that edge, so the cue is never shown once the pane is
+  // truly at rest at either end. This is the pane measured truncating an
+  // honesty-relevant caveat exactly at its own lower edge with no visible
+  // "more below" affordance at all.
+  background:
+    linear-gradient($bg-surface 30%, rgba($bg-surface, 0)) center top,
+    linear-gradient(rgba($bg-surface, 0), $bg-surface 70%) center bottom,
+    radial-gradient(
+      farthest-side at 50% 0, rgba(15, 23, 30, .22), rgba(15, 23, 30, 0)
+    ) center top,
+    radial-gradient(
+      farthest-side at 50% 100%, rgba(15, 23, 30, .22), rgba(15, 23, 30, 0)
+    ) center bottom;
+  background-repeat: no-repeat;
+  background-color: $bg-surface;
+  background-size: 100% 36px, 100% 36px, 100% 12px, 100% 12px;
+  background-attachment: local, local, scroll, scroll;
 }
 
 .disclaimer {
@@ -620,7 +705,10 @@ $zero-notch: rgba(31, 41, 51, .5);
 // "Key measurements" pane header below and read as a sentence cut in half.
 .control_reason {
   box-sizing: border-box;
-  margin: 8px 0 2px;
+  // Enough trailing space that this block's own last line is never the exact
+  // line sitting on the pane's fold — it was measured landing there, amber
+  // text cut mid-word with nothing to say more of it was hidden.
+  margin: 8px 0 10px;
   padding: 7px 9px;
   border: 1px solid #F0DDB8;
   border-radius: 6px;
@@ -759,7 +847,7 @@ $zero-notch: rgba(31, 41, 51, .5);
 // The table's own pane: a labelled header and an independent scroller, so the
 // numbers are on screen at rest instead of below four paragraphs of prose.
 .values {
-  flex: 1 1 52%;
+  flex: 1 1 42%;
   min-height: 250px;
   display: flex;
   flex-direction: column;
@@ -1276,6 +1364,9 @@ $zero-notch: rgba(31, 41, 51, .5);
     flex: none;
     overflow: visible;
     padding: 0;
+    // Paper has no fold to shadow: the scroll-shadow backgrounds are a
+    // screen-only affordance.
+    background: none;
   }
 
   .values {
@@ -1315,7 +1406,7 @@ $zero-notch: rgba(31, 41, 51, .5);
   }
 
   .control {
-    padding: 5px 0;
+    padding: 4px 0;
     page-break-inside: avoid;
   }
 
@@ -1330,24 +1421,28 @@ $zero-notch: rgba(31, 41, 51, .5);
   }
 
   .footnotes {
-    margin-top: 8px;
-    padding-top: 7px;
+    margin-top: 4px;
+    padding-top: 4px;
     page-break-inside: avoid;
   }
 
   .footnote,
   .legend_key {
-    margin-bottom: 4px;
+    margin-bottom: 3px;
     font-size: 9px;
-    line-height: 1.4;
+    line-height: 1.35;
   }
 
   // ---- Certification --------------------------------------------------------
 
+  // A chart sheet is printed for a parent conversation: forcing an
+  // almost-blank extra page just to fit the signature block reads as
+  // unpolished, so this block — and the space it needs above it — is kept as
+  // tight as it can be while it stays legible.
   .print_tail {
     display: block;
-    margin-top: 10px;
-    padding-top: 8px;
+    margin-top: 5px;
+    padding-top: 5px;
     border-top: 1px solid $border;
     page-break-inside: avoid;
   }
@@ -1363,7 +1458,7 @@ $zero-notch: rgba(31, 41, 51, .5);
   .sig_row {
     display: flex;
     gap: 10mm;
-    margin-top: 10px;
+    margin-top: 6px;
   }
 
   .sig_field {
@@ -1391,9 +1486,19 @@ $zero-notch: rgba(31, 41, 51, .5);
   }
 
   .print_colophon {
-    margin: 8px 0 0;
+    margin: 5px 0 0;
     font-size: 9px;
-    line-height: 1.45;
+    line-height: 1.4;
     color: $text-tertiary;
+  }
+
+  // The ratio list is read once, not measured against — the print sheet can
+  // afford to hold it tighter than the on-screen panel does.
+  .soft {
+    padding-top: 8px;
+  }
+
+  .soft_row {
+    padding: 3px 0;
   }
 }

@@ -5,8 +5,6 @@ import * as cx from 'classnames';
 
 import { Helmet } from 'react-helmet';
 
-import { saveAs } from 'file-saver';
-
 import IconClose from 'material-ui/svg-icons/navigation/close';
 import IconReset from 'material-ui/svg-icons/av/replay';
 import IconPrint from 'material-ui/svg-icons/action/print';
@@ -74,6 +72,10 @@ import { formatCaptureDate, parseCaptureDate } from 'utils/records';
 import { printDocumentTitle } from 'utils/printTitle';
 import { formatAgeFull, formatSexFull } from 'utils/patient';
 import { renderSuperimpositionSnapshot } from 'utils/superimpositionSnapshot';
+// `saveBlobAs` replaces `file-saver`'s saveAs(): see its doc comment in
+// tracingSnapshot.ts for why (a webpack chunk boundary between file-saver
+// and its caller silently drops the filename).
+import { saveBlobAs } from 'utils/tracingSnapshot';
 
 const classes = require('./style.scss');
 
@@ -286,7 +288,7 @@ export default class TreatmentSimulation extends React.PureComponent<Props, Stat
 
         <div className={classes.chrome}>
           <span className={classes.chrome_title}>
-            Treatment simulation
+            <span className={classes.chrome_title_text}>Treatment simulation</span>
             <span className={classes.chrome_hint}>
               Geometric simulation for planning discussion — not a growth or
               outcome prediction
@@ -359,7 +361,7 @@ export default class TreatmentSimulation extends React.PureComponent<Props, Stat
                   </div>
                 )}
             </div>
-            {this.renderLegend()}
+            {this.renderLegend(controls)}
           </div>
           {this.renderPanel(controls, table, simulation)}
         </div>
@@ -796,9 +798,9 @@ export default class TreatmentSimulation extends React.PureComponent<Props, Stat
       `each control · this film is calibrated at ${formatScale(scaleFactor)}.`;
   }
 
-  private renderLegend() {
+  private renderLegend(controls: ControlAvailability[]) {
     const { plan } = this.state;
-    const parts = describePlan(plan);
+    const parts = describePlan(plan, controls);
     const planeSentence = this.planeSentence();
     const inlineNote = this.inlineScaleNote(planeSentence !== null);
     return (
@@ -924,9 +926,11 @@ export default class TreatmentSimulation extends React.PureComponent<Props, Stat
                   {scaleBlocked.length === 1
                     ? 'This movement is'
                     : `These ${scaleBlocked.length} movements are`}{' '}
-                  entered in millimetres and need an mm/px calibration for this
-                  film — set it from the calibration chip in the toolbar. The
-                  incisor controls are scale-independent and stay available.
+                  entered in millimetres and{' '}
+                  {scaleBlocked.length === 1 ? 'needs' : 'need'} an mm/px
+                  calibration for this film — set it from the calibration chip
+                  in the toolbar. The incisor controls are scale-independent
+                  and stay available.
                 </p>
               ) : null}
               {this.renderControl(control, references, firstScaleBlocked !== null)}
@@ -1028,7 +1032,7 @@ export default class TreatmentSimulation extends React.PureComponent<Props, Stat
           disabled={!isAvailable}
           title={title}
           aria-label={`${spec.label} — ${spec.negative} to ${spec.positive}, in ${spec.unit}`}
-          onChange={this.handleControlChange.bind(this, spec.id)}
+          onChange={this.handleControlChange.bind(this, spec.id, isAvailable)}
         />
         <div className={classes.control_scale} aria-hidden="true">
           <span className={classes.control_min}>
@@ -1406,9 +1410,22 @@ export default class TreatmentSimulation extends React.PureComponent<Props, Stat
     }
   };
 
+  /**
+   * `isAvailable` is the same `ControlAvailability` already computed for this
+   * control's render — not recomputed here, since a slider fires this once
+   * per pixel of drag. The DOM `disabled` attribute already stops a genuine
+   * mouse/keyboard interaction from reaching this handler at all; this is the
+   * independent state-layer guard, so that if anything were ever to fire a
+   * change event on a disabled control the plan cannot silently record a
+   * movement `applySimulation` would then no-op — an honest legend must never
+   * claim a movement that was not actually applied.
+   */
   private handleControlChange = (
-    id: ControlId, e: React.ChangeEvent<HTMLInputElement>,
+    id: ControlId, isAvailable: boolean, e: React.ChangeEvent<HTMLInputElement>,
   ) => {
+    if (!isAvailable) {
+      return;
+    }
     const value = parseFloat(e.target.value);
     this.setState({
       plan: withControlValue(
@@ -1457,7 +1474,8 @@ export default class TreatmentSimulation extends React.PureComponent<Props, Stat
     const currentPoints = placedPoints(landmarks);
     const simulatedPoints = placedPoints(simulation.landmarks);
     const built = simulatedOutlines(simulation, currentPoints);
-    const parts = describePlan(this.state.plan);
+    const controls = describeControls(landmarks, scaleFactor);
+    const parts = describePlan(this.state.plan, controls);
     const planeSentence = this.planeSentence();
     const annotations: SuperimpositionAnnotations = {
       // No registration here: the two layers are one film, so the only
@@ -1527,7 +1545,7 @@ export default class TreatmentSimulation extends React.PureComponent<Props, Stat
         });
         return;
       }
-      saveAs(blob, `${this.exportStem()}-simulation.png`);
+      saveBlobAs(blob, `${this.exportStem()}-simulation.png`);
       this.setState({ isExporting: false });
     });
   };

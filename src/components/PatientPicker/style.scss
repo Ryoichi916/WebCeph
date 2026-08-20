@@ -3,10 +3,14 @@
 
 // Patient picker — the product entry point, and the practice's case list.
 // Split card: brand panel on the left, the quick-add strip and the case table on
-// the right. The table is a CSS grid rather than a `<table>`: the header and the
-// rows are laid out from ONE column template (`$cols` below), which is what keeps
-// a header from ever standing over the wrong column, and a row can stay the single
-// button that opens the case.
+// the right. The table IS a real `<table>` in the markup (so its `<thead>`
+// repeats across printed pages — @see the print block at the foot of this
+// file), but its columns are one CSS grid rather than table columns: the header
+// and the rows are laid out from ONE column template (`$cols` below), which is
+// what keeps a header from ever standing over the wrong column, and a row can
+// stay the single button that opens the case. `display: contents` on the
+// `<th>`/`<td>` each lives in is what lets the grid see straight through the
+// table skeleton on screen — @see `.thead_cell`/`.row_cell`.
 
 .screen {
   position: absolute;
@@ -586,6 +590,12 @@ $row-inset: 4px;
   padding-right: 0;
 }
 
+// A real `<table>` in the markup — a `<thead>` is the only construction a
+// browser both repeats *and* reserves the space for across printed pages (see
+// the print block at the foot of this file) — laid out as the flex column it
+// has always been: `display: flex` here overrides the tag's own table layout
+// on screen, and the print block below switches it back to a real table so
+// the header repeats.
 .table {
   // Grows into the space a full page of rows needs and shrinks (scrolling) when
   // there are more, but never *stretches*: a three-case practice gets its pager
@@ -594,6 +604,7 @@ $row-inset: 4px;
   min-height: 0;
   display: flex;
   flex-direction: column;
+  border-collapse: collapse;
   margin-top: 10px;
   // The eight columns need their width; a narrow window scrolls the table
   // sideways rather than crushing the chart ID into two characters.
@@ -622,11 +633,13 @@ $row-inset: 4px;
   flex: 1 1 auto;
 }
 
-// The head is a block around the grid rather than the grid itself, so that on
-// paper it can become a `table-header-group` — the one thing that repeats a
-// header across printed pages — while the columns inside it stay the same grid
-// the rows are laid out on. @see the print block at the foot of this file.
+// A real `<thead>` now (@see index.tsx#renderHead) — `display: block` on screen
+// overrides the tag's own `table-header-group`, so the sticky positioning below
+// behaves exactly as it did as a div. On paper it goes back to being a real
+// `table-header-group`, which is the one thing that repeats a header across
+// printed pages — @see the print block at the foot of this file.
 .thead {
+  display: block;
   position: sticky;
   top: 0;
   z-index: 1;
@@ -634,6 +647,15 @@ $row-inset: 4px;
   padding-bottom: 6px;
   border-bottom: 1px solid $border-strong;
   background: $bg-surface;
+}
+
+// The one `<th>` the head's `<tr>` holds, wide enough (`colSpan`) to carry the
+// whole column grid as one cell — `display: contents` on screen erases the cell
+// from the box tree, so `.thead_grid` inside it lays out exactly as it did as
+// `.thead`'s only child before this was a real table. @see `.row_cell`, the
+// same construction for a data row.
+.thead_cell {
+  display: contents;
 }
 
 .thead_grid {
@@ -704,6 +726,19 @@ $row-inset: 4px;
   }
 }
 
+// Paper's own twin of `.th_btn` — same label, same arrow, never a `<button>`.
+// Hidden on screen, where the real (interactive) one already shows; shown only
+// in print, where the real one is hidden in its place (@see the print block at
+// the foot of this file). Not a paper-only affectation: a `<button>` inside a
+// `<thead>` paints on a printed sheet's first page, where the head is ordinary
+// document flow, and is blank on every sheet after it, where the browser is
+// instead repainting a synthetic copy of the header for the new page — probed
+// in this Chromium build by printing 200 rows to PDF and rasterizing every
+// page. This plain span has no such fault.
+.th_label_print {
+  display: none;
+}
+
 // The sort affordance: a faint double arrow on every sortable column (so the
 // column reads as sortable before it is pressed), the real direction on the one
 // the list is ordered by.
@@ -728,14 +763,24 @@ $row-inset: 4px;
   color: $primary-600;
 }
 
+// A real `<tbody>` (@see index.tsx#render) — `display: block` overrides the
+// tag's own `table-row-group`, so the rows below still lay out exactly as they
+// did as an `<ul>`'s `<li>`s. Only the row list itself carries this class: the
+// empty state's own `<tbody>` (one filler row) does not, which is how
+// `syncTableHeight` (index.tsx) tells the two apart.
 .list {
+  display: block;
   list-style: none;
   margin: 0;
   padding: 0;
   min-width: 800px;
 }
 
+// A real `<tr>` now — `display: block` overrides `table-row`, so `position:
+// relative` below still gives `.row_delete`/`.row_chevron` the same containing
+// block a `<li>` did.
 .row_item {
+  display: block;
   position: relative;
 
   & + & {
@@ -756,6 +801,14 @@ $row-inset: 4px;
   &:hover .row {
     background: $primary-050;
   }
+}
+
+// The one `<td>` each row's `<tr>` holds (`colSpan`-wide) — `display: contents`
+// erases the cell from the box tree, so the row button and its trailing
+// controls lay out as direct children of `.row_item` exactly as they did before
+// this was a real table. @see `.thead_cell`, the same construction for the head.
+.row_cell {
+  display: contents;
 }
 
 .row {
@@ -1553,17 +1606,27 @@ $row-inset: 4px;
 // and the table stops being a window: it flows, and no row is ever split between
 // two sheets.
 //
-// The column header prints once, at the top of the first sheet. Blink does not
-// repeat a CSS `display: table-header-group` across printed pages — probed both
-// with and without an explicit table-row/table-cell inside it, one header in a
-// four-page print either way; only a real `<table><thead>` repeats, and the body
-// here is a list of buttons, which a `<tr>` may not hold. The caption carries the
-// filter, the order and the row range instead, so a loose sheet still says which
-// cases it is showing.
+// The column header repeats on every sheet: `.table`/`.thead`/`.list`/
+// `.row_item` are a real `<table>`/`<thead>`/`<tbody>`/`<tr>` in the markup
+// (index.tsx), which is the one construction Blink and Gecko actually repeat —
+// probed against a `display: table-header-group` div, with and without an
+// explicit table-row/table-cell inside it, which repeated in neither engine at
+// up to 199 rows over 8 sheets. The one place that departs from an ordinary
+// table is the body: each row is one button that opens the case, and a `<tr>`
+// may not hold a `<button>` directly, so `.row_item` (a `<tr>`) holds exactly
+// one `<td>` (`.row_cell`) the button lives inside — `display: contents` on
+// screen, so the columns inside it are laid out by the same grid `.row` always
+// used. The caption still carries the filter, the order and the row range
+// (`renderPrintCaption`), because a repeated head has no room left for them.
 //
-// No `@page` rule here on purpose: `@page` is document-wide, and this stylesheet
-// is bundled with the report's and the superimposition's, which set their own
-// page box. The sheet is laid out to whatever the print dialog is set to.
+// No static `@page` rule here on purpose: `@page` is document-wide, and this
+// stylesheet is bundled with the report's and the superimposition's, which set
+// their own page box. The running foot that dates and numbers the sheets is
+// instead injected at render time, from the component
+// (`renderPrintPageStyle`), the same way the records dashboard's own case sheet
+// does it — so the page box is only ever this surface's own, for exactly as
+// long as this surface is mounted, and never leaks into a print of one of the
+// others.
 @media print {
   .screen {
     position: static;
@@ -1626,8 +1689,11 @@ $row-inset: 4px;
     margin: 0 0 8px;
   }
 
+  // The div this used to be became `display: block` on paper; the real table it
+  // is now becomes `display: table`, which is what makes the `<thead>` below a
+  // repeating header rather than a block that merely looks like one.
   .table {
-    display: block;
+    display: table;
     width: auto;
     // The visible height is clipped to whole rows on screen (an inline style —
     // hence the `!important`), and paper has no viewport to clip to.
@@ -1638,6 +1704,7 @@ $row-inset: 4px;
   }
 
   .thead {
+    display: table-header-group;
     position: static;
     min-width: 0;
     padding: 0;
@@ -1646,16 +1713,23 @@ $row-inset: 4px;
     page-break-after: avoid;
   }
 
+  .thead_cell,
+  .row_cell {
+    display: table-cell;
+  }
+
   .thead_grid {
     padding-bottom: 3px;
     border-bottom: 1px solid #999999;
   }
 
   .list {
+    display: table-row-group;
     min-width: 0;
   }
 
   .row_item {
+    display: table-row;
     // A row is one patient: it is never split across two sheets.
     break-inside: avoid;
     page-break-inside: avoid;
@@ -1665,6 +1739,20 @@ $row-inset: 4px;
   // column the list IS ordered by stays, and the caption states it in words.
   .sort_hint {
     display: none;
+  }
+
+  // The interactive head swaps for its plain twin (@see `.th_label_print`): a
+  // `<button>` here would print on sheet 1 and go blank on every sheet after,
+  // because it sits inside the repeated running head, not in ordinary flow.
+  .th_btn {
+    display: none;
+  }
+
+  .th_label_print {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    max-width: 100%;
   }
 
   .row {

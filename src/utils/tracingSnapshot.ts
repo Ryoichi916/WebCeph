@@ -126,8 +126,15 @@ export const drawTracingOverlay = (
   // 2. Anatomical outline tracings (soft-tissue profile, mandible, maxilla,
   //    sella, orbital rim, ear-rod) — shared geometry with the on-screen SVG
   //    overlay (see components/TracingViewer/outlines.ts). The heaviest,
-  //    highest-contrast layer on the film.
-  const outlines = buildOutlines(manual);
+  //    highest-contrast layer on the film. Built from `pointLandmarks`, not
+  //    the raw `manual` map: a caller that scopes its dots to one analysis
+  //    (both real callers do — the export middleware's `display`, the report's
+  //    `film.landmarks`) must have its outlines scoped the same way, or a
+  //    point another analysis left behind (e.g. Downs' A/B/U1 after switching
+  //    to Tweed) still draws a maxilla/incisor outline through it even though
+  //    its own dot is correctly gone. `pointLandmarks` defaults to `manual`
+  //    above, so a caller that never scopes anything is unaffected.
+  const outlines = buildOutlines(pointLandmarks);
   if (outlines.length > 0) {
     ctx.save();
     // Dark casing under the light stroke, so it reads on bright bone too.
@@ -633,4 +640,52 @@ export const sanitizeFilenameStem = (parts: (string | null | undefined)[]): stri
     .replace(/[\\/:*?"<>|\x00-\x1f]+/g, '_')
     .replace(/_{2,}/g, '_')
     .replace(/^[_.\-]+|[_.\-]+$/g, '');
+};
+
+/**
+ * Saves a `Blob` (or `File`) to the patient-named filename every export dialog
+ * in this app promises, e.g. "Written as C-9012 鈴木 花子.wceph". This does
+ * **not** go through the `file-saver` package.
+ *
+ * `file-saver`'s `saveAs()` keeps a single `<a>` element in its own module's
+ * top-level scope and reuses it for every call, setting `.download` on that
+ * shared node before dispatching a synthetic click. Webpack's own
+ * `splitChunks` config (`webpack.config.js`) puts `file-saver` in the
+ * `node_modules` `lib` chunk, separate from every one of this app's own
+ * chunks that calls `saveAs()`. Confirmed by a minimal reproduction served
+ * over HTTP: `file-saver` in one `<script>`, the calling code in another ->
+ * the browser writes a bare `download` with no filename; both inlined into a
+ * single script -> the real name. (The theory: Chromium only honours
+ * `download` on an anchor that the click handler itself is holding "live" —
+ * a cross-chunk shared singleton, resolved through an async import boundary,
+ * loses that at the moment of the synthetic click, even though the property
+ * read back on the very same object looks set.) A `.wceph` case file is the
+ * chart's only copy; landing in Downloads under a name with no patient
+ * identity in it is not an acceptable failure mode for that file, and every
+ * dialog claiming a filename that isn't the one actually written is a
+ * dishonest label.
+ *
+ * The fix is to never share the anchor across a chunk boundary: build a
+ * fresh `<a download>` right here, in the same module as this function, at
+ * the moment of the call, and click it directly (no synthetic-event
+ * indirection). `tracingSnapshot.ts` is not code-split from its callers —
+ * every export call site imports it statically — so the anchor construction
+ * and the click that consumes it always run out of the same chunk.
+ */
+export const saveBlobAs = (blob: Blob, filename: string): void => {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.rel = 'noopener';
+  // Some browsers only trigger the download when the anchor is attached to
+  // the document at click time.
+  a.style.display = 'none';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  // Revoked after a delay, not synchronously: revoking immediately has been
+  // observed to cancel the download in flight in some browsers (the same
+  // margin file-saver itself used).
+  setTimeout(() => URL.revokeObjectURL(url), 40000);
 };

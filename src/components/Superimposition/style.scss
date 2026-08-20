@@ -1098,7 +1098,17 @@
     flex: 1 1 auto;
     min-width: 0;
     padding: 0;
-    page-break-inside: avoid;
+    // Not `page-break-inside: avoid`: the legend carries the full "About
+    // this view" disclosure (every source paragraph, printed open) plus the
+    // table notes, which is routinely taller than a single sheet once a
+    // magnification warning or a one-sided-measurements note joins the base
+    // two paragraphs. "Avoid" on content that cannot possibly fit on one
+    // page is not honoured so much as fought: Chrome pushed the *entire*
+    // figure_column — figure included — past a blank first sheet trying to
+    // find a page the legend would fit on whole, never found one, and still
+    // had to fragment it regardless. Left to flow like ordinary text, the
+    // legend breaks where it runs out of room and nothing upstream of it is
+    // held back waiting for space that was never coming.
   }
 
   .key_text { color: $text-primary; }
@@ -1122,16 +1132,25 @@
     display: block;
     border-left: none;
     background: #FFFFFF;
-    page-break-before: always;
-    break-before: page;
   }
 
   // The section header travels with the first rows it heads. Left breakable, it
   // printed "Change · T2 − T1 · 32 comparable measurements over 5 mo" at the
   // foot of sheet 1 with nothing under it — the table began on sheet 2 and 45 %
   // of the first sheet was white.
+  //
+  // `break-inside: avoid` matters here as much as `break-after`: `.panel_head`
+  // is a flex *column* on screen (title above subtitle, see the non-print
+  // rule), and Chrome fragments a flex column between its own children just
+  // as readily as between unrelated siblings — a plain title/subtitle pair
+  // once printed as "Change" alone at the foot of one sheet with its own
+  // subtitle line stranded at the top of the next. Without `avoid-inside` the
+  // rule below only kept the header from separating from the *table*; it did
+  // nothing to keep the header's own two lines together.
   .panel_head {
     padding: 14px 0 6px;
+    page-break-inside: avoid;
+    break-inside: avoid;
     page-break-after: avoid;
     break-after: avoid;
   }
@@ -1158,16 +1177,29 @@
     padding: 4px 6px;
   }
 
+  // Not `page-break-inside: avoid` on the wrapper: with the table's own sheet
+  // break now natural rather than forced (see `.panel` above), the table can
+  // land close enough to a sheet's foot that neither footnote paragraph fits
+  // under it — and gluing both to the block after them (the certification)
+  // pushed the whole lot onto a sheet of its own with nothing else on it
+  // (observed: a fourth sheet carrying one footnote and the signature block,
+  // otherwise blank). Left breakable, whichever paragraph fits stays with the
+  // table that explains it, and only the shorter remainder — never both —
+  // spills to the next sheet with the certification.
   .footnotes {
     margin-top: 8px;
     padding-top: 7px;
-    page-break-inside: avoid;
   }
 
+  // `break-inside: avoid` moves here, per paragraph, so a sentence still never
+  // splits mid-line even though the two footnotes may now land on different
+  // sheets from each other.
   .footnote {
     margin-bottom: 4px;
     font-size: 10px;
     line-height: 1.4;
+    page-break-inside: avoid;
+    break-inside: avoid;
   }
 
   .legend_note {

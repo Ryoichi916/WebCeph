@@ -25,7 +25,16 @@ export interface RemoveRecordDialogProps {
    * row carries its image.
    */
   thumbnail?: string | null;
-  /** Whether anything has been traced on this image (said out loud if so). */
+  /**
+   * Whether anything has been traced on this image (said out loud if so).
+   * This must be the true total stored for the film — `record.landmarkPoints.length`,
+   * the same figure the dashboard's own StatusChip discloses via its
+   * "· N plotted in all" badge — and never just the active analysis's manual
+   * step count. A film can carry landmarks from more than one analysis (e.g.
+   * auto-plotted for a Clinical Report covering all nine), and this is the one
+   * dialog whose explicit job is to state exactly what an irreversible removal
+   * destroys; understating that count here would misstate the loss.
+   */
   landmarksPlaced: number;
   /**
    * How many other images the patient has on file. Removing an image clears the

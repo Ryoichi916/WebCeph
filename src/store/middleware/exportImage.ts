@@ -1,5 +1,4 @@
 import { Store, Middleware } from 'redux';
-import { saveAs } from 'file-saver';
 
 import { isActionOfType } from 'utils/store';
 import {
@@ -16,8 +15,12 @@ import { getActivePatient } from 'store/reducers/patients';
 import { buildProfilogram, Segment } from 'analyses/profilogram';
 import { isGeoVector } from 'utils/math';
 // The overlay composition (colors + drawing) is shared with the printable
-// clinical report — see utils/tracingSnapshot.ts.
-import { drawTracingOverlay, drawScaleBar, sanitizeFilenameStem } from 'utils/tracingSnapshot';
+// clinical report — see utils/tracingSnapshot.ts. `saveBlobAs` replaces
+// `file-saver`'s saveAs(): see its doc comment for why (a webpack chunk
+// boundary between file-saver and its caller silently drops the filename).
+import {
+  drawTracingOverlay, drawScaleBar, sanitizeFilenameStem, saveBlobAs,
+} from 'utils/tracingSnapshot';
 
 const baseName = (name: string | null): string => {
   if (!name) {
@@ -109,7 +112,7 @@ const middleware = ({ getState }: Store<StoreState>) =>
       canvas.toBlob(
         (blob) => {
           if (blob !== null) {
-            saveAs(blob, filename);
+            saveBlobAs(blob, filename);
           }
         },
         mime,

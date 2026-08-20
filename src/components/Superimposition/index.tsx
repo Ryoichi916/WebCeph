@@ -5,8 +5,6 @@ import * as cx from 'classnames';
 
 import { Helmet } from 'react-helmet';
 
-import { saveAs } from 'file-saver';
-
 import IconPrint from 'material-ui/svg-icons/action/print';
 import IconClose from 'material-ui/svg-icons/navigation/close';
 import IconImage from 'material-ui/svg-icons/image/photo';
@@ -49,7 +47,7 @@ import AboutDisclosure from 'components/AboutDisclosure';
 // Number formatting, unit suffixes and the printed sheet's wording are the
 // app's, not this view's: the same helpers the Summary dialog and the clinical
 // report use.
-import { getUnitSuffix } from 'components/AnalysisResultsViewer';
+import { getUnitSuffix, roundToDisplay } from 'components/AnalysisResultsViewer';
 import {
   printNumber,
   printSigned,
@@ -77,7 +75,10 @@ import { printDocumentTitle } from 'utils/printTitle';
 import {
   renderSuperimpositionSnapshot,
 } from 'utils/superimpositionSnapshot';
-import { sanitizeFilenameStem } from 'utils/tracingSnapshot';
+// `saveBlobAs` replaces `file-saver`'s saveAs(): see its doc comment for why
+// (a webpack chunk boundary between file-saver and its caller silently drops
+// the filename).
+import { sanitizeFilenameStem, saveBlobAs } from 'utils/tracingSnapshot';
 
 const classes = require('./style.scss');
 
@@ -1342,6 +1343,20 @@ export default class Superimposition extends React.PureComponent<Props, State> {
       ? Math.min(1, Math.abs(row.change) / scale.max)
       : 0;
     const isForward = row.change >= 0;
+    // The printed Change column is derived from T1 and T2 **as printed**, not
+    // from the full-precision figure behind them: at one decimal, a true
+    // change of e.g. −26.4° can round its endpoints to −11.0° and −37.4° while
+    // the raw difference prints as −26.5° — a row that contradicts itself to
+    // any reader who subtracts the two visible columns. Rounding T1 and T2
+    // first, then differencing, is what makes the row's own arithmetic true on
+    // the sheet — the same fix (and the same helper) as the treatment
+    // simulation and trend chart use for the identical problem. The bar and
+    // the hand-plotting-error dimming above are read straight off the raw
+    // `row.change`; they are reading aids and a clinical threshold, not
+    // numbers a reader checks by hand, so they are left at full precision.
+    const shownChange = roundToDisplay(
+      roundToDisplay(row.t2) - roundToDisplay(row.t1),
+    );
     const errorNote = row.kind === 'angular'
       ? `Within hand-plotting error (±${PLOTTING_ERROR.angular}°)`
       : `Within hand-plotting error (±${PLOTTING_ERROR.linear} mm)`;
@@ -1360,7 +1375,7 @@ export default class Superimposition extends React.PureComponent<Props, State> {
         <td className={classes.cell_num}>{printNumber(row.t1)}{unit}</td>
         <td className={classes.cell_num}>{printNumber(row.t2)}{unit}</td>
         <td className={cx(classes.cell_num, classes.cell_change)}>
-          {printSigned(row.change)}{unit}
+          {printSigned(shownChange)}{unit}
         </td>
         <td className={classes.cell_bar}>
           {fraction > 0 ? (
@@ -1473,7 +1488,7 @@ export default class Superimposition extends React.PureComponent<Props, State> {
         });
         return;
       }
-      saveAs(blob, `${this.exportStem()}-superimposition.png`);
+      saveBlobAs(blob, `${this.exportStem()}-superimposition.png`);
       this.setState({ isExporting: false });
     });
   };

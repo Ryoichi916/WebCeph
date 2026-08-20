@@ -205,6 +205,54 @@ const drawTracing = (
 };
 
 /**
+ * Where to draw a point-anchored label so it stays inside the canvas.
+ *
+ * `wrapText` above solves this for the legend's free-flowing sentences by
+ * wrapping; a landmark label is a single short run that must not wrap, so
+ * instead it flips sides — right of the point by default, left of it when
+ * the right placement would run past the frame's right edge — the same
+ * "flip before overflow" a tooltip uses. On a crop so tight neither side
+ * clears the frame, the label's own box is clamped fully inside
+ * `[0, width]`/`[0, imageHeight]` rather than left to spill past either edge,
+ * which is what let `Me — registration` get cut off flush at the canvas
+ * edge before this measured against `width` at all.
+ */
+const placePointLabel = (
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  anchor: GeoPoint,
+  fontSize: number,
+  width: number,
+  imageHeight: number,
+): { x: number; y: number; align: CanvasTextAlign } => {
+  ctx.font = `600 ${fontSize}px ${FONT_STACK}`;
+  const textWidth = ctx.measureText(text).width;
+  const offset = fontSize * 0.9;
+
+  let align: CanvasTextAlign = 'left';
+  let x = anchor.x + offset;
+  const rightFits = x + textWidth <= width;
+  const leftX = anchor.x - offset;
+  const leftFits = leftX - textWidth >= 0;
+  if (!rightFits && leftFits) {
+    align = 'right';
+    x = leftX;
+  } else if (!rightFits) {
+    // Neither side clears the frame (a very tight crop): keep the label's
+    // own box fully inside the canvas instead of letting either edge win.
+    align = 'left';
+    x = Math.max(0, Math.min(width - textWidth, x));
+  }
+
+  const halfLine = fontSize * 0.5;
+  const y = Math.max(
+    halfLine, Math.min(imageHeight - halfLine, anchor.y - offset),
+  );
+
+  return { x, y, align };
+};
+
+/**
  * The annotation layer: the matched reference line of each timepoint, the
  * registration marker, the names of the registration landmarks and the
  * millimetre scale bar. Drawn in device pixels (after the frame transform has
@@ -282,7 +330,8 @@ const drawAnnotations = (
     const text = symbol === annotations.originSymbol
       ? `${symbol} — registration`
       : symbol;
-    label(text, p.x + fontSize * 0.9, p.y - fontSize * 0.9, 'left');
+    const placement = placePointLabel(ctx, text, p, fontSize, width, imageHeight);
+    label(text, placement.x, placement.y, placement.align);
   });
 
   // Displacement arrows: where a landmark was, where the plan puts it. Drawn in

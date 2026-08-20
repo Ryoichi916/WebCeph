@@ -1,5 +1,4 @@
 import { Store, Dispatch, Middleware } from 'redux';
-import { saveAs } from 'file-saver';
 
 import {
   exportFileSucceeded, exportFileFailed, setExportProgress,
@@ -8,6 +7,11 @@ import {
 import createExport from 'utils/importers/wceph/v1/export';
 
 import { isActionOfType } from 'utils/store';
+// Replaces `file-saver`'s saveAs(): see its doc comment in tracingSnapshot.ts
+// for why (a webpack chunk boundary between file-saver and its caller
+// silently drops the filename, saving this chart's only copy as an unnamed
+// 'download').
+import { saveBlobAs } from 'utils/tracingSnapshot';
 
 /**
  * Writing the case out as one `.wceph`.
@@ -41,7 +45,7 @@ const middleware = ({ getState }: Store<StoreState>) =>
         const file = await createExport(state, options, (value: number) => {
           next(setExportProgress({ value }));
         });
-        saveAs(file, file.name);
+        saveBlobAs(file, file.name);
         return next(exportFileSucceeded({ fileName: file.name }));
       } catch (e) {
         // Diagnostic only, and only in development: the clinician's answer is

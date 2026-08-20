@@ -1203,10 +1203,26 @@ export const describeMovement = (
  * The structure is named by its noun, not by the slider's label: the movement
  * word is already in `describeMovement`, and joining the two labels would
  * produce "Maxilla — impaction: 6.0 mm impaction".
+ *
+ * `controls`, when given, is this same plan's `describeControls(...)` — a
+ * control that is not currently available (e.g. its calibration or reference
+ * plane went away after the value was set) is left out even if the plan
+ * still carries a stored non-zero value for it. `applySimulation` already
+ * silently no-ops a movement whose landmarks or scale are missing, so this
+ * sentence must not claim one it would not actually draw. Omitting the
+ * parameter keeps the old, unfiltered behaviour.
  */
-export const describePlan = (plan: SimulationPlan): string[] => {
+export const describePlan = (
+  plan: SimulationPlan, controls?: ControlAvailability[],
+): string[] => {
+  const unavailable = controls !== undefined
+    ? new Set(controls.filter((c) => !c.isAvailable).map((c) => c.spec.id))
+    : null;
   const parts: string[] = [];
   SIMULATION_CONTROLS.forEach((spec) => {
+    if (unavailable !== null && unavailable.has(spec.id)) {
+      return;
+    }
     const value = valueForControl(plan, spec.id);
     const described = describeMovement(spec, value);
     if (described !== null) {

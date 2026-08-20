@@ -57,6 +57,18 @@
   }
 }
 
+// The tooltip for a reason-gated action (Superimpose, Simulate) lives on this
+// wrapper, never on the `<button>` itself: a `disabled` control never fires a
+// hover event in Chromium or WebKit, so a `title` sitting on the button is
+// unreachable — computed correctly and never shown. The button inside stays a
+// plain, always-enabled element and is gated instead by `aria-disabled` plus
+// a no-op click guard (same idiom as Superimposition's own registration-basis
+// segmented control, see `.seg_slot`).
+.button_slot {
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
 .button {
   display: inline-flex;
   align-items: center;
@@ -92,7 +104,7 @@
 
   // Hover uses the same primary tint as the active pill (one hue family for
   // every interactive state — no gray-on-gray pills in the toolbar).
-  &:hover:not(:disabled) {
+  &:hover:not(:disabled):not([aria-disabled="true"]) {
     background: $primary-050;
     color: $primary-600;
   }
@@ -105,7 +117,12 @@
     box-shadow: $focus-ring;
   }
 
-  &:disabled {
+  // Native `disabled` (most buttons) and `aria-disabled` (Superimpose and
+  // Simulate, see `.button_slot`) read the same visual dimming — the two
+  // controls that must stay hoverable to explain themselves are otherwise
+  // indistinguishable from ones the browser truly disables.
+  &:disabled,
+  &[aria-disabled="true"] {
     color: $text-disabled;
     cursor: default;
   }

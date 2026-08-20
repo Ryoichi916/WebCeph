@@ -7,8 +7,6 @@ import IconCopy from 'material-ui/svg-icons/content/content-copy';
 import IconCheck from 'material-ui/svg-icons/navigation/check';
 import IconDownload from 'material-ui/svg-icons/file/file-download';
 
-import { saveAs } from 'file-saver';
-
 import * as cx from 'classnames';
 
 import map from 'lodash/map';
@@ -40,6 +38,11 @@ import {
 } from 'analyses/helpers';
 
 import LATERAL_ANALYSES from 'analyses/lateral';
+
+// `saveBlobAs` replaces `file-saver`'s saveAs(): see its doc comment for why
+// (a webpack chunk boundary between file-saver and its caller silently
+// drops the filename).
+import { saveBlobAs } from 'utils/tracingSnapshot';
 
 const classes = require('./style.scss');
 
@@ -1312,19 +1315,21 @@ export class AnalysisResultsViewer extends React.PureComponent<Props, ViewerStat
         results, landmarksBySymbol, provenance, caveatMarkers(caveats),
       ),
     ];
-    // No manual BOM here: file-saver 1.3.3 prepends one itself for any
-    // `text/*;charset=utf-8` blob (its own `auto_bom`), and a blob that
-    // already opened with a literal U+FEFF used to get a second one welded
-    // on top of that. Excel's BOM-stripping only ever eats the outer one,
-    // leaving the inner U+FEFF as an invisible character inside cell A1
-    // ("\uFEFFAnalysis"), which silently fails an exact-match or VLOOKUP on
-    // the header row. Let file-saver add the single BOM Excel expects.
+    // Exactly one BOM: this download no longer goes through file-saver's
+    // saveAs() (see saveBlobAs's doc comment in tracingSnapshot.ts \u2014 a
+    // webpack chunk boundary between file-saver and its caller silently
+    // drops the filename), and a plain anchor download adds no BOM of its
+    // own, so it must be prepended here now that nothing else will. Exactly
+    // one: a second U+FEFF welded on top of this one would survive as an
+    // invisible character inside cell A1 ("\uFEFFAnalysis") \u2014 Excel's
+    // BOM-stripping only ever eats the outer one \u2014 which silently fails an
+    // exact-match or VLOOKUP on the header row.
     const csv = rows.map(
       (cells) => cells.map(csvEscape).join(','),
     ).join('\r\n');
     const stem = analysisId !== null ? `${analysisId}-analysis` : 'analysis';
-    saveAs(
-      new Blob([csv], { type: 'text/csv;charset=utf-8' }),
+    saveBlobAs(
+      new Blob(['\uFEFF', csv], { type: 'text/csv;charset=utf-8' }),
       `${stem}-summary.csv`,
     );
   };

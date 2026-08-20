@@ -119,7 +119,10 @@ const popoverStyle: React.CSSProperties = {
 };
 
 // Same zoom bounds as the mouse-wheel zoom tool (see editorTools/zoomWithWheel).
-const ZOOM_MIN = 0.2;
+// 0.5, not the old 0.2: in this app's fixed-viewport layout, fit-to-screen
+// (1) already shows the whole film, so the old floor let the zoom-out button
+// shrink it into a small thumbnail lost in dead canvas with no benefit.
+const ZOOM_MIN = 0.5;
 const ZOOM_MAX = 2;
 const ZOOM_STEP = 1.25;
 
@@ -460,35 +463,40 @@ export default class TracingToolbar extends React.PureComponent<Props, State> {
           <span className={classes.button_label}>Report</span>
         </button>
 
-        {/* Superimposition of two timepoints. Disabled until the patient has
-            two registrable tracings; the tooltip then names what is missing
-            rather than graying out silently. */}
-        <button
-          type="button"
-          className={cx(classes.button, classes.button__superimpose)}
-          disabled={!canSuperimpose}
-          title={superimposeReason}
-          aria-label="Superimpose two timepoints"
-          onClick={this.openSuperimposition}
-        >
-          <IconSuperimpose color={ICON_COLOR} style={iconStyle} />
-          <span className={classes.button_label}>Superimpose</span>
-        </button>
+        {/* Superimposition of two timepoints. Gated until the patient has two
+            registrable tracings. The tooltip lives on this wrapper, not on
+            the button: a `disabled` button never fires a hover event in
+            Chromium/WebKit, so a `title` sitting on it is unreachable — the
+            reason string would be computed correctly and shown to nobody.
+            Gated instead by `aria-disabled` + a no-op click guard. */}
+        <span className={classes.button_slot} title={superimposeReason}>
+          <button
+            type="button"
+            className={cx(classes.button, classes.button__superimpose)}
+            aria-disabled={!canSuperimpose}
+            aria-label="Superimpose two timepoints"
+            onClick={this.openSuperimposition}
+          >
+            <IconSuperimpose color={ICON_COLOR} style={iconStyle} />
+            <span className={classes.button_label}>Superimpose</span>
+          </button>
+        </span>
 
         {/* Treatment simulation (VTO-lite). Needs enough of a tracing for at
-            least one movement to have a meaning; the tooltip names what is
-            missing rather than graying out silently. */}
-        <button
-          type="button"
-          className={cx(classes.button, classes.button__simulate)}
-          disabled={!canSimulate}
-          title={simulateReason}
-          aria-label="Simulate a treatment plan"
-          onClick={this.openSimulation}
-        >
-          <IconSimulate color={ICON_COLOR} style={iconStyle} />
-          <span className={classes.button_label}>Simulate</span>
-        </button>
+            least one movement to have a meaning. Same wrapper-tooltip /
+            aria-disabled idiom as Superimpose above, for the same reason. */}
+        <span className={classes.button_slot} title={simulateReason}>
+          <button
+            type="button"
+            className={cx(classes.button, classes.button__simulate)}
+            aria-disabled={!canSimulate}
+            aria-label="Simulate a treatment plan"
+            onClick={this.openSimulation}
+          >
+            <IconSimulate color={ICON_COLOR} style={iconStyle} />
+            <span className={classes.button_label}>Simulate</span>
+          </button>
+        </span>
 
         <button
           type="button"
@@ -733,6 +741,12 @@ export default class TracingToolbar extends React.PureComponent<Props, State> {
   };
 
   private openSuperimposition = (e: React.MouseEvent<HTMLButtonElement>) => {
+    // aria-disabled, not `disabled` — the reason tooltip on `.button_slot`
+    // needs an always-hoverable control (see the button's own comment), so
+    // the gate is enforced here as a no-op instead of by the browser.
+    if (!this.props.canSuperimpose) {
+      return;
+    }
     e.currentTarget.blur();
     this.setState({ isSuperimpositionOpen: true });
   };
@@ -742,6 +756,10 @@ export default class TracingToolbar extends React.PureComponent<Props, State> {
   };
 
   private openSimulation = (e: React.MouseEvent<HTMLButtonElement>) => {
+    // Same aria-disabled + no-op guard as openSuperimposition above.
+    if (!this.props.canSimulate) {
+      return;
+    }
     e.currentTarget.blur();
     this.setState({ isSimulationOpen: true });
   };

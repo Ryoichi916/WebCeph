@@ -4673,7 +4673,11 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
           // cephs the file name was the whole of the evidence.
           thumbnail={removing !== undefined ? removing.thumbnail : null}
           otherRecordCount={Math.max(records.length - 1, 0)}
-          landmarksPlaced={removing !== undefined ? removing.landmarksPlaced : 0}
+          // The true total stored for this film, not the active analysis's step
+          // count: a film can carry landmarks from more than one analysis (see
+          // StatusChip's "· N plotted in all"), and this is the one dialog whose
+          // job is to state exactly what an irreversible removal destroys.
+          landmarksPlaced={removing !== undefined ? removing.landmarkPoints.length : 0}
           onConfirm={this.handleConfirmRemove}
           onCancel={this.closeRemove}
         />
