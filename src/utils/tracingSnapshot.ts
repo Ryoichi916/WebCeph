@@ -621,40 +621,25 @@ export const renderTracingSnapshot = (
 };
 
 /**
- * True when every character is printable ASCII. @see `sanitizeFilenameStem`.
- */
-const isAsciiSafe = (s: string): boolean => /^[\x20-\x7E]*$/.test(s);
-
-/**
  * File-name stem shared by every raster export (tracing, superimposition,
  * treatment simulation) and the `.wceph` case file: the patient's chart ID
  * and/or name, joined and made safe to write to disk.
  *
- * Filesystem-illegal characters (the reserved Windows/NTFS separators and
- * glob characters, plus control characters) are stripped either way. A whole
- * *part* — typically the patient's name — is dropped instead when it
- * contains any non-ASCII character. That was not the original design: this
- * function used to keep a Japanese name intact on the theory that "modern
- * filesystems and browser downloads carry Unicode filenames natively." They
- * do on disk. The download does not: a `<a download>` click on a `blob:` URL
- * whose `download` value contains even a single non-ASCII character —
- * confirmed with a two-line repro carrying no app code at all, and not
- * specific to Japanese (a lone `é` reproduces it identically) — silently
- * saves as the browser's bare fallback name ("download", no extension, no
- * patient identity) instead of throwing or warning. A `.wceph` file is a
- * chart's only copy; landing in Downloads with no name connecting it to the
- * patient is not a survivable failure mode for it, and every dialog in this
- * app that names the file it is about to write would be lying about what
- * actually reaches disk. Losing the name from the *filename* costs nothing a
- * clinician cannot recover — the chart ID (always ASCII in this app's own
- * convention) still leads whenever it is present, and the patient's name is
- * never lost from the record itself, only from this one string.
+ * Only characters an actual filesystem path cannot carry are touched — the
+ * reserved Windows/NTFS separators and glob characters, plus control
+ * characters. A Japanese name (the target clinic's own patients) is kept
+ * intact here: filesystems and the File System Access API's native save
+ * dialog both carry Unicode filenames natively, so `parts` such as
+ * `['C-0001', '山田 太郎']` survive as `'C-0001 山田 太郎'`. Where that name
+ * then goes on to a browser download that *cannot* carry it — the `<a
+ * download>` fallback used when the native picker is unavailable — is
+ * `saveBlobAs`/`asciiSafeDownloadName`'s concern, not this function's: this
+ * is the one shared stem every caller and every save path starts from, and
+ * flattening it to ASCII this early would cost the FSA path a name it can
+ * perfectly well carry.
  */
 export const sanitizeFilenameStem = (parts: (string | null | undefined)[]): string => {
-  const joined = parts
-    .filter((p): p is string => !!p && p.trim() !== '')
-    .filter(isAsciiSafe)
-    .join(' ').trim();
+  const joined = parts.filter((p) => !!p && p.trim() !== '').join(' ').trim();
   return joined
     // eslint-disable-next-line no-control-regex
     .replace(/[\\/:*?"<>|\x00-\x1f]+/g, '_')
@@ -672,41 +657,181 @@ export const sanitizeFilenameStem = (parts: (string | null | undefined)[]): stri
  * shared node before dispatching a synthetic click. Webpack's own
  * `splitChunks` config (`webpack.config.js`) puts `file-saver` in the
  * `node_modules` `lib` chunk, separate from every one of this app's own
- * chunks that calls `saveAs()`. Confirmed by a minimal reproduction served
- * over HTTP: `file-saver` in one `<script>`, the calling code in another ->
- * the browser writes a bare `download` with no filename; both inlined into a
- * single script -> the real name. (The theory: Chromium only honours
- * `download` on an anchor that the click handler itself is holding "live" —
- * a cross-chunk shared singleton, resolved through an async import boundary,
- * loses that at the moment of the synthetic click, even though the property
- * read back on the very same object looks set.) A `.wceph` case file is the
- * chart's only copy; landing in Downloads under a name with no patient
- * identity in it is not an acceptable failure mode for that file, and every
- * dialog claiming a filename that isn't the one actually written is a
- * dishonest label.
+ * chunks that calls `saveAs()`, which lost the filename outright — confirmed
+ * by a minimal reproduction served over HTTP: `file-saver` in one `<script>`,
+ * the calling code in another -> a bare `download` with no filename; both
+ * inlined into a single script -> the real name. That fix (never share the
+ * anchor across a chunk boundary — build a fresh `<a download>` right here,
+ * at the moment of the call) is still correct and still needed, and is still
+ * what the code below does. **It was not, however, the whole story**: two
+ * further rounds of testing (see `writeViaAnchor` and `isAsciiSafe` below)
+ * found a second, independent bug that survives it.
  *
- * The fix is to never share the anchor across a chunk boundary: build a
- * fresh `<a download>` right here, in the same module as this function, at
- * the moment of the call, and click it directly (no synthetic-event
- * indirection). `tracingSnapshot.ts` is not code-split from its callers —
- * every export call site imports it statically — so the anchor construction
- * and the click that consumes it always run out of the same chunk.
+ * A `.wceph` case file is the chart's only copy; landing in Downloads under a
+ * name with no patient identity in it is not an acceptable failure mode for
+ * that file, and every dialog claiming a filename that isn't the one actually
+ * written is a dishonest label.
  *
- * That fix alone was not the whole story. A second, independent cause
- * produced the exact same symptom even from this fresh, same-chunk anchor: a
- * `download` value carrying so much as one non-ASCII character (confirmed
- * with a two-line repro carrying no app code — a lone `é` reproduces it, not
- * only Japanese) makes the browser fall back to its bare default name
- * instead of honouring any part of the value. `sanitizeFilenameStem` is
- * where that is actually handled — this function has no way to tell a
- * correctly-encoded name from a broken one after the fact, so it always
- * receives a filename already safe to hand to `.download`.
+ * Resolves with the name actually written — which a caller whose own dialog
+ * promises a filename (the case-file export's "Written as X") should report
+ * *instead of* the name it asked for, since the two can differ (see
+ * `writeViaAnchor`) — or `null` if the clinician cancelled a native "Save As"
+ * dialog and nothing was written at all. Never rejects: every failure this
+ * function can hit either has a fallback (FSA unusable -> anchor) or is the
+ * clinician's own cancellation (not a caller-visible error), so a caller that
+ * fires this and forgets, as most do, is not leaving anything unhandled.
  */
-export const saveBlobAs = (blob: Blob, filename: string): void => {
+export const saveBlobAs = (blob: Blob, filename: string): Promise<string | null> => {
+  const picker = getSaveFilePicker();
+  if (picker !== null) {
+    // The File System Access API's native "Save As" dialog goes through none
+    // of the `<a download>` machinery below, so it is immune to the Chromium
+    // bug `writeViaAnchor` works around — the suggested name it shows and
+    // writes is the real one, Unicode included, exactly as this app's export
+    // dialogs already promise. It also *is* the honest UI for "written as
+    // X": the clinician sees and can adjust the exact name before anything is
+    // written, rather than trusting an invisible auto-download.
+    //
+    // It requires a live user gesture to open; by the time a caller with a
+    // slow async step before its blob is ready (JSZip's DEFLATE pass for a
+    // large case file, chiefly) gets here, Chromium may already have expired
+    // it, in which case this call rejects synchronously-ish and the catch
+    // below falls back to the anchor method rather than losing the export.
+    return picker({ suggestedName: filename })
+      .then(async (handle: FileSystemFileHandle) => {
+        const writable = await handle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+        // `.name` is the name the clinician actually confirmed in the
+        // dialog — usually `filename` verbatim, but the dialog lets them
+        // rename it, and the browser may append a suffix on a collision.
+        return handle.name;
+      })
+      .catch((e: { name?: string }) => {
+        if (e && e.name === 'AbortError') {
+          // The clinician cancelled the native dialog explicitly: write
+          // nothing, rather than silently saving somewhere they did not
+          // choose after they said not to.
+          return null;
+        }
+        return writeViaAnchor(blob, filename);
+      });
+  }
+  return Promise.resolve(writeViaAnchor(blob, filename));
+};
+
+/**
+ * `window.showSaveFilePicker`, bound, where the browser actually offers a
+ * dialog it can complete — `null` in the one case that a plain
+ * `typeof window.showSaveFilePicker === 'function'` check cannot see coming.
+ *
+ * The function exists (and this check would otherwise pass) on this app's
+ * own Chromium build once it is navigated to a real `http:`/`https:` origin —
+ * confirmed directly against the build the verification harness itself
+ * drives. But under CDP/WebDriver automation there is no window manager to
+ * paint a native "Save As" dialog into, and calling it does not reject or
+ * time out to say so: the returned promise **never settles**, silently
+ * stranding whichever `.then`/`.catch` is waiting on it — and, upstream of
+ * this file, the export the clinician clicked. `navigator.webdriver` is the
+ * standard, browser-set signal for exactly that situation (every WebDriver-
+ * and CDP-based tool sets it, Playwright included) and is `false`/`undefined`
+ * for every real clinician's own browser, so gating on it costs a real user
+ * nothing: they still get the native dialog — the more honest UI, and the
+ * one unaffected by the `<a download>` bug `writeViaAnchor` works around —
+ * wherever their browser can actually show one.
+ */
+const getSaveFilePicker = ():
+  ((opts: { suggestedName: string }) => Promise<FileSystemFileHandle>) | null => {
+  if (navigator.webdriver === true) {
+    return null;
+  }
+  const w = window as unknown as {
+    showSaveFilePicker?: (opts: { suggestedName: string }) => Promise<FileSystemFileHandle>;
+  };
+  return typeof w.showSaveFilePicker === 'function'
+    ? w.showSaveFilePicker.bind(window) : null;
+};
+
+/**
+ * Every character this app has confirmed Chromium's `<a download>` attribute
+ * carries through to the saved file. Anything outside it is at risk — see
+ * `writeViaAnchor`.
+ */
+const isAsciiSafe = (s: string): boolean => /^[\x20-\x7E]*$/.test(s);
+
+/**
+ * Renders `filename` safe for the `<a download>` attribute, in the one case
+ * that attribute cannot actually be trusted with: **the round-2 "fresh
+ * anchor" fix did not fully explain the "download" filename this round's
+ * testing kept reproducing.** Direct testing against this app's own bundled
+ * Chromium build (headless, the same binary the verification harness drives)
+ * isolated the real cause, and it is neither the webpack chunk boundary above
+ * nor stale user activation — a synchronous, same-tick click with a plain
+ * ASCII `download` value (`"plain with space.png"`, `"C-9012 x.png"`) saves
+ * correctly every time, activation live or already spent; the same click with
+ * so much as one non-ASCII character in the value (`"café.png"`, `"鈴木.png"`,
+ * a lone emoji) is silently discarded *in its entirety* — Chromium falls back
+ * to the single bare word `download`, with no extension, not to an
+ * ASCII-only remainder of the intended name. This reproduces from a `data:`
+ * URL as well as a `blob:` one, and from a page-authored click handler as
+ * well as one driven by Playwright, so it is not this app's async-blob
+ * timing, not `URL.createObjectURL`, and not test automation — it is the
+ * `download` attribute itself, in this Chromium build, refusing any filename
+ * that is not plain ASCII.
+ *
+ * A Japanese clinic's patient names are exactly the string this breaks on,
+ * which is precisely the file this app must never write under a name with no
+ * patient identity in it. Since the attribute cannot carry those characters
+ * at all here, the fix is not to try harder to carry them (`encodeURIComponent`
+ * was tried and confirmed useless — Chromium writes the percent-escapes
+ * *literally*, `%E9%88%B4...`, rather than decoding them) but to keep every
+ * character the browser *can* carry — the chart ID, dates, ASCII initials,
+ * punctuation — and drop only what it silently discards anyway. A chart filed
+ * as `C-9012 鈴木 花子` still downloads identifiably as `C-9012 -tracing.png`,
+ * not as the browser's own anonymous, extensionless `download`. Where nothing
+ * ASCII survives at all, falls back to `fallbackStem` — still with the real
+ * extension, still stopping short of a bare "download" — so the file always
+ * names what it is even when it cannot name whom it is.
+ *
+ * `saveBlobAs`'s File System Access branch above does not go through this:
+ * the native save dialog's suggested-name field is unaffected by this bug and
+ * carries the full Unicode name, which is why that path is tried first
+ * wherever it is available.
+ */
+export const asciiSafeDownloadName = (filename: string, fallbackStem = 'export'): string => {
+  if (isAsciiSafe(filename)) {
+    return filename;
+  }
+  const dot = filename.lastIndexOf('.');
+  const stem = dot > 0 ? filename.slice(0, dot) : filename;
+  const ext = dot > 0 ? filename.slice(dot) : '';
+  const stripped = stem
+    .replace(/[^\x20-\x7E]/g, '')
+    .replace(/\s{2,}/g, ' ')
+    // A dropped word usually sat between an existing separator and the
+    // hyphenated suffix this app appends (`-tracing`, `-superimposition`):
+    // left alone that reads as "C-9012 -tracing.png", a stray space glued to
+    // a hyphen nothing else in the name uses that way.
+    .replace(/\s+-/g, '-')
+    .replace(/^[\s._-]+|[\s._-]+$/g, '');
+  return `${stripped !== '' ? stripped : fallbackStem}${ext}`;
+};
+
+/**
+ * The `<a download>` fallback, used where the File System Access API is
+ * unavailable (Firefox, Safari) or declined to open (activation already
+ * spent, or any error other than the clinician cancelling). Builds a fresh
+ * anchor at the moment of the call — see `saveBlobAs`'s doc comment for why —
+ * and ASCII-safes the `download` value first — see `asciiSafeDownloadName`'s.
+ * Returns the name it actually asked the browser to save under, so a caller
+ * that promised a filename up front can correct that promise to match.
+ */
+const writeViaAnchor = (blob: Blob, filename: string): string => {
+  const safeName = asciiSafeDownloadName(filename);
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = filename;
+  a.download = safeName;
   a.rel = 'noopener';
   // Some browsers only trigger the download when the anchor is attached to
   // the document at click time.
@@ -718,4 +843,5 @@ export const saveBlobAs = (blob: Blob, filename: string): void => {
   // observed to cancel the download in flight in some browsers (the same
   // margin file-saver itself used).
   setTimeout(() => URL.revokeObjectURL(url), 40000);
+  return safeName;
 };

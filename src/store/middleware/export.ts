@@ -45,8 +45,22 @@ const middleware = ({ getState }: Store<StoreState>) =>
         const file = await createExport(state, options, (value: number) => {
           next(setExportProgress({ value }));
         });
-        saveBlobAs(file, file.name);
-        return next(exportFileSucceeded({ fileName: file.name }));
+        // Awaited, not fired-and-forgotten: `saveBlobAs` resolves with the
+        // name it actually wrote the file under, which is not always
+        // `file.name` verbatim (see its own doc comment) — and this dialog's
+        // "Written as X" must say what was written, not what was asked for.
+        const savedAs = await saveBlobAs(file, file.name);
+        if (savedAs === null) {
+          // The clinician cancelled the browser's own "Save As" dialog: no
+          // file exists, so this is not a success, but it is also not the
+          // writer failing — the wording says so rather than reusing a
+          // scarier "could not be written" sentence for a deliberate cancel.
+          return next(exportFileFailed({
+            message: 'Export cancelled — nothing was written. ' +
+              'Nothing on this chart has changed.',
+          }));
+        }
+        return next(exportFileSucceeded({ fileName: savedAs }));
       } catch (e) {
         // Diagnostic only, and only in development: the clinician's answer is
         // the dispatched `exportFileFailed` above, which the dialog already

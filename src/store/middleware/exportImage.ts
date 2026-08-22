@@ -8,12 +8,15 @@ import {
   getImageName,
   getManualLandmarks,
   getScaleFactor,
+  getImageTimepoint,
+  getImageCaptureDate,
 } from 'store/reducers/workspace/image';
 import { getLandmarksToDisplay } from 'store/reducers/workspace';
 import { isProfilogramShown } from 'store/reducers/workspace/canvas';
 import { getActivePatient } from 'store/reducers/patients';
 import { buildProfilogram, Segment } from 'analyses/profilogram';
 import { isGeoVector } from 'utils/math';
+import { getTimepointToken, formatCaptureDate } from 'utils/records';
 // The overlay composition (colors + drawing) is shared with the printable
 // clinical report — see utils/tracingSnapshot.ts. `saveBlobAs` replaces
 // `file-saver`'s saveAs(): see its doc comment for why (a webpack chunk
@@ -77,13 +80,24 @@ const middleware = ({ getState }: Store<StoreState>) =>
     // filed against the patient; fall back to the image name.
     const patient = getActivePatient(state);
     const ext = format === 'jpeg' ? 'jpg' : 'png';
+    // The visit token (T1, T2, …) and capture date, the same way the
+    // Superimposition view already labels each side of a comparison — without
+    // either, exporting more than one timepoint of the same patient in a
+    // session writes every tracing to the identical filename ("C-0001
+    // 山田 太郎-tracing.png" for T1 and T2 alike), and the browser's silent
+    // "(1)" suffix is the only thing left to tell them apart once separated
+    // from download order.
+    const visitLabel = sanitizeFilenameStem([
+      getTimepointToken(getImageTimepoint(state)(imageId)),
+      formatCaptureDate(getImageCaptureDate(state)(imageId)),
+    ]);
     // Only characters an actual filesystem path cannot carry are sanitised
     // away — same rule as the `.wceph` case file export — so a Japanese
     // patient's name survives, e.g. `C-0001 山田 太郎-tracing.png` rather than
     // losing the name entirely. See `sanitizeFilenameStem`.
     const stem = patient
-      ? sanitizeFilenameStem([patient.chartId, patient.name])
-      : sanitizeFilenameStem([baseName(getImageName(state)(imageId))]);
+      ? sanitizeFilenameStem([patient.chartId, patient.name, visitLabel])
+      : sanitizeFilenameStem([baseName(getImageName(state)(imageId)), visitLabel]);
     const filename = `${stem || 'tracing'}-tracing.${ext}`;
 
     const img = new Image();

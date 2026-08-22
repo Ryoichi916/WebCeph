@@ -13,6 +13,7 @@ import {
   STARS,
   formatRange,
   displayMinus,
+  SUM_ROUNDING_NOTE,
 } from 'components/AnalysisResultsViewer';
 import {
   hasNorm, isSdBand, rangeExcess,
@@ -94,6 +95,26 @@ const caveatMarkers = (
   });
   return markers;
 };
+
+/**
+ * Whether this table carries a `sum`-type row (Björk's total, Tweed's
+ * triangle closure) — the same test `computeTableFlags` in
+ * `AnalysisResultsViewer` runs to decide whether the Summary dialog's legend
+ * and its clipboard/CSV export print `SUM_ROUNDING_NOTE`. Kept local rather
+ * than importing that (unexported) helper, but checking the identical
+ * condition, so the printed report foots the same tables the dialog does —
+ * see `SUM_ROUNDING_NOTE`'s own doc comment for why the printed total can be
+ * 0.1° off a hand-addition of the rounded parts above it.
+ */
+const hasSumRow = (
+  results: ResultsTableProps['results'],
+  landmarksBySymbol: ResultsTableProps['landmarksBySymbol'],
+): boolean => results.some(({ relevantComponents }) => relevantComponents.some(
+  ({ symbol }) => {
+    const landmark = landmarksBySymbol[symbol];
+    return landmark !== undefined && landmark.type === 'sum';
+  },
+));
 
 /** The star key, printed once per document (see `showKey`). */
 export const DeviationKey = () => (
@@ -225,6 +246,29 @@ const entriesFor = (
   return entries;
 };
 
+/**
+ * Splits the neutral bucket's entries at each subheading, so print can move
+ * one run to the next page without dragging every other run of "Measured
+ * values" with it (see the `<tbody>` comment below, and `.subrule_row` in
+ * style.scss: Chromium's table fragmenter will not split a `<tbody>` whose
+ * `rowSpan`'d finding cell reaches every row in it, confirmed directly against
+ * this build's own print pipeline — CSS `page-break-inside: auto` on the
+ * `<tbody>` does not change that). `entriesFor` above always opens the neutral
+ * bucket with a `rule` entry (its `previous` grading starts `null`, which
+ * never equals a real grading), so every run here is non-empty.
+ */
+const runsFor = (entries: Entry[]): Entry[][] => {
+  const runs: Entry[][] = [];
+  entries.forEach((entry) => {
+    if (entry.kind === 'rule' || runs.length === 0) {
+      runs.push([entry]);
+    } else {
+      runs[runs.length - 1].push(entry);
+    }
+  });
+  return runs;
+};
+
 const ResultsTable = (props: ResultsTableProps) => {
   const {
     results, landmarksBySymbol, needsScaleForLinear, analysisName,
@@ -237,10 +281,21 @@ const ResultsTable = (props: ResultsTableProps) => {
   // other findings drawn from it are named in that group's finding cell.
   const groups = groupFindings(results);
   const markers = caveatMarkers(caveats);
+  const sumRow = hasSumRow(results, landmarksBySymbol);
 
   const notes = (
     <div className={classes.legend}>
       {showKey ? <DeviationKey /> : null}
+      {sumRow ? (
+        // Explains, once, why a printed sum row (Björk's total, Tweed's
+        // triangle closure) can read up to 0.1° off a hand-addition of the
+        // rounded parts printed above it — without this the discrepancy on
+        // page 7's Björk section reads as an arithmetic error rather than the
+        // full-precision-vs-rounded-parts artifact it is (see `hasSumRow`).
+        <span className={classes.legend_note}>
+          {SUM_ROUNDING_NOTE}
+        </span>
+      ) : null}
       {/* What the analysis' own numbers say about the tracing. Printed above
           the housekeeping footnotes: it can invalidate the rows it names. */}
       {map(caveats, (caveat, i) => (
@@ -310,24 +365,42 @@ const ResultsTable = (props: ResultsTableProps) => {
           const chipClass = chipClassFor(indication);
           const isNeutral = category === NEUTRAL_CATEGORY;
           const entries = entriesFor(category, components);
-          return (
-            <tbody key={`${category}/${indication}`} className={classes.group}>
-              {map(entries, (entry, i) => {
-                // The heading cell spans the whole group, sub-rules included.
-                // The neutral bucket carries no chip: its rows are graded one
-                // by one under the rules below, and a single chip over them
-                // would have to be untrue of most of them.
+          // One `<tbody>` for the whole group ordinarily — but the neutral
+          // bucket splits at each of its own subheadings (`runsFor`), because
+          // Chromium will not fragment a `<tbody>` whose finding cell
+          // `rowSpan`s every row in it (see the comment on `runsFor` and
+          // `.subrule_row` in style.scss). A non-neutral group is always a
+          // single run: `runsFor` is never called on it.
+          const runs = isNeutral ? runsFor(entries) : [entries];
+          return map(runs, (runEntries, runIndex) => (
+            <tbody
+              key={`${category}/${indication}/${runIndex}`}
+              className={classes.group}
+            >
+              {map(runEntries, (entry, i) => {
+                // The heading cell spans its own run, sub-rule included — the
+                // whole group, pre-split. The category label and chip print
+                // only on the group's first run: a reader who turns the page
+                // mid-bucket reads the next run's own subheading instead,
+                // never a second "Measured values" purporting to be a new
+                // finding. The neutral bucket carries no chip regardless: its
+                // rows are graded one by one under the rules below, and a
+                // single chip over them would have to be untrue of most.
                 const findingCell = i === 0 ? (
-                  <td rowSpan={entries.length} className={classes.cell_finding}>
-                    <span className={classes.finding_category}>
-                      {mapCategoryToString(category) || '—'}
-                    </span>
-                    {isNeutral ? null : (
-                      <span className={chipClass}>
-                        {mapIndicationToString(indication) || '—'}
-                      </span>
-                    )}
-                    {also.length > 0 ? <AlsoFindings also={also} /> : null}
+                  <td rowSpan={runEntries.length} className={classes.cell_finding}>
+                    {runIndex === 0 ? (
+                      <>
+                        <span className={classes.finding_category}>
+                          {mapCategoryToString(category) || '—'}
+                        </span>
+                        {isNeutral ? null : (
+                          <span className={chipClass}>
+                            {mapIndicationToString(indication) || '—'}
+                          </span>
+                        )}
+                        {also.length > 0 ? <AlsoFindings also={also} /> : null}
+                      </>
+                    ) : null}
                   </td>
                 ) : null;
                 if (entry.kind === 'rule') {
@@ -424,7 +497,7 @@ const ResultsTable = (props: ResultsTableProps) => {
                 );
               })}
             </tbody>
-          );
+          ));
         })}
       </table>
       {notes}

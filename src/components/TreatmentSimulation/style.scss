@@ -218,7 +218,14 @@ $current-hue: #40C4FF;
 
 .figure {
   flex: 1 1 auto;
-  min-height: 0;
+  // A floor, not just a shrink target: at a realistic viewport height with
+  // the legend's disclosure expanded below it, `flex: 1 1 auto` alone let
+  // this box collapse to ~130 CSS px — landmark dots and displacement arrows
+  // compress into an indistinct smear well before this figure is the reason
+  // this view exists. `.legend_about`'s own scroll cap (below) is the primary
+  // fix — the disclosure's prose no longer grows without bound — and this is
+  // the backstop for whatever space is still tight.
+  min-height: 220px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -404,8 +411,21 @@ $current-hue: #40C4FF;
 
 // The disclosure takes `currentColor`, so it is given the legend's ink rather
 // than the panel's dark text.
+//
+// Capped and independently scrollable: `.legend` is `flex: 0 0 auto` in a
+// column it shares with `.figure`, so before this cap the disclosure's three
+// paragraphs — rendered only once "About this figure" is opened — grew this
+// box without limit and every pixel they took was a pixel `.figure` (which
+// *does* shrink, down to `.figure`'s own floor) gave up. Capping the one
+// element that can grow unboundedly, rather than the figure that must not,
+// keeps the diagram legible at a realistic viewport height with the
+// disclosure open. Scoped to this element rather than `.legend_notes` as a
+// whole: the one-line inline note above it is never more than a line and
+// does not need its own scroller.
 .legend_about {
   margin-top: 6px;
+  max-height: 30vh;
+  overflow-y: auto;
   color: rgba(199, 208, 217, .82);
 }
 
@@ -436,6 +456,47 @@ $current-hue: #40C4FF;
   gap: 8px;
   padding: 14px 16px 12px;
   border-bottom: 1px solid $border;
+}
+
+// A true compositing mask for a scrolling pane's top/bottom edges — not just
+// a background shadow. `background` paints behind every child, so it can
+// dim empty space near an edge but can never hide an opaque, rounded-corner
+// box (e.g. `.group_banner`) that the pane's own overflow happens to clip
+// mid-shape at some scroll offset: that box's rounded corner would still
+// poke through, hard-edged, past the fold. `mask-image` composites against
+// the pane's entire rendered output — background, borders and children
+// together — so that same box genuinely fades to nothing instead.
+//
+// Same local/scroll dual-layer trick as the visual shadow below: two
+// `local`-attached, fully-opaque "cancel" patches sit at the true start/end
+// of the full scrollable content and restore full opacity there, so (as
+// with the shadow) the fade disappears once there is nothing left above or
+// below to reveal. Two `scroll`-attached fades sit at the pane's own
+// visible top/bottom edges regardless of scroll position. A fully-opaque
+// base layer keeps everything else visible — a mask defaults to hiding any
+// pixel no layer touches, unlike a background, which just lets the parent
+// show through.
+@mixin edge-fade-mask($edge: 44px) {
+  mask-image:
+    linear-gradient(#000, #000),
+    linear-gradient(#000, #000),
+    linear-gradient(to bottom, transparent, #000 #{$edge}),
+    linear-gradient(to top, transparent, #000 #{$edge}),
+    linear-gradient(#000, #000);
+  mask-position: top, bottom, top, bottom, center;
+  mask-size: 100% #{$edge}, 100% #{$edge}, 100% #{$edge}, 100% #{$edge}, 100% 100%;
+  mask-repeat: no-repeat;
+  mask-attachment: local, local, scroll, scroll, scroll;
+  -webkit-mask-image:
+    linear-gradient(#000, #000),
+    linear-gradient(#000, #000),
+    linear-gradient(to bottom, transparent, #000 #{$edge}),
+    linear-gradient(to top, transparent, #000 #{$edge}),
+    linear-gradient(#000, #000);
+  -webkit-mask-position: top, bottom, top, bottom, center;
+  -webkit-mask-size: 100% #{$edge}, 100% #{$edge}, 100% #{$edge}, 100% #{$edge}, 100% 100%;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-attachment: local, local, scroll, scroll, scroll;
 }
 
 .panel_title {
@@ -472,15 +533,21 @@ $current-hue: #40C4FF;
     linear-gradient($bg-surface 30%, rgba($bg-surface, 0)) center top,
     linear-gradient(rgba($bg-surface, 0), $bg-surface 70%) center bottom,
     radial-gradient(
-      farthest-side at 50% 0, rgba(15, 23, 30, .22), rgba(15, 23, 30, 0)
+      farthest-side at 50% 0, rgba(15, 23, 30, .28), rgba(15, 23, 30, 0)
     ) center top,
     radial-gradient(
-      farthest-side at 50% 100%, rgba(15, 23, 30, .22), rgba(15, 23, 30, 0)
+      farthest-side at 50% 100%, rgba(15, 23, 30, .28), rgba(15, 23, 30, 0)
     ) center bottom;
   background-repeat: no-repeat;
   background-color: $bg-surface;
-  background-size: 100% 36px, 100% 36px, 100% 12px, 100% 12px;
+  background-size: 100% 44px, 100% 44px, 100% 16px, 100% 16px;
   background-attachment: local, local, scroll, scroll;
+
+  // Belt-and-braces over the shadow above: genuinely masks any opaque child
+  // (an amber `.group_banner` clipped mid-shape by this pane's own scroll,
+  // for instance) rather than just dimming the empty space around it. See
+  // `edge-fade-mask` above.
+  @include edge-fade-mask;
 }
 
 .disclaimer {
@@ -848,10 +915,17 @@ $zero-notch: rgba(31, 41, 51, .5);
 // numbers are on screen at rest instead of below four paragraphs of prose.
 .values {
   flex: 1 1 42%;
+  // Protected minimum: this pane never shrinks below room for a handful of
+  // rows, even when the controls pane above is fighting it for height. (Was
+  // overridden by a second, later `min-height: 0` in this same ruleset,
+  // which — per the cascade — silently won and let this pane collapse to
+  // 6 of 11 rows with no scroll cue at a 900px viewport. That second
+  // declaration is gone; `.values_scroll` below is the one that needs
+  // `min-height: 0`, to stay scrollable within whatever height `.values`
+  // is given, and it has its own.)
   min-height: 250px;
   display: flex;
   flex-direction: column;
-  min-height: 0;
   border-top: 1px solid $border-strong;
   background: $bg-surface;
 }
@@ -872,6 +946,29 @@ $zero-notch: rgba(31, 41, 51, .5);
   min-height: 0;
   overflow-y: auto;
   padding: 10px 16px 18px;
+
+  // Same CSS-only scroll shadow as `.panel_scroll` above: `local`-attached
+  // cover layers that scroll with the content and blank themselves the
+  // instant nothing is left to reveal past that edge. Without this the
+  // table pane could scroll — unlike `.panel_scroll`'s sibling problem,
+  // which was fully hidden — but gave no visual signal that it did, so a
+  // clinician scanning six visible rows had no cue that five more plus the
+  // color-key legend and the "nothing here is saved" footnote sat below.
+  background:
+    linear-gradient($bg-surface 30%, rgba($bg-surface, 0)) center top,
+    linear-gradient(rgba($bg-surface, 0), $bg-surface 70%) center bottom,
+    radial-gradient(
+      farthest-side at 50% 0, rgba(15, 23, 30, .28), rgba(15, 23, 30, 0)
+    ) center top,
+    radial-gradient(
+      farthest-side at 50% 100%, rgba(15, 23, 30, .28), rgba(15, 23, 30, 0)
+    ) center bottom;
+  background-repeat: no-repeat;
+  background-color: $bg-surface;
+  background-size: 100% 44px, 100% 44px, 100% 16px, 100% 16px;
+  background-attachment: local, local, scroll, scroll;
+
+  @include edge-fade-mask;
 }
 
 .values_title {
@@ -1327,6 +1424,16 @@ $zero-notch: rgba(31, 41, 51, .5);
     column-count: 1;
   }
 
+  // Paper has no fold to scroll: the on-screen cap on the disclosure (see
+  // `.legend_about` above) is a screen-only affordance, and left in place
+  // here it would silently clip the very prose AboutDisclosure's own print
+  // rule forces open — a clinical-honesty regression on a printed sheet, not
+  // just a cosmetic one.
+  .legend_about {
+    max-height: none;
+    overflow: visible;
+  }
+
   .key_text { color: $text-primary; }
   .key__current .key_swatch { border-top-color: #10538F; }
   .key__simulated .key_swatch { border-top-color: #6A2FB5; }
@@ -1365,8 +1472,14 @@ $zero-notch: rgba(31, 41, 51, .5);
     overflow: visible;
     padding: 0;
     // Paper has no fold to shadow: the scroll-shadow backgrounds are a
-    // screen-only affordance.
+    // screen-only affordance. `mask-image` must be neutralised here too —
+    // it is a separate property from `background` and, left in place,
+    // would fade the top/bottom ~44px of every printed page's content to
+    // invisible, silently dropping whatever text sits there (a clinical-
+    // honesty regression, not just cosmetic).
     background: none;
+    mask-image: none;
+    -webkit-mask-image: none;
   }
 
   .values {

@@ -28,6 +28,15 @@ export interface DispatchProps {
   dispatch: GenericDispatch;
   /** Commits a dragged manual landmark to its new position (image coords). */
   onLandmarkMoved: (symbol: string, x: number, y: number) => any;
+  /**
+   * Live, non-undoable position update fired on every frame of an in-progress
+   * drag (mouse still down) — @see MOVE_MANUAL_LANDMARK_LIVE in webceph.d.ts.
+   * Lets every selector already reading `manualLandmarks` live (the analysis
+   * planes/vectors/angles, the stepper's computed measurements, the
+   * profilogram) track the point as it moves instead of only snapping into
+   * place once `onLandmarkMoved` commits on drop.
+   */
+  onLandmarkDragged: (symbol: string, x: number, y: number) => any;
 };
 
 export type ConnectableProps = StateProps & DispatchProps;

@@ -940,6 +940,19 @@ interface StoreState {
    */
   'history.past': Array<{ [imageId: string]: CephImageTracingData }>;
   'history.future': Array<{ [imageId: string]: CephImageTracingData }>;
+  /**
+   * The tracing slice as it stood immediately before the drag gesture
+   * currently in progress, if any — set on the first MOVE_MANUAL_LANDMARK_LIVE
+   * of a gesture and consumed (then cleared back to null) by the commit that
+   * ends it. Exists so a whole drag (many non-undoable live position updates,
+   * see MOVE_MANUAL_LANDMARK_LIVE) still collapses into the single undo step
+   * its final ADD_MANUAL_LANDMARK_REQUESTED represents: without it, the
+   * "previous state" enableUndoRedo pushes to `history.past` on commit would
+   * be the already-mid-drag slice from the last live update, not the true
+   * pre-drag one, and Undo would restore the point to wherever the mouse
+   * happened to be last during the drag instead of where it started.
+   */
+  'history.dragBaseline': { [imageId: string]: CephImageTracingData } | null;
   'images.status': {
     [imageId: string]: {
       isLoading: true;
@@ -1290,6 +1303,25 @@ interface Events {
     workspaceId: string;
   };
   ADD_MANUAL_LANDMARK_REQUESTED: {
+    imageId: string;
+    symbol: string;
+    value: GeoObject;
+  };
+  /**
+   * Same shape and reducer effect as ADD_MANUAL_LANDMARK_REQUESTED, but for the
+   * transient position of a landmark still being dragged (mouse still down).
+   * Deliberately its own action type rather than reusing the committing one, so
+   * every frame of a drag gesture stays OFF the undo stack, the analytics log
+   * and the project autosave trigger list (all three are allow-lists keyed by
+   * action type — see UNDOABLE_ACTIONS in store/index.ts, the list in
+   * store/middleware/analytics.ts, and SAVE_TRIGGERING_ACTIONS in
+   * store/middleware/project.ts) while still landing in the same
+   * `manualLandmarks` slice every other selector (analysis geometry, computed
+   * measurements, the profilogram) already reads live off. The drag's final
+   * position is separately committed via ADD_MANUAL_LANDMARK_REQUESTED on
+   * mouseup, exactly as before — this type only carries the in-between frames.
+   */
+  MOVE_MANUAL_LANDMARK_LIVE: {
     imageId: string;
     symbol: string;
     value: GeoObject;

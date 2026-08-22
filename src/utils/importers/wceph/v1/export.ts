@@ -340,12 +340,10 @@ const createExport: Exporter = async (state, options, onUpdate) => {
    * ("scan0007.wceph"), which is a filename that says nothing about whose record
    * it is, on the one artefact that leaves the device.
    *
-   * `sanitizeFilenameStem` (shared with the raster exports) is what actually
-   * makes this safe to hand to `saveBlobAs` — it drops a non-ASCII part
-   * (typically the patient's name) rather than let the whole `download`
-   * silently fall back to a nameless file. A chart ID alone (this app's
-   * convention is always ASCII) is enough to keep the file traceable to its
-   * patient even then.
+   * Built with `sanitizeFilenameStem`, shared with the raster exports, so a
+   * Japanese name survives here exactly as it does there — the ASCII-only
+   * safety net for a browser download that cannot carry it lives downstream,
+   * in `saveBlobAs`, not in how this stem is built.
    */
   const props = activeImageId !== null ? getProps(activeImageId) : null;
   let basename: string;

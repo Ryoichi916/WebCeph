@@ -101,6 +101,28 @@ export class TracingViewer extends React.PureComponent<Props, State> {
 
   private imageElement: SVGImageElement | null = null;
 
+  componentDidMount() {
+    // The SVG's own onMouseUp only fires when the release happens over the
+    // SVG itself — a drag that leaves the film (fast mouse, small canvas) and
+    // releases past its edge would otherwise never call commitDrag(), leaving
+    // the point "grabbed" forever (wrong cursor, and its live position stuck
+    // uncommitted in the store's non-undoable MOVE_MANUAL_LANDMARK_LIVE slot
+    // rather than folded into a proper undo step). A window-level listener
+    // catches the release wherever it lands; commitDrag() is already a no-op
+    // when nothing is being dragged.
+    window.addEventListener('mouseup', this.commitDrag);
+  }
+
+  componentWillUnmount() {
+    window.removeEventListener('mouseup', this.commitDrag);
+    this.isMounted_ = false;
+    // Commit rather than abandon an in-flight drag on unmount (e.g. navigating
+    // away mid-gesture) — a no-op when nothing is being dragged, and otherwise
+    // the only way to clear the store's pending drag baseline so a later,
+    // unrelated drag does not inherit it as its own starting point.
+    this.commitDrag();
+  }
+
   render() {
     const {
       className,
@@ -460,14 +482,28 @@ export class TracingViewer extends React.PureComponent<Props, State> {
     e.stopPropagation();
     const { x, y } = this.convertPagePositionToOriginalImage(e.pageX, e.pageY);
     this.setState({ draggedSymbol: symbol, dragX: x, dragY: y });
+    // Mirror this starting position too (not just the moves that follow — see
+    // handleSvgMouseMove), so a click that grabs the point slightly off its
+    // exact pixel already carries every dependent plane/vector/angle along
+    // from the gesture's very first rendered frame, not just from the first
+    // mousemove onward.
+    this.props.onLandmarkDragged(symbol, x, y);
   };
 
   private handleSvgMouseMove = (e: React.MouseEvent<SVGElement>) => {
-    if (this.state.draggedSymbol === null || this.imageElement === null) {
+    const { draggedSymbol } = this.state;
+    if (draggedSymbol === null || this.imageElement === null) {
       return;
     }
     const { x, y } = this.convertPagePositionToOriginalImage(e.pageX, e.pageY);
     this.setState({ dragX: x, dragY: y });
+    // Mirror the live position into the store (non-undoable — @see
+    // MOVE_MANUAL_LANDMARK_LIVE) so every dependent plane/vector/angle, the
+    // stepper's numeric measurements, and the profilogram — none of which this
+    // component computes itself, all sourced from `manualLandmarks` downstream
+    // — track the drag instead of staying frozen at the pre-drag position until
+    // commitDrag() commits the final value on mouseup.
+    this.props.onLandmarkDragged(draggedSymbol, x, y);
   };
 
   private commitDrag = () => {
@@ -476,8 +512,19 @@ export class TracingViewer extends React.PureComponent<Props, State> {
       return;
     }
     this.props.onLandmarkMoved(draggedSymbol, Math.round(dragX), Math.round(dragY));
-    this.setState({ draggedSymbol: null });
+    // Not reachable once componentWillUnmount has already fired: React warns
+    // on a setState() past that point, and the local state is about to be
+    // discarded with the component anyway — only the dispatch above (which
+    // clears the store's drag baseline) still matters then.
+    if (this.isMounted_) {
+      this.setState({ draggedSymbol: null });
+    }
   };
+
+  // Plain instance flag, not React's deprecated `isMounted()` — only guards
+  // the unmount-time commitDrag() call in componentWillUnmount above against
+  // also calling setState (see the comment there).
+  private isMounted_ = true;
 
   /**
    * Anatomical outline tracings (soft-tissue profile, mandible, maxilla, sella,

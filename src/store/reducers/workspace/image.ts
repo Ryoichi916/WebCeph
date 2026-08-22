@@ -286,6 +286,29 @@ const tracingReducer = handleActions<typeof KEY_TRACING>({
       },
     };
   },
+  // Same shape and effect as ADD_MANUAL_LANDMARK_REQUESTED above (duplicated
+  // rather than shared to keep each reducer's action-type parameter literal,
+  // not a union — simplest way to keep this typed against ActionToReducerMap).
+  // Fired on every frame of an in-progress drag rather than once on drop, and
+  // deliberately kept out of that action's undo/analytics/autosave allow-lists
+  // (@see MOVE_MANUAL_LANDMARK_LIVE in webceph.d.ts). This is what lets the
+  // analysis geometry, the computed stepper values and the profilogram — every
+  // one of them already selected live off `manualLandmarks` — track a landmark
+  // as it is being dragged instead of only snapping into place on mouseup.
+  MOVE_MANUAL_LANDMARK_LIVE: (state, { payload }) => {
+    const { imageId, symbol, value } = payload;
+    const entry = state[imageId];
+    return {
+      ...state,
+      [imageId]: {
+        ...entry,
+        manualLandmarks: {
+          ...(entry && entry.manualLandmarks),
+          [symbol]: value,
+        },
+      },
+    };
+  },
   ADD_MANUAL_LANDMARKS_BATCH_REQUESTED: (state, { payload }) => {
     const { imageId, landmarks } = payload;
     const entry = state[imageId];

@@ -57,8 +57,6 @@ never from the on-screen preview alone.
   with no scrollbar and no fade — the only hint is a half-cut row. Give it the
   viewport height and a visible overflow affordance (the stepper's scroll-fade
   pattern already exists). `components/AnalysisResultsViewer/`.
-- [ ] **Simulation's value table cannot be scrolled fully into view** — 8 of 14
-  rows visible at 900 px. Same fix as above. `components/TreatmentSimulation/`.
 - [ ] **Printed report leaves a three-quarters-blank page.** "Clinical notes &
   plan" plus certification occupy the top quarter of page 3 and the rest is
   white. Either let the ruled notes fill the page or keep the block on page 2 —
