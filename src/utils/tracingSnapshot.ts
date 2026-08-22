@@ -621,20 +621,40 @@ export const renderTracingSnapshot = (
 };
 
 /**
+ * True when every character is printable ASCII. @see `sanitizeFilenameStem`.
+ */
+const isAsciiSafe = (s: string): boolean => /^[\x20-\x7E]*$/.test(s);
+
+/**
  * File-name stem shared by every raster export (tracing, superimposition,
- * treatment simulation): the patient's chart ID and/or name, joined and made
- * safe to write to disk.
+ * treatment simulation) and the `.wceph` case file: the patient's chart ID
+ * and/or name, joined and made safe to write to disk.
  *
- * Only characters an actual filesystem path cannot carry are touched — the
- * reserved Windows/NTFS separators and glob characters, plus control
- * characters — exactly what `utils/importers/wceph/v1/export.ts` strips for
- * the `.wceph` case file. A Japanese name (the target clinic's own patients)
- * is not one of those characters: modern filesystems and browser downloads
- * carry Unicode filenames natively, so `parts` such as `['C-0001', '山田 太郎']`
- * survive intact rather than being reduced to `C-0001` alone.
+ * Filesystem-illegal characters (the reserved Windows/NTFS separators and
+ * glob characters, plus control characters) are stripped either way. A whole
+ * *part* — typically the patient's name — is dropped instead when it
+ * contains any non-ASCII character. That was not the original design: this
+ * function used to keep a Japanese name intact on the theory that "modern
+ * filesystems and browser downloads carry Unicode filenames natively." They
+ * do on disk. The download does not: a `<a download>` click on a `blob:` URL
+ * whose `download` value contains even a single non-ASCII character —
+ * confirmed with a two-line repro carrying no app code at all, and not
+ * specific to Japanese (a lone `é` reproduces it identically) — silently
+ * saves as the browser's bare fallback name ("download", no extension, no
+ * patient identity) instead of throwing or warning. A `.wceph` file is a
+ * chart's only copy; landing in Downloads with no name connecting it to the
+ * patient is not a survivable failure mode for it, and every dialog in this
+ * app that names the file it is about to write would be lying about what
+ * actually reaches disk. Losing the name from the *filename* costs nothing a
+ * clinician cannot recover — the chart ID (always ASCII in this app's own
+ * convention) still leads whenever it is present, and the patient's name is
+ * never lost from the record itself, only from this one string.
  */
 export const sanitizeFilenameStem = (parts: (string | null | undefined)[]): string => {
-  const joined = parts.filter((p) => !!p && p.trim() !== '').join(' ').trim();
+  const joined = parts
+    .filter((p): p is string => !!p && p.trim() !== '')
+    .filter(isAsciiSafe)
+    .join(' ').trim();
   return joined
     // eslint-disable-next-line no-control-regex
     .replace(/[\\/:*?"<>|\x00-\x1f]+/g, '_')
@@ -671,6 +691,16 @@ export const sanitizeFilenameStem = (parts: (string | null | undefined)[]): stri
  * indirection). `tracingSnapshot.ts` is not code-split from its callers —
  * every export call site imports it statically — so the anchor construction
  * and the click that consumes it always run out of the same chunk.
+ *
+ * That fix alone was not the whole story. A second, independent cause
+ * produced the exact same symptom even from this fresh, same-chunk anchor: a
+ * `download` value carrying so much as one non-ASCII character (confirmed
+ * with a two-line repro carrying no app code — a lone `é` reproduces it, not
+ * only Japanese) makes the browser fall back to its bare default name
+ * instead of honouring any part of the value. `sanitizeFilenameStem` is
+ * where that is actually handled — this function has no way to tell a
+ * correctly-encoded name from a broken one after the fact, so it always
+ * receives a filename already safe to hand to `.download`.
  */
 export const saveBlobAs = (blob: Blob, filename: string): void => {
   const url = URL.createObjectURL(blob);

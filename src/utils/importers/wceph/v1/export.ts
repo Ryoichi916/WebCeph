@@ -9,6 +9,7 @@ import uniqueId from 'lodash/uniqueId';
 import JSZip from 'jszip';
 
 import { getBaseName } from 'utils/file';
+import { sanitizeFilenameStem } from 'utils/tracingSnapshot';
 
 import findIndex from 'lodash/findIndex';
 import zipObject from 'lodash/zipObject';
@@ -338,23 +339,29 @@ const createExport: Exporter = async (state, options, onUpdate) => {
    * film inside it. It used to be named after whichever image happened to be open
    * ("scan0007.wceph"), which is a filename that says nothing about whose record
    * it is, on the one artefact that leaves the device.
+   *
+   * `sanitizeFilenameStem` (shared with the raster exports) is what actually
+   * makes this safe to hand to `saveBlobAs` — it drops a non-ASCII part
+   * (typically the patient's name) rather than let the whole `download`
+   * silently fall back to a nameless file. A chart ID alone (this app's
+   * convention is always ASCII) is enough to keep the file traceable to its
+   * patient even then.
    */
   const props = activeImageId !== null ? getProps(activeImageId) : null;
   let basename: string;
-  const patientParts = patient !== null
-    ? [patient.chartId, patient.name].filter(
-      (part) => typeof part === 'string' && part.trim() !== '',
-    ) : [];
-  if (patientParts.length > 0) {
-    basename = patientParts.join(' ').trim();
+  const patientStem = patient !== null
+    ? sanitizeFilenameStem([patient.chartId, patient.name])
+    : '';
+  if (patientStem !== '') {
+    basename = patientStem;
   } else if (hasActiveImage && props && props.name) {
-    basename = getBaseName(props.name);
+    basename = sanitizeFilenameStem([getBaseName(props.name)]);
   } else {
+    basename = '';
+  }
+  if (basename === '') {
     basename = uniqueId('Exported tracing ');
   }
-  // Never a path separator or a reserved character: the name is written to the
-  // reader's own filesystem.
-  basename = basename.replace(/[\\/:*?"<>|]/g, '-');
   return new File([blob], `${basename}.wceph`);
 };
 
