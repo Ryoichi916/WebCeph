@@ -1349,20 +1349,31 @@ export default class PatientPicker extends React.PureComponent<Props, State> {
    * Each label prints twice: the on-screen sort `<button>` and a plain,
    * non-interactive `<span>` twin next to it (`.th_label_print`) — because a
    * `<button>` inside a `<thead>` turned out not to be the whole answer either.
-   * It paints fine on sheet 1, where the head is laid out as ordinary content,
-   * and is blank on every sheet after, where Chromium is instead repainting a
-   * synthetic copy of the header for the new page: verified in this build by
-   * printing 200 rows to PDF and rasterizing every page. The plain twin has no
-   * such fault, so it is what paper actually shows; the sort affordance stays
-   * screen-only, as it already was (paper is not sortable).
+   *
+   * Neither the `<th>` nor its grid `<div>` carries its own row/columnheader
+   * role: a `<th colSpan={COLUMNS.length}>` is natively one columnheader cell
+   * covering all nine columns, and giving its inner div `role="row"` (an
+   * earlier version of this did) nests a synthetic row *inside* that cell --
+   * which nests a row inside a columnheader, and, once the `<th>`'s own
+   * `display: contents` (`.thead_cell`) flattens it out of the render tree,
+   * nests that synthetic row directly inside the real `<tr>`'s native row
+   * role too. Both a row-in-a-columnheader and a row-in-a-row are invalid
+   * ARIA table structure, and assistive tech's behavior on either is
+   * undefined rather than merely imperfect. `role="presentation"` on both
+   * the `<th>` and the div removes them from the accessibility tree the same
+   * way `display: contents` already removes them from the box tree, so the
+   * nine `role="columnheader"` spans below attach directly to the real
+   * `<tr>` -- one real header row, nine real column headers, matching what a
+   * plain `<table>` with nine `<th>`s would have produced natively, which is
+   * what this construction stands in for.
    */
   private renderHead() {
     const { sortKey, sortDir } = this.state;
     return (
       <thead className={classes.thead}>
         <tr>
-          <th className={classes.thead_cell} scope="col" colSpan={COLUMNS.length}>
-            <div className={classes.thead_grid} role="row" aria-rowindex={1}>
+          <th className={classes.thead_cell} role="presentation" colSpan={COLUMNS.length}>
+            <div className={classes.thead_grid} role="presentation">
               {COLUMNS.map((column, index) => {
                 const isSorted = column.key !== null && column.key === sortKey;
                 const cellClass = cx(classes.th, classes[column.cell], {
@@ -1466,12 +1477,19 @@ export default class PatientPicker extends React.PureComponent<Props, State> {
     const reading = (patient.reading || '').trim();
     return (
       // A real `<tr>`, so the header 190 rows up is a real `<thead>` a printed
-      // page can repeat (@see renderHead) — one `<td>` wide, because the row
+      // page can repeat (@see renderHead) -- one `<td>` wide, because the row
       // beneath it is one button that opens the case and a table row only to a
       // screen reader (see below), and a `<tr>` may not hold a `<button>`
-      // directly.
-      <tr key={patient.id} className={classes.row_item}>
-        <td className={classes.row_cell} colSpan={COLUMNS.length}>
+      // directly. Both the `<tr>` and this `<td>` carry `role="presentation"`
+      // for the same reason `renderHead`'s `<th>` does: the button below
+      // already supplies its own `role="row"`, and leaving the real `<tr>`
+      // (native row) wrapping it would nest a synthetic row inside a real
+      // one -- invalid ARIA table structure. Presentational here removes
+      // both the `<tr>` and `<td>` from the accessibility tree, so the
+      // button's row attaches directly to the real `<tbody>` (a valid
+      // rowgroup context) instead.
+      <tr key={patient.id} className={classes.row_item} role="presentation">
+        <td className={classes.row_cell} colSpan={COLUMNS.length} role="presentation">
           {/* The row is one button that opens the case, and a table row to a
               screen reader: its cells are announced as the columns they are
               under instead of as one run-on string. Native activation is
