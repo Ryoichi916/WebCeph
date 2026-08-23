@@ -314,7 +314,17 @@ export const buildRegistration = (
 
   // How far T2 actually had to move, reported so the clinician can sanity-check
   // the fit (a huge translation usually means a mis-plotted registration point).
-  const translationPx = Math.hypot(O1.x - O2.x, O1.y - O2.y);
+  // O1 and O2 live in their own image's raw pixel grid, which is only the same
+  // grid as each other's when the two films share a magnification — scaled by
+  // the same `k` the transform itself applies to T2 first, both points are
+  // expressed in T1-pixel-equivalent units before they are differenced, so the
+  // millimetre figure below (T1's own scaleFactor is the only one applied to
+  // it, downstream) is never built by mixing two different pixels-per-mm
+  // ratios together. Without both calibrations `k` is already 1 by definition
+  // (`hasBothScales` above), and the figure is already flagged
+  // `isMagnificationAssumed` at the call site, so no separate handling is
+  // needed here for that case.
+  const translationPx = Math.hypot(O1.x - O2.x * k, O1.y - O2.y * k);
   // Screen y grows downwards, so a positive θ turns clockwise on screen.
   let rotationDeg = (theta * 180) / Math.PI;
   while (rotationDeg > 180) { rotationDeg -= 360; }

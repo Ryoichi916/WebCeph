@@ -106,6 +106,70 @@ const ANNOTATION_PX_PRINT = 10;
 /** Clip path for T1's film, so the radiograph stops at the framed region. */
 const FILM_CLIP_ID = 'superimposition-film-clip';
 
+/**
+ * A bold sans-serif character's width as a fraction of its font size — wide
+ * enough to over-, not under-, estimate a short cephalometric label (the
+ * halo-stroked em dash and spaces in "Me — registration" run wider than a
+ * typical letter), since the cost of the two are not symmetric: flipping a
+ * label one side sooner than strictly necessary is invisible, and flipping
+ * it too late is the clipped label this estimate exists to prevent.
+ */
+const AVG_CHAR_WIDTH_FRACTION = 0.62;
+
+/**
+ * Where to draw a point-anchored annotation label so it stays inside the
+ * frame — the live/print SVG's own version of `utils/superimpositionSnapshot
+ * .ts`'s `placePointLabel`, which the canvas PNG export already uses. The two
+ * renderers used to diverge: the export flips sides (and, on a crop too tight
+ * for either side, clamps fully inside the frame) while this component always
+ * drew to the point's right, so a label near the frame's right edge — "Me —
+ * registration" on a typical mandibular-plane crop — ran past `.figure`'s
+ * `overflow: hidden` and was cut off flush, on screen and (since the print
+ * figure is narrower still, see `PRINT_FIGURE_HEIGHT_PX`) on the printed,
+ * signed sheet.
+ *
+ * There is no canvas here to measure the rendered text with, so the width is
+ * estimated from the string length instead of measured — deliberately over-
+ * rather than under-estimated (`AVG_CHAR_WIDTH_FRACTION`), and computed against
+ * both the screen and the print font size (`sizeCandidates`) since the two
+ * differ and a fixed `x`/`y` has to be correct in whichever CSS media is
+ * actually rendering it.
+ */
+const placeAnnotationLabel = (
+  text: string, anchor: GeoPoint, offset: number, frame: Box,
+  sizeCandidates: number[],
+): { x: number; y: number; anchor: 'start' | 'end' } => {
+  const fontSize = Math.max(...sizeCandidates);
+  const textWidth = text.length * fontSize * AVG_CHAR_WIDTH_FRACTION;
+  const left = frame.x;
+  const right = frame.x + frame.width;
+
+  const rightX = anchor.x + offset;
+  const rightFits = rightX + textWidth <= right;
+  const leftX = anchor.x - offset;
+  const leftFits = leftX - textWidth >= left;
+
+  let x = rightX;
+  let textAnchor: 'start' | 'end' = 'start';
+  if (!rightFits && leftFits) {
+    textAnchor = 'end';
+    x = leftX;
+  } else if (!rightFits) {
+    // Neither side clears the frame (a very tight crop): keep the label's own
+    // box fully inside it instead of letting either edge win.
+    textAnchor = 'start';
+    x = Math.max(left, Math.min(right - textWidth, rightX));
+  }
+
+  const halfLine = fontSize * 0.5;
+  const y = Math.max(
+    frame.y + halfLine,
+    Math.min(frame.y + frame.height - halfLine, anchor.y - offset * 1.05),
+  );
+
+  return { x, y, anchor: textAnchor };
+};
+
 interface State {
   t1Id: string | null;
   t2Id: string | null;
@@ -961,7 +1025,7 @@ export default class Superimposition extends React.PureComponent<Props, State> {
           t2Points, t2Outlines, dotRadius, classes.t2,
           t2OrphanOutlineIds, t2OrphanSymbols,
         )}
-        {this.renderAnnotations(annotations, dotRadius, frame, offset)}
+        {this.renderAnnotations(annotations, dotRadius, frame, offset, size, sizePrint)}
       </svg>
     );
   }
@@ -994,6 +1058,8 @@ export default class Superimposition extends React.PureComponent<Props, State> {
     dotRadius: number,
     frame: Box,
     offset: number,
+    size: number,
+    sizePrint: number,
   ) {
     const { origin, scaleBar } = annotations;
     const pad = frame.width * 0.04;
@@ -1012,18 +1078,25 @@ export default class Superimposition extends React.PureComponent<Props, State> {
             r={dotRadius * 3.2}
           />
         ) : null}
-        {annotations.labels.map(({ symbol, point }) => (
-          <text
-            key={symbol}
-            className={classes.anno_text}
-            x={point.x + offset}
-            y={point.y - offset * 1.05}
-          >
-            {symbol === annotations.originSymbol
-              ? `${symbol} — registration`
-              : symbol}
-          </text>
-        ))}
+        {annotations.labels.map(({ symbol, point }) => {
+          const text = symbol === annotations.originSymbol
+            ? `${symbol} — registration`
+            : symbol;
+          const placed = placeAnnotationLabel(
+            text, point, offset, frame, [size, sizePrint],
+          );
+          return (
+            <text
+              key={symbol}
+              className={classes.anno_text}
+              x={placed.x}
+              y={placed.y}
+              textAnchor={placed.anchor}
+            >
+              {text}
+            </text>
+          );
+        })}
         {scaleBar !== null ? (
           // Only drawn when T1 carries a calibration: a ruler without one would
           // be a fabricated measurement.
