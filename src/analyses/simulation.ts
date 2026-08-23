@@ -75,7 +75,7 @@ const missing = (points: PointMap, symbols: string[]): string[] =>
  * jaw "to the right"; the movement is stated along an anatomical plane, and the
  * plane has to be named in the UI because it changes what the millimetres mean.
  */
-export type ReferenceId = 'occlusal' | 'palatal' | 'facial';
+export type ReferenceId = 'occlusal' | 'palatal' | 'facial' | 'frankfort';
 
 export interface Reference {
   id: ReferenceId;
@@ -100,6 +100,7 @@ export const REFERENCE_REQUIREMENTS: { [id: string]: string[] } = {
   occlusal: ['U6', 'L6', 'U4', 'L4'],
   palatal: ['PNS', 'ANS'],
   facial: ['N', 'Me'],
+  frankfort: ['Po', 'Or'],
 };
 
 /** Cranio-caudal unit vector (N → Me), or null when either point is missing. */
@@ -164,6 +165,25 @@ const buildReference = (
       upName: 'perpendicular to that plane',
     };
   }
+  if (id === 'frankfort') {
+    // Po → Or, the same convention as the FH construction line (see
+    // analyses/landmarks/lines/skeletal#FH). Tweed's own diagnostic triangle
+    // is built on this plane — it is the FMPA/IMPA/FMIA of "FMPA" — and its
+    // step list plots Po and Or before anything else, so this is the one
+    // reference a Tweed-only tracing can always supply.
+    const po = points['Po'];
+    const or = points['Or'];
+    const ant = normalize({ x: or.x - po.x, y: or.y - po.y });
+    if (ant === null) {
+      return null;
+    }
+    return {
+      id, ant, up: superiorPerpendicular(ant, down),
+      name: 'Frankfort horizontal plane',
+      from: 'Po → Or',
+      upName: 'perpendicular to that plane',
+    };
+  }
   if (down === null) {
     return null;
   }
@@ -219,16 +239,18 @@ export const getReference = (
  * Mandibular movement is stated along the occlusal plane (that is where the
  * occlusion it is meant to correct lives); the maxilla along the palatal plane,
  * which is the Le Fort I convention. Both fall back to the N–Me perpendicular,
- * and the UI always names the plane actually used.
+ * and then to the Frankfort horizontal (Po → Or) — the plane a Tweed-only
+ * tracing can still supply when neither of the first two is plotted. The UI
+ * always names the plane actually used.
  */
-const MANDIBLE_REFERENCE: ReferenceId[] = ['occlusal', 'palatal', 'facial'];
-const MAXILLA_REFERENCE: ReferenceId[] = ['palatal', 'facial'];
+const MANDIBLE_REFERENCE: ReferenceId[] = ['occlusal', 'palatal', 'facial', 'frankfort'];
+const MAXILLA_REFERENCE: ReferenceId[] = ['palatal', 'facial', 'frankfort'];
 /**
  * Incisor tipping needs no plane of its own — only a consistent *anterior*, so
  * that "proclination" tips the crown toward the face whichever way the film is
- * hung. Any of the three planes supplies one.
+ * hung. Any of the four planes supplies one.
  */
-const INCISOR_REFERENCE: ReferenceId[] = ['palatal', 'facial', 'occlusal'];
+const INCISOR_REFERENCE: ReferenceId[] = ['palatal', 'facial', 'occlusal', 'frankfort'];
 
 // ---- Landmark groups --------------------------------------------------------
 
@@ -625,7 +647,7 @@ export interface SimulationReadiness {
 }
 
 /** Any reference plane at all — the widest preference order this app has. */
-const ANY_REFERENCE: ReferenceId[] = ['occlusal', 'palatal', 'facial'];
+const ANY_REFERENCE: ReferenceId[] = ['occlusal', 'palatal', 'facial', 'frankfort'];
 
 export const getSimulationReadiness = (
   map: LandmarkMap, scaleFactor: number | null,
@@ -645,15 +667,17 @@ export const getSimulationReadiness = (
     };
   }
   if (reference === null) {
-    // Some analyses (Tweed among them) plot every landmark a movement needs
-    // except the ones a *plane* is built from — Tweed's own triangle never
-    // references N, so a clinician who works through its step list exactly as
-    // asked still finds every reference plane absent. Naming a landmark to
-    // plot is only half the remedy on a tracing like that: the other half,
-    // stated explicitly rather than left for the reader to infer, is that
-    // switching to an analysis which already plots one of these planes is
-    // enough — the landmark lives on the tracing, not on the analysis, so it
-    // carries over untouched and nothing already plotted is lost.
+    // Some analyses plot every landmark a movement needs except the ones a
+    // *plane* is built from, so a clinician who works through the step list
+    // exactly as asked still finds every reference plane absent — Tweed used
+    // to be the standing example of this until Frankfort horizontal (Po →
+    // Or, Tweed's own first two points) was added as a fourth option below.
+    // Naming a landmark to plot is only half the remedy on a tracing like
+    // that: the other half, stated explicitly rather than left for the
+    // reader to infer, is that switching to an analysis which already plots
+    // one of these planes is enough — the landmark lives on the tracing, not
+    // on the analysis, so it carries over untouched and nothing already
+    // plotted is lost.
     return {
       canSimulate: false,
       reason:
