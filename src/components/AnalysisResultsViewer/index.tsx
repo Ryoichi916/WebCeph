@@ -717,6 +717,12 @@ const dialogContentStyle: React.CSSProperties = {
 
 const dialogBodyStyle: React.CSSProperties = {
   padding: '0 24px 8px',
+  // The results table carries a min-width (see `.table`, style.scss) so its
+  // measurement-name column stays readable instead of wrapping one letter
+  // per line on a narrow window; on a window too narrow even for that
+  // minimum, this is what scrolls horizontally. Not `.table_wrap` itself —
+  // see its own comment for why that specific element must stay overflow-free.
+  overflowX: 'auto',
 };
 
 const dialogActionsStyle: React.CSSProperties = {

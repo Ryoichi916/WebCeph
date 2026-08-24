@@ -146,6 +146,17 @@
 
 .table {
   width: 100%;
+  // The four side columns (148 + 74 + 104 + 108 = 434px) are fixed by design
+  // (see the comment above `.col_finding`) and `table-layout: fixed` never
+  // shrinks them — a dialog narrower than that plus a readable measurement
+  // column instead crushed MEASUREMENT itself toward zero, wrapping "Sum of
+  // the saddle, articular and gonial angles" one letter per line. A min-width
+  // covering the fixed columns plus ~200px for MEASUREMENT keeps every column
+  // usable; `.table_wrap` still carries no overflow of its own (see the
+  // comment there — that broke the sticky header), so the dialog's own body
+  // (`dialogBodyStyle`, index.tsx) is what scrolls horizontally on a window
+  // too narrow even for that.
+  min-width: 634px;
   table-layout: fixed;
   border-collapse: collapse;
   font-family: $font-stack;
