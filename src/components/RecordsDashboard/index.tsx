@@ -1521,6 +1521,7 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
     const { patient, records } = this.props;
     const name = patient !== null && patient.name ? patient.name : null;
     const chartId = patient !== null && patient.chartId ? patient.chartId : null;
+    const reading = patient !== null && patient.reading ? patient.reading : null;
     const dob = patient !== null ? formatDisplayDate(patient.dateOfBirth) : null;
     const sex = patient !== null ? formatSexFull(patient.sex) : null;
     const heading = name !== null ? name
@@ -1604,7 +1605,7 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
               <span className={classes.ps_facts}>
                 <span className={classes.ps_row}>
                   {cell('Patient', heading, name === null && chartId !== null
-                    ? 'Name not recorded' : null)}
+                    ? 'Name not recorded' : reading)}
                   {cell('Chart ID', chartId)}
                   {cell('Date of birth', dob, sex !== null ? sex : 'Sex not recorded')}
                 </span>
@@ -1866,6 +1867,10 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
     // instead, and is the control that closes it.
     const name = patient !== null && patient.name ? patient.name : null;
     const chartId = patient !== null && patient.chartId ? patient.chartId : null;
+    // The かな reading a name was registered with — shown only where the name
+    // itself is (a chart ID alone has nothing to be read out) so it is never
+    // mistaken for a second identifier of its own.
+    const reading = patient !== null && patient.reading ? patient.reading : null;
     const heading = name !== null ? name
       : (chartId !== null ? chartId
         : (patient !== null ? '(unnamed patient)' : '—'));
@@ -1895,6 +1900,9 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
           </span>
           <div className={classes.identity_names}>
             <h3 className={classes.identity_name}>{heading}</h3>
+            {name !== null && reading !== null ? (
+              <span className={classes.identity_reading}>{reading}</span>
+            ) : null}
             {name !== null && chartId !== null ? (
               <span className={classes.identity_chart}>{chartId}</span>
             ) : patient !== null ? (
