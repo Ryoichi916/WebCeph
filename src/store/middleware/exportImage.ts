@@ -25,13 +25,16 @@ import {
   drawTracingOverlay, drawScaleBar, sanitizeFilenameStem, saveBlobAs,
 } from 'utils/tracingSnapshot';
 
+// The bare stem only — the caller's own `${stem}-tracing.${ext}` template is
+// the one place "-tracing" gets appended, for both this fallback and the
+// patient-identity stem beside it. Appending it here too doubled it up:
+// "sample-tracing T1 2026-08-24-tracing.png".
 const baseName = (name: string | null): string => {
   if (!name) {
     return 'tracing';
   }
   const dot = name.lastIndexOf('.');
-  const stem = dot > 0 ? name.slice(0, dot) : name;
-  return `${stem}-tracing`;
+  return dot > 0 ? name.slice(0, dot) : name;
 };
 
 /**
