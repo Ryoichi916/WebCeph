@@ -527,12 +527,28 @@ const compareText = (a: string, b: string): number => {
 };
 
 /**
- * Folds a name or a query into the form the search matches on: case-folded,
- * with the punctuation a clinician does not type — the comma of "Alvarez,
- * Greta", the hyphen of "Vandenberghe-Kowalczyk", the dot of an initial, the
- * 、and ・of a Japanese record — flattened to spaces.
+ * Katakana folded to hiragana, after `NFKC` folds half-width katakana (the
+ * IME-adjacent "ﾔﾏﾀﾞ" shape) to full-width. The sort above already treats
+ * hiragana, katakana and half-width katakana as equivalent — `Intl.Collator`
+ * does that natively — but a plain substring search does not, so a reading
+ * on file in one script silently failed to match a query typed in another.
+ * Hiragana and (full-width) katakana share one code plane 0x60 apart for
+ * every character that has both forms, so the fold is a single offset
+ * subtraction; katakana-only characters (the prolonged sound mark ー, ヶ used
+ * as a counter) have no hiragana form and simply pass through unchanged.
  */
-const foldForSearch = (text: string): string => text
+const toHiragana = (text: string): string => text
+  .normalize('NFKC')
+  .replace(/[ァ-ヶ]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0x60));
+
+/**
+ * Folds a name or a query into the form the search matches on: case-folded,
+ * kana-folded (`toHiragana`), with the punctuation a clinician does not
+ * type — the comma of "Alvarez, Greta", the hyphen of
+ * "Vandenberghe-Kowalczyk", the dot of an initial, the 、and ・of a Japanese
+ * record — flattened to spaces.
+ */
+const foldForSearch = (text: string): string => toHiragana(text)
   .toLowerCase()
   .replace(
     /[,、，.。．・･:;_/\\|()\[\]'"‘’“”]+/g,
