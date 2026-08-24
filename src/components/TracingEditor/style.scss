@@ -44,6 +44,38 @@
   color: $text-secondary;
 }
 
+// Pinned to the dropzone's top edge, not `.import_overlay`'s full inset:0
+// scrim: the loading state's own scrim blocks interaction on purpose (there
+// is nothing to click while a file decodes), but a failed import's very next
+// step is picking a different file, and a scrim over "Choose image…" blocked
+// the retry it was reporting the need for. The dropzone stays fully live
+// beneath this banner.
+.import_error_banner {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  right: 16px;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border-radius: 8px;
+  background: $error-bg;
+  box-shadow: $shadow-2;
+}
+
+.import_error_icon {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+}
+
+.import_error_text {
+  font-size: 13.5px;
+  color: $error;
+}
+
 // DOM-first (primary controls) but visually docked at the bottom.
 .toolbar {
   order: 2;

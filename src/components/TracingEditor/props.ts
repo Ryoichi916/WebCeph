@@ -8,6 +8,16 @@ export interface StateProps {
    * to decode. @see store/reducers/workspace#shouldShowLoadingFileIndicator
    */
   isLoadingFile: boolean;
+  /**
+   * Why the last file dropped or chosen for this workspace failed to import,
+   * or null when nothing has failed (or a later attempt has since cleared
+   * it — see IMPORT_FILE_REQUESTED/SUCCEEDED in the settings reducer). The
+   * dropzone was the one place this reached no rendered surface at all: a
+   * corrupt or unsupported file just sat there looking like nothing had
+   * happened, no different from never having picked a file.
+   * @see store/reducers/workspace/settings#getImportError
+   */
+  importError: GenericError | null;
   /** Whether the analysis results summary dialog is open. */
   isSummaryShown: boolean;
   /**

@@ -9,8 +9,15 @@ import AnalysisResultsViewer from 'components/AnalysisResultsViewer/connected';
 import RecordViewer from 'components/RecordViewer/connected';
 
 import CircularProgress from 'material-ui/CircularProgress';
+import IconError from 'material-ui/svg-icons/alert/error-outline';
 
 const classes = require('./style.scss');
+
+// Matches `$error` in src/_variables.scss — a Sass variable is not reachable
+// from here, and the icon (an SVG whose own fill an ordinary CSS class does
+// not reliably override, unlike the surrounding markup) needs its color as a
+// prop, not a class, the same way the toolbar's own status icons take theirs.
+const ERROR_COLOR = '#C62828';
 
 export default class TracingEditor extends React.PureComponent<Props, { }> {
   render() {
@@ -18,6 +25,7 @@ export default class TracingEditor extends React.PureComponent<Props, { }> {
       imageId,
       className,
       isLoadingFile,
+      importError,
       isSummaryShown,
       isImageTraceable,
       defaultTimepoint,
@@ -71,6 +79,27 @@ export default class TracingEditor extends React.PureComponent<Props, { }> {
                     Reading and decoding the image…
                   </span>
                 </div>
+              </div>
+            ) : null}
+            {/* The dropzone itself has no store slice to read this from (see
+                its own props.ts) — it reaches no rendered surface at all
+                without this, so a corrupt or unsupported file just sat there
+                looking exactly like nothing had happened. A banner, not the
+                loading state's full scrim: the very next thing a clinician
+                does is pick a different file, and the loading overlay's
+                inset:0 backdrop sat on top of "Choose image…" and blocked
+                the retry it was itself telling them to make. The dropzone
+                stays fully live underneath; choosing another file clears
+                this the same as any other IMPORT_FILE_REQUESTED. */}
+            {!isLoadingFile && importError !== null ? (
+              <div className={classes.import_error_banner} role="alert">
+                <IconError
+                  className={classes.import_error_icon}
+                  color={ERROR_COLOR}
+                />
+                <span className={classes.import_error_text}>
+                  {importError.message}
+                </span>
               </div>
             ) : null}
           </div>

@@ -4,7 +4,7 @@ import {
   MapDispatchToPropsFunction,
 } from 'react-redux';
 
-import { getTracingImageId } from 'store/reducers/workspace/settings';
+import { getTracingImageId, getImportError } from 'store/reducers/workspace/settings';
 import { isSummaryShown } from 'store/reducers/workspace/analyses';
 import { isImageTraceable } from 'store/reducers/workspace/image';
 
@@ -31,6 +31,7 @@ const mapStateToProps: MapStateToProps<StateProps, OwnProps, StoreState> =
     return {
       imageId,
       isLoadingFile: shouldShowLoadingFileIndicator(state)(workspaceId),
+      importError: getImportError(state)(workspaceId),
       isSummaryShown: isSummaryShown(state),
       isImageTraceable: imageId !== null ? isImageTraceable(state)(imageId) : true,
       // The next *visit* in the series, read off the timepoint labels the
