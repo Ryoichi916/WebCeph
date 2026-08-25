@@ -205,11 +205,36 @@ const getDefaultOffset = (
 });
 
 /**
- * Keeps a translate within the range that still shows the image filling (or
- * centered within) the canvas on each axis — from flush against one edge to
- * flush against the other — so a pan/zoom gesture can never park the image
- * off in empty space with nothing on screen, and never show a gap on one
- * side while the image overflows the other.
+ * The minimum fraction of the image (or of the canvas, whichever is
+ * smaller) that must stay visible on each axis. A tight "never show any
+ * empty canvas margin" bound (this app's original clamp) leaves too little
+ * pan range to keep an off-center point anchored under the cursor while
+ * zooming: computeAnchoredZoomOffset below recomputes a fresh delta-based
+ * offset on every step from the image's *actual currently-rendered*
+ * position, which is only mathematically able to land exactly on the
+ * requested anchor when that offset is reachable within the clamp — a tight
+ * bound made that fail routinely for anything but a near-dead-center
+ * cursor, producing a visible jump when the bound was hit that then
+ * persisted (the point that ended up under the cursor after the jump
+ * becomes the new — now off-target — thing subsequent steps faithfully
+ * keep anchored). Loosening the bound to "keep at least this fraction of
+ * the image on screen" instead of "keep zero empty margin" gives enough
+ * slack that realistic zooming (toward any point in the image, through the
+ * app's full zoom range) essentially never collides with it, while still
+ * guaranteeing — same as before — that the image can never be panned
+ * completely off-canvas with no way back.
+ */
+const MIN_VISIBLE_FRACTION = 0.15;
+
+/**
+ * Keeps a translate within the range that still shows at least
+ * MIN_VISIBLE_FRACTION of the image on each axis, so a pan/zoom gesture can
+ * never park the image off in empty space with nothing on screen. Looser
+ * than "zero empty canvas margin" on purpose — @see MIN_VISIBLE_FRACTION —
+ * so cursor-anchored zoom (computeAnchoredZoomOffset) has room to track an
+ * off-center point exactly instead of hitting a hard, visible boundary. The
+ * default/centered offset (getDefaultOffset) always falls well inside this
+ * range, so idle framing (a freshly loaded or reset image) is unaffected.
  */
 const clampOffset = (
   offset: { left: number; top: number },
@@ -219,9 +244,10 @@ const clampOffset = (
   scale: number,
 ): { left: number; top: number } => {
   const clampAxis = (value: number, canvasSize: number, imageSize: number) => {
-    const slack = canvasSize - imageSize * scale;
-    const min = Math.min(0, slack);
-    const max = Math.max(0, slack);
+    const scaledImageSize = imageSize * scale;
+    const minVisible = Math.min(canvasSize, scaledImageSize) * MIN_VISIBLE_FRACTION;
+    const min = minVisible - scaledImageSize;
+    const max = canvasSize - minVisible;
     return Math.min(max, Math.max(min, value));
   };
   return {

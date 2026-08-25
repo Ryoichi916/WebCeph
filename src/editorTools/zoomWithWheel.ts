@@ -18,8 +18,8 @@ const zoomIntensity = 0.2;
 // context) without reaching that degenerate state. Mirrored in
 // TracingToolbar's ZOOM_MIN, which the zoom-out button is bound by — keep the
 // two in sync.
-const ZOOM_MIN = 0.5;
-const ZOOM_MAX = 2;
+export const ZOOM_MIN = 0.5;
+export const ZOOM_MAX = 2;
 
 const createZoomWithWheel: EditorToolCreator = (
   state: StoreState,
