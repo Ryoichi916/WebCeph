@@ -831,6 +831,15 @@ export interface Simulation {
   hasScale: boolean;
   /** Soft-tissue landmarks this plan moved. */
   softTissueSymbols: string[];
+  /**
+   * The ratio-weighted soft-tissue displacement of *every* symbol in
+   * `SOFT_TISSUE_RESPONSE`, plotted or not, in image pixels — the same
+   * vectors `profileLandmarks` was built from. Empty when the response is
+   * held — a missing entry reads as zero. Consumed by the photo-morph
+   * preview, which needs the displacement per soft-tissue point rather
+   * than a rebuilt landmark map.
+   */
+  softVectors: { [symbol: string]: Vec };
 }
 
 /**
@@ -1034,6 +1043,7 @@ export const applySimulation = (
     maxillaReference,
     hasScale,
     softTissueSymbols,
+    softVectors,
   };
 };
 
