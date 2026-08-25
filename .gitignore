@@ -4,5 +4,8 @@ tmp
 .vscode/*.db*
 build
 
+# Claude Code harness state (session settings, workflow worktrees) — not repo content
+.claude/
+
 # Auto-plot ONNX model binaries (large; not committed — see docs/auto-plot-handoff.md)
 src/assets/models/*.onnx
