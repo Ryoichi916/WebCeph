@@ -766,6 +766,12 @@ export default class TreatmentSimulation extends React.PureComponent<Props, Stat
         `segment superiorly ${references.maxilla.upName}`,
       );
     }
+    if (references.incisor !== null) {
+      planes.push(
+        `bodily incisor movement along the ${references.incisor.name} ` +
+        `(${references.incisor.from})`,
+      );
+    }
     if (planes.length === 0) {
       return null;
     }
@@ -929,8 +935,8 @@ export default class TreatmentSimulation extends React.PureComponent<Props, Stat
                   entered in millimetres and{' '}
                   {scaleBlocked.length === 1 ? 'needs' : 'need'} an mm/px
                   calibration for this film — set it from the calibration chip
-                  in the toolbar. The incisor controls are scale-independent
-                  and stay available.
+                  in the toolbar. The incisor inclination controls are angular,
+                  scale-independent and stay available.
                 </p>
               ) : null}
               {this.renderControl(control, references, firstScaleBlocked !== null)}
@@ -964,7 +970,9 @@ export default class TreatmentSimulation extends React.PureComponent<Props, Stat
       ? references.mandible
       : (spec.id === 'maxilla' || spec.id === 'impaction')
         ? references.maxilla
-        : null;
+        : (spec.id === 'u1Mm' || spec.id === 'l1Mm')
+          ? references.incisor
+          : null;
     // What the control moves, and the plane its millimetres are measured along
     // — rendered at rest as well as engaged, so the panel is readable before it
     // is touched and so touching a slider cannot shift everything below it.

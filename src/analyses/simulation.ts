@@ -214,11 +214,16 @@ const buildReference = (
  */
 export const planReferences = (
   map: LandmarkMap,
-): { mandible: Reference | null; maxilla: Reference | null } => {
+): {
+  mandible: Reference | null;
+  maxilla: Reference | null;
+  incisor: Reference | null;
+} => {
   const points = placedPoints(map);
   return {
     mandible: getReference(points, MANDIBLE_REFERENCE),
     maxilla: getReference(points, MAXILLA_REFERENCE),
+    incisor: getReference(points, INCISOR_REFERENCE),
   };
 };
 
@@ -298,9 +303,13 @@ export const LOWER_INCISOR_REQUIRED: string[] = ['L1 Apex', 'L1 Incisal Edge'];
  * Glabella and soft-tissue nasion are absent on purpose: they overlie the
  * cranium and the nasal bones, which nothing in this simulation moves.
  *
- * `u1` / `l1` are applied to the *rotational* part of the incisal-edge movement
- * only, because the translational part is already accounted for by the jaw the
- * incisor travels with — otherwise the lips would be moved twice.
+ * `u1` / `l1` are applied to the incisor's *own* movement — the rotational
+ * incisal-edge delta of a tipping plus any bodily translation entered on the
+ * incisor's own control — and never to the jaw translation the incisor merely
+ * rides with, which the `maxilla` / `mandible` columns already carry:
+ * otherwise the lips would be moved twice. The published retraction ratios
+ * are stated per unit of incisor movement regardless of whether it was
+ * achieved by tipping or bodily mechanics, so one column serves both.
  */
 export interface SoftTissueRatio {
   symbol: string;
@@ -356,10 +365,10 @@ export const activeSoftTissueRatios = (
     if (plan.mandibleMm !== 0 && ratio.mandible > 0) {
       drivers.push({ driver: 'mandible', value: ratio.mandible });
     }
-    if (plan.u1Deg !== 0 && ratio.u1 > 0) {
+    if ((plan.u1Deg !== 0 || plan.u1Mm !== 0) && ratio.u1 > 0) {
       drivers.push({ driver: 'upper incisor', value: ratio.u1 });
     }
-    if (plan.l1Deg !== 0 && ratio.l1 > 0) {
+    if ((plan.l1Deg !== 0 || plan.l1Mm !== 0) && ratio.l1 > 0) {
       drivers.push({ driver: 'lower incisor', value: ratio.l1 });
     }
     if (drivers.length > 0) {
@@ -382,6 +391,10 @@ export interface SimulationPlan {
   u1Deg: number;
   /** Lower-incisor proclination (+) / retroclination (−), degrees about L1 Apex. */
   l1Deg: number;
+  /** Upper-incisor bodily advancement (+) / retraction (−), mm, apex and edge together. */
+  u1Mm: number;
+  /** Lower-incisor bodily advancement (+) / retraction (−), mm, apex and edge together. */
+  l1Mm: number;
   /** Whether the soft-tissue profile follows, at the published ratios. */
   isSoftTissueFollowing: boolean;
 }
@@ -392,23 +405,29 @@ export const EMPTY_PLAN: SimulationPlan = {
   impactionMm: 0,
   u1Deg: 0,
   l1Deg: 0,
+  u1Mm: 0,
+  l1Mm: 0,
   isSoftTissueFollowing: true,
 };
 
 export const isPlanEmpty = (plan: SimulationPlan): boolean => (
   plan.mandibleMm === 0 && plan.maxillaMm === 0 && plan.impactionMm === 0 &&
-  plan.u1Deg === 0 && plan.l1Deg === 0
+  plan.u1Deg === 0 && plan.l1Deg === 0 &&
+  plan.u1Mm === 0 && plan.l1Mm === 0
 );
 
 /** Stable key for memoizing a simulation across re-renders. */
 export const planKey = (plan: SimulationPlan): string => [
   plan.mandibleMm, plan.maxillaMm, plan.impactionMm,
-  plan.u1Deg, plan.l1Deg, plan.isSoftTissueFollowing ? 1 : 0,
+  plan.u1Deg, plan.l1Deg, plan.u1Mm, plan.l1Mm,
+  plan.isSoftTissueFollowing ? 1 : 0,
 ].join('|');
 
 // ---- Controls ---------------------------------------------------------------
 
-export type ControlId = 'mandible' | 'maxilla' | 'impaction' | 'u1' | 'l1';
+export type ControlId =
+  | 'mandible' | 'maxilla' | 'impaction'
+  | 'u1' | 'l1' | 'u1Mm' | 'l1Mm';
 
 export interface ControlSpec {
   id: ControlId;
@@ -500,7 +519,7 @@ export const SIMULATION_CONTROLS: ControlSpec[] = [
   },
   {
     id: 'u1',
-    label: 'Upper incisor',
+    label: 'Upper incisor — inclination',
     noun: 'Upper incisor',
     negative: 'retraction', positive: 'proclination',
     unit: '°', min: -15, max: 15, step: 1,
@@ -513,8 +532,23 @@ export const SIMULATION_CONTROLS: ControlSpec[] = [
     short: 'Tips the upper incisal edge about its apex; tipping only.',
   },
   {
+    id: 'u1Mm',
+    label: 'Upper incisor — bodily',
+    noun: 'Upper incisor',
+    negative: 'retraction', positive: 'advancement',
+    unit: 'mm', min: -8, max: 8, step: 0.5,
+    required: UPPER_INCISOR_REQUIRED,
+    referencePreference: INCISOR_REFERENCE,
+    isLinear: true,
+    description:
+      'Translates the whole upper incisor — apex and incisal edge together — ' +
+      'along the anterior axis: bodily movement into extraction or stripping ' +
+      'space. The posterior dentition is held; no anchorage loss is modelled.',
+    short: 'Moves the whole upper incisor bodily; molars are held.',
+  },
+  {
     id: 'l1',
-    label: 'Lower incisor',
+    label: 'Lower incisor — inclination',
     noun: 'Lower incisor',
     negative: 'retroclination', positive: 'proclination',
     unit: '°', min: -15, max: 15, step: 1,
@@ -525,6 +559,21 @@ export const SIMULATION_CONTROLS: ControlSpec[] = [
       'Tips the incisal edge about the L1 root apex, which is held. Crown ' +
       'tipping only.',
     short: 'Tips the lower incisal edge about its apex; tipping only.',
+  },
+  {
+    id: 'l1Mm',
+    label: 'Lower incisor — bodily',
+    noun: 'Lower incisor',
+    negative: 'retraction', positive: 'advancement',
+    unit: 'mm', min: -8, max: 8, step: 0.5,
+    required: LOWER_INCISOR_REQUIRED,
+    referencePreference: INCISOR_REFERENCE,
+    isLinear: true,
+    description:
+      'Translates the whole lower incisor — apex and incisal edge together — ' +
+      'along the anterior axis: bodily movement into extraction or stripping ' +
+      'space. The posterior dentition is held; no anchorage loss is modelled.',
+    short: 'Moves the whole lower incisor bodily; molars are held.',
   },
 ];
 
@@ -554,18 +603,28 @@ export const maxSimulatedTravelPx = (
     const maxillaMm = Math.hypot(mm('maxilla'), mm('impaction'));
     travel = Math.max(mm('mandible'), maxillaMm) / scaleFactor!;
   }
-  [['U1 Apex', 'U1 Incisal Edge', 'u1'], ['L1 Apex', 'L1 Incisal Edge', 'l1']]
-    .forEach(([apexSymbol, edgeSymbol, id]) => {
+  [
+    ['U1 Apex', 'U1 Incisal Edge', 'u1', 'u1Mm'],
+    ['L1 Apex', 'L1 Incisal Edge', 'l1', 'l1Mm'],
+  ]
+    .forEach(([apexSymbol, edgeSymbol, tipId, bodilyId]) => {
       const apex = points[apexSymbol];
       const edge = points[edgeSymbol];
-      const spec = SIMULATION_CONTROLS.filter((s) => s.id === id)[0];
+      const spec = SIMULATION_CONTROLS.filter((s) => s.id === tipId)[0];
       if (apex === undefined || edge === undefined || spec === undefined) {
         return;
       }
       const axis = Math.hypot(edge.x - apex.x, edge.y - apex.y);
       const deg = Math.max(Math.abs(spec.min), spec.max);
+      // Tipping and bodily movement apply at once, so the worst case is the
+      // swept chord plus the full bodily translation (zero when uncalibrated —
+      // the bodily control is withheld without a scale).
+      const bodilySpec = SIMULATION_CONTROLS.filter((s) => s.id === bodilyId)[0];
+      const bodilyPx = hasScale && bodilySpec !== undefined
+        ? Math.max(Math.abs(bodilySpec.min), bodilySpec.max) / scaleFactor!
+        : 0;
       travel = Math.max(
-        travel, 2 * axis * Math.sin((deg * Math.PI / 180) / 2),
+        travel, 2 * axis * Math.sin((deg * Math.PI / 180) / 2) + bodilyPx,
       );
     });
   return travel;
@@ -707,9 +766,10 @@ export const getSimulationReadiness = (
     return {
       canSimulate: false,
       reason:
-        'The skeletal movements are entered in millimetres, so this film ' +
-        'needs an mm/px calibration, and no incisor landmarks are plotted ' +
-        'yet. Calibrate from the toolbar chip, or plot the incisors.',
+        'The skeletal and bodily incisor movements are entered in ' +
+        'millimetres, so this film needs an mm/px calibration, and no ' +
+        'incisor landmarks are plotted yet. Calibrate from the toolbar ' +
+        'chip, or plot the incisors for the angular inclination controls.',
     };
   }
   return {
@@ -865,8 +925,38 @@ export const applySimulation = (
     return delta;
   };
 
-  const dU1 = tip('U1 Apex', 'U1 Incisal Edge', plan.u1Deg);
-  const dL1 = tip('L1 Apex', 'L1 Incisal Edge', plan.l1Deg);
+  const dU1Tip = tip('U1 Apex', 'U1 Incisal Edge', plan.u1Deg);
+  const dL1Tip = tip('L1 Apex', 'L1 Incisal Edge', plan.l1Deg);
+
+  // --- incisor bodily movement ----------------------------------------------
+  // Apex and edge translate together along the same anterior axis the tipping
+  // uses — bodily movement, no inclination change. The posterior dentition is
+  // deliberately held: moving it would require an anchorage-loss ratio this
+  // module would be inventing (the same discipline as "no autorotation").
+  const bodily = (
+    apexSymbol: string, edgeSymbol: string, mm: number,
+  ): Vec => {
+    if (mm === 0 || !hasScale || ant === null) {
+      return ZERO;
+    }
+    if (points[apexSymbol] === undefined || points[edgeSymbol] === undefined) {
+      return ZERO;
+    }
+    const v = scale(ant, toPx(mm));
+    shift(apexSymbol, v);
+    shift(edgeSymbol, v);
+    return v;
+  };
+
+  const dU1Bodily = bodily('U1 Apex', 'U1 Incisal Edge', plan.u1Mm);
+  const dL1Bodily = bodily('L1 Apex', 'L1 Incisal Edge', plan.l1Mm);
+
+  // The incisor's *own* movement, tipping plus bodily — the quantity the
+  // published retraction ratios are stated against (@see SOFT_TISSUE_RESPONSE:
+  // the jaw translation the incisor rides with is counted by the jaw columns,
+  // never here).
+  const dU1 = add(dU1Tip, dU1Bodily);
+  const dL1 = add(dL1Tip, dL1Bodily);
 
   // --- soft-tissue response -------------------------------------------------
   // The ratio-weighted movement of every soft-tissue point in the table, whether
@@ -1005,7 +1095,7 @@ export const KEY_MEASUREMENTS: string[] = [
   'FMPA', 'NAPog',
   'U1-SN', 'IMPA', 'U1-L1',
   'ANS-Me (mm)',
-  'Ls-E-line', 'Li-E-line',
+  'Ls-E-line', 'Li-E-line', 'Nasolabial',
 ];
 
 export interface Norm {
@@ -1270,6 +1360,10 @@ export const describePlan = (
   return parts;
 };
 
+// Every ControlId gets an explicit case in both switches below: the closing
+// default is a type-safety fallthrough only. A new id that is *not* given a
+// case would silently read/write l1Deg — the least visible bug this module
+// can host — so extend both switches whenever ControlId grows.
 export const valueForControl = (
   plan: SimulationPlan, id: ControlId,
 ): number => {
@@ -1278,6 +1372,8 @@ export const valueForControl = (
     case 'maxilla': return plan.maxillaMm;
     case 'impaction': return plan.impactionMm;
     case 'u1': return plan.u1Deg;
+    case 'u1Mm': return plan.u1Mm;
+    case 'l1Mm': return plan.l1Mm;
     default: return plan.l1Deg;
   }
 };
@@ -1290,6 +1386,8 @@ export const withControlValue = (
     case 'maxilla': return { ...plan, maxillaMm: value };
     case 'impaction': return { ...plan, impactionMm: value };
     case 'u1': return { ...plan, u1Deg: value };
+    case 'u1Mm': return { ...plan, u1Mm: value };
+    case 'l1Mm': return { ...plan, l1Mm: value };
     default: return { ...plan, l1Deg: value };
   }
 };
