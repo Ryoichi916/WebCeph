@@ -4,6 +4,7 @@ import Tools from 'editorTools';
 
 import { getActiveWorkspaceId } from './activeId';
 import { getWorkspaceSettingsById, getAllWorkspacesSettings } from './settings';
+import { getImageWidth, getImageHeight } from './image';
 
 const KEY_CANVAS_MOUSE_POSITION: StoreKey = 'workspace.canvas.mouse.position';
 const KEY_CANVAS_TOOL_ID: StoreKey = 'workspace.canvas.tools.activeToolId';
@@ -50,6 +51,11 @@ const reducers: Partial<ReducerMap> = {
         };
       },
       RESET_WORKSPACE_REQUESTED: () => null,
+      // A freshly loaded image starts centered, same as its scale resets to
+      // 1 = exactly fitted (@see middleware/autoScale) — otherwise a pan left
+      // over from whatever was previously on screen would carry over onto an
+      // image of a different size, where it has no reason to still apply.
+      LOAD_IMAGE_SUCCEEDED: () => null,
     },
     null,
   ),
@@ -151,4 +157,152 @@ export const getCanvasDimensions = (state: StoreState): { width: number; height:
     width: typeof window !== 'undefined' ? window.innerWidth : 0,
     height: typeof window !== 'undefined' ? window.innerHeight : 0,
   };
+};
+
+// ---- Pan/zoom geometry --------------------------------------------------
+// The tracing canvas is a fixed-size viewport (getCanvasDimensions) holding
+// an image drawn at `fitScale * the user's zoom factor`, positioned by an
+// (left, top) translate — @see TracingViewer#getTransformAttribute, which is
+// the only consumer of getEffectiveOffset. Kept here, alongside getScale and
+// getCanvasDimensions, so the wheel/click zoom tools (editorTools/zoomWith*)
+// and the viewer compute the exact same numbers instead of two independent
+// formulas drifting apart.
+
+/**
+ * The scale that letterboxes the image into the canvas — `min(w/iw, h/ih)`,
+ * or `1` when either the canvas or the image has no measured size yet (first
+ * render, or an image still loading). The user's own zoom (getScale) is a
+ * multiplier on top of this.
+ */
+export const getFitScale = (
+  canvas: { width: number; height: number },
+  imageWidth: number,
+  imageHeight: number,
+): number => {
+  if (canvas.width > 0 && canvas.height > 0 && imageWidth > 0 && imageHeight > 0) {
+    return Math.min(canvas.width / imageWidth, canvas.height / imageHeight);
+  }
+  return 1;
+};
+
+/** The on-screen scale actually applied to the image: fit × the user's zoom. */
+export const getEffectiveScale = (state: StoreState) => (imageId: string): number => {
+  const canvas = getCanvasDimensions(state);
+  const imageWidth = getImageWidth(state)(imageId);
+  const imageHeight = getImageHeight(state)(imageId);
+  return getFitScale(canvas, imageWidth, imageHeight) * getScale(state);
+};
+
+/** The translate that simply centers the (scaled) image inside the canvas. */
+const getDefaultOffset = (
+  canvas: { width: number; height: number },
+  imageWidth: number,
+  imageHeight: number,
+  scale: number,
+): { left: number; top: number } => ({
+  left: Math.max(0, (canvas.width - imageWidth * scale) / 2),
+  top: Math.max(0, (canvas.height - imageHeight * scale) / 2),
+});
+
+/**
+ * The minimum fraction of the image (or of the canvas, whichever is
+ * smaller) that must stay visible on each axis. A tight "never show any
+ * empty canvas margin" bound (this app's original clamp) leaves too little
+ * pan range to keep an off-center point anchored under the cursor while
+ * zooming: computeAnchoredZoomOffset below recomputes a fresh delta-based
+ * offset on every step from the image's *actual currently-rendered*
+ * position, which is only mathematically able to land exactly on the
+ * requested anchor when that offset is reachable within the clamp — a tight
+ * bound made that fail routinely for anything but a near-dead-center
+ * cursor, producing a visible jump when the bound was hit that then
+ * persisted (the point that ended up under the cursor after the jump
+ * becomes the new — now off-target — thing subsequent steps faithfully
+ * keep anchored). Loosening the bound to "keep at least this fraction of
+ * the image on screen" instead of "keep zero empty margin" gives enough
+ * slack that realistic zooming (toward any point in the image, through the
+ * app's full zoom range) essentially never collides with it, while still
+ * guaranteeing — same as before — that the image can never be panned
+ * completely off-canvas with no way back.
+ */
+const MIN_VISIBLE_FRACTION = 0.15;
+
+/**
+ * Keeps a translate within the range that still shows at least
+ * MIN_VISIBLE_FRACTION of the image on each axis, so a pan/zoom gesture can
+ * never park the image off in empty space with nothing on screen. Looser
+ * than "zero empty canvas margin" on purpose — @see MIN_VISIBLE_FRACTION —
+ * so cursor-anchored zoom (computeAnchoredZoomOffset) has room to track an
+ * off-center point exactly instead of hitting a hard, visible boundary. The
+ * default/centered offset (getDefaultOffset) always falls well inside this
+ * range, so idle framing (a freshly loaded or reset image) is unaffected.
+ */
+const clampOffset = (
+  offset: { left: number; top: number },
+  canvas: { width: number; height: number },
+  imageWidth: number,
+  imageHeight: number,
+  scale: number,
+): { left: number; top: number } => {
+  const clampAxis = (value: number, canvasSize: number, imageSize: number) => {
+    const scaledImageSize = imageSize * scale;
+    const minVisible = Math.min(canvasSize, scaledImageSize) * MIN_VISIBLE_FRACTION;
+    const min = minVisible - scaledImageSize;
+    const max = canvasSize - minVisible;
+    return Math.min(max, Math.max(min, value));
+  };
+  return {
+    left: clampAxis(offset.left, canvas.width, imageWidth),
+    top: clampAxis(offset.top, canvas.height, imageHeight),
+  };
+};
+
+/**
+ * The translate actually used to draw the image (@see
+ * TracingViewer#getTransformAttribute): the stored pan/zoom offset if one has
+ * been set (@see SET_SCALE_OFFSET_REQUESTED), else the centered default —
+ * always clamped against the *current* canvas/image/scale, so a stored offset
+ * left over from a differently-sized image or canvas self-corrects instead of
+ * parking the image off-screen.
+ */
+export const getEffectiveOffset = (state: StoreState) => (imageId: string): { left: number; top: number } => {
+  const canvas = getCanvasDimensions(state);
+  const imageWidth = getImageWidth(state)(imageId);
+  const imageHeight = getImageHeight(state)(imageId);
+  const scale = getEffectiveScale(state)(imageId);
+  const stored = getScaleOrigin(state);
+  const base = stored !== null
+    ? stored
+    : getDefaultOffset(canvas, imageWidth, imageHeight, scale);
+  return clampOffset(base, canvas, imageWidth, imageHeight, scale);
+};
+
+/**
+ * The offset that keeps a given image-space point fixed under the cursor
+ * across a scale change from the current user zoom to `newUserScale` — the
+ * standard "zoom to point" construction: shift the translate by exactly the
+ * distance that point would otherwise move due to the scale delta alone.
+ * Used by both wheel-zoom and click-zoom (@see editorTools/zoomWithWheel,
+ * editorTools/zoomWithClick) so the image content under the pointer stays
+ * put instead of sliding out from under it as the zoom level changes.
+ */
+export const computeAnchoredZoomOffset = (
+  state: StoreState,
+  imageId: string,
+  cursorImageX: number,
+  cursorImageY: number,
+  newUserScale: number,
+): { left: number; top: number } => {
+  const canvas = getCanvasDimensions(state);
+  const imageWidth = getImageWidth(state)(imageId);
+  const imageHeight = getImageHeight(state)(imageId);
+  const fitScale = getFitScale(canvas, imageWidth, imageHeight);
+  const oldEffectiveScale = getEffectiveScale(state)(imageId);
+  const newEffectiveScale = fitScale * newUserScale;
+  const oldOffset = getEffectiveOffset(state)(imageId);
+  const delta = newEffectiveScale - oldEffectiveScale;
+  const raw = {
+    left: oldOffset.left - cursorImageX * delta,
+    top: oldOffset.top - cursorImageY * delta,
+  };
+  return clampOffset(raw, canvas, imageWidth, imageHeight, newEffectiveScale);
 };

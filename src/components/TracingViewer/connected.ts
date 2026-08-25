@@ -19,7 +19,7 @@ import {
   getManualLandmarks,
 } from 'store/reducers/workspace/image';
 
-import { addManualLandmark } from 'actions/workspace';
+import { addManualLandmark, moveManualLandmarkLive } from 'actions/workspace';
 
 import {
   getCanvasDimensions
@@ -29,6 +29,8 @@ import {
   getScale,
   getActiveTool,
   isProfilogramShown,
+  getFitScale,
+  getEffectiveOffset,
 } from 'store/reducers/workspace/canvas';
 
 import { buildProfilogram } from 'analyses/profilogram';
@@ -121,20 +123,6 @@ const getPropsForLandmark = createSelector(
   }),
 );
 
-// Scale that letterboxes the image into the canvas. Computed at render time so
-// it always reflects the current layout, instead of a one-shot value captured
-// at load time (which races with layout).
-const getFitScale = (
-  canvas: { width: number; height: number },
-  imageWidth: number,
-  imageHeight: number,
-): number => {
-  if (canvas.width > 0 && canvas.height > 0 && imageWidth > 0 && imageHeight > 0) {
-    return Math.min(canvas.width / imageWidth, canvas.height / imageHeight);
-  }
-  return 1;
-};
-
 const mapStateToProps: MapStateToProps<StateProps, OwnProps, StoreState> =
   (state: StoreState, { imageId }: OwnProps) => {
     const canvasSize = getCanvasDimensions(state);
@@ -147,12 +135,11 @@ const mapStateToProps: MapStateToProps<StateProps, OwnProps, StoreState> =
       imageHeight,
       // The stored scale is the user's zoom factor (1 = fit, wheel-adjusted).
       scale: getFitScale(canvasSize, imageWidth, imageHeight) * getScale(state),
-      // brightness: getImageBrightness(state),
-      // contrast: getImageContrast(state),
-      // isFlippedX: isImageFlippedX(state),
-      // isFlippedY: isImageFlippedY(state),
+      // Where the (scaled) image is drawn within the canvas — cursor-anchored
+      // pan/zoom offset if one has been set, else centered. @see
+      // store/reducers/workspace/canvas#getEffectiveOffset
+      offset: getEffectiveOffset(state)(imageId),
       landmarks: getSortedLandmarksToDisplay(state),
-      // isInverted: isImageInverted(state),
       isHighlightMode: isHighlightMode(state),
       highlightedLandmarks: getHighlightedLandmarks(state),
       activeTool: getActiveTool(state),
@@ -170,6 +157,8 @@ const mapDispatchToProps: MapDispatchToPropsFunction<DispatchProps, OwnProps> =
     dispatch,
     onLandmarkMoved: (symbol: string, x: number, y: number) =>
       dispatch(addManualLandmark({ imageId, symbol, value: { x, y } })),
+    onLandmarkDragged: (symbol: string, x: number, y: number) =>
+      dispatch(moveManualLandmarkLive({ imageId, symbol, value: { x, y } })),
   });
 
 const connected = connect<StateProps, DispatchProps, OwnProps>(

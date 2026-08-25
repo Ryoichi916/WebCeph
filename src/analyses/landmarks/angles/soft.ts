@@ -55,10 +55,15 @@ export const Z: CephLandmark = {
   ) as CalculateLandmark<number, GeoObject, GeoObject>,
   /**
    * A low Z angle (< 71°) marks a protrusive (convex) soft-tissue profile,
-   * a high one (> 89°) a flat-to-concave profile.
+   * a high one (> 89°) a flat-to-concave profile. Filed under the
+   * **soft-tissue** profile: the Z angle is read off the lips and the
+   * soft-tissue chin, and the whole point of reporting it beside the skeletal
+   * analyses is to say when the face and the bone part company — a job it
+   * cannot do from inside the `skeletalProfile` category, where it used to
+   * print a facial-surface reading under a "Skeletal profile" heading.
    */
   interpret: defaultInterpetLandmark(
-    'skeletalProfile',
+    'softTissueProfile',
     ['convex', 'normal', 'concave'],
   ),
 };
@@ -116,7 +121,7 @@ export const softTissueFacialConvexity: CephLandmark = {
       (angle: GeoAngle) => 180 - Math.abs(radiansToDegrees(calculateAngle(angle)))
   ) as CalculateLandmark<number, GeoObject, GeoObject>,
   interpret: defaultInterpetLandmark(
-    'skeletalProfile',
+    'softTissueProfile',
     ['concave', 'normal', 'convex'],
   ),
 };
@@ -138,7 +143,7 @@ export const totalFacialConvexity: CephLandmark = {
   ...angleBetweenPoints(G, Pn, softPog, 'Total facial convexity (G-Pn-Pog\')'),
   symbol: 'G-Pn-Pog\'',
   interpret: defaultInterpetLandmark(
-    'skeletalProfile',
+    'softTissueProfile',
     // A small angle at the nose tip is a convex profile; a large one is flat.
     ['convex', 'normal', 'concave'],
   ),
@@ -164,9 +169,11 @@ export const mentolabialSulcusAngle: CephLandmark = {
   ...angleBetweenPoints(Li, Ils, softPog, 'Mentolabial sulcus (Li-Ils-Pog\')'),
   symbol: 'Li-Ils-Pog\'',
   interpret: defaultInterpetLandmark(
-    'chin',
-    // A deep (narrow) sulcus reads as a prominent chin button, a shallow
-    // (wide) one as a recessive chin.
-    ['prominent', 'normal', 'recessive'],
+    'mentolabialSulcus',
+    // A narrow angle is a deep fold, a wide one a shallow (effaced) fold.
+    // Reported as the fold it is, not converted into a "Chin prominence"
+    // verdict: that category is graded on bone (Pog-NB, the facial angle),
+    // and a deep fold over a retruded lower incisor is not a prominent chin.
+    ['deep', 'normal', 'shallow'],
   ),
 };

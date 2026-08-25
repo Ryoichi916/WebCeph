@@ -33,7 +33,7 @@ TODO
 * [x] Typings for reducers
 * [x] Selectors with corresponding reducers in one file
 * [ ] Tracing modes: manual, assisted, automatic
-* [ ] Command palette
+* [x] Command palette
 * [ ] Redesign
 * [ ] Send manual tracing data to dev server in `__DEBUG__` mode, save to database
   * [ ] Only when "Show results" clicked?

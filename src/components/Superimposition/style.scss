@@ -389,6 +389,18 @@
   .dot { fill: #FF8A65; }
 }
 
+// A landmark or synthesised shape plotted on one tracing with no counterpart
+// on the other — carried over from a different analysis, or simply not yet
+// plotted on that film — has nothing to compare against, so it recedes rather
+// than littering the frame at full weight. The same idiom `.row__within`
+// already uses in the Change table for a difference too small to be a
+// finding: still visible, no longer competing for attention. Kept in step
+// with `ORPHAN_ALPHA` in `utils/superimpositionSnapshot.ts`, so the exported
+// PNG dims the same geometry the same amount.
+.geometry__orphan {
+  opacity: .34;
+}
+
 // The reference line whose direction the registration matched, at each
 // timepoint: two coincident lines are the visible proof that the fit is right.
 .basis_line {
@@ -885,6 +897,21 @@
     display: inline;
   }
 
+  // ---- Empty states ------------------------------------------------------------
+
+  // The screen palette ($canvas-text and its faded variant) is tuned for the
+  // app's dark canvas and is nearly invisible on white paper. If a clinician
+  // prints while a pair is unregistered or unplotted, this copy is the only
+  // content on the sheet, so it has to read at the same ink strength as the
+  // rest of the printed page.
+  .empty_title {
+    color: $text-primary;
+  }
+
+  .empty_hint {
+    color: $text-secondary;
+  }
+
   // ---- Letterhead ------------------------------------------------------------
 
   .print_head {
@@ -991,17 +1018,39 @@
     display: block;
   }
 
+  // Not `display: flex`: a flex *row* does not fragment across print pages
+  // the way ordinary block flow does. Once the legend (routinely 2-3 sheets
+  // of copy once the "About this view" disclosure is open — see the comment
+  // on `.legend` below) outgrows the figure's fixed height, Chrome keeps
+  // allocating the *row's* full width to every page the row spans, figure
+  // column included, even though the figure itself finished printing on
+  // sheet 1 — so the next sheet carried nothing but a narrow ribbon of
+  // legend text beside a blank three-quarters of the page, and the sheet
+  // after that could do it again. A float does what the flex row cannot:
+  // the figure sits in its own box while the legend wraps around it (the
+  // ordinary two-column magazine layout), and once the legend outgrows the
+  // figure's height it simply continues at the sheet's full width — plain
+  // block flow, which paginates the way every other block on this sheet
+  // already does. On a short comparison the two still end together near the
+  // figure's foot, exactly as before; a long one no longer strands a nearly
+  // empty sheet to get there.
   .figure_column {
-    display: flex;
-    flex-direction: row;
-    align-items: flex-start;
-    gap: 6mm;
+    display: block;
     padding: 6mm 0 0;
+
+    // Clears the float below so `.panel` (the change table — a sibling of
+    // this element, not of `.figure`) starts under the figure instead of
+    // wrapping up beside its own leftover space.
+    &::after {
+      content: '';
+      display: table;
+      clear: both;
+    }
   }
 
   .figure {
-    flex: 0 0 auto;
-    align-self: flex-start;
+    float: left;
+    margin: 0 6mm 4mm 0;
     // Keep in step with PRINT_FIGURE_HEIGHT_MM in index.tsx, which sizes the
     // figure's annotation type from it. 142mm, not 112: the change table now
     // starts its own sheet (see `.panel` below), so the first sheet is the
@@ -1068,10 +1117,41 @@
   .key__t2 .key_swatch { border-top-color: #C0431A; }
 
   .legend {
-    flex: 1 1 auto;
-    min-width: 0;
+    // No longer a flex sibling of `.figure` (see `.figure_column` above):
+    // it wraps around the floated figure instead, so its measure comes from
+    // the leftover line width rather than from a flex basis — the same
+    // ~50-character column the flex row gave it while the figure is still
+    // running down the page, narrowing to nothing new once the legend
+    // clears the figure's foot and the text drops to the sheet's full width.
     padding: 0;
-    page-break-inside: avoid;
+    // Not `page-break-inside: avoid`: the legend carries the full "About
+    // this view" disclosure (every source paragraph, printed open) plus the
+    // table notes, which is routinely taller than a single sheet once a
+    // magnification warning or a one-sided-measurements note joins the base
+    // two paragraphs. "Avoid" on content that cannot possibly fit on one
+    // page is not honoured so much as fought — it used to fight the *flex
+    // row* itself into pushing the whole figure_column past a blank first
+    // sheet trying to find a page the legend would fit on whole, never
+    // found one, and still had to fragment it regardless. Left to flow like
+    // ordinary text, the legend breaks where it runs out of room and
+    // nothing upstream of it is held back waiting for space that was never
+    // coming.
+  }
+
+  // The screen rule caps both at `92ch` — a sensible width for a paragraph
+  // filling the dark rail's own fixed column, where nothing beside it needs
+  // clearing. Here, while a paragraph still overlaps the floated figure
+  // vertically, that cap is measured from the figure's own left edge (a
+  // wrapping block's box is *not* indented past a float, only the text
+  // inside it is), and 92ch computes only a little wider than the figure
+  // itself — leaving the sliver of line width actually clear of the float
+  // barely wide enough for one short word per line ("Sella" / "held" /
+  // "fixed," / "S–N", each stranded on its own line). Uncapped, the box
+  // reaches the sheet's true right margin, and the same lines read as
+  // ordinary sentences in the space the float leaves free.
+  .legend_note,
+  .legend_about {
+    max-width: none;
   }
 
   .key_text { color: $text-primary; }
@@ -1095,16 +1175,25 @@
     display: block;
     border-left: none;
     background: #FFFFFF;
-    page-break-before: always;
-    break-before: page;
   }
 
   // The section header travels with the first rows it heads. Left breakable, it
   // printed "Change · T2 − T1 · 32 comparable measurements over 5 mo" at the
   // foot of sheet 1 with nothing under it — the table began on sheet 2 and 45 %
   // of the first sheet was white.
+  //
+  // `break-inside: avoid` matters here as much as `break-after`: `.panel_head`
+  // is a flex *column* on screen (title above subtitle, see the non-print
+  // rule), and Chrome fragments a flex column between its own children just
+  // as readily as between unrelated siblings — a plain title/subtitle pair
+  // once printed as "Change" alone at the foot of one sheet with its own
+  // subtitle line stranded at the top of the next. Without `avoid-inside` the
+  // rule below only kept the header from separating from the *table*; it did
+  // nothing to keep the header's own two lines together.
   .panel_head {
     padding: 14px 0 6px;
+    page-break-inside: avoid;
+    break-inside: avoid;
     page-break-after: avoid;
     break-after: avoid;
   }
@@ -1131,16 +1220,29 @@
     padding: 4px 6px;
   }
 
+  // Not `page-break-inside: avoid` on the wrapper: with the table's own sheet
+  // break now natural rather than forced (see `.panel` above), the table can
+  // land close enough to a sheet's foot that neither footnote paragraph fits
+  // under it — and gluing both to the block after them (the certification)
+  // pushed the whole lot onto a sheet of its own with nothing else on it
+  // (observed: a fourth sheet carrying one footnote and the signature block,
+  // otherwise blank). Left breakable, whichever paragraph fits stays with the
+  // table that explains it, and only the shorter remainder — never both —
+  // spills to the next sheet with the certification.
   .footnotes {
     margin-top: 8px;
     padding-top: 7px;
-    page-break-inside: avoid;
   }
 
+  // `break-inside: avoid` moves here, per paragraph, so a sentence still never
+  // splits mid-line even though the two footnotes may now land on different
+  // sheets from each other.
   .footnote {
     margin-bottom: 4px;
     font-size: 10px;
     line-height: 1.4;
+    page-break-inside: avoid;
+    break-inside: avoid;
   }
 
   .legend_note {

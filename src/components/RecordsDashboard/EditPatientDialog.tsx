@@ -136,7 +136,7 @@ export default class EditPatientDialog
         overlayClassName={classes.no_print}
         title={
           <div className={classes.title}>
-            <h3 className={classes.title_heading}>Edit patient details</h3>
+            <h3 id="edit-patient-dialog-title" className={classes.title_heading}>Edit patient details</h3>
             <span className={classes.title_caption}>
               Corrections apply to this patient's whole record
             </span>
@@ -163,6 +163,9 @@ export default class EditPatientDialog
         actionsContainerStyle={{ padding: '12px 24px', borderTop: '1px solid #DDE3EA' }}
         titleStyle={{ padding: '20px 24px 12px' }}
         paperProps={{
+          role: 'dialog',
+          'aria-modal': 'true',
+          'aria-labelledby': 'edit-patient-dialog-title',
           style: {
             borderRadius: 8,
             boxShadow: '0 12px 32px rgba(16, 30, 50, .22)',

@@ -434,6 +434,16 @@ $page-gutter-narrow: 12px;
   overflow-wrap: anywhere;
 }
 
+// The name's own かな reading — quiet, directly under the name it reads, and
+// nowhere else on screen: the Patient Picker only ever carried it as a hover
+// title, so a clinician working straight from a case's Records page (never
+// passing back through the picker) had no visible surface for it at all.
+.identity_reading {
+  font-size: 12.5px;
+  color: $text-tertiary;
+  overflow-wrap: anywhere;
+}
+
 .identity_chart {
   align-self: flex-start;
   display: inline-flex;
@@ -7160,17 +7170,17 @@ $tc-band-outer: #F1F7FC;
   // flexible one on paper, so the two grids differ only by the well's own ~3mm
   // inset instead of by the width of three columns.
   .oa_row {
-    grid-template-columns: minmax(0, 1fr) 58pt 94pt;
+    grid-template-columns: minmax(0, 1fr) 58pt 150pt;
     gap: 0 8pt;
     padding: 1.5pt 0;
   }
 
   .fb_others__solo .oa_row {
-    grid-template-columns: minmax(0, 1fr) 58pt 94pt 62pt 50pt;
+    grid-template-columns: minmax(0, 1fr) 58pt 150pt 62pt 50pt;
   }
 
   .fb_others__solo.fb_others__nochange .oa_row {
-    grid-template-columns: minmax(0, 1fr) 58pt 94pt 62pt;
+    grid-template-columns: minmax(0, 1fr) 58pt 150pt 62pt;
   }
 
   // Why every cell of this block's CHANGE column is an em-dash, said once in the
@@ -7237,11 +7247,20 @@ $tc-band-outer: #F1F7FC;
   // published range carries two bounds *and* the word that says it is a range
   // ("62.0–65.0 RANGE"), and set in 74pt it overran its cell and printed into
   // the value beside it — "69.8 %62.0–65.0" on a filed chart.
+  //
+  // A *target* norm (`isTarget`, @see AnalysisResultsViewer#formatNorm) is
+  // wider still: it states the target figure and the whole range beside it
+  // ("90.0 · range 85.0–95.0 TARGET" against a plain range's "85.0–95.0
+  // RANGE"), and 94pt — plenty for the plain case — printed exactly the same
+  // failure into the value column one track over: "984.2°ange 85.0–95.0" on a
+  // Tweed chart, `justify-content: flex-end` (`.fv_norm`) bleeding the
+  // overflow left instead of right. 150pt is sized to Tweed's own three
+  // target rows, the widest this app currently prints.
   .fv_head,
   .fv_row,
   .fv__nostrip .fv_head,
   .fv__nostrip .fv_row {
-    grid-template-columns: minmax(0, 1fr) 58pt 94pt 62pt 50pt;
+    grid-template-columns: minmax(0, 1fr) 58pt 150pt 62pt 50pt;
     gap: 0 8pt;
   }
 
@@ -7249,7 +7268,7 @@ $tc-band-outer: #F1F7FC;
   .fv__nochange .fv_row,
   .fv__nochange.fv__nostrip .fv_head,
   .fv__nochange.fv__nostrip .fv_row {
-    grid-template-columns: minmax(0, 1fr) 58pt 94pt 62pt;
+    grid-template-columns: minmax(0, 1fr) 58pt 150pt 62pt;
     gap: 0 8pt;
   }
 

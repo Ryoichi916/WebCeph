@@ -37,8 +37,15 @@ const CompatibilityChecker = pure((props: Props) => {
   } = props;
   return (
     <div className={className}>
-      <Dialog open={open}>
-        <h3>You are using an outdated web browser</h3>
+      <Dialog
+        open={open}
+        paperProps={{
+          role: 'dialog',
+          'aria-modal': 'true',
+          'aria-labelledby': 'compat-checker-title',
+        }}
+      >
+        <h3 id="compat-checker-title">You are using an outdated web browser</h3>
         <div>
           Your web browser does not support all the features required for this application to work.
         </div>
@@ -84,7 +91,16 @@ const CompatibilityChecker = pure((props: Props) => {
 });
 
 const ProgressDialog = pure((props: Props) => (
-  <Dialog className={classes.dialog__loading} open={props.open}>
+  <Dialog
+    className={classes.dialog__loading}
+    open={props.open}
+    paperProps={{
+      role: 'dialog',
+      'aria-modal': 'true',
+      'aria-label': 'Checking browser compatibility',
+      tabIndex: -1,
+    }}
+  >
     <div className={classes.loading_container}>
       <CircularProgress />
       <span>Checking browser compatiblity...</span>

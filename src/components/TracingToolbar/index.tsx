@@ -119,7 +119,10 @@ const popoverStyle: React.CSSProperties = {
 };
 
 // Same zoom bounds as the mouse-wheel zoom tool (see editorTools/zoomWithWheel).
-const ZOOM_MIN = 0.2;
+// 0.5, not the old 0.2: in this app's fixed-viewport layout, fit-to-screen
+// (1) already shows the whole film, so the old floor let the zoom-out button
+// shrink it into a small thumbnail lost in dead canvas with no benefit.
+const ZOOM_MIN = 0.5;
 const ZOOM_MAX = 2;
 const ZOOM_STEP = 1.25;
 
@@ -135,6 +138,21 @@ export default class TracingToolbar extends React.PureComponent<Props, State> {
     isSimulationOpen: false,
     caseFileMode: null,
   };
+
+  /**
+   * Mirrors mui 0.20 Menu's own internal `focusIndex` for the analysis list, so
+   * Enter/Space can select the item the keyboard has landed on (@see
+   * `handleAnalysisMenuKeyDown` for why the menu needs this tracked at all).
+   * Deliberately an instance field, not state: `Menu`'s `componentWillReceiveProps`
+   * recomputes its own focus index from its children's `value`/`selected` props
+   * on every re-render of this component (none of the `MenuItem`s here carry
+   * either, so it resolves to -1 and resets focus toward the top) — routing
+   * this through `setState` was exactly what caused that re-render on every
+   * keystroke, silently undoing the ArrowDown that triggered it past the 2nd
+   * item. Nothing here is rendered, so a field the key handler reads
+   * synchronously is all `handleAnalysisMenuFocusChange` needs.
+   */
+  private analysisMenuFocusIndex = 0;
 
   /**
    * The two shortcuts the history buttons name in their own tooltips.
@@ -445,35 +463,40 @@ export default class TracingToolbar extends React.PureComponent<Props, State> {
           <span className={classes.button_label}>Report</span>
         </button>
 
-        {/* Superimposition of two timepoints. Disabled until the patient has
-            two registrable tracings; the tooltip then names what is missing
-            rather than graying out silently. */}
-        <button
-          type="button"
-          className={cx(classes.button, classes.button__superimpose)}
-          disabled={!canSuperimpose}
-          title={superimposeReason}
-          aria-label="Superimpose two timepoints"
-          onClick={this.openSuperimposition}
-        >
-          <IconSuperimpose color={ICON_COLOR} style={iconStyle} />
-          <span className={classes.button_label}>Superimpose</span>
-        </button>
+        {/* Superimposition of two timepoints. Gated until the patient has two
+            registrable tracings. The tooltip lives on this wrapper, not on
+            the button: a `disabled` button never fires a hover event in
+            Chromium/WebKit, so a `title` sitting on it is unreachable — the
+            reason string would be computed correctly and shown to nobody.
+            Gated instead by `aria-disabled` + a no-op click guard. */}
+        <span className={classes.button_slot} title={superimposeReason}>
+          <button
+            type="button"
+            className={cx(classes.button, classes.button__superimpose)}
+            aria-disabled={!canSuperimpose}
+            aria-label="Superimpose two timepoints"
+            onClick={this.openSuperimposition}
+          >
+            <IconSuperimpose color={ICON_COLOR} style={iconStyle} />
+            <span className={classes.button_label}>Superimpose</span>
+          </button>
+        </span>
 
         {/* Treatment simulation (VTO-lite). Needs enough of a tracing for at
-            least one movement to have a meaning; the tooltip names what is
-            missing rather than graying out silently. */}
-        <button
-          type="button"
-          className={cx(classes.button, classes.button__simulate)}
-          disabled={!canSimulate}
-          title={simulateReason}
-          aria-label="Simulate a treatment plan"
-          onClick={this.openSimulation}
-        >
-          <IconSimulate color={ICON_COLOR} style={iconStyle} />
-          <span className={classes.button_label}>Simulate</span>
-        </button>
+            least one movement to have a meaning. Same wrapper-tooltip /
+            aria-disabled idiom as Superimpose above, for the same reason. */}
+        <span className={classes.button_slot} title={simulateReason}>
+          <button
+            type="button"
+            className={cx(classes.button, classes.button__simulate)}
+            aria-disabled={!canSimulate}
+            aria-label="Simulate a treatment plan"
+            onClick={this.openSimulation}
+          >
+            <IconSimulate color={ICON_COLOR} style={iconStyle} />
+            <span className={classes.button_label}>Simulate</span>
+          </button>
+        </span>
 
         <button
           type="button"
@@ -498,7 +521,13 @@ export default class TracingToolbar extends React.PureComponent<Props, State> {
           targetOrigin={{ horizontal: 'left', vertical: 'bottom' }}
           onRequestClose={this.closeMenu}
         >
-          <Menu desktop width={264} onEscKeyDown={this.closeMenu}>
+          <Menu
+            desktop
+            width={264}
+            onEscKeyDown={this.closeMenu}
+            onKeyDown={this.handleAnalysisMenuKeyDown}
+            onMenuItemFocusChange={this.handleAnalysisMenuFocusChange}
+          >
             <div className={classes.menu_heading}>Analysis</div>
             {ANALYSES.map((a) => {
               const isSelected = a.id === activeAnalysisId;
@@ -712,6 +741,12 @@ export default class TracingToolbar extends React.PureComponent<Props, State> {
   };
 
   private openSuperimposition = (e: React.MouseEvent<HTMLButtonElement>) => {
+    // aria-disabled, not `disabled` — the reason tooltip on `.button_slot`
+    // needs an always-hoverable control (see the button's own comment), so
+    // the gate is enforced here as a no-op instead of by the browser.
+    if (!this.props.canSuperimpose) {
+      return;
+    }
     e.currentTarget.blur();
     this.setState({ isSuperimpositionOpen: true });
   };
@@ -721,6 +756,10 @@ export default class TracingToolbar extends React.PureComponent<Props, State> {
   };
 
   private openSimulation = (e: React.MouseEvent<HTMLButtonElement>) => {
+    // Same aria-disabled + no-op guard as openSuperimposition above.
+    if (!this.props.canSimulate) {
+      return;
+    }
     e.currentTarget.blur();
     this.setState({ isSimulationOpen: true });
   };
@@ -749,6 +788,9 @@ export default class TracingToolbar extends React.PureComponent<Props, State> {
   };
 
   private openAnalysisMenu = (e: React.MouseEvent<HTMLButtonElement>) => {
+    // Fresh keyboard-focus tracking for this menu session, not whatever a
+    // previous open left behind.
+    this.analysisMenuFocusIndex = 0;
     this.setState({ openMenu: 'analysis', anchorEl: e.currentTarget });
   };
 
@@ -828,6 +870,50 @@ export default class TracingToolbar extends React.PureComponent<Props, State> {
   private selectAnalysis = (id: string) => {
     this.closeMenu();
     this.props.onSelectAnalysis(id);
+  };
+
+  /**
+   * mui 0.20's desktop `Menu` moves the focus pill on ArrowUp/ArrowDown (and
+   * reports it via `onMenuItemFocusChange`, see below) but never wires Enter
+   * or Space to anything — `MenuItem` renders on a plain `<span>`
+   * (`ListItem`'s default `containerElement`), not a native `<button>`, so
+   * there is no element for the browser to auto-activate on a keypress, and
+   * `Menu`'s own `handleKeyDown` has no `case` for either key. A menu a mouse
+   * can drive but a keyboard cannot operate is not keyboard-accessible at
+   * all — only Escape worked. This picks the currently keyboard-focused
+   * analysis directly instead, the same list `ANALYSES.map` below renders in
+   * and `analysisMenuFocusIndex` (kept in step via `onMenuItemFocusChange`,
+   * see the instance field's own doc comment for why it isn't state) indexes
+   * into.
+   *
+   * `Menu` forwards this same `onKeyDown` prop straight through onto the
+   * inner `List` element (see its `other` passthrough) *in addition to*
+   * invoking it itself from its own wrapping handler, so one keypress can
+   * reach this handler twice; `e.preventDefault()` on the first pass makes
+   * the second a no-op via the `defaultPrevented` guard below rather than a
+   * second dispatch.
+   */
+  private handleAnalysisMenuKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.defaultPrevented) {
+      return;
+    }
+    if (e.key !== 'Enter' && e.key !== ' ' && e.key !== 'Spacebar') {
+      return;
+    }
+    const analysis = ANALYSES[this.analysisMenuFocusIndex];
+    if (analysis === undefined) {
+      return;
+    }
+    e.preventDefault();
+    this.selectAnalysis(analysis.id);
+  };
+
+  /** @see handleAnalysisMenuKeyDown */
+  private handleAnalysisMenuFocusChange = (
+    _e: React.SyntheticEvent<{}> | null,
+    newFocusIndex: number,
+  ) => {
+    this.analysisMenuFocusIndex = newFocusIndex;
   };
 
   /** @see componentDidMount */

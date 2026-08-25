@@ -65,20 +65,28 @@ const createExport: Exporter = async (state, options, _) => {
     (
       <svg>
         {includeRasterImage ? <image xlinkHref={imageToExport.data} /> : null}
-        {map(objectsByImage, (objects, imgId) => (
-          <GeoViewer
-            key={imgId}
-            objects={map(objects, (value: GeoObject | undefined, symbol: string) =>
-              ({ label: symbol, symbol, value: value as GeoObject }))}
-            top={0}
-            left={0}
-            width={500}
-            height={500}
-            getPropsForPoint={() => ({})}
-            getPropsForVector={() => ({})}
-            getPropsForAngle={() => ({})}
-          />
-        ))}
+        {map(objectsByImage, (objects, imgId) => {
+          // Use this image's own real dimensions, not a hardcoded stand-in —
+          // a wrong width/height here silently corrupts Angle's
+          // extend-vs-parallel geometry (isPointWithinRect against
+          // boundingRect), the same construction that GeoViewer's live
+          // callers (TracingViewer) always pass the real film's size to.
+          const { width: imgWidth, height: imgHeight } = getProps(imgId);
+          return (
+            <GeoViewer
+              key={imgId}
+              objects={map(objects, (value: GeoObject | undefined, symbol: string) =>
+                ({ label: symbol, symbol, value: value as GeoObject }))}
+              top={0}
+              left={0}
+              width={imgWidth || 0}
+              height={imgHeight || 0}
+              getPropsForPoint={() => ({})}
+              getPropsForVector={() => ({})}
+              getPropsForAngle={() => ({})}
+            />
+          );
+        })}
       </svg>
     ),
     fragment as unknown as Element,

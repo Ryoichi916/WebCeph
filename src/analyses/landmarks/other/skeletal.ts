@@ -4,7 +4,9 @@ import {
   normSd,
 } from 'analyses/helpers';
 
-import { NSAr, SArGo, ArGoMe, FMIA } from 'analyses/landmarks/angles/skeletal';
+import {
+  NSAr, SArGo, ArGoMe, FMPA, IMPA, FMIA,
+} from 'analyses/landmarks/angles/skeletal';
 import { L1Axis } from 'analyses/landmarks/lines/skeletal';
 
 import {
@@ -95,6 +97,28 @@ export const articulareCaveats = (
       'it crosses the cranial base, before reading these three as findings.',
   }];
 };
+
+/**
+ * The closure of Tweed's diagnostic triangle: FMA + IMPA + FMIA, which is
+ * 180° *by construction* — the three angles are what the Frankfort horizontal,
+ * the mandibular plane and the lower incisor axis make with each other, and in
+ * this app all three are computed from the same three directed lines (Po→Or,
+ * Go↔Me, apex→edge), so they cannot disagree by even a rounding error.
+ *
+ * Printed with the triangle rather than left implicit, for the reader who
+ * knows Tweed's geometry and wants to see that the tracing closes: a table
+ * whose three angles were measured independently (as on paper, with a
+ * protractor) is trusted *because* their total lands on 180, and this row is
+ * that check, run on the app's own numbers.
+ *
+ * It carries no norm — nobody publishes one for an identity — so the norm and
+ * deviation columns print an em dash (see `NO_NORM`), never an invented
+ * "180 ± 0" pretending a sample statistic exists.
+ */
+export const tweedTriangleSum: CephAngularSum = angularSum(
+  [FMPA, IMPA, FMIA],
+  'Closure of the diagnostic triangle',
+);
 
 export const cephCorrection: CephLandmark = {
   name: 'Cephalometric correction',

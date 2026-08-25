@@ -156,9 +156,12 @@ export const getRecordAnalyses = createSelector(
     getLandmarks, getScale,
   ): RecordAnalysis[] => {
     // Which lateral analyses could report anything at all. An analysis module
-    // that interprets no measurement (Tweed, in this build) is left out here for
-    // the same reason the combined report leaves it out of its sections: a "0 of
-    // 0" is a gap in the software, not a finding about the patient.
+    // that interprets no measurement is left out here for the same reason the
+    // combined report leaves it out of its sections: a "0 of 0" is a gap in the
+    // software, not a finding about the patient. Every analysis currently
+    // registered — Tweed included, via its triangle-closure group — defines at
+    // least one measurement, so nothing is filtered out in this build today;
+    // this stays a guard against a future module that defines none.
     const reportable = LATERAL_ANALYSES.filter(
       ({ analysis }) => definesMeasurements(analysis),
     );

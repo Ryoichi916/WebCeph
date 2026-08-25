@@ -56,6 +56,13 @@ import {
   formatVisitAge,
 } from 'utils/caseSummary';
 
+// The printed page's own plumbing, from the view that established it: the same
+// font stack in the `@page` margin boxes, the same string escaping, and the date
+// form a *document* of this app states as its own — so a case list and a case
+// sheet filed in the same chart cannot date and number their sheets two ways.
+// @see RecordsDashboard#renderPrintPageStyle, which this mirrors.
+import { PRINT_FONT, cssString, documentDate } from 'components/ClinicalReport';
+
 const classes = require('./style.scss');
 
 /**
@@ -349,6 +356,29 @@ interface State extends ListView {
    * filtered list instead of only the page on screen.
    */
   printing: boolean;
+  /**
+   * What this browser profile's own storage looks like right now — bytes this
+   * origin is actually using, and the quota the browser is willing to grow it
+   * to — or null where the browser will not say. Every case here lives only in
+   * this profile's IndexedDB (@see store/middleware/project), so "how much
+   * room is left" is a real clinical question with a real answer this API
+   * gives, not a guess this screen is entitled to make up. @see refreshStorage
+   */
+  storage: { usageBytes: number; quotaBytes: number | null } | null;
+  /**
+   * Whether the storage estimate has resolved once (successfully or not), so
+   * the strip can stay blank on the very first paint instead of flashing
+   * "not available" for the one tick before the promise settles.
+   */
+  storageChecked: boolean;
+  /**
+   * Whether this origin's storage has been granted "persistent" treatment —
+   * true, false, or null where the browser exposes no such API and the
+   * question cannot be answered either way. A clinic keeping a growing chart
+   * only on this device is exactly who needs to be told the browser may still
+   * clear it under storage pressure if this reads false.
+   */
+  persisted: boolean | null;
 }
 
 /** One row of the case list: the patient, their summary, and what sorts them. */
@@ -497,12 +527,28 @@ const compareText = (a: string, b: string): number => {
 };
 
 /**
- * Folds a name or a query into the form the search matches on: case-folded,
- * with the punctuation a clinician does not type — the comma of "Alvarez,
- * Greta", the hyphen of "Vandenberghe-Kowalczyk", the dot of an initial, the
- * 、and ・of a Japanese record — flattened to spaces.
+ * Katakana folded to hiragana, after `NFKC` folds half-width katakana (the
+ * IME-adjacent "ﾔﾏﾀﾞ" shape) to full-width. The sort above already treats
+ * hiragana, katakana and half-width katakana as equivalent — `Intl.Collator`
+ * does that natively — but a plain substring search does not, so a reading
+ * on file in one script silently failed to match a query typed in another.
+ * Hiragana and (full-width) katakana share one code plane 0x60 apart for
+ * every character that has both forms, so the fold is a single offset
+ * subtraction; katakana-only characters (the prolonged sound mark ー, ヶ used
+ * as a counter) have no hiragana form and simply pass through unchanged.
  */
-const foldForSearch = (text: string): string => text
+const toHiragana = (text: string): string => text
+  .normalize('NFKC')
+  .replace(/[ァ-ヶ]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0x60));
+
+/**
+ * Folds a name or a query into the form the search matches on: case-folded,
+ * kana-folded (`toHiragana`), with the punctuation a clinician does not
+ * type — the comma of "Alvarez, Greta", the hyphen of
+ * "Vandenberghe-Kowalczyk", the dot of an initial, the 、and ・of a Japanese
+ * record — flattened to spaces.
+ */
+const foldForSearch = (text: string): string => toHiragana(text)
   .toLowerCase()
   .replace(
     /[,、，.。．・･:;_/\\|()\[\]'"‘’“”]+/g,
@@ -523,6 +569,30 @@ const searchTerms = (query: string): string[] =>
 
 const plural = (count: number, one: string, many: string): string =>
   `${count} ${count === 1 ? one : many}`;
+
+/**
+ * Bytes as a clinician reads them — one or two significant figures past the
+ * point, the unit that keeps the number between 1 and 1024, and never more
+ * precision than the browser's own estimate carries (the spec allows it to
+ * pad the true figure for privacy, so a strip reading "41.29 MB" would be
+ * false precision over a number that was never exact to begin with).
+ */
+const formatBytes = (bytes: number): string => {
+  if (!isFinite(bytes) || bytes < 0) {
+    return '—';
+  }
+  if (bytes < 1024) {
+    return `${Math.round(bytes)} B`;
+  }
+  const units = ['KB', 'MB', 'GB', 'TB'];
+  let value = bytes / 1024;
+  let unitIndex = 0;
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+  return `${value < 10 ? value.toFixed(1) : Math.round(value)} ${units[unitIndex]}`;
+};
 
 /** "3 images in 3 visits" — what the Records column says, spelled out. */
 const describeRecords = (summary: PatientCaseSummary | undefined): string => {
@@ -719,12 +789,15 @@ export default class PatientPicker extends React.PureComponent<Props, State> {
     registerOpen: this.props.patients.length === 0,
     restoreOpen: false,
     printing: false,
+    storage: null,
+    storageChecked: false,
+    persisted: null,
     // Where the user left the list — see `readView`.
     ...readView(),
   };
 
   /** The scrolling table, whose visible height is quantised to whole rows. */
-  private table: HTMLDivElement | null = null;
+  private table: HTMLTableElement | null = null;
 
   /**
    * The rows as they were last built, with the two props they are built from.
@@ -747,7 +820,16 @@ export default class PatientPicker extends React.PureComponent<Props, State> {
   /** The `print` media query, watched so the sheet can carry the whole list. */
   private printQuery: MediaQueryList | null = null;
 
+  /**
+   * Whether this component is still mounted — the picker unmounts the moment a
+   * case is opened (@see class doc), and `navigator.storage.estimate()` is a
+   * promise that can easily resolve after that. Checked before every setState
+   * the estimate schedules.
+   */
+  private isMounted_ = false;
+
   componentDidMount() {
+    this.isMounted_ = true;
     window.addEventListener('resize', this.syncTableHeight);
     // Chrome and Firefox raise these around the print dialog; Safari does not,
     // and neither does a headless print pass — hence the media query below as
@@ -762,6 +844,12 @@ export default class PatientPicker extends React.PureComponent<Props, State> {
       this.printQuery = null;
     }
     this.syncTableHeight();
+    // A clinic works this screen across a whole day with the tab left open, and
+    // storage this app's own autosave has written since the last measurement is
+    // exactly what makes the strip stale — refreshed on mount and whenever the
+    // tab is looked at again, never polled while it is not.
+    this.refreshStorage();
+    document.addEventListener('visibilitychange', this.handleVisibilityChange);
   }
 
   componentDidUpdate(_: Props, prevState: State) {
@@ -773,13 +861,79 @@ export default class PatientPicker extends React.PureComponent<Props, State> {
   }
 
   componentWillUnmount() {
+    this.isMounted_ = false;
     window.removeEventListener('resize', this.syncTableHeight);
     window.removeEventListener('beforeprint', this.enterPrint);
     window.removeEventListener('afterprint', this.exitPrint);
+    document.removeEventListener('visibilitychange', this.handleVisibilityChange);
     if (this.printQuery !== null) {
       this.printQuery.removeListener(this.handlePrintQuery);
     }
   }
+
+  private handleVisibilityChange = () => {
+    if (document.visibilityState === 'visible') {
+      this.refreshStorage();
+    }
+  };
+
+  /**
+   * Measures this origin's own storage — never a figure derived from the case
+   * index. The case index counts *records*, not the bytes a saved project
+   * actually occupies on disk (compression, IndexedDB overhead and the
+   * autosave debounce all put daylight between the two), so the only honest
+   * source for "how full is this browser" is the browser's own accounting.
+   * Where it declines to give one (Safari < 15.2, a `file://` origin, a
+   * disabled Storage API) the strip says so instead of estimating — a wrong
+   * number here is worse than none, on a screen a practice reads before
+   * deciding whether to keep filing films into this browser.
+   */
+  private refreshStorage = () => {
+    const storageManager = navigator.storage;
+    if (
+      storageManager === undefined ||
+      typeof storageManager.estimate !== 'function'
+    ) {
+      this.setState({ storageChecked: true, storage: null, persisted: null });
+      return;
+    }
+    storageManager.estimate()
+      .then((estimate) => {
+        if (!this.isMounted_) {
+          return;
+        }
+        if (typeof estimate.usage !== 'number') {
+          this.setState({ storageChecked: true, storage: null });
+          return;
+        }
+        this.setState({
+          storageChecked: true,
+          storage: {
+            usageBytes: estimate.usage,
+            quotaBytes: typeof estimate.quota === 'number'
+              ? estimate.quota : null,
+          },
+        });
+      })
+      .catch(() => {
+        if (this.isMounted_) {
+          this.setState({ storageChecked: true, storage: null });
+        }
+      });
+    if (typeof storageManager.persisted === 'function') {
+      storageManager.persisted()
+        .then((persisted) => {
+          if (this.isMounted_) {
+            this.setState({ persisted });
+          }
+        })
+        .catch(() => {
+          if (this.isMounted_) {
+            this.setState({ persisted: null });
+          }
+        });
+    }
+  };
 
   private enterPrint = () => {
     this.setState({ printing: true });
@@ -796,7 +950,7 @@ export default class PatientPicker extends React.PureComponent<Props, State> {
     this.setState({ printing: e.matches });
   };
 
-  private setTable = (el: HTMLDivElement | null) => {
+  private setTable = (el: HTMLTableElement | null) => {
     this.table = el;
     this.syncTableHeight();
   };
@@ -819,7 +973,10 @@ export default class PatientPicker extends React.PureComponent<Props, State> {
     // Measure the height the layout wants first: the clamp from the last pass
     // would otherwise cap it and the table could never grow again.
     el.style.maxHeight = '';
-    const list = el.querySelector('ul');
+    // The row list only — never the empty-state's own `<tbody>` (@see render),
+    // which holds one filler row and would otherwise be read as a one-row table
+    // and clamped to it.
+    const list = el.querySelector(`.${classes.list}`);
     const head = el.firstElementChild as HTMLElement | null;
     if (list === null || head === null || list.children.length === 0) {
       return;
@@ -1015,6 +1172,10 @@ export default class PatientPicker extends React.PureComponent<Props, State> {
     const { pendingRemoval } = this.state;
     if (pendingRemoval !== null) {
       this.props.onRemove(pendingRemoval.id);
+      // The deletion itself is an async IndexedDB write; a measurement taken
+      // in the same tick would still be reading the space it used to occupy.
+      // Best-effort only — nothing on this screen depends on the timing.
+      window.setTimeout(this.refreshStorage, 1200);
     }
     this.setState({ pendingRemoval: null });
   };
@@ -1191,52 +1352,100 @@ export default class PatientPicker extends React.PureComponent<Props, State> {
     );
   }
 
+  /**
+   * The column heads, as a real `<thead>` — the one construction a browser
+   * repeats *and* reserves the space for across printed pages. A `position:
+   * fixed` div repeats but the flow then runs underneath it from sheet 2 on, and
+   * a div with `display: table-header-group` does not repeat at all (both
+   * probed in Chromium and Firefox, at up to 199 rows over 8 sheets): only a
+   * real `<table><thead>` does. @see RecordsDashboard's own case sheet, which
+   * this mirrors — one `<th>` wide enough to hold the whole header, so the grid
+   * of sortable columns inside it stays exactly the layout it always was.
+   *
+   * Each label prints twice: the on-screen sort `<button>` and a plain,
+   * non-interactive `<span>` twin next to it (`.th_label_print`) — because a
+   * `<button>` inside a `<thead>` turned out not to be the whole answer either.
+   *
+   * Neither the `<th>` nor its grid `<div>` carries its own row/columnheader
+   * role: a `<th colSpan={COLUMNS.length}>` is natively one columnheader cell
+   * covering all nine columns, and giving its inner div `role="row"` (an
+   * earlier version of this did) nests a synthetic row *inside* that cell --
+   * which nests a row inside a columnheader, and, once the `<th>`'s own
+   * `display: contents` (`.thead_cell`) flattens it out of the render tree,
+   * nests that synthetic row directly inside the real `<tr>`'s native row
+   * role too. Both a row-in-a-columnheader and a row-in-a-row are invalid
+   * ARIA table structure, and assistive tech's behavior on either is
+   * undefined rather than merely imperfect. `role="presentation"` on both
+   * the `<th>` and the div removes them from the accessibility tree the same
+   * way `display: contents` already removes them from the box tree, so the
+   * nine `role="columnheader"` spans below attach directly to the real
+   * `<tr>` -- one real header row, nine real column headers, matching what a
+   * plain `<table>` with nine `<th>`s would have produced natively, which is
+   * what this construction stands in for.
+   */
   private renderHead() {
     const { sortKey, sortDir } = this.state;
     return (
-      <div className={classes.thead}>
-        <div className={classes.thead_grid} role="row" aria-rowindex={1}>
-          {COLUMNS.map((column, index) => {
-            const isSorted = column.key !== null && column.key === sortKey;
-            const cellClass = cx(classes.th, classes[column.cell], {
-              [classes.th__sorted]: isSorted,
-            });
-            if (column.key === null) {
-              return (
-                <span
-                  key={`spacer-${index}`}
-                  className={cellClass}
-                  role="columnheader"
-                />
-              );
-            }
-            const key = column.key;
-            return (
-              <span
-                key={key}
-                className={cellClass}
-                role="columnheader"
-                aria-colindex={index + 1}
-                aria-sort={
-                  isSorted
-                    ? (sortDir === 'asc' ? 'ascending' : 'descending')
-                    : 'none'
+      <thead className={classes.thead}>
+        <tr>
+          <th className={classes.thead_cell} role="presentation" colSpan={COLUMNS.length}>
+            <div className={classes.thead_grid} role="presentation">
+              {COLUMNS.map((column, index) => {
+                const isSorted = column.key !== null && column.key === sortKey;
+                const cellClass = cx(classes.th, classes[column.cell], {
+                  [classes.th__sorted]: isSorted,
+                });
+                if (column.key === null) {
+                  return (
+                    <span
+                      key={`spacer-${index}`}
+                      className={cellClass}
+                      role="columnheader"
+                    />
+                  );
                 }
-              >
-                <button
-                  type="button"
-                  className={classes.th_btn}
-                  title={column.title}
-                  onClick={() => this.sortBy(key)}
-                >
-                  {column.label}
-                  {this.renderSortIndicator(key)}
-                </button>
-              </span>
-            );
-          })}
-        </div>
-      </div>
+                const key = column.key;
+                return (
+                  <span
+                    key={key}
+                    className={cellClass}
+                    role="columnheader"
+                    aria-colindex={index + 1}
+                    aria-sort={
+                      isSorted
+                        ? (sortDir === 'asc' ? 'ascending' : 'descending')
+                        : 'none'
+                    }
+                  >
+                    <button
+                      type="button"
+                      className={classes.th_btn}
+                      title={column.title}
+                      onClick={() => this.sortBy(key)}
+                    >
+                      {column.label}
+                      {this.renderSortIndicator(key)}
+                    </button>
+                    {/* Paper's own twin of the same label and arrow — never
+                        shown on screen (`.th_label_print` is print-only, @see
+                        style.scss) and never interactive, because a `<button>`
+                        inside a `<thead>` does not repaint on the REPEATED
+                        copies of a printed table's running head: verified in
+                        this Chromium build (`page.pdf()`) — the button prints
+                        on sheet 1, where the head is part of normal flow, and
+                        is blank on every sheet after, where it is not. A plain
+                        `<span>` carrying the same words has no such fault. */}
+                    <span className={classes.th_label_print} aria-hidden="true">
+                      {column.label}
+                      {this.renderSortIndicator(key)}
+                    </span>
+                  </span>
+                );
+              })}
+            </div>
+          </th>
+        </tr>
+      </thead>
     );
   }
 
@@ -1283,172 +1492,186 @@ export default class PatientPicker extends React.PureComponent<Props, State> {
     const status = row.status;
     const reading = (patient.reading || '').trim();
     return (
-      <li key={patient.id} className={classes.row_item}>
-        {/* The row is one button that opens the case, and a table row to a
-            screen reader: its cells are announced as the columns they are
-            under instead of as one run-on string. Native activation is
-            unaffected by the role. */}
-        <button
-          type="button"
-          className={classes.row}
-          role="row"
-          aria-rowindex={rowIndex}
-          onClick={() => onOpen(patient.id)}
-        >
-          <span className={classes.cell_film} role="cell">
-            {this.renderFilm(row)}
-          </span>
-          <span className={cx(classes.cell_name, classes.cell)} role="cell">
-            {hasName ? (
-              // The full name where the column has to ellipsise it: two
-              // siblings must never be indistinguishable from the list.
-              <span
-                className={classes.row_name}
-                title={reading !== '' ? `${patient.name} (${reading})` : patient.name}
-              >
-                {patient.name}
-              </span>
-            ) : (
-              // A record filed under a chart ID alone. Printing that identifier
-              // here as well would say the same datum twice in one row.
-              <span className={classes.row_unnamed}>(unnamed patient)</span>
-            )}
-            {/* The reading, on the qualifier line every other column uses for
-                one. It is what this column is ORDERED by (kanji carry no
-                reading a collator can find), and a list ordered on a key it
-                never shows is an order the user cannot account for. */}
-            {reading !== '' ? (
-              <span className={classes.cell_sub} title={reading}>
-                {reading}
-              </span>
-            ) : null}
-          </span>
-          <span
-            className={cx(classes.cell_chart, classes.cell)}
-            role="cell"
-            aria-label={
-              patient.chartId !== ''
-                ? `Chart ID ${patient.chartId}` : 'No chart ID on file'
-            }
+      // A real `<tr>`, so the header 190 rows up is a real `<thead>` a printed
+      // page can repeat (@see renderHead) -- one `<td>` wide, because the row
+      // beneath it is one button that opens the case and a table row only to a
+      // screen reader (see below), and a `<tr>` may not hold a `<button>`
+      // directly. Both the `<tr>` and this `<td>` carry `role="presentation"`
+      // for the same reason `renderHead`'s `<th>` does: the button below
+      // already supplies its own `role="row"`, and leaving the real `<tr>`
+      // (native row) wrapping it would nest a synthetic row inside a real
+      // one -- invalid ARIA table structure. Presentational here removes
+      // both the `<tr>` and `<td>` from the accessibility tree, so the
+      // button's row attaches directly to the real `<tbody>` (a valid
+      // rowgroup context) instead.
+      <tr key={patient.id} className={classes.row_item} role="presentation">
+        <td className={classes.row_cell} colSpan={COLUMNS.length} role="presentation">
+          {/* The row is one button that opens the case, and a table row to a
+              screen reader: its cells are announced as the columns they are
+              under instead of as one run-on string. Native activation is
+              unaffected by the role. */}
+          <button
+            type="button"
+            className={classes.row}
+            role="row"
+            aria-rowindex={rowIndex}
+            onClick={() => onOpen(patient.id)}
           >
-            {patient.chartId !== '' ? (
-              <span className={classes.chip_id} title={patient.chartId}>
-                {patient.chartId}
-              </span>
-            ) : (
-              <span className={classes.unset}>—</span>
-            )}
-          </span>
-          <span
-            className={cx(classes.cell_age, classes.cell)}
-            role="cell"
-            aria-label={
-              age !== null && dob !== null
-                ? `Age ${age}, born ${dob}`
-                : 'Age not known — no date of birth on file'
-            }
-          >
-            {age !== null ? (
-              <span className={classes.cell_value}>{age}</span>
-            ) : (
-              <span className={classes.unset}>—</span>
-            )}
-            {dob !== null ? (
-              <span className={classes.cell_sub}>{dob}</span>
-            ) : (
-              <span className={classes.cell_sub}>no date of birth</span>
-            )}
-          </span>
-          <span
-            className={cx(classes.cell_sex, classes.cell)}
-            role="cell"
-            aria-label={formatSexFull(patient.sex) || 'Sex not recorded'}
-          >
-            {sex !== null ? (
-              <span className={classes.cell_value}>{sex}</span>
-            ) : (
-              <span className={classes.unset}>—</span>
-            )}
-          </span>
-          <span
-            className={cx(classes.cell_records, classes.cell)}
-            role="cell"
-            aria-label={describeRecords(summary)}
-            // Where the figure comes from, which is the answer to the one
-            // question this column can raise: the row is counted off the
-            // project as it was last written, not off unsaved work.
-            title={
-              summary !== undefined
-                ? `Counted from the project saved on ` +
-                  `${getTodayISO(new Date(summary.savedAt))}`
-                : 'No project has been saved for this case yet'
-            }
-          >
-            {summary !== undefined && summary.recordCount > 0 ? (
-              <span className={classes.cell_value}>{summary.recordCount}</span>
-            ) : (
-              <span className={classes.unset}>—</span>
-            )}
-            {summary !== undefined && summary.timepointCount > 0 ? (
-              <span className={classes.cell_sub}>
-                {summary.timepointCount === 1
-                  ? '1 visit' : `${summary.timepointCount} visits`}
-              </span>
-            ) : null}
-          </span>
-          <span
-            className={cx(classes.cell_visit, classes.cell)}
-            role="cell"
-            // How long the case has been under records, which is the one figure
-            // the index counts that the row has no column for.
-            title={describeVisitSpan(summary)}
-            aria-label={
-              lastVisit !== null
-                ? `Last visit ${lastVisit}${visitAge !== null ? `, ${visitAge}` : ''}`
-                : 'No dated visit on file'
-            }
-          >
-            {lastVisit !== null ? (
-              <span className={classes.cell_value}>{lastVisit}</span>
-            ) : (
-              <span className={classes.unset}>—</span>
-            )}
-            {visitAge !== null ? (
-              <span className={classes.cell_sub}>{visitAge}</span>
-            ) : null}
-          </span>
-          <span className={cx(classes.cell_status, classes.cell)} role="cell">
-            <span
-              className={cx(classes.chip, classes[STATUS_CHIP_CLASS[status]])}
-              title={getCaseTracingTitle(summary)}
-            >
-              {getCaseTracingLabel(summary)}
+            <span className={classes.cell_film} role="cell">
+              {this.renderFilm(row)}
             </span>
+            <span className={cx(classes.cell_name, classes.cell)} role="cell">
+              {hasName ? (
+                // The full name where the column has to ellipsise it: two
+                // siblings must never be indistinguishable from the list.
+                <span
+                  className={classes.row_name}
+                  title={reading !== '' ? `${patient.name} (${reading})` : patient.name}
+                >
+                  {patient.name}
+                </span>
+              ) : (
+                // A record filed under a chart ID alone. Printing that identifier
+                // here as well would say the same datum twice in one row.
+                <span className={classes.row_unnamed}>(unnamed patient)</span>
+              )}
+              {/* The reading, on the qualifier line every other column uses for
+                  one. It is what this column is ORDERED by (kanji carry no
+                  reading a collator can find), and a list ordered on a key it
+                  never shows is an order the user cannot account for. */}
+              {reading !== '' ? (
+                <span className={classes.cell_sub} title={reading}>
+                  {reading}
+                </span>
+              ) : null}
+            </span>
+            <span
+              className={cx(classes.cell_chart, classes.cell)}
+              role="cell"
+              aria-label={
+                patient.chartId !== ''
+                  ? `Chart ID ${patient.chartId}` : 'No chart ID on file'
+              }
+            >
+              {patient.chartId !== '' ? (
+                <span className={classes.chip_id} title={patient.chartId}>
+                  {patient.chartId}
+                </span>
+              ) : (
+                <span className={classes.unset}>—</span>
+              )}
+            </span>
+            <span
+              className={cx(classes.cell_age, classes.cell)}
+              role="cell"
+              aria-label={
+                age !== null && dob !== null
+                  ? `Age ${age}, born ${dob}`
+                  : 'Age not known — no date of birth on file'
+              }
+            >
+              {age !== null ? (
+                <span className={classes.cell_value}>{age}</span>
+              ) : (
+                <span className={classes.unset}>—</span>
+              )}
+              {dob !== null ? (
+                <span className={classes.cell_sub}>{dob}</span>
+              ) : (
+                <span className={classes.cell_sub}>no date of birth</span>
+              )}
+            </span>
+            <span
+              className={cx(classes.cell_sex, classes.cell)}
+              role="cell"
+              aria-label={formatSexFull(patient.sex) || 'Sex not recorded'}
+            >
+              {sex !== null ? (
+                <span className={classes.cell_value}>{sex}</span>
+              ) : (
+                <span className={classes.unset}>—</span>
+              )}
+            </span>
+            <span
+              className={cx(classes.cell_records, classes.cell)}
+              role="cell"
+              aria-label={describeRecords(summary)}
+              // Where the figure comes from, which is the answer to the one
+              // question this column can raise: the row is counted off the
+              // project as it was last written, not off unsaved work.
+              title={
+                summary !== undefined
+                  ? `Counted from the project saved on ` +
+                    `${getTodayISO(new Date(summary.savedAt))}`
+                  : 'No project has been saved for this case yet'
+              }
+            >
+              {summary !== undefined && summary.recordCount > 0 ? (
+                <span className={classes.cell_value}>{summary.recordCount}</span>
+              ) : (
+                <span className={classes.unset}>—</span>
+              )}
+              {summary !== undefined && summary.timepointCount > 0 ? (
+                <span className={classes.cell_sub}>
+                  {summary.timepointCount === 1
+                    ? '1 visit' : `${summary.timepointCount} visits`}
+                </span>
+              ) : null}
+            </span>
+            <span
+              className={cx(classes.cell_visit, classes.cell)}
+              role="cell"
+              // How long the case has been under records, which is the one figure
+              // the index counts that the row has no column for.
+              title={describeVisitSpan(summary)}
+              aria-label={
+                lastVisit !== null
+                  ? `Last visit ${lastVisit}${visitAge !== null ? `, ${visitAge}` : ''}`
+                  : 'No dated visit on file'
+              }
+            >
+              {lastVisit !== null ? (
+                <span className={classes.cell_value}>{lastVisit}</span>
+              ) : (
+                <span className={classes.unset}>—</span>
+              )}
+              {visitAge !== null ? (
+                <span className={classes.cell_sub}>{visitAge}</span>
+              ) : null}
+            </span>
+            <span className={cx(classes.cell_status, classes.cell)} role="cell">
+              <span
+                className={cx(classes.chip, classes[STATUS_CHIP_CLASS[status]])}
+                title={getCaseTracingTitle(summary)}
+              >
+                {getCaseTracingLabel(summary)}
+              </span>
+            </span>
+            <span
+              className={classes.cell_actions}
+              role="cell"
+              aria-label="Open case"
+            />
+          </button>
+          <span className={classes.row_delete}>
+            <IconButton
+              tooltip="Remove patient"
+              // Above the icon, never below it: a tooltip painted downwards sat
+              // over the *next* patient's row, so on a long list you were
+              // pointing at one name and reading another.
+              tooltipPosition="top-left"
+              style={deleteButtonStyle}
+              iconStyle={deleteIconStyle}
+              onClick={() => this.requestRemoval(patient)}
+            >
+              <IconDelete color="#7B8794" hoverColor="#C62828" />
+            </IconButton>
           </span>
-          <span
-            className={classes.cell_actions}
-            role="cell"
-            aria-label="Open case"
-          />
-        </button>
-        <span className={classes.row_delete}>
-          <IconButton
-            tooltip="Remove patient"
-            // Above the icon, never below it: a tooltip painted downwards sat
-            // over the *next* patient's row, so on a long list you were
-            // pointing at one name and reading another.
-            tooltipPosition="top-left"
-            style={deleteButtonStyle}
-            iconStyle={deleteIconStyle}
-            onClick={() => this.requestRemoval(patient)}
-          >
-            <IconDelete color="#7B8794" hoverColor="#C62828" />
-          </IconButton>
-        </span>
-        <span className={classes.row_chevron} aria-hidden="true">
-          <IconArrow color="#A9B4BE" />
-        </span>
-      </li>
+          <span className={classes.row_chevron} aria-hidden="true">
+            <IconArrow color="#A9B4BE" />
+          </span>
+        </td>
+      </tr>
     );
   }
 
@@ -1594,6 +1817,50 @@ export default class PatientPicker extends React.PureComponent<Props, State> {
   }
 
   /**
+   * The printed sheet's own paper geometry and its running foot — the same
+   * construction the records dashboard's own case sheet uses
+   * (`RecordsDashboard#renderPrintPageStyle`, whose margin boxes and type this
+   * matches exactly), because a chart holding a printed case list alongside a
+   * case sheet or a report cannot date and number its sheets two ways.
+   *
+   * Declared here rather than in the stylesheet for the same two reasons that
+   * component gives: the foot's date is generated at render time, and a static
+   * `@page` in *this* stylesheet would be document-wide the moment this bundle
+   * sits alongside the report's or the superimposition's, which set their own
+   * page box (see the print block at the foot of style.scss, which explains why
+   * it deliberately declares none). Rendered only while this screen is mounted
+   * at all — the app shows the case list or an open case, never both (see
+   * `components/App`) — so the page box this injects is always this surface's
+   * own.
+   *
+   * The header repeats without any of this (a real `<thead>`, @see renderHead)
+   * — this is only what numbers the sheets and dates the print run, which the
+   * header cannot carry since it is the same on every page.
+   */
+  private renderPrintPageStyle = () => {
+    const printed = `Printed ${documentDate(new Date())} · WebCeph`;
+    const box = (align: string) => (
+      `font: 8pt ${PRINT_FONT}; color: #7B8794; text-align: ${align};` +
+      ' vertical-align: top; padding-top: 3mm;'
+    );
+    const css = [
+      '@page {',
+      '  size: A4 portrait;',
+      '  margin: 12mm 12mm 14mm;',
+      '  @bottom-left {',
+      `    content: ${cssString(printed)};`,
+      `    ${box('left')}`,
+      '  }',
+      '  @bottom-right {',
+      '    content: "Page " counter(page) " of " counter(pages);',
+      `    ${box('right')} color: #52616F; font-weight: 600;`,
+      '  }',
+      '}',
+    ].join('\n');
+    return <style type="text/css" dangerouslySetInnerHTML={{ __html: css }} />;
+  };
+
+  /**
    * The caption the printed sheet carries instead of the toolbar.
    *
    * A work queue is something a practice prints and carries, and on paper the
@@ -1724,6 +1991,87 @@ export default class PatientPicker extends React.PureComponent<Props, State> {
     );
   }
 
+  /**
+   * The strip that answers "how full is this browser" — honestly: only what
+   * `navigator.storage.estimate()` actually reports, never a figure derived
+   * from the case index (@see refreshStorage). Screen-only, like the toolbar
+   * above it; a printed work queue has no use for a live storage reading.
+   */
+  private renderStorageStrip() {
+    const { storage, storageChecked, persisted } = this.state;
+    if (!storageChecked) {
+      // Nothing yet, rather than a state that is about to be wrong for one
+      // tick — the estimate is normally back within a frame or two.
+      return null;
+    }
+    if (storage === null) {
+      return (
+        <div className={classes.storage_strip}>
+          <span className={classes.storage_text}>
+            Storage usage isn't reported by this browser.
+          </span>
+        </div>
+      );
+    }
+    const { usageBytes, quotaBytes } = storage;
+    const fraction = quotaBytes !== null && quotaBytes > 0
+      ? Math.min(1, usageBytes / quotaBytes) : null;
+    // Amber past 70%, red past 90% — a practice needs the warning while there
+    // is still headroom to act on it (export cases, free space), not at 100%
+    // when the next save is the one that fails.
+    const tone = fraction === null ? 'ok' : (
+      fraction >= 0.9 ? 'critical' : (fraction >= 0.7 ? 'warn' : 'ok')
+    );
+    const persistedNote = persisted === false
+      ? ' Not marked for persistent storage — the browser may clear this ' +
+        'origin’s data under storage pressure, on its own schedule.'
+      : '';
+    const title =
+      `Reported by this browser for this origin only, not audited against ` +
+      `what WebCeph itself has written; the browser's estimate may be ` +
+      `rounded for privacy.${persistedNote}`;
+    return (
+      <div className={classes.storage_strip} title={title}>
+        <span className={classes.storage_text}>
+          {quotaBytes !== null ? (
+            <span>
+              <strong>{formatBytes(usageBytes)}</strong> used of about{' '}
+              {formatBytes(quotaBytes)} available in this browser
+            </span>
+          ) : (
+            <span>
+              <strong>{formatBytes(usageBytes)}</strong> used in this browser —
+              this browser does not report a quota
+            </span>
+          )}
+          {persisted === false ? (
+            <span className={classes.storage_warn_text}>
+              {' '}· may be cleared under storage pressure
+            </span>
+          ) : null}
+        </span>
+        {fraction !== null ? (
+          <span
+            className={classes.storage_bar}
+            role="progressbar"
+            aria-label="Browser storage used"
+            aria-valuenow={Math.round(fraction * 100)}
+            aria-valuemin={0}
+            aria-valuemax={100}
+          >
+            <span
+              className={cx(classes.storage_bar_fill, {
+                [classes.storage_bar_fill__warn]: tone === 'warn',
+                [classes.storage_bar_fill__critical]: tone === 'critical',
+              })}
+              style={{ width: `${Math.max(2, fraction * 100)}%` }}
+            />
+          </span>
+        ) : null}
+      </div>
+    );
+  }
+
   render() {
     const { patients } = this.props;
     const {
@@ -1788,6 +2136,9 @@ export default class PatientPicker extends React.PureComponent<Props, State> {
 
     return (
       <div className={classes.screen}>
+        {/* Paper only: the sheet's own page box and the running foot that dates
+            and numbers it. @see renderPrintPageStyle */}
+        {this.renderPrintPageStyle()}
         <RestoreFromCaseFile
           open={this.state.restoreOpen}
           existingChartIds={patients.map((p) => p.chartId)}
@@ -1983,13 +2334,18 @@ export default class PatientPicker extends React.PureComponent<Props, State> {
                 {/* Paper carries no controls, so the sheet states what the
                     controls were set to — see `renderPrintCaption`. */}
                 {this.renderPrintCaption(sorted.length)}
-                <div
+                {/* A real `<table>`, so its `<thead>` is one a printed page
+                    repeats — @see renderHead, and the print block at the foot of
+                    style.scss for why the div this replaces never could. On
+                    screen `.table`/`.thead`/`.list` keep the exact flex/grid
+                    layout they always had (see style.scss): the tag changed,
+                    the box model did not. */}
+                <table
                   className={cx(classes.table, {
                     // An empty state is centred in the space the table occupies,
                     // rather than pinned to the top of it.
                     [classes.table__empty]: pageRows.length === 0,
                   })}
-                  role="table"
                   aria-label="Case list"
                   aria-colcount={COLUMNS.length}
                   aria-rowcount={sorted.length + 1}
@@ -1997,18 +2353,27 @@ export default class PatientPicker extends React.PureComponent<Props, State> {
                 >
                   {this.renderHead()}
                   {pageRows.length === 0 ? (
-                    this.renderNoMatches()
+                    // No `.list` class on this one (@see syncTableHeight): it
+                    // holds one filler row, never the rows that method quantises
+                    // the table's height to.
+                    <tbody>
+                      <tr>
+                        <td colSpan={COLUMNS.length}>
+                          {this.renderNoMatches()}
+                        </td>
+                      </tr>
+                    </tbody>
                   ) : (
-                    <ul className={classes.list} role="rowgroup">
+                    <tbody className={classes.list}>
                       {pageRows.map((row, index) => this.renderRow(
                         // aria row indices count the header as row 1 and run
                         // over the whole filtered list, not this page.
                         row,
                         (printing ? 0 : (page - 1) * pageSize) + index + 2,
                       ))}
-                    </ul>
+                    </tbody>
                   )}
-                </div>
+                </table>
                 {/* A pager over a table with nothing in it would read "Page 0 of
                     0" under an empty state that has already said why. */}
                 {sorted.length > 0
@@ -2021,6 +2386,7 @@ export default class PatientPicker extends React.PureComponent<Props, State> {
               <IconLock color="#A9B4BE" style={{ width: 14, height: 14 }} />
               Patient data stays in this browser — nothing is uploaded.
             </div>
+            {this.renderStorageStrip()}
           </div>
         </div>
 
@@ -2031,7 +2397,15 @@ export default class PatientPicker extends React.PureComponent<Props, State> {
           bodyStyle={dialogBodyStyle}
           contentStyle={{ width: 440, maxWidth: '90vw' }}
           actionsContainerStyle={dialogActionsStyle}
-          paperProps={{ style: dialogPaperStyle }}
+          paperProps={{
+            role: 'dialog',
+            'aria-modal': 'true',
+            // A plain string `title` is rendered by Dialog's own internal
+            // markup, so there is no heading element here to point
+            // aria-labelledby at — aria-label says the same thing directly.
+            'aria-label': 'Remove patient?',
+            style: dialogPaperStyle,
+          }}
           actions={dialogActions}
           onRequestClose={this.cancelRemoval}
         >

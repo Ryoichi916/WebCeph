@@ -19,6 +19,54 @@
   font-family: $font-stack;
   position: relative;
   z-index: 5;
+  // Everything above (the elastic labels giving way, the qualifiers and
+  // whitespace tightening at 1720px, the two names hiding at 1180px) only
+  // ever recovers ~180px, and only down to a ~1300px window. Below that —
+  // an ordinary 1024px laptop or a secondary monitor, not a contrived edge
+  // case — there is nothing left to give, and without this the strip simply
+  // clipped: Report, Superimpose, Simulate and Export were pushed off the
+  // right edge with no scrollbar, no chevron, nothing to say they were still
+  // there. Scrolling is the backstop under every breakpoint above, not a
+  // replacement for any of them — an action is now always *reachable*, even
+  // on a window nothing above was tuned for.
+  overflow-x: auto;
+  overflow-y: hidden;
+  // A persistent, slim scrollbar (same idiom as the visit rail's
+  // `.band_track`, see RecordsDashboard/style.scss) rather than the
+  // platform's overlay one, which appears only mid-scroll — a clinician who
+  // has never touched the strip needs to see, before touching it, that it
+  // continues past its own edge.
+  scrollbar-width: thin;
+  scrollbar-color: $border-strong transparent;
+
+  &::-webkit-scrollbar {
+    height: 6px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: $border-strong;
+    border-radius: 999px;
+  }
+
+  &::-webkit-scrollbar-thumb:hover {
+    background: $text-tertiary;
+  }
+}
+
+// The tooltip for a reason-gated action (Superimpose, Simulate) lives on this
+// wrapper, never on the `<button>` itself: a `disabled` control never fires a
+// hover event in Chromium or WebKit, so a `title` sitting on the button is
+// unreachable — computed correctly and never shown. The button inside stays a
+// plain, always-enabled element and is gated instead by `aria-disabled` plus
+// a no-op click guard (same idiom as Superimposition's own registration-basis
+// segmented control, see `.seg_slot`).
+.button_slot {
+  display: inline-flex;
+  flex-shrink: 0;
 }
 
 .button {
@@ -56,7 +104,7 @@
 
   // Hover uses the same primary tint as the active pill (one hue family for
   // every interactive state — no gray-on-gray pills in the toolbar).
-  &:hover:not(:disabled) {
+  &:hover:not(:disabled):not([aria-disabled="true"]) {
     background: $primary-050;
     color: $primary-600;
   }
@@ -69,7 +117,12 @@
     box-shadow: $focus-ring;
   }
 
-  &:disabled {
+  // Native `disabled` (most buttons) and `aria-disabled` (Superimpose and
+  // Simulate, see `.button_slot`) read the same visual dimming — the two
+  // controls that must stay hoverable to explain themselves are otherwise
+  // indistinguishable from ones the browser truly disables.
+  &:disabled,
+  &[aria-disabled="true"] {
     color: $text-disabled;
     cursor: default;
   }
@@ -134,9 +187,24 @@
 // 1440 or 1366 and only a 1280px monitor ellipsizes at all. Only the *rendering*
 // narrows even then — the whole name stays in each control's `title` and
 // `aria-label`, so nothing a reader or a screen reader can reach is lost.
+// `min-width: 0` opts this item out of flexbox's own "never smaller than my
+// content" floor so the label can actually shrink — but with nothing put back
+// in its place, the browser could compute the button narrower than an 18px
+// icon + the label's own 7ch floor (`.label_analysis`) + an 18px caret can
+// render at, and with no clipping, those glyphs painted straight past the
+// button's own edge onto whatever sits next on the strip: the caret over the
+// separator and onto Undo at ~1280px, Undo/Redo's own icons over the label
+// text below ~1140px. The min-width below is that same content floor made
+// real — icon + two 6px gaps + the caret's 18px less the 8px its own negative
+// margin folds back in + the button's 8px/side padding — so the button can
+// still shrink freely down to it (the ellipsis keeps doing its job above that
+// point) but never past what its own glyphs need to render inside its own
+// box. `overflow: hidden` is the backstop: even a few px of miscalculation
+// stays clipped inside the button rather than bleeding onto a neighbour.
 .button__elastic {
-  min-width: 0;
+  min-width: calc(7ch + 56px);
   flex-shrink: 1;
+  overflow: hidden;
 
   .button_label {
     overflow: hidden;

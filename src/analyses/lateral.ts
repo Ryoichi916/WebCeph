@@ -46,7 +46,7 @@ export const LATERAL_ANALYSES: LateralAnalysisEntry[] = [
   },
   {
     id: 'tweed', name: 'Tweed',
-    focus: 'FMA · FMIA · IMPA triangle & Y axis',
+    focus: 'FMA · IMPA · FMIA triangle & Y axis',
     analysis: tweed,
   },
   {

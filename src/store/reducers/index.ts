@@ -16,6 +16,7 @@ import locale, {
   getNegotiatedLocaleFetchError,
   isNegotiatedLocaleFetched,
 } from './locale';
+import commandPalette from './commandPalette';
 
 const reducers = {
   ...workspace,
@@ -26,6 +27,7 @@ const reducers = {
   ...app,
   ...locale,
   ...history,
+  ...commandPalette,
 } as ReducerMap;
 
 export const isAppReady = createSelector(

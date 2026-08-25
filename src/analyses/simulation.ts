@@ -75,7 +75,7 @@ const missing = (points: PointMap, symbols: string[]): string[] =>
  * jaw "to the right"; the movement is stated along an anatomical plane, and the
  * plane has to be named in the UI because it changes what the millimetres mean.
  */
-export type ReferenceId = 'occlusal' | 'palatal' | 'facial';
+export type ReferenceId = 'occlusal' | 'palatal' | 'facial' | 'frankfort';
 
 export interface Reference {
   id: ReferenceId;
@@ -100,6 +100,7 @@ export const REFERENCE_REQUIREMENTS: { [id: string]: string[] } = {
   occlusal: ['U6', 'L6', 'U4', 'L4'],
   palatal: ['PNS', 'ANS'],
   facial: ['N', 'Me'],
+  frankfort: ['Po', 'Or'],
 };
 
 /** Cranio-caudal unit vector (N → Me), or null when either point is missing. */
@@ -164,6 +165,25 @@ const buildReference = (
       upName: 'perpendicular to that plane',
     };
   }
+  if (id === 'frankfort') {
+    // Po → Or, the same convention as the FH construction line (see
+    // analyses/landmarks/lines/skeletal#FH). Tweed's own diagnostic triangle
+    // is built on this plane — it is the FMPA/IMPA/FMIA of "FMPA" — and its
+    // step list plots Po and Or before anything else, so this is the one
+    // reference a Tweed-only tracing can always supply.
+    const po = points['Po'];
+    const or = points['Or'];
+    const ant = normalize({ x: or.x - po.x, y: or.y - po.y });
+    if (ant === null) {
+      return null;
+    }
+    return {
+      id, ant, up: superiorPerpendicular(ant, down),
+      name: 'Frankfort horizontal plane',
+      from: 'Po → Or',
+      upName: 'perpendicular to that plane',
+    };
+  }
   if (down === null) {
     return null;
   }
@@ -219,16 +239,18 @@ export const getReference = (
  * Mandibular movement is stated along the occlusal plane (that is where the
  * occlusion it is meant to correct lives); the maxilla along the palatal plane,
  * which is the Le Fort I convention. Both fall back to the N–Me perpendicular,
- * and the UI always names the plane actually used.
+ * and then to the Frankfort horizontal (Po → Or) — the plane a Tweed-only
+ * tracing can still supply when neither of the first two is plotted. The UI
+ * always names the plane actually used.
  */
-const MANDIBLE_REFERENCE: ReferenceId[] = ['occlusal', 'palatal', 'facial'];
-const MAXILLA_REFERENCE: ReferenceId[] = ['palatal', 'facial'];
+const MANDIBLE_REFERENCE: ReferenceId[] = ['occlusal', 'palatal', 'facial', 'frankfort'];
+const MAXILLA_REFERENCE: ReferenceId[] = ['palatal', 'facial', 'frankfort'];
 /**
  * Incisor tipping needs no plane of its own — only a consistent *anterior*, so
  * that "proclination" tips the crown toward the face whichever way the film is
- * hung. Any of the three planes supplies one.
+ * hung. Any of the four planes supplies one.
  */
-const INCISOR_REFERENCE: ReferenceId[] = ['palatal', 'facial', 'occlusal'];
+const INCISOR_REFERENCE: ReferenceId[] = ['palatal', 'facial', 'occlusal', 'frankfort'];
 
 // ---- Landmark groups --------------------------------------------------------
 
@@ -624,6 +646,9 @@ export interface SimulationReadiness {
   reason: string;
 }
 
+/** Any reference plane at all — the widest preference order this app has. */
+const ANY_REFERENCE: ReferenceId[] = ['occlusal', 'palatal', 'facial', 'frankfort'];
+
 export const getSimulationReadiness = (
   map: LandmarkMap, scaleFactor: number | null,
 ): SimulationReadiness => {
@@ -632,7 +657,7 @@ export const getSimulationReadiness = (
   const available = controls.filter((c) => c.isAvailable);
   // Something has to anchor the anterior direction, or no movement has a
   // meaning; and at least one movement has to be possible.
-  const reference = getReference(points, ['occlusal', 'palatal', 'facial']);
+  const reference = getReference(points, ANY_REFERENCE);
   if (reference !== null && available.length > 0) {
     return {
       canSimulate: true,
@@ -642,11 +667,24 @@ export const getSimulationReadiness = (
     };
   }
   if (reference === null) {
+    // Some analyses plot every landmark a movement needs except the ones a
+    // *plane* is built from, so a clinician who works through the step list
+    // exactly as asked still finds every reference plane absent — Tweed used
+    // to be the standing example of this until Frankfort horizontal (Po →
+    // Or, Tweed's own first two points) was added as a fourth option below.
+    // Naming a landmark to plot is only half the remedy on a tracing like
+    // that: the other half, stated explicitly rather than left for the
+    // reader to infer, is that switching to an analysis which already plots
+    // one of these planes is enough — the landmark lives on the tracing, not
+    // on the analysis, so it carries over untouched and nothing already
+    // plotted is lost.
     return {
       canSimulate: false,
       reason:
-        'A simulation needs an anatomical reference plane. Plot N and Menton ' +
-        '(or the palatal plane, PNS and ANS) and it becomes available.',
+        'A simulation needs an anatomical reference plane. Plot ' +
+        `${describeReferenceOptions(ANY_REFERENCE)} — or switch to an ` +
+        'analysis that already plots one of these, and the point carries ' +
+        'over: Simulate becomes available either way.',
     };
   }
   // Every movement blocked, and at least one of them only for want of the plane
@@ -1203,10 +1241,26 @@ export const describeMovement = (
  * The structure is named by its noun, not by the slider's label: the movement
  * word is already in `describeMovement`, and joining the two labels would
  * produce "Maxilla — impaction: 6.0 mm impaction".
+ *
+ * `controls`, when given, is this same plan's `describeControls(...)` — a
+ * control that is not currently available (e.g. its calibration or reference
+ * plane went away after the value was set) is left out even if the plan
+ * still carries a stored non-zero value for it. `applySimulation` already
+ * silently no-ops a movement whose landmarks or scale are missing, so this
+ * sentence must not claim one it would not actually draw. Omitting the
+ * parameter keeps the old, unfiltered behaviour.
  */
-export const describePlan = (plan: SimulationPlan): string[] => {
+export const describePlan = (
+  plan: SimulationPlan, controls?: ControlAvailability[],
+): string[] => {
+  const unavailable = controls !== undefined
+    ? new Set(controls.filter((c) => !c.isAvailable).map((c) => c.spec.id))
+    : null;
   const parts: string[] = [];
   SIMULATION_CONTROLS.forEach((spec) => {
+    if (unavailable !== null && unavailable.has(spec.id)) {
+      return;
+    }
     const value = valueForControl(plan, spec.id);
     const described = describeMovement(spec, value);
     if (described !== null) {

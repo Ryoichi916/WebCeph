@@ -32,6 +32,7 @@ import fileExport, {
   getFileExportError,
 } from './fileExport';
 import workers from './workers';
+import predictorWarnings from './predictorWarnings';
 import order from './order';
 import activeId, { getActiveWorkspaceId } from './activeId';
 import { getWorkspacesIdsInOrder } from './order';
@@ -51,6 +52,7 @@ export default {
   ...image,
   ...canvas,
   ...workers,
+  ...predictorWarnings,
   ...treatment,
   ...records,
   ...settings,
@@ -79,10 +81,29 @@ export const getHighlightedLandmarks = createSelector(
     }
     const unhighlighted = mapValues(all(imageId), () => false);
     const step = findStep(imageId)(symbol, true);
-    if (step !== null && typeof getMapped(imageId)(step) !== 'undefined') {
+    if (step === null) {
+      return unhighlighted;
+    }
+    if (typeof getMapped(imageId)(step) !== 'undefined') {
       return { ...unhighlighted, [step.symbol]: true };
     }
-    return unhighlighted;
+    // A computed-only measurement (an angular sum: Tweed's triangle closure,
+    // Björk's sum) has no geometry of its own — its figure *is* its
+    // components' figures. Hovering its row used to enter highlight mode with
+    // nothing lit: the whole tracing dimmed and Tweed's diagnostic triangle,
+    // the one row defined as a single closed figure, was the only row whose
+    // hover emphasized nothing. Light every mapped component instead, so the
+    // sum reads as the one figure it is — for the closure row that is all
+    // three angles, their lines, extensions and arcs: the closed triangle.
+    const composite = { ...unhighlighted };
+    let anyComponentLit = false;
+    step.components.forEach((component) => {
+      if (typeof getMapped(imageId)(component) !== 'undefined') {
+        composite[component.symbol] = true;
+        anyComponentLit = true;
+      }
+    });
+    return anyComponentLit ? composite : unhighlighted;
   },
 );
 

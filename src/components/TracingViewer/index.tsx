@@ -1,15 +1,10 @@
 import * as React from 'react';
 
-import BrightnessFilter from './filters/Brightness';
-import ContrastFilter from './filters/Contrast';
-import DropShadow from './filters/DropShadow';
-import InvertFilter from './filters/Invert';
-import GlowFilter from './filters/Glow';
-
 import * as cx from 'classnames';
 
 import Props from './props';
 
+import { highlightStep, unhighlightStep } from 'actions/workspace';
 import GeoViewer from 'components/GeoViewer';
 import { isGeoAngle, isGeoPoint, isGeoVector } from 'utils/math';
 import { mapCursor } from 'utils/constants';
@@ -20,6 +15,7 @@ import {
   OUTLINE_WIDTH,
   OUTLINE_OPACITY,
   LandmarkMap,
+  SOFT_TISSUE_PROFILE_LANDMARKS,
 } from './outlines';
 // The label layer is shared with the rasterised tracing (image export and the
 // printed clinical report) so the film on paper carries the same, identically
@@ -40,14 +36,40 @@ const classes = require('./style.scss');
 const POINT_RADIUS = 4.5;
 const POINT_HIT_RADIUS = 13;
 
+// Precision magnifier (see renderLens): fixed on-screen diameter and corner
+// margin, and how much further zoomed-in than the current viewer scale it
+// shows. 3.5x is enough to place a landmark to the pixel at any viewer zoom
+// (including the 20% floor) without magnifying film grain into mush at the
+// 200% ceiling.
+const LENS_DIAMETER = 168;
+const LENS_MARGIN = 16;
+const LENS_MAGNIFICATION = 3.5;
+const LENS_CLIP_ID = 'tracing-lens-clip';
+
+/**
+ * Landmarks whose correct position sits right where the soft-tissue silhouette
+ * meets the film's dark background — the profile points (nose, lips, chin) and
+ * the skeletal chin point directly beneath them. There the crop the lens shows
+ * is mostly flat dark (skin shadow against film background), which is exactly
+ * where the fixed 3.5x/no-boost view is least useful for placing the point to
+ * the pixel. Reuses the same sourced soft-tissue set the outline tracing is
+ * drawn through (@see SOFT_TISSUE_PROFILE_LANDMARKS) rather than a second,
+ * separately-maintained list; `Pog` is added because the skeletal chin sits on
+ * the same dark edge one landmark short of its soft-tissue counterpart `Pog'`.
+ */
+const LENS_EDGE_LANDMARKS: ReadonlyArray<string> = [
+  ...SOFT_TISSUE_PROFILE_LANDMARKS, 'Pog',
+];
+const LENS_EDGE_BOOST_ID = 'tracing-lens-edge-boost';
+
 function isMouseEvent<T>(e: any): e is React.MouseEvent<T> {
   return e.touches === undefined;
 };
 
 /**
  * A wrapper around a canvas element.
- * Provides a declarative API for viewing landmarks on a cephalomertic image
- * and performing common edits like brightness and contrast.
+ * Provides a declarative API for viewing and editing landmarks on a
+ * cephalometric image (pan/zoom, drag-to-adjust, the precision lens).
  */
 interface State {
   /** Symbol of the manual landmark currently being dragged, if any. */
@@ -57,6 +79,15 @@ interface State {
   dragY: number;
   /** Symbol of the draggable landmark currently under the cursor, if any. */
   hoveredSymbol: string | null;
+  /**
+   * Live cursor position in original-image coordinates, while it is over the
+   * film — feeds the precision lens (see renderLens). Tracked locally rather
+   * than read from the `workspace.canvas.mouse.position` Redux slice: only
+   * tools that compose `trackCursor` keep that slice current (Select does
+   * not), so a lens driven by it would silently stall for tools that still
+   * declare `shouldShowLens`. Cleared when the cursor leaves the canvas.
+   */
+  cursorImagePos: { x: number; y: number } | null;
 }
 
 export class TracingViewer extends React.PureComponent<Props, State> {
@@ -65,26 +96,54 @@ export class TracingViewer extends React.PureComponent<Props, State> {
     dragX: 0,
     dragY: 0,
     hoveredSymbol: null,
+    cursorImagePos: null,
   };
 
   private imageElement: SVGImageElement | null = null;
+
+  componentDidMount() {
+    // The SVG's own onMouseUp only fires when the release happens over the
+    // SVG itself — a drag that leaves the film (fast mouse, small canvas) and
+    // releases past its edge would otherwise never call commitDrag(), leaving
+    // the point "grabbed" forever (wrong cursor, and its live position stuck
+    // uncommitted in the store's non-undoable MOVE_MANUAL_LANDMARK_LIVE slot
+    // rather than folded into a proper undo step). A window-level listener
+    // catches the release wherever it lands; commitDrag() is already a no-op
+    // when nothing is being dragged.
+    window.addEventListener('mouseup', this.commitDrag);
+  }
+
+  componentWillUnmount() {
+    window.removeEventListener('mouseup', this.commitDrag);
+    this.isMounted_ = false;
+    // Commit rather than abandon an in-flight drag on unmount (e.g. navigating
+    // away mid-gesture) — a no-op when nothing is being dragged, and otherwise
+    // the only way to clear the store's pending drag baseline so a later,
+    // unrelated drag does not inherit it as its own starting point.
+    this.commitDrag();
+  }
 
   render() {
     const {
       className,
       src,
-      canvasSize: { width: canvasWidth, height: canvasHeight },
       imageHeight, imageWidth,
-      contrast = 50, brightness = 50,
       isHighlightMode,
       getPropsForLandmark,
     } = this.props;
     // Surface = max(canvas, rendered film) — the raw image dimensions must not
     // leak in here, or a fitted high-resolution film inflates the svg beyond
     // the viewport and the visible area shows a corner of empty canvas.
-    const { scale } = this.props;
-    const minHeight = Math.max(canvasHeight, imageHeight * scale);
-    const minWidth = Math.max(canvasWidth, imageWidth * scale);
+    const { width: minWidth, height: minHeight } = this.getSurfaceSize();
+    // The shared highlight flag also lights up on a bare landmark hover (see
+    // handleLandmarkMouseEnter), not only on a deliberate stepper-row hover —
+    // dimming the whole film to 50% on every one of ~30+ dots the cursor
+    // passes near, during otherwise ordinary fine-tuning, reads as a flicker
+    // rather than a deliberate "inspect this measurement" cue. Reserve the
+    // full-image dim for a highlight this canvas did not itself originate;
+    // a hovered/dragged point still gets its own color change either way
+    // (see .point_hovered / .point_dragged).
+    const dimImage = isHighlightMode && this.state.hoveredSymbol === null;
     return (
       <div className={className} style={{ height: minHeight, width: minWidth }}>
         <svg
@@ -97,35 +156,22 @@ export class TracingViewer extends React.PureComponent<Props, State> {
           onMouseMove={this.handleSvgMouseMove}
           onMouseUp={this.commitDrag}
         >
-          <defs>
-            <BrightnessFilter id="brightness" value={brightness} />
-            <DropShadow id="shadow" />
-            <InvertFilter id="invert" />
-            <ContrastFilter id="contrast" value={contrast} />
-            <GlowFilter id="glow" />
-          </defs>
           <g>
-            <g filter="">
-              <g filter="">
-                <image
-                  ref={this.setImageRef}
-                  className={classes.image}
-                  xlinkHref={src}
-                  x={0}
-                  y={0}
-                  width={imageWidth}
-                  height={imageHeight}
-                  onWheelCapture={this.handleMouseWheel}
-                  onMouseDown={this.handleClick}
-                  onMouseMove={this.handleCanvasMouseMove}
-                  onTouchMove={this.handleCanvasMouseMove}
-                  transform={this.getTransformAttribute()}
-                  filter={this.getFilterAttribute()}
-                  opacity={isHighlightMode ? 0.5 : 1 }
-                  style={{ cursor: this.getCanvasCursor() }}
-                />
-              </g>
-            </g>
+            <image
+              ref={this.setImageRef}
+              className={classes.image}
+              xlinkHref={src}
+              x={0}
+              y={0}
+              width={imageWidth}
+              height={imageHeight}
+              onMouseDown={this.handleClick}
+              onMouseMove={this.handleCanvasMouseMove}
+              onTouchMove={this.handleCanvasMouseMove}
+              transform={this.getTransformAttribute()}
+              opacity={dimImage ? 0.5 : 1 }
+              style={{ cursor: this.getCanvasCursor() }}
+            />
             <g transform={this.getTransformAttribute()}>
               {this.renderOutlines()}
               <GeoViewer
@@ -141,11 +187,26 @@ export class TracingViewer extends React.PureComponent<Props, State> {
               {this.renderProfilogram()}
               {this.renderLandmarkDecorations()}
             </g>
+            {this.renderLens()}
           </g>
         </svg>
       </div>
     );
   }
+
+  /**
+   * The drawing surface is always exactly the canvas — the viewport, not the
+   * (possibly larger, zoomed-in) rendered film. The image is positioned
+   * within it by `getTransformAttribute`'s translate and, once it overflows,
+   * clipped by the svg's own viewBox — the same as any pannable zoomed
+   * canvas — rather than growing the surface itself and relying on the
+   * ancestor's scroll to reveal the rest (nothing ever scrolled it: wheel
+   * zoom preventDefaults the native wheel-scroll it would otherwise ride on
+   * — @see setImageRef). Shared with renderLens, which positions the
+   * magnifier relative to this same box (the visible viewport's corner, not
+   * a partly off-screen enlarged one).
+   */
+  private getSurfaceSize = (): { width: number; height: number } => this.props.canvasSize;
 
   private convertMousePositionRelativeToOriginalImage = (
     e: React.MouseEvent<SVGElement> | React.TouchEvent<SVGElement>,
@@ -160,52 +221,21 @@ export class TracingViewer extends React.PureComponent<Props, State> {
     const elementLeft = (rect.left) + scrollLeft;
     const elementTop = (rect.top) + scrollTop;
     const { pageX, pageY } = isMouseEvent(e) ? e : e.touches.item(0);
-    let x = (pageX - elementLeft) / scaleX;
-    let y = (pageY - elementTop)  / scaleY;
-    if (this.props.isFlippedX) {
-      x = imageWidth - x;
-    }
-    if (this.props.isFlippedY) {
-      y = imageHeight - y;
-    }
+    const x = (pageX - elementLeft) / scaleX;
+    const y = (pageY - elementTop)  / scaleY;
     return { x: Math.round(x), y: Math.round(y) };
   }
 
-  private getFilterAttribute = () => {
-    let f = '';
-    if (this.props.isInverted) {
-      f += ' url(#invert)';
-    }
-    return f;
-  }
-
   private getTransformAttribute = () => {
-    const {
-      scale,
-      canvasSize: { width: canvasWidth, height: canvasHeight },
-      imageWidth, imageHeight,
-    } = this.props;
-    let transform = '';
-    // Center the (scaled) image inside the drawing surface so the radiograph
-    // is the visual hero instead of hugging the top-left corner. Mouse math is
-    // unaffected: all conversions use the image element's bounding rect.
-    // The surface is the larger of the canvas and the *rendered* film
-    // (image × scale) — sizing it by the raw image put a fitted high-resolution
-    // film (e.g. the 1578×2089 bundled sample) inside a surface bigger than the
-    // viewport, and the viewport then showed one corner of mostly-empty canvas.
-    const surfaceWidth = Math.max(canvasWidth, imageWidth * scale);
-    const surfaceHeight = Math.max(canvasHeight, imageHeight * scale);
-    const translateX = Math.max(0, (surfaceWidth - imageWidth * scale) / 2);
-    const translateY = Math.max(0, (surfaceHeight - imageHeight * scale) / 2);
-    transform += ` translate(${translateX}, ${translateY}) `;
-    transform += ` scale(${scale}, ${scale})`;
-    if (this.props.isFlippedX) {
-      transform += ` scale(-1, 1) translate(-${this.props.imageWidth}, 0)`;
-    }
-    if (this.props.isFlippedY) {
-      transform += ` scale(1, -1) translate(0, -${this.props.imageHeight})`;
-    }
-    return transform;
+    const { scale, offset } = this.props;
+    // Position is the pan/zoom offset computed in the store (centered by
+    // default, cursor-anchored once the user has wheel- or click-zoomed —
+    // @see store/reducers/workspace/canvas#getEffectiveOffset), not
+    // recomputed here: this component only ever draws where it's told, so
+    // there is exactly one place (the selector) that decides where the image
+    // sits. Mouse math is unaffected either way: all conversions use the
+    // image element's own rendered bounding rect, not this formula.
+    return ` translate(${offset.left}, ${offset.top})  scale(${scale}, ${scale})`;
   }
 
   private handleCanvasMouseEnter = (e: React.MouseEvent<SVGElement>) => {
@@ -221,6 +251,8 @@ export class TracingViewer extends React.PureComponent<Props, State> {
     // Leaving the canvas mid-drag commits the landmark at its last position so
     // it is never left visually detached from its stored value.
     this.commitDrag();
+    // Nothing for the lens to magnify once the cursor is off the film.
+    this.setState({ cursorImagePos: null });
     const { onCanvasMouseLeave } = this.props.activeTool;
     if (typeof onCanvasMouseLeave === 'function') {
       e.preventDefault();
@@ -235,7 +267,23 @@ export class TracingViewer extends React.PureComponent<Props, State> {
   // update on release.
 
   private setImageRef = (element: SVGImageElement | null) => {
+    // Wheel-zoom is bound as a *native* listener with { passive: false },
+    // not React's onWheel/onWheelCapture: React 16 registers its delegated
+    // wheel listener as passive (facebook/react#13234, tuned for scroll
+    // perf), so a synthetic event's preventDefault() silently no-ops —
+    // Chrome logs "Unable to preventDefault inside passive event listener"
+    // and the imaging area's own overflow:auto (the mechanism that lets a
+    // zoomed-in film be panned by scrolling) scrolls the container on top of
+    // the zoom this component computes, so one wheel tick both zooms *and*
+    // shunts the film sideways. Only a real DOM listener can opt back into
+    // an active (non-passive) registration and make preventDefault stick.
+    if (this.imageElement !== null) {
+      this.imageElement.removeEventListener('wheel', this.handleNativeWheel);
+    }
     this.imageElement = element;
+    if (this.imageElement !== null) {
+      this.imageElement.addEventListener('wheel', this.handleNativeWheel, { passive: false });
+    }
   };
 
   private convertPagePositionToOriginalImage = (pageX: number, pageY: number) => {
@@ -245,14 +293,8 @@ export class TracingViewer extends React.PureComponent<Props, State> {
     const scaleY = rect.height / imageHeight;
     const scrollTop = document.documentElement.scrollTop;
     const scrollLeft = document.documentElement.scrollLeft;
-    let x = (pageX - (rect.left + scrollLeft)) / scaleX;
-    let y = (pageY - (rect.top + scrollTop)) / scaleY;
-    if (this.props.isFlippedX) {
-      x = imageWidth - x;
-    }
-    if (this.props.isFlippedY) {
-      y = imageHeight - y;
-    }
+    const x = (pageX - (rect.left + scrollLeft)) / scaleX;
+    const y = (pageY - (rect.top + scrollTop)) / scaleY;
     return {
       x: Math.min(Math.max(x, 0), imageWidth),
       y: Math.min(Math.max(y, 0), imageHeight),
@@ -400,12 +442,23 @@ export class TracingViewer extends React.PureComponent<Props, State> {
     );
   };
 
+  /**
+   * Mirrors the stepper's own hover→highlight (see
+   * `AnalysisStepper/connected#onStepMouseEnter`): pointing at a placed
+   * landmark directly on the film dispatches the same
+   * `HIGHLIGHT_STEP_ON_CANVAS_REQUESTED` the stepper row's hover does, so the
+   * checklist row lights up and scrolls into view — not just this dot's own
+   * CSS treatment (`hoveredSymbol`, local to this component and unaffected by
+   * the dispatch below).
+   */
   private handleLandmarkMouseEnter = (symbol: string) => {
     this.setState({ hoveredSymbol: symbol });
+    this.props.dispatch(highlightStep({ symbol }));
   };
 
   private handleLandmarkMouseLeave = () => {
     this.setState({ hoveredSymbol: null });
+    this.props.dispatch(unhighlightStep(void 0));
   };
 
   private handleLandmarkMouseDown = (symbol: string, e: React.MouseEvent<SVGCircleElement>) => {
@@ -416,14 +469,28 @@ export class TracingViewer extends React.PureComponent<Props, State> {
     e.stopPropagation();
     const { x, y } = this.convertPagePositionToOriginalImage(e.pageX, e.pageY);
     this.setState({ draggedSymbol: symbol, dragX: x, dragY: y });
+    // Mirror this starting position too (not just the moves that follow — see
+    // handleSvgMouseMove), so a click that grabs the point slightly off its
+    // exact pixel already carries every dependent plane/vector/angle along
+    // from the gesture's very first rendered frame, not just from the first
+    // mousemove onward.
+    this.props.onLandmarkDragged(symbol, x, y);
   };
 
   private handleSvgMouseMove = (e: React.MouseEvent<SVGElement>) => {
-    if (this.state.draggedSymbol === null || this.imageElement === null) {
+    const { draggedSymbol } = this.state;
+    if (draggedSymbol === null || this.imageElement === null) {
       return;
     }
     const { x, y } = this.convertPagePositionToOriginalImage(e.pageX, e.pageY);
     this.setState({ dragX: x, dragY: y });
+    // Mirror the live position into the store (non-undoable — @see
+    // MOVE_MANUAL_LANDMARK_LIVE) so every dependent plane/vector/angle, the
+    // stepper's numeric measurements, and the profilogram — none of which this
+    // component computes itself, all sourced from `manualLandmarks` downstream
+    // — track the drag instead of staying frozen at the pre-drag position until
+    // commitDrag() commits the final value on mouseup.
+    this.props.onLandmarkDragged(draggedSymbol, x, y);
   };
 
   private commitDrag = () => {
@@ -432,8 +499,19 @@ export class TracingViewer extends React.PureComponent<Props, State> {
       return;
     }
     this.props.onLandmarkMoved(draggedSymbol, Math.round(dragX), Math.round(dragY));
-    this.setState({ draggedSymbol: null });
+    // Not reachable once componentWillUnmount has already fired: React warns
+    // on a setState() past that point, and the local state is about to be
+    // discarded with the component anyway — only the dispatch above (which
+    // clears the store's drag baseline) still matters then.
+    if (this.isMounted_) {
+      this.setState({ draggedSymbol: null });
+    }
   };
+
+  // Plain instance flag, not React's deprecated `isMounted()` — only guards
+  // the unmount-time commitDrag() call in componentWillUnmount above against
+  // also calling setState (see the comment there).
+  private isMounted_ = true;
 
   /**
    * Anatomical outline tracings (soft-tissue profile, mandible, maxilla, sella,
@@ -546,6 +624,108 @@ export class TracingViewer extends React.PureComponent<Props, State> {
   };
 
   /**
+   * Precision magnifier: a fixed-diameter circular crop of the film, zoomed
+   * well past the current viewer scale, pinned to the surface's top-right
+   * corner and centered on wherever the cursor (or an active drag) currently
+   * sits — so a landmark can be set to the pixel at any zoom level instead of
+   * "close enough" at whatever the viewer happens to be showing.
+   *
+   * Gated on `activeTool.shouldShowLens`: Select, Add-point and every tool
+   * that composes `trackCursor` already declare it on the `EditorTool` they
+   * return (see webceph.d.ts and editorTools/*.ts), but nothing consumed the
+   * flag anywhere in the canvas — the zoom tools correctly opt out
+   * (`shouldShowLens: false`), where a magnifier would only be in the way.
+   *
+   * Rendered as a sibling of the pan/zoom group, not inside it, so its own
+   * position and size stay constant on screen regardless of the current
+   * pan/zoom transform.
+   */
+  private renderLens = () => {
+    const { activeTool, src, imageWidth, imageHeight, scale } = this.props;
+    if (activeTool.shouldShowLens !== true) {
+      return null;
+    }
+    const { draggedSymbol, dragX, dragY, hoveredSymbol, cursorImagePos } = this.state;
+    const target = draggedSymbol !== null ? { x: dragX, y: dragY } : cursorImagePos;
+    if (target === null) {
+      return null;
+    }
+    // The landmark the lens is currently centered on, if any — a drag names it
+    // directly, a bare hover over its (larger, invisible) hit circle names it
+    // too (@see handleLandmarkMouseEnter). Neither is set while simply moving
+    // the cursor over open film, which is fine: the boost below only matters
+    // once an actual landmark is the thing being placed to the pixel.
+    const targetSymbol = draggedSymbol !== null ? draggedSymbol : hoveredSymbol;
+    const isEdgeLandmark = targetSymbol !== null &&
+      LENS_EDGE_LANDMARKS.indexOf(targetSymbol) !== -1;
+    const { width: surfaceWidth } = this.getSurfaceSize();
+    const radius = LENS_DIAMETER / 2;
+    const cx = surfaceWidth - radius - LENS_MARGIN;
+    const cy = radius + LENS_MARGIN;
+    const lensScale = scale * LENS_MAGNIFICATION;
+    // Same construction as getTransformAttribute (center-then-scale), just
+    // centering the cursor's point instead of the whole image.
+    const lensTransform = `translate(${cx - target.x * lensScale}, ${cy - target.y * lensScale}) ` +
+      `scale(${lensScale}, ${lensScale})`;
+    return (
+      <g pointerEvents="none">
+        <defs>
+          <clipPath id={LENS_CLIP_ID}>
+            <circle cx={cx} cy={cy} r={radius} />
+          </clipPath>
+          {/* Lifts shadow detail so a crop that is mostly the dark
+              skin-against-background edge (@see LENS_EDGE_LANDMARKS)
+              separates into readable structure instead of flat black. A
+              gamma curve (exponent < 1) lifts the near-black range hard while
+              leaving the mid/high tones comparatively alone — plain
+              slope+intercept was tried first and left true-black pixels
+              barely distinguishable from very-dark skin, because a fixed
+              intercept cannot add proportionally more to the pixels that most
+              need it. Applied only to the lens's own crop, never to the film
+              itself, so it never changes what is actually being measured —
+              only what this one placement aid shows. */}
+          <filter id={LENS_EDGE_BOOST_ID}>
+            <feComponentTransfer>
+              <feFuncR type="gamma" amplitude="1" exponent="0.45" offset="0.04" />
+              <feFuncG type="gamma" amplitude="1" exponent="0.45" offset="0.04" />
+              <feFuncB type="gamma" amplitude="1" exponent="0.45" offset="0.04" />
+            </feComponentTransfer>
+          </filter>
+        </defs>
+        {/* Dark backing so a crop near the film's own edge reads as "nothing
+            here" rather than flashing the page background through. */}
+        <circle cx={cx} cy={cy} r={radius} fill="#14181D" />
+        <g clipPath={`url(#${LENS_CLIP_ID})`}>
+          <image
+            xlinkHref={src}
+            x={0}
+            y={0}
+            width={imageWidth}
+            height={imageHeight}
+            transform={lensTransform}
+            filter={isEdgeLandmark ? `url(#${LENS_EDGE_BOOST_ID})` : undefined}
+          />
+        </g>
+        {/* Crosshair pinpointing the exact pixel a click would land on. */}
+        <line
+          x1={cx - radius} y1={cy} x2={cx + radius} y2={cy}
+          stroke="rgba(20, 24, 29, 0.6)" strokeWidth={1}
+        />
+        <line
+          x1={cx} y1={cy - radius} x2={cx} y2={cy + radius}
+          stroke="rgba(20, 24, 29, 0.6)" strokeWidth={1}
+        />
+        <line x1={cx - 9} y1={cy} x2={cx + 9} y2={cy} stroke="#FF6E40" strokeWidth={1.25} />
+        <line x1={cx} y1={cy - 9} x2={cx} y2={cy + 9} stroke="#FF6E40" strokeWidth={1.25} />
+        {/* Rim: dark casing + a bright ring, matching the halo the landmark
+            labels use to read on any film region (see renderLandmarkDecorations). */}
+        <circle cx={cx} cy={cy} r={radius} fill="none" stroke="rgba(20, 24, 29, 0.85)" strokeWidth={3} />
+        <circle cx={cx} cy={cy} r={radius} fill="none" stroke="#FFC400" strokeWidth={1.5} />
+      </g>
+    );
+  };
+
+  /**
    * Whether a piece of geometry can be drawn at all — every coordinate on it a
    * finite number.
    *
@@ -632,19 +812,27 @@ export class TracingViewer extends React.PureComponent<Props, State> {
     return result;
   };
 
-  private handleMouseWheel = (e: React.WheelEvent<SVGElement>) => {
+  /** @see setImageRef for why this is a native listener, not React's onWheel. */
+  private handleNativeWheel = (e: WheelEvent) => {
     const { onCanvasMouseWheel } = this.props.activeTool;
-    if (typeof onCanvasMouseWheel === 'function') {
-      e.preventDefault();
-      const { x, y } = this.convertMousePositionRelativeToOriginalImage(e);
-      onCanvasMouseWheel(this.props.dispatch, x, y, e.deltaY);
+    if (typeof onCanvasMouseWheel !== 'function' || this.imageElement === null) {
+      return;
     }
+    e.preventDefault();
+    const { x, y } = this.convertPagePositionToOriginalImage(e.pageX, e.pageY);
+    onCanvasMouseWheel(this.props.dispatch, x, y, e.deltaY);
   }
 
   private handleCanvasMouseMove = (e: React.MouseEvent<SVGElement> | React.TouchEvent<SVGElement>) => {
+    // Tracked locally and unconditionally (not only when the active tool
+    // defines onCanvasMouseMove below) so the lens follows the cursor for
+    // every tool that declares shouldShowLens — Select composes neither
+    // trackCursor nor its own onCanvasMouseMove, so it would otherwise never
+    // update either the Redux mouse position or a lens driven by it.
+    const { x, y } = this.convertMousePositionRelativeToOriginalImage(e);
+    this.setState({ cursorImagePos: { x, y } });
     const { onCanvasMouseMove } = this.props.activeTool;
     if (typeof onCanvasMouseMove === 'function') {
-      const { x, y } = this.convertMousePositionRelativeToOriginalImage(e);
       const { dispatch } = this.props;
       onCanvasMouseMove(dispatch, x, y);
     }

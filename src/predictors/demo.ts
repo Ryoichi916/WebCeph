@@ -1,5 +1,12 @@
 import { LandmarkPredictor, PredictionInput, PredictedLandmark } from './types';
 
+/**
+ * Identifies this predictor to callers that need to tell placeholder output
+ * apart from a real detection (see `store/middleware/autoPlot`, which warns
+ * the clinician when this id plots on anything but the bundled sample film).
+ */
+export const PLACEHOLDER_PREDICTOR_ID = 'demo-heuristic';
+
 /** Stable FNV-1a hash so each unknown symbol maps to the same spot across runs. */
 const hash = (s: string): number => {
   let h = 2166136261;
@@ -99,7 +106,7 @@ const TEMPLATE: { [symbol: string]: [number, number] } = {
  * (e.g. onnxruntime-web) backend.
  */
 const demoPredictor: LandmarkPredictor = {
-  id: 'demo-heuristic',
+  id: PLACEHOLDER_PREDICTOR_ID,
   isReady: () => true,
   predict: ({ width, height, symbols }: PredictionInput): Promise<PredictedLandmark[]> => {
     const results: PredictedLandmark[] = symbols.map((symbol) => {

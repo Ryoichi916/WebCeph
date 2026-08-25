@@ -35,6 +35,38 @@ import {
 } from 'analyses/helpers';
 
 import { isGeoPoint } from 'utils/math';
+import { LATERAL_ANALYSES } from 'analyses/lateral';
+
+/**
+ * Every point symbol any of the nine lateral analyses defines as a step,
+ * lazily unioned once. Distinguishes a landmark `getAllGeoObjects` should
+ * keep surfacing when the active analysis doesn't reference it (a genuinely
+ * cross-analysis point — the soft-tissue profile points the profilogram
+ * uses, glabella, and the like, none of which any analysis' own step list
+ * claims) from one it should not: a point another lateral analysis DOES own,
+ * auto-plotted while that analysis was active and left behind in the manual
+ * landmarks store when the clinician switched away from it. @see
+ * `getAllGeoObjects` below, and the bug that not making this distinction
+ * caused — Downs' A/B/U1 apex-and-edge/ANS/PNS points (all points Tweed's
+ * own 17-step set never references) kept drawing the maxilla outline and
+ * incisor lozenges through Tweed's own tracing, on screen and in every
+ * export, whenever a film was auto-plotted on Downs (the per-image default)
+ * and then switched to Tweed — silently, since nothing marked that geometry
+ * as belonging to a different analysis than the one the figure was labelled
+ * with.
+ */
+const KNOWN_LATERAL_ANALYSIS_SYMBOLS: { [symbol: string]: true } = {};
+LATERAL_ANALYSES.forEach(({ analysis }) => {
+  // `analysis.components` is only each measurement's own top-level symbol
+  // ('FMPA', 'SNA', …) — the raw points a measurement is computed FROM (A, B,
+  // Or, Po, …) live one level down, reachable only by walking the same
+  // dependency expansion `getActiveAnalysisSteps` uses for a single active
+  // analysis. Unioning `analysis.components` directly here would leave every
+  // point symbol out of this set and make the guard below a no-op.
+  getStepsForAnalysis(analysis, false).forEach((step) => {
+    KNOWN_LATERAL_ANALYSIS_SYMBOLS[step.symbol] = true;
+  });
+});
 
 const KEY_ANALYSIS_LOAD_STATUS: StoreKey = 'analyses.status';
 const KEY_LAST_USED_ID: StoreKey = 'analyses.lastUsedId';
@@ -82,14 +114,27 @@ const analysisLoadStatusReducer = handleActions<typeof KEY_ANALYSIS_LOAD_STATUS>
 const reducers: Partial<ReducerMap> = {
   [KEY_ANALYSIS_LOAD_STATUS]: analysisLoadStatusReducer,
   [KEY_LAST_USED_ID]: handleActions<typeof KEY_LAST_USED_ID>({
-    SET_ANALYSIS_REQUESTED: (state, { payload: { imageType, analysisId } }) => {
+    // Not `SET_ANALYSIS_REQUESTED` itself: `fetchAnalysis` middleware sits
+    // ahead of the reducers and never forwards that raw request through —
+    // only its eventual `FETCH_ANALYSIS_SUCCEEDED`/`FETCH_ANALYSIS_FAILED`
+    // reach here (see `store/middleware/fetchAnalysis`). Keying off the
+    // *succeeded* outcome is if anything more honest: this only remembers a
+    // choice once the analysis module actually loaded.
+    FETCH_ANALYSIS_SUCCEEDED: (state, { payload: { imageType, analysisId } }) => {
       return {
         ...state,
         [imageType]: analysisId,
       };
     },
   }, {
-    ceph_lateral: 'ricketts_lateral',
+    // ceph_lateral's seed matches `defaultImageProps.analysis` (see
+    // store/reducers/workspace/image) rather than an arbitrary analysis, so a
+    // virgin install — where the clinician has never explicitly chosen one —
+    // is indistinguishable from "no choice yet" to `analysisDefault`'s
+    // middleware: applying this seed to a freshly filed film is a no-op,
+    // exactly the behaviour a fresh install always had, until the clinician's
+    // first explicit pick overwrites it for real.
+    ceph_lateral: 'downs',
     ceph_pa: 'ricketts_frontal',
     photo_frontal: 'frontal_face_proportions',
     photo_lateral: 'soft_tissues_photo_lateral',
@@ -413,7 +458,12 @@ export const getAllGeoObjects = createSelector(
     });
     // Also surface manually placed landmarks that the active analysis does not
     // define (e.g. the soft-tissue profile points used by the profilogram), so
-    // they render as draggable points instead of being invisible.
+    // they render as draggable points instead of being invisible — but ONLY
+    // when no lateral analysis owns that symbol at all. A symbol some OTHER
+    // analysis defines (Downs' A/B/U1 apex-and-edge/ANS/PNS, left in the
+    // manual store from an auto-plot run while Downs was active) is stale
+    // once the clinician has switched away from it, not an orphan to keep
+    // showing — see `KNOWN_LATERAL_ANALYSIS_SYMBOLS`'s own doc comment.
     const manual = getManual(imageId);
     const stepsBySymbol = keyBy(steps, s => s.symbol);
     const result: { [symbol: string]: GeoObject | undefined } = { ...fromAnalysis };
@@ -422,6 +472,9 @@ export const getAllGeoObjects = createSelector(
       // Same stray-point guard as above: never resurrect a point stored under
       // a computed measurement's symbol.
       if (step !== undefined && step.type !== 'point') {
+        return;
+      }
+      if (step === undefined && KNOWN_LATERAL_ANALYSIS_SYMBOLS[symbol] === true) {
         return;
       }
       if (result[symbol] === undefined) {

@@ -49,6 +49,33 @@
   white-space: nowrap;
 }
 
+// The demo predictor's placeholder warning (see index.tsx) — leads the dialog
+// body, ahead of the table and every other note: a fabricated landmark makes
+// the whole reading suspect, not one footnote's worth of it.
+.placeholder_banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0 0 12px;
+  padding: 10px 14px;
+  border-radius: 6px;
+  background: $warn-bg;
+  border: 1px solid $warn;
+}
+
+.placeholder_banner_icon {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  margin-top: 1px;
+}
+
+.placeholder_banner_text {
+  font-size: 13px;
+  line-height: 1.5;
+  color: $text-primary;
+}
+
 // Which film the results came from: the record's timepoint, then its date.
 // The timepoint badge: the token pill and, beside it, the rest of a free-text
 // label. One construction, shared with the records dashboard's timeline stamp
@@ -146,6 +173,17 @@
 
 .table {
   width: 100%;
+  // The four side columns (148 + 74 + 104 + 108 = 434px) are fixed by design
+  // (see the comment above `.col_finding`) and `table-layout: fixed` never
+  // shrinks them — a dialog narrower than that plus a readable measurement
+  // column instead crushed MEASUREMENT itself toward zero, wrapping "Sum of
+  // the saddle, articular and gonial angles" one letter per line. A min-width
+  // covering the fixed columns plus ~200px for MEASUREMENT keeps every column
+  // usable; `.table_wrap` still carries no overflow of its own (see the
+  // comment there — that broke the sticky header), so the dialog's own body
+  // (`dialogBodyStyle`, index.tsx) is what scrolls horizontally on a window
+  // too narrow even for that.
+  min-width: 634px;
   table-layout: fixed;
   border-collapse: collapse;
   font-family: $font-stack;
@@ -327,6 +365,21 @@
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
+  color: $text-disabled;
+}
+
+// The clinical-latitude range under a *target* norm (see `isTarget`) — e.g.
+// "20.0–30.0" under Tweed's "25.0". `.cell_numeric` sets `white-space: nowrap`
+// on the whole column so a plain number never wraps, but this line is prose
+// wide enough to overflow the 104px column at that setting: on a fixed-layout
+// table (see `.table`) an overflowing nowrap line does not widen its column,
+// it bleeds into the DEVIATION column beside it. Allowed to wrap here instead,
+// onto a second line inside its own cell.
+.norm_target_bounds {
+  display: block;
+  margin-top: 1px;
+  font-size: 10.5px;
+  white-space: normal;
   color: $text-disabled;
 }
 

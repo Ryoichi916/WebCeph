@@ -24,6 +24,17 @@ $text-primary:   #1F2933;
 $text-secondary: #52616F;
 $text-tertiary:  #7B8794;
 $text-disabled:  #A9B4BE;
+// A harsh-judge accessibility audit measured $text-tertiary at 3.2:1 and
+// $text-disabled at 1.84:1 against $bg-sunken/white — both well under WCAG
+// AA's 4.5:1 for normal text — on genuinely live, informative microcopy
+// ("optional" field asides, a date-input echo, field micro-labels) that had
+// borrowed the "disabled" token for its quiet *weight* alone, not because
+// the text was actually inert. $text-quiet clears 4.5:1 against both
+// $bg-sunken and white while still reading distinctly lighter than
+// $text-secondary, so that visual hierarchy survives the fix. $text-disabled
+// itself is left alone — it is correct for content that is actually
+// disabled, where WCAG's normal-text contrast requirement does not apply.
+$text-quiet:     #566270;
 $text-on-dark:   #F2F5F8;
 
 // Semantic

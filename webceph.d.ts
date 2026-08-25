@@ -32,7 +32,39 @@ type Categories = {
   upperIncisorPosition: 'normal' | 'protrusive' | 'retrusive',
   lowerIncisorPosition: 'normal' | 'protrusive' | 'retrusive',
   skeletalBite: 'normal' | 'open' | 'closed',
+  /**
+   * Tweed's diagnostic triangle read as **one** finding: FMA, IMPA and FMIA
+   * are the three angles the Frankfort horizontal, the mandibular plane and
+   * the lower incisor axis make with each other, so they are defined to sum
+   * to 180° and cannot vary independently — three separate table groups was a
+   * presentation of the geometry, not of Tweed's reading of it. `within_norm`
+   * when every graded angle of the triangle sits inside Tweed's band,
+   * `outside_norm` otherwise; the per-angle conclusions (mandibular rotation,
+   * lower incisor inclination) still travel with the same measurements and are
+   * named on the group.
+   */
+  tweedTriangle: 'within_norm' | 'outside_norm',
   chin: 'normal' | 'recessive' | 'prominent',
+  /**
+   * The *soft-tissue* profile — what the face shows, as opposed to the
+   * skeletal profile the bone underneath it draws (`skeletalProfile`). The
+   * two are separate findings by design: a thick chin pad or a full upper lip
+   * can carry a convex skeleton into a straight face, and the whole point of
+   * a soft-tissue analysis is to say when the two part company. Merrifield's
+   * Z angle and Legan & Burstone's convexity readings used to be filed under
+   * `skeletalProfile`, so the Summary printed a facial-surface reading under
+   * a "Skeletal profile" heading — a category error on the surface most
+   * likely to be pasted into a chart note.
+   */
+  softTissueProfile: 'normal' | 'concave' | 'convex',
+  /**
+   * The mentolabial (labiomental) fold, Li-Ils-Pog': how deeply the chin-lip
+   * sulcus is set. Reported as its own soft-tissue finding — deep or shallow —
+   * rather than converted into a "Chin prominence" verdict: the fold reads on
+   * the skin, the chin category on bone (Pog-NB, the facial angle), and a
+   * deep fold on a retruded incisor is not a prominent chin.
+   */
+  mentolabialSulcus: 'normal' | 'deep' | 'shallow',
   overbite: 'normal' | 'negative' | 'decreased' | 'increased',
   overjet: 'normal' | 'negative' | 'decreased' | 'increased',
   lowerLipProminence: 'normal' | 'resessive' | 'prominent',
@@ -91,6 +123,8 @@ interface LandmarkInterpretation<T extends Category> {
   band?: NormBand;
   /** See `AnalysisComponent.normSource`. */
   normSource?: string;
+  /** See `AnalysisComponent.isTarget`. */
+  isTarget?: boolean;
 }
 
 interface AnalysisInterpretation<T extends Category> extends LandmarkInterpretation<T> {
@@ -288,6 +322,21 @@ type AnalysisComponent = {
   perYearFrom?: NormAgeCorrection;
   /** The author's sex-specific means for this component (see `NormSexMeans`). */
   sexMeans?: NormSexMeans;
+  /**
+   * `mean` is a **published target**, not a manufactured range midpoint — true
+   * of Tweed's FMA/IMPA/FMIA (his 25°/90°/65°, each read ± 5° of clinical
+   * latitude) and of no other range-band component in this app. Björk's gonial
+   * halves and Jarabak's facial-height ratio are also declared with `RANGE`,
+   * but their `mean` is only the arithmetic midpoint of a bound their authors
+   * published as a bound, not as a figure a clinician treats toward — showing
+   * it as a target would resurrect exactly the invented-figure problem `RANGE`
+   * exists to prevent (see `NormBand`).
+   *
+   * Only meaningful when `band` is `'range'`; ignored for a mean ± SD band,
+   * which already shows its mean. Absent (the default) means the range has no
+   * published target and the norm cell prints the bounds alone.
+   */
+  isTarget?: boolean;
 };
 
 /**
@@ -310,7 +359,7 @@ type CategorizedAnalysisResult<T extends Category> = {
   relevantComponents: Array<
     Pick<
       LandmarkInterpretation<T>,
-      'mean' | 'max' | 'min' | 'value' | 'band' | 'normSource'
+      'mean' | 'max' | 'min' | 'value' | 'band' | 'normSource' | 'isTarget'
     > &
     { symbol: string }
   >;
@@ -413,8 +462,20 @@ interface NormsProvenance {
    * file", and those are two different documents.
    *
    * Returns undefined when there is nothing extra to say.
+   *
+   * `computedSymbols`, when the caller has it, is the set of symbols this
+   * particular reading actually tabulated — so a note that describes a row
+   * ("the Wits appraisal above is graded against...") can tell whether that
+   * row is above. Jacobson's Wits distance needs an image scale like any other
+   * millimetre reading; on an uncalibrated film it is absent from the table,
+   * and a note that still said "the Wits appraisal above" was a claim about a
+   * row that was not there. Omitted by a caller that does not track computed
+   * symbols — a `patientNote` must still degrade sensibly with nothing but
+   * `context`, which is every existing implementation's contract.
    */
-  patientNote?(context?: AnalysisContext): string | undefined;
+  patientNote?(
+    context?: AnalysisContext, computedSymbols?: Set<string>,
+  ): string | undefined;
   /**
    * The same reading as its *figures* — the corrected norms themselves, set as a
    * compact run a clinician can scan ("Age 22 y · facial depth 90.0° · mand.
@@ -809,6 +870,8 @@ interface StoreState {
   'app.status.isInstalling': boolean;
   'app.status.isInstalled': boolean;
   'app.status.isUpdated': boolean;
+  /** Whether the command palette overlay is open. @see components/CommandPalette */
+  'commandPalette.isOpen': boolean;
   'app.persistence.isSupported': boolean;
   'app.persistence.isSaving': boolean;
   'app.persistence.isLoading': boolean;
@@ -867,12 +930,43 @@ interface StoreState {
     [imageId: string]: CephImageTracingData;
   };
   /**
+   * The clinician's most recently explicitly-chosen analysis (via the
+   * switcher), independent of any one image. @see
+   * `store/reducers/workspace/image#getLastActiveAnalysisId`
+   */
+  'workspace.analysis.lastActiveId': AnalysisId<ImageType> | null;
+  /**
+   * Per-image: true once the demo/placeholder predictor (see
+   * `predictors/demo.ts`) has plotted a landmark on this image and it is not
+   * the bundled sample cephalogram that predictor's template is calibrated
+   * against. UI-only — never exported with the case file and never part of
+   * the undo history, because it records a fact about *this session*
+   * ("some of what's on screen was fabricated, not detected"), not a fact
+   * about the tracing. @see store/reducers/workspace/predictorWarnings
+   */
+  'workspace.autoPlot.placeholderWarning': {
+    [imageId: string]: boolean;
+  };
+  /**
    * Undo/redo history of the tracing slice. Managed by the enableUndoRedo
    * reducer enhancer (see store/index.ts); the registered reducers for these
    * keys are passthroughs so combineReducers leaves them intact.
    */
   'history.past': Array<{ [imageId: string]: CephImageTracingData }>;
   'history.future': Array<{ [imageId: string]: CephImageTracingData }>;
+  /**
+   * The tracing slice as it stood immediately before the drag gesture
+   * currently in progress, if any — set on the first MOVE_MANUAL_LANDMARK_LIVE
+   * of a gesture and consumed (then cleared back to null) by the commit that
+   * ends it. Exists so a whole drag (many non-undoable live position updates,
+   * see MOVE_MANUAL_LANDMARK_LIVE) still collapses into the single undo step
+   * its final ADD_MANUAL_LANDMARK_REQUESTED represents: without it, the
+   * "previous state" enableUndoRedo pushes to `history.past` on commit would
+   * be the already-mid-drag slice from the last live update, not the true
+   * pre-drag one, and Undo would restore the point to wherever the mouse
+   * happened to be last during the drag instead of where it started.
+   */
+  'history.dragBaseline': { [imageId: string]: CephImageTracingData } | null;
   'images.status': {
     [imageId: string]: {
       isLoading: true;
@@ -1090,6 +1184,10 @@ interface Events {
   }>;
   APP_INSTALL_STATUS_CHANGED: ProgressStatus;
   APP_UPDATE_STATUS_CHANGED: ProgressStatus;
+  /** Open or close the command palette overlay. @see components/CommandPalette */
+  SET_COMMAND_PALETTE_SHOWN: {
+    isShown: boolean;
+  };
   WORKER_CREATED: WorkerDetails;
   WORKER_TERMINATED: string;
   WORKER_STATUS_CHANGED: Pick<WorkerDetails, 'id'> & Pick<WorkerDetails, 'isBusy' | 'error'>;
@@ -1227,6 +1325,25 @@ interface Events {
     symbol: string;
     value: GeoObject;
   };
+  /**
+   * Same shape and reducer effect as ADD_MANUAL_LANDMARK_REQUESTED, but for the
+   * transient position of a landmark still being dragged (mouse still down).
+   * Deliberately its own action type rather than reusing the committing one, so
+   * every frame of a drag gesture stays OFF the undo stack, the analytics log
+   * and the project autosave trigger list (all three are allow-lists keyed by
+   * action type — see UNDOABLE_ACTIONS in store/index.ts, the list in
+   * store/middleware/analytics.ts, and SAVE_TRIGGERING_ACTIONS in
+   * store/middleware/project.ts) while still landing in the same
+   * `manualLandmarks` slice every other selector (analysis geometry, computed
+   * measurements, the profilogram) already reads live off. The drag's final
+   * position is separately committed via ADD_MANUAL_LANDMARK_REQUESTED on
+   * mouseup, exactly as before — this type only carries the in-between frames.
+   */
+  MOVE_MANUAL_LANDMARK_LIVE: {
+    imageId: string;
+    symbol: string;
+    value: GeoObject;
+  };
   ADD_UNKOWN_MANUAL_LANDMARK_REQUESTED: {
     imageId: string;
     value: GeoObject;
@@ -1255,6 +1372,17 @@ interface Events {
     symbols?: string[];
   };
   AUTO_PLOT_LANDMARKS_SUCCEEDED: {
+    imageId: string;
+  };
+  /**
+   * The demo/placeholder predictor (see `predictors/demo.ts`) plotted at
+   * least one landmark on an image other than the bundled sample
+   * cephalogram it is calibrated against — those positions are fabricated
+   * for this image's anatomy, not detected on it. Drives the "verify before
+   * clinical use" warning in TracingEditor and AnalysisResultsViewer.
+   * @see store/reducers/workspace/predictorWarnings
+   */
+  PLACEHOLDER_LANDMARKS_PLOTTED: {
     imageId: string;
   };
   AUTO_PLOT_LANDMARKS_FAILED: {
@@ -1750,13 +1878,18 @@ type Validator = (
  */
 type Saver = (state: StoreState) => IterableIterator<GenericAction>;
 
+// Command Palette's Ctrl+K/Cmd+K is *not* one of these: it is bound with its
+// own document-level listener in `components/CommandPalette/index.tsx`, not
+// through this react-hotkeys map — @see `components/App/shortcuts.ts` for why.
 type KeyboardCommand = (
   'ADD_NEW_WORKSPACE'
 );
 
 type KeyboardActionCreators = Record<KeyboardCommand, () => GenericAction>;
 type KeyboardHandlers = Record<KeyboardCommand, (event: KeyboardEvent) => any>;
-type KeyboardMap = Record<KeyboardCommand, string>;
+// A binding may be a single combo ('n') or several alternates that all fire the
+// same command — react-hotkeys accepts either.
+type KeyboardMap = Record<KeyboardCommand, string | string[]>;
 
 /* Browser compatiblity checking */
 type BrowserId = 'Chrome' | 'Firefox' | 'Opera' | 'Microsoft Edge' | 'Safari';

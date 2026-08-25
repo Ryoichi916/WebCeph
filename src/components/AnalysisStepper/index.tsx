@@ -42,6 +42,12 @@ const icons: { [id: string]: JSX.Element } = {
   done: ICON_DONE,
   evaluating: ICON_EVALUATING,
   pending: ICON_PENDING,
+  // A landmark the clinician removed on purpose (see
+  // REMOVE_MANUAL_LANDMARK_REQUESTED) reads no differently from an
+  // untouched one until it is the next step in line — same hollow circle,
+  // no separate iconography to learn for what is, to the person tracing,
+  // still just "not placed yet".
+  skipped: ICON_PENDING,
 };
 
 /**
@@ -49,8 +55,21 @@ const icons: { [id: string]: JSX.Element } = {
  * unit-aware — and with the typographic minus every other surface uses
  * (`displayMinus`), so the −3.6° in the stepper is character-for-character the
  * −3.6° in the Summary dialog and in the printed report.
+ *
+ * A `sum`-type step (Björk's total, Tweed's triangle closure) is printed the
+ * same way as every other step: the raw, full-precision value rounded to one
+ * decimal, *not* the sum of its parts' own rounded display figures. Summing
+ * post-rounding parts can land on a different last digit than the true total
+ * (see `SUM_ROUNDING_NOTE` in AnalysisResultsViewer) — e.g. Björk's rounded
+ * addends 101.1 + 166.6 + 122.3 = 390.0 while the true total is 389.9. The
+ * Summary dialog, its Copy/CSV export and the printed report all show the
+ * full-precision total for this row, so the stepper must show the identical
+ * number rather than compute a second, disagreeing one from the same data.
  */
-const formatStepValue = (step: CephLandmark, value: number): string => {
+const formatStepValue = (
+  step: CephLandmark,
+  value: number,
+): string => {
   const rounded = displayMinus(value.toFixed(1));
   if (step.type === 'angle' || step.unit === 'degree') {
     return `${rounded}°`;
@@ -74,6 +93,7 @@ export class AnalysisStepper extends React.PureComponent<Props, State> {
 
   private itemToScrollTo: HTMLElement | null = null;
   private lastScrolledSymbol: string | null = null;
+  private lastHighlightedSymbol: string | null = null;
 
   public componentDidMount() {
     this.scrollToActiveStep();
@@ -82,6 +102,7 @@ export class AnalysisStepper extends React.PureComponent<Props, State> {
 
   public componentDidUpdate() {
     this.scrollToActiveStep();
+    this.scrollToHighlightedStep();
     this.updateScrollState();
   }
 
@@ -90,6 +111,7 @@ export class AnalysisStepper extends React.PureComponent<Props, State> {
       className,
       steps,
       analysisName,
+      highlightedStep,
       getStepState,
       getStepValue,
       isStepValuePendingScale,
@@ -175,6 +197,12 @@ export class AnalysisStepper extends React.PureComponent<Props, State> {
               i === firstPendingIndex ||
               (firstPendingIndex === -1 && i === lastDoneIndex)
             );
+            // The reverse of this row's own hover→highlight: hovering the
+            // matching landmark directly on the film (TracingViewer) sets the
+            // same canvas-highlight symbol, so the row it corresponds to
+            // lights up too — see `scrollToHighlightedStep` for the matching
+            // scroll-into-view.
+            const isHighlighted = highlightedStep !== null && step.symbol === highlightedStep;
             return (
               <li
                 key={step.symbol}
@@ -182,9 +210,20 @@ export class AnalysisStepper extends React.PureComponent<Props, State> {
                 className={cx(classes.step, {
                   [classes.step__current]: state === 'current',
                   [classes.step__done]: isDone,
+                  [classes.step__highlighted]: isHighlighted,
                 })}
                 onMouseEnter={isDone ? onStepMouseEnter.bind(null, step) : undefined}
                 onMouseLeave={isDone ? onStepMouseLeave.bind(null, step) : undefined}
+                // Completed rows highlight their measurement on the film. That
+                // affordance was mouse-only; a keyboard user could tab to the
+                // remove buttons but never light a measurement up. Done rows
+                // are therefore focusable, and focus/blur drive the same
+                // highlight actions as hover. React's onFocus/onBlur bubble,
+                // so tabbing on to the row's own remove button keeps the row
+                // highlighted rather than flickering it off.
+                tabIndex={isDone ? 0 : undefined}
+                onFocus={isDone ? onStepMouseEnter.bind(null, step) : undefined}
+                onBlur={isDone ? onStepMouseLeave.bind(null, step) : undefined}
               >
                 <span className={classes.step_icon}>{icons[state]}</span>
                 <span className={classes.step_text}>
@@ -192,7 +231,10 @@ export class AnalysisStepper extends React.PureComponent<Props, State> {
                     {command}
                   </span>
                   {description ? (
-                    <span className={classes.step_description} title={description}>
+                    // No title attr: the definition renders in full (the
+                    // stylesheet no longer clamps it), so a tooltip would
+                    // only repeat what is already on screen.
+                    <span className={classes.step_description}>
                       {description}
                     </span>
                   ) : null}
@@ -277,6 +319,34 @@ export class AnalysisStepper extends React.PureComponent<Props, State> {
       scrollIntoViewIfNeeded(this.itemToScrollTo, false);
       this.snapListToRowBoundary();
       this.lastScrolledSymbol = this.scrollTargetSymbol;
+    }
+  }
+
+  /**
+   * The canvas→stepper half of the hover highlight (see
+   * `TracingViewer#handleLandmarkMouseEnter`): when a landmark hovered
+   * directly on the film becomes the highlighted step, bring its row into
+   * view exactly as the auto-follow above does for the current/last-done row
+   * — `scrollIntoViewIfNeeded` is already a no-op for a row that is fully on
+   * screen, so panning across several already-visible landmarks does not
+   * fight the list. Gated on the symbol actually changing (not fired on
+   * every render) and reset to null on unhighlight, so re-hovering the same
+   * landmark later scrolls again rather than being treated as a no-op.
+   */
+  private scrollToHighlightedStep() {
+    const { highlightedStep, steps } = this.props;
+    if (highlightedStep === this.lastHighlightedSymbol) {
+      return;
+    }
+    this.lastHighlightedSymbol = highlightedStep;
+    const list = this.listElement;
+    if (highlightedStep === null || list === null) {
+      return;
+    }
+    const index = findIndex(steps, (step) => step.symbol === highlightedStep);
+    const node = index !== -1 ? (list.children[index] as HTMLElement | undefined) : undefined;
+    if (node !== undefined) {
+      scrollIntoViewIfNeeded(node, false);
     }
   }
 

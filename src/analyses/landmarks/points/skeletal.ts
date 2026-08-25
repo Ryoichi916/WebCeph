@@ -117,7 +117,7 @@ export const ANS = point(
  */
 export const PNS = point(
   'PNS',
-  'Poseterior nasal spine', 'Posterior limit of bony palate or maxilla',
+  'Posterior nasal spine', 'Posterior limit of bony palate or maxilla',
 );
 
 /** Apex of Upper Incisor */

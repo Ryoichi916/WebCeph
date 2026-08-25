@@ -171,7 +171,17 @@ const analysis: Analysis<'ceph_lateral'> = {
       'Jacobson published the Wits appraisal separately by sex — about ' +
       '−1 mm in males and 0 mm in females, ± 2 mm — and this app grades ' +
       'against the patient\'s own figure whenever a sex is on record.',
-    patientNote: (context) => {
+    patientNote: (context, computedSymbols) => {
+      // Jacobson's distance needs an image scale like any other millimetre
+      // reading (see `witsAppraisal`); on an uncalibrated film it is absent
+      // from the table above, and a sentence that still says "the Wits
+      // appraisal above" would be a claim about a row that is not there.
+      // `computedSymbols` is only absent for a caller that does not track
+      // which rows it tabulated, in which case the sentence still describes
+      // the sex split correctly — it just cannot promise the row is present.
+      if (computedSymbols !== undefined && !computedSymbols.has(witsAppraisal.symbol)) {
+        return undefined;
+      }
       if (context === undefined || context.sex === undefined) {
         return (
           'No sex is recorded for this patient, so the Wits appraisal above ' +

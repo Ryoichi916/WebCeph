@@ -1,5 +1,4 @@
 import { Store, Middleware } from 'redux';
-import { saveAs } from 'file-saver';
 
 import { isActionOfType } from 'utils/store';
 import {
@@ -9,23 +8,33 @@ import {
   getImageName,
   getManualLandmarks,
   getScaleFactor,
+  getImageTimepoint,
+  getImageCaptureDate,
 } from 'store/reducers/workspace/image';
 import { getLandmarksToDisplay } from 'store/reducers/workspace';
 import { isProfilogramShown } from 'store/reducers/workspace/canvas';
 import { getActivePatient } from 'store/reducers/patients';
 import { buildProfilogram, Segment } from 'analyses/profilogram';
 import { isGeoVector } from 'utils/math';
+import { getTimepointToken, formatCaptureDate } from 'utils/records';
 // The overlay composition (colors + drawing) is shared with the printable
-// clinical report — see utils/tracingSnapshot.ts.
-import { drawTracingOverlay, drawScaleBar } from 'utils/tracingSnapshot';
+// clinical report — see utils/tracingSnapshot.ts. `saveBlobAs` replaces
+// `file-saver`'s saveAs(): see its doc comment for why (a webpack chunk
+// boundary between file-saver and its caller silently drops the filename).
+import {
+  drawTracingOverlay, drawScaleBar, sanitizeFilenameStem, saveBlobAs,
+} from 'utils/tracingSnapshot';
 
+// The bare stem only — the caller's own `${stem}-tracing.${ext}` template is
+// the one place "-tracing" gets appended, for both this fallback and the
+// patient-identity stem beside it. Appending it here too doubled it up:
+// "sample-tracing T1 2026-08-24-tracing.png".
 const baseName = (name: string | null): string => {
   if (!name) {
     return 'tracing';
   }
   const dot = name.lastIndexOf('.');
-  const stem = dot > 0 ? name.slice(0, dot) : name;
-  return `${stem}-tracing`;
+  return dot > 0 ? name.slice(0, dot) : name;
 };
 
 /**
@@ -74,17 +83,24 @@ const middleware = ({ getState }: Store<StoreState>) =>
     // filed against the patient; fall back to the image name.
     const patient = getActivePatient(state);
     const ext = format === 'jpeg' ? 'jpg' : 'png';
-    // Sanitising drops every character a file name cannot carry — which is
-    // every CJK name among them. Collapse the runs of separators that leaves
-    // and trim them off the ends, so a Japanese name yields `C-0001-tracing.png`
-    // rather than the malformed `C-0001__-tracing.png`. Same rule as the
-    // superimposition and treatment-simulation exports.
-    const stem = (patient
-      ? [patient.chartId, patient.name].filter(Boolean).join('_')
-      : baseName(getImageName(state)(imageId)))
-      .replace(/[^\w.\-]+/g, '_')
-      .replace(/_{2,}/g, '_')
-      .replace(/^[_.\-]+|[_.\-]+$/g, '');
+    // The visit token (T1, T2, …) and capture date, the same way the
+    // Superimposition view already labels each side of a comparison — without
+    // either, exporting more than one timepoint of the same patient in a
+    // session writes every tracing to the identical filename ("C-0001
+    // 山田 太郎-tracing.png" for T1 and T2 alike), and the browser's silent
+    // "(1)" suffix is the only thing left to tell them apart once separated
+    // from download order.
+    const visitLabel = sanitizeFilenameStem([
+      getTimepointToken(getImageTimepoint(state)(imageId)),
+      formatCaptureDate(getImageCaptureDate(state)(imageId)),
+    ]);
+    // Only characters an actual filesystem path cannot carry are sanitised
+    // away — same rule as the `.wceph` case file export — so a Japanese
+    // patient's name survives, e.g. `C-0001 山田 太郎-tracing.png` rather than
+    // losing the name entirely. See `sanitizeFilenameStem`.
+    const stem = patient
+      ? sanitizeFilenameStem([patient.chartId, patient.name, visitLabel])
+      : sanitizeFilenameStem([baseName(getImageName(state)(imageId)), visitLabel]);
     const filename = `${stem || 'tracing'}-tracing.${ext}`;
 
     const img = new Image();
@@ -113,7 +129,7 @@ const middleware = ({ getState }: Store<StoreState>) =>
       canvas.toBlob(
         (blob) => {
           if (blob !== null) {
-            saveAs(blob, filename);
+            saveBlobAs(blob, filename);
           }
         },
         mime,

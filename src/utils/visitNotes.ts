@@ -131,18 +131,37 @@ export const getVisitNoteKey = (
   timepoint: string | null | undefined,
 ): string => (timepoint === null || timepoint === undefined ? '' : timepoint.trim());
 
+/**
+ * The edge whitespace `trimField` below strips — every character
+ * `String.prototype.trim()` treats as whitespace, *except* U+3000
+ * (ideographic space): a routine convention in Japanese clinical and
+ * administrative writing is a paragraph opening with one, and the plain
+ * `.trim()` this module used everywhere a field's content is stored or
+ * compared silently discarded it, with no indication to the clinician who
+ * typed it — directly contradicting this module's own guarantee above that
+ * nothing here alters clinician-authored text.
+ */
+const EDGE_WHITESPACE = new RegExp(
+  '^[\\t\\n\\v\\f\\r \\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\ufeff]+' +
+  '|[\\t\\n\\v\\f\\r \\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\ufeff]+$',
+  'g',
+);
+
+/** A field's own text, trimmed the same way everywhere it is stored or compared. */
+const trimField = (s: string): string => s.replace(EDGE_WHITESPACE, '');
+
 /** Every field trimmed, which is the form a note is stored and compared in. */
 export const trimVisitNoteFields = (fields: VisitNoteFields): VisitNoteFields => ({
-  chiefComplaint: fields.chiefComplaint.trim(),
-  diagnosis: fields.diagnosis.trim(),
-  plan: fields.plan.trim(),
-  appliance: fields.appliance.trim(),
-  note: fields.note.trim(),
+  chiefComplaint: trimField(fields.chiefComplaint),
+  diagnosis: trimField(fields.diagnosis),
+  plan: trimField(fields.plan),
+  appliance: trimField(fields.appliance),
+  note: trimField(fields.note),
 });
 
 /** True when no field holds anything — nothing to store, nothing to show. */
 export const isVisitNoteEmpty = (fields: VisitNoteFields): boolean =>
-  VISIT_NOTE_FIELDS.every(({ key }) => fields[key].trim() === '');
+  VISIT_NOTE_FIELDS.every(({ key }) => trimField(fields[key]) === '');
 
 /**
  * What the record says about an entry whose every field has been cleared.
@@ -189,7 +208,7 @@ export const getVisitNoteVisitName = (
 export const sameVisitNoteFields = (
   a: VisitNoteFields, b: VisitNoteFields,
 ): boolean =>
-  VISIT_NOTE_FIELDS.every(({ key }) => a[key].trim() === b[key].trim());
+  VISIT_NOTE_FIELDS.every(({ key }) => trimField(a[key]) === trimField(b[key]));
 
 /**
  * The fields that differ between two versions, in the catalogue's order — what
@@ -199,7 +218,7 @@ export const changedVisitNoteFields = (
   from: VisitNoteFields, to: VisitNoteFields,
 ): VisitNoteFieldOption[] =>
   VISIT_NOTE_FIELDS.filter(
-    ({ key }) => from[key].trim() !== to[key].trim(),
+    ({ key }) => trimField(from[key]) !== trimField(to[key]),
   );
 
 /** The fields a version actually holds text in, in the catalogue's order. */
@@ -207,8 +226,8 @@ export const filledVisitNoteFields = (
   fields: VisitNoteFields,
 ): Array<{ option: VisitNoteFieldOption; value: string }> =>
   VISIT_NOTE_FIELDS
-    .filter(({ key }) => fields[key].trim() !== '')
-    .map((option) => ({ option, value: fields[option.key].trim() }));
+    .filter(({ key }) => trimField(fields[key]) !== '')
+    .map((option) => ({ option, value: trimField(fields[option.key]) }));
 
 /**
  * A stored note read back as one version per entry, oldest first — or null when

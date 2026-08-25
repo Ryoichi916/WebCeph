@@ -165,7 +165,7 @@ export default class ApplyScaleDialog
         overlayClassName={classes.no_print}
         title={
           <div className={classes.title}>
-            <h3 className={classes.title_heading}>
+            <h3 id="apply-scale-dialog-title" className={classes.title_heading}>
               {isRemoving
                 ? 'Remove this scale from the films it was applied to'
                 : 'Apply this scale to other films'}
@@ -210,6 +210,9 @@ export default class ApplyScaleDialog
         actionsContainerStyle={{ padding: '12px 24px', borderTop: '1px solid #DDE3EA' }}
         titleStyle={{ padding: '20px 24px 12px' }}
         paperProps={{
+          role: 'dialog',
+          'aria-modal': 'true',
+          'aria-labelledby': 'apply-scale-dialog-title',
           style: {
             borderRadius: 8,
             boxShadow: '0 12px 32px rgba(16, 30, 50, .22)',

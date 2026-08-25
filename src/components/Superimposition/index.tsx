@@ -5,8 +5,6 @@ import * as cx from 'classnames';
 
 import { Helmet } from 'react-helmet';
 
-import { saveAs } from 'file-saver';
-
 import IconPrint from 'material-ui/svg-icons/action/print';
 import IconClose from 'material-ui/svg-icons/navigation/close';
 import IconImage from 'material-ui/svg-icons/image/photo';
@@ -31,13 +29,17 @@ import {
   SuperimpositionAnnotations,
   formatInterval,
   basisSymbols,
+  missingBasisSymbols,
+  orphanSymbols,
+  orphanOutlineIds,
+  IDENTITY,
   PLOTTING_ERROR,
   ChangeRow,
   ChangeTable,
   BarScale,
   Box,
 } from 'analyses/superimposition';
-import { buildOutlines, outlineToSvgPath } from 'components/TracingViewer/outlines';
+import { buildOutlines, outlineToSvgPath, Outline } from 'components/TracingViewer/outlines';
 // The honest account of what the registration means, condensed on screen and
 // printed in full — the same affordance the treatment simulation uses.
 import AboutDisclosure from 'components/AboutDisclosure';
@@ -45,7 +47,7 @@ import AboutDisclosure from 'components/AboutDisclosure';
 // Number formatting, unit suffixes and the printed sheet's wording are the
 // app's, not this view's: the same helpers the Summary dialog and the clinical
 // report use.
-import { getUnitSuffix } from 'components/AnalysisResultsViewer';
+import { getUnitSuffix, roundToDisplay } from 'components/AnalysisResultsViewer';
 import {
   printNumber,
   printSigned,
@@ -73,6 +75,10 @@ import { printDocumentTitle } from 'utils/printTitle';
 import {
   renderSuperimpositionSnapshot,
 } from 'utils/superimpositionSnapshot';
+// `saveBlobAs` replaces `file-saver`'s saveAs(): see its doc comment for why
+// (a webpack chunk boundary between file-saver and its caller silently drops
+// the filename).
+import { sanitizeFilenameStem, saveBlobAs } from 'utils/tracingSnapshot';
 
 const classes = require('./style.scss');
 
@@ -99,6 +105,70 @@ const ANNOTATION_PX_PRINT = 10;
 
 /** Clip path for T1's film, so the radiograph stops at the framed region. */
 const FILM_CLIP_ID = 'superimposition-film-clip';
+
+/**
+ * A bold sans-serif character's width as a fraction of its font size — wide
+ * enough to over-, not under-, estimate a short cephalometric label (the
+ * halo-stroked em dash and spaces in "Me — registration" run wider than a
+ * typical letter), since the cost of the two are not symmetric: flipping a
+ * label one side sooner than strictly necessary is invisible, and flipping
+ * it too late is the clipped label this estimate exists to prevent.
+ */
+const AVG_CHAR_WIDTH_FRACTION = 0.62;
+
+/**
+ * Where to draw a point-anchored annotation label so it stays inside the
+ * frame — the live/print SVG's own version of `utils/superimpositionSnapshot
+ * .ts`'s `placePointLabel`, which the canvas PNG export already uses. The two
+ * renderers used to diverge: the export flips sides (and, on a crop too tight
+ * for either side, clamps fully inside the frame) while this component always
+ * drew to the point's right, so a label near the frame's right edge — "Me —
+ * registration" on a typical mandibular-plane crop — ran past `.figure`'s
+ * `overflow: hidden` and was cut off flush, on screen and (since the print
+ * figure is narrower still, see `PRINT_FIGURE_HEIGHT_PX`) on the printed,
+ * signed sheet.
+ *
+ * There is no canvas here to measure the rendered text with, so the width is
+ * estimated from the string length instead of measured — deliberately over-
+ * rather than under-estimated (`AVG_CHAR_WIDTH_FRACTION`), and computed against
+ * both the screen and the print font size (`sizeCandidates`) since the two
+ * differ and a fixed `x`/`y` has to be correct in whichever CSS media is
+ * actually rendering it.
+ */
+const placeAnnotationLabel = (
+  text: string, anchor: GeoPoint, offset: number, frame: Box,
+  sizeCandidates: number[],
+): { x: number; y: number; anchor: 'start' | 'end' } => {
+  const fontSize = Math.max(...sizeCandidates);
+  const textWidth = text.length * fontSize * AVG_CHAR_WIDTH_FRACTION;
+  const left = frame.x;
+  const right = frame.x + frame.width;
+
+  const rightX = anchor.x + offset;
+  const rightFits = rightX + textWidth <= right;
+  const leftX = anchor.x - offset;
+  const leftFits = leftX - textWidth >= left;
+
+  let x = rightX;
+  let textAnchor: 'start' | 'end' = 'start';
+  if (!rightFits && leftFits) {
+    textAnchor = 'end';
+    x = leftX;
+  } else if (!rightFits) {
+    // Neither side clears the frame (a very tight crop): keep the label's own
+    // box fully inside it instead of letting either edge win.
+    textAnchor = 'start';
+    x = Math.max(left, Math.min(right - textWidth, rightX));
+  }
+
+  const halfLine = fontSize * 0.5;
+  const y = Math.max(
+    frame.y + halfLine,
+    Math.min(frame.y + frame.height - halfLine, anchor.y - offset * 1.05),
+  );
+
+  return { x, y, anchor: textAnchor };
+};
 
 interface State {
   t1Id: string | null;
@@ -185,6 +255,36 @@ const slotToken = (t: TimepointRecord, slot: 'T1' | 'T2'): string => {
   return token !== null ? token : slot;
 };
 
+/**
+ * Which of the Change table's two columns holds the chronologically earlier
+ * film — from the films' own capture dates, never from which slot (T1/T2)
+ * they were dropped into.
+ *
+ * The column heads already carry the picker's guarantee that this table's
+ * *left-to-right layout* is T1-then-T2 (see `slotToken`'s comment), but the
+ * words "earlier"/"later" underneath used to be hardcoded to that same
+ * left/right position — true only while the T1 dropdown happens to hold the
+ * chronologically earlier film. Pick the later-dated film into the T1
+ * dropdown (the picker allows it; nothing enforces date order between the
+ * two selects) and the table still printed "earlier" over the later film and
+ * "later" over the earlier one, one line under a subtitle stating the
+ * opposite via the films' own dates. Silent where the comparison cannot be
+ * made honestly: either capture date missing, unparseable, or the two films
+ * share a date.
+ */
+const chronologyCaptions = (
+  t1: TimepointRecord, t2: TimepointRecord,
+): { t1: string | null; t2: string | null } => {
+  const d1 = parseCaptureDate(t1.captureDate);
+  const d2 = parseCaptureDate(t2.captureDate);
+  if (d1 === null || d2 === null || d1.getTime() === d2.getTime()) {
+    return { t1: null, t2: null };
+  }
+  return d1.getTime() < d2.getTime()
+    ? { t1: 'earlier', t2: 'later' }
+    : { t1: 'later', t2: 'earlier' };
+};
+
 /** Which of the two films lack a mm/px calibration, named as prose. */
 const uncalibratedFilms = (t1: TimepointRecord, t2: TimepointRecord): string => {
   const missing: string[] = [];
@@ -201,6 +301,37 @@ const uncalibratedFilms = (t1: TimepointRecord, t2: TimepointRecord): string => 
     return `${missing[0]} is not calibrated`;
   }
   return 'a measurement is missing a scale on one film';
+};
+
+/**
+ * What a basis needs, and — when it is unavailable — precisely which of those
+ * landmarks are missing and from which film. Naming only the full requirement
+ * ("needs S, N on both tracings") is true but not actionable when a film is
+ * short a single point: the reader has to open both tracings and compare
+ * point lists by hand to find it. This names the film and the point, so the
+ * segmented control's tooltip and the hint line beneath it are both
+ * answerable from the sentence alone.
+ */
+const basisMissingSummary = (
+  basis: RegistrationBasis, t1: TimepointRecord, t2: TimepointRecord,
+): string => {
+  const need = basisSymbols(basis).join(', ');
+  const missing1 = missingBasisSymbols(basis, t1.landmarks);
+  const missing2 = missingBasisSymbols(basis, t2.landmarks);
+  const clauses: string[] = [];
+  if (missing1.length > 0) {
+    clauses.push(`${slotToken(t1, 'T1')} is missing ${missing1.join(', ')}`);
+  }
+  if (missing2.length > 0) {
+    clauses.push(`${slotToken(t2, 'T2')} is missing ${missing2.join(', ')}`);
+  }
+  // The fallback cannot be reached from `renderControls` — a basis only lands
+  // in its `unavailable` list when at least one film is short a landmark —
+  // but stays honest rather than silently mis-stating a basis whose
+  // unavailability comes from anywhere else in the future.
+  return clauses.length > 0
+    ? `needs ${need} on both tracings — ${clauses.join('; ')}`
+    : `needs ${need} on both tracings`;
 };
 
 /**
@@ -409,6 +540,16 @@ export default class Superimposition extends React.PureComponent<Props, State> {
 
   private renderView() {
     const pair = this.getPair();
+    // A pair can exist and still share no registration basis at all (see
+    // `renderNotEnough`'s sibling state inside `renderPair`) — two tracings
+    // with, say, S plotted on one film and N on the other, neither alone.
+    // Export and Print were gated only on `pair === null`, so in that state
+    // both buttons stayed visually identical to the working ones: nothing
+    // told a clinician there was nothing to export before they clicked and
+    // read the in-view error. This mirrors the same shared-basis test
+    // `renderPair` and `handlePrint`/`handleExportPng` already run.
+    const canExport = pair !== null
+      && sharedBasisIds(pair.t1.availableBasisIds, pair.t2.availableBasisIds).length > 0;
 
     return (
       <div
@@ -457,7 +598,7 @@ export default class Superimposition extends React.PureComponent<Props, State> {
             <button
               type="button"
               className={classes.chrome_button}
-              disabled={pair === null || this.state.isExporting}
+              disabled={!canExport || this.state.isExporting}
               onClick={this.handleExportPng}
             >
               <IconImage color="currentColor" style={{ width: 18, height: 18 }} />
@@ -467,7 +608,7 @@ export default class Superimposition extends React.PureComponent<Props, State> {
               type="button"
               className={cx(classes.chrome_button, classes.chrome_button__primary)}
               autoFocus
-              disabled={pair === null}
+              disabled={!canExport}
               onClick={this.handlePrint}
             >
               <IconPrint color="currentColor" style={{ width: 18, height: 18 }} />
@@ -755,8 +896,7 @@ export default class Superimposition extends React.PureComponent<Props, State> {
               const isShared = shared.indexOf(b.id) !== -1;
               const title = isShared
                 ? `${b.name} — ${b.description}`
-                : `${b.name} is unavailable: both tracings must carry ` +
-                  `${basisSymbols(b).join(', ')}.`;
+                : `${b.name} is unavailable: ${basisMissingSummary(b, t1, t2)}.`;
               return (
                 // The tooltip lives on an enabled wrapper, not on the button:
                 // browsers do not fire hover on a disabled control.
@@ -783,7 +923,7 @@ export default class Superimposition extends React.PureComponent<Props, State> {
           <p className={classes.seg_hint}>
             Unavailable:{' '}
             {unavailable.map((b) => (
-              `${b.label} needs ${basisSymbols(b).join(', ')} on both tracings`
+              `${b.label} ${basisMissingSummary(b, t1, t2)}`
             )).join(' · ')}. Auto-plot does not place these — plot them on each
             film to unlock the registration.
           </p>
@@ -797,7 +937,10 @@ export default class Superimposition extends React.PureComponent<Props, State> {
    * framed region, dimmed, purely as anatomical context; both tracings are
    * drawn from `buildOutlines` — the same curves the editor draws — over it, T1
    * solid cyan and T2 dashed orange, so a segment where the two coincide still
-   * shows T1 through T2's gaps.
+   * shows T1 through T2's gaps. A landmark or synthesised shape with no
+   * counterpart on the other tracing — plotted for one film's analysis but not
+   * the other's — is drawn dimmed (see `orphanSymbols`/`orphanOutlineIds`)
+   * rather than at full weight, so it reads as context instead of clutter.
    */
   private renderSvg(
     t1: TimepointRecord,
@@ -806,10 +949,14 @@ export default class Superimposition extends React.PureComponent<Props, State> {
     frame: Box,
     basis: RegistrationBasis,
   ) {
-    const t1Points = transformLandmarks(t1.landmarks, {
-      a: 1, b: 0, c: 0, d: 1, e: 0, f: 0,
-    });
+    const t1Points = transformLandmarks(t1.landmarks, IDENTITY);
     const t2Points = transformLandmarks(t2.landmarks, transform);
+    const t1Outlines = buildOutlines(t1Points);
+    const t2Outlines = buildOutlines(t2Points);
+    const t1OrphanSymbols = orphanSymbols(t1Points, t2Points);
+    const t2OrphanSymbols = orphanSymbols(t2Points, t1Points);
+    const t1OrphanOutlineIds = orphanOutlineIds(t1Outlines, t2Outlines);
+    const t2OrphanOutlineIds = orphanOutlineIds(t2Outlines, t1Outlines);
     const dotRadius = frame.width / 190;
     const annotations = buildAnnotations(
       basis, t1Points, t2Points, frame, t1.scaleFactor,
@@ -870,9 +1017,15 @@ export default class Superimposition extends React.PureComponent<Props, State> {
         ) : null}
         {this.renderBasisLine(annotations.t1Basis, classes.basis_line__t1)}
         {this.renderBasisLine(annotations.t2Basis, classes.basis_line__t2)}
-        {this.renderTracing(t1Points, dotRadius, classes.t1)}
-        {this.renderTracing(t2Points, dotRadius, classes.t2)}
-        {this.renderAnnotations(annotations, dotRadius, frame, offset)}
+        {this.renderTracing(
+          t1Points, t1Outlines, dotRadius, classes.t1,
+          t1OrphanOutlineIds, t1OrphanSymbols,
+        )}
+        {this.renderTracing(
+          t2Points, t2Outlines, dotRadius, classes.t2,
+          t2OrphanOutlineIds, t2OrphanSymbols,
+        )}
+        {this.renderAnnotations(annotations, dotRadius, frame, offset, size, sizePrint)}
       </svg>
     );
   }
@@ -905,6 +1058,8 @@ export default class Superimposition extends React.PureComponent<Props, State> {
     dotRadius: number,
     frame: Box,
     offset: number,
+    size: number,
+    sizePrint: number,
   ) {
     const { origin, scaleBar } = annotations;
     const pad = frame.width * 0.04;
@@ -923,18 +1078,25 @@ export default class Superimposition extends React.PureComponent<Props, State> {
             r={dotRadius * 3.2}
           />
         ) : null}
-        {annotations.labels.map(({ symbol, point }) => (
-          <text
-            key={symbol}
-            className={classes.anno_text}
-            x={point.x + offset}
-            y={point.y - offset * 1.05}
-          >
-            {symbol === annotations.originSymbol
-              ? `${symbol} — registration`
-              : symbol}
-          </text>
-        ))}
+        {annotations.labels.map(({ symbol, point }) => {
+          const text = symbol === annotations.originSymbol
+            ? `${symbol} — registration`
+            : symbol;
+          const placed = placeAnnotationLabel(
+            text, point, offset, frame, [size, sizePrint],
+          );
+          return (
+            <text
+              key={symbol}
+              className={classes.anno_text}
+              x={placed.x}
+              y={placed.y}
+              textAnchor={placed.anchor}
+            >
+              {text}
+            </text>
+          );
+        })}
         {scaleBar !== null ? (
           // Only drawn when T1 carries a calibration: a ruler without one would
           // be a fabricated measurement.
@@ -961,18 +1123,32 @@ export default class Superimposition extends React.PureComponent<Props, State> {
     );
   }
 
+  /**
+   * One tracing's curves and landmark dots. `orphanOutlineIdList` and
+   * `orphanSymbolList` name the geometry this tracing carries that the other
+   * timepoint does not — dimmed via `.geometry__orphan` rather than omitted,
+   * so a landmark plotted for only one film's analysis stays visible as
+   * context without competing with the paired geometry the change table
+   * actually reads (see `orphanSymbols`/`orphanOutlineIds`).
+   */
   private renderTracing(
     points: { [symbol: string]: GeoPoint },
+    outlines: Outline[],
     dotRadius: number,
     hueClass: string,
+    orphanOutlineIdList: string[],
+    orphanSymbolList: string[],
   ) {
-    const outlines = buildOutlines(points);
     return (
       <g className={hueClass}>
         {outlines.map((outline) => {
           const d = outlineToSvgPath(outline);
+          const isOrphan = orphanOutlineIdList.indexOf(outline.id) !== -1;
           return (
-            <g key={outline.id}>
+            <g
+              key={outline.id}
+              className={cx({ [classes.geometry__orphan]: isOrphan })}
+            >
               <path className={classes.casing} d={d} />
               <path className={classes.outline} d={d} />
             </g>
@@ -981,7 +1157,9 @@ export default class Superimposition extends React.PureComponent<Props, State> {
         {Object.keys(points).map((symbol) => (
           <circle
             key={symbol}
-            className={classes.dot}
+            className={cx(classes.dot, {
+              [classes.geometry__orphan]: orphanSymbolList.indexOf(symbol) !== -1,
+            })}
             cx={points[symbol].x}
             cy={points[symbol].y}
             r={dotRadius}
@@ -1055,9 +1233,12 @@ export default class Superimposition extends React.PureComponent<Props, State> {
             region; T2 contributes its tracing only, drawn dashed so a
             coincident T1 stays visible beneath it. The straight cyan and orange
             line is the {basis.from}–{basis.to} reference whose direction was
-            matched: where the two coincide, the registration is exact. Both
-            tracings are the plotted landmarks — nothing here is predicted or
-            simulated.
+            matched: where the two coincide, the registration is exact. A
+            landmark or curve plotted on one tracing with no counterpart on the
+            other — carried over from a different analysis, say — is drawn
+            faded rather than at full weight: it has nothing to compare
+            against. Both tracings are the plotted landmarks — nothing here is
+            predicted or simulated.
           </p>
           {/* How the Change table is to be read. It is stated here, in the
               column the figure leaves free, rather than under the table: five
@@ -1145,6 +1326,7 @@ export default class Superimposition extends React.PureComponent<Props, State> {
     t2: TimepointRecord,
     interval: string | null,
   ) {
+    const chronology = chronologyCaptions(t1, t2);
     return (
       <div className={classes.panel}>
         <div className={classes.panel_head}>
@@ -1188,14 +1370,22 @@ export default class Superimposition extends React.PureComponent<Props, State> {
                       reading "T2 − T3", and nothing on an exported PNG or a filed
                       sheet said which way round the pair was. Two words, in the
                       head's own quiet register, and the columns state it
-                      themselves. */}
+                      themselves — computed from the films' own capture dates (see
+                      `chronologyCaptions`), not assumed from column position: the
+                      T1 dropdown and the T2 dropdown are two independent selects,
+                      and nothing stops a clinician picking the later-dated film
+                      into the left one. */}
                   <th className={classes.col_num}>
                     {slotToken(t1, 'T1')}
-                    <span className={classes.col_slot}>earlier</span>
+                    {chronology.t1 !== null ? (
+                      <span className={classes.col_slot}>{chronology.t1}</span>
+                    ) : null}
                   </th>
                   <th className={classes.col_num}>
                     {slotToken(t2, 'T2')}
-                    <span className={classes.col_slot}>later</span>
+                    {chronology.t2 !== null ? (
+                      <span className={classes.col_slot}>{chronology.t2}</span>
+                    ) : null}
                   </th>
                   <th className={classes.col_num}>Change</th>
                   <th
@@ -1275,6 +1465,20 @@ export default class Superimposition extends React.PureComponent<Props, State> {
       ? Math.min(1, Math.abs(row.change) / scale.max)
       : 0;
     const isForward = row.change >= 0;
+    // The printed Change column is derived from T1 and T2 **as printed**, not
+    // from the full-precision figure behind them: at one decimal, a true
+    // change of e.g. −26.4° can round its endpoints to −11.0° and −37.4° while
+    // the raw difference prints as −26.5° — a row that contradicts itself to
+    // any reader who subtracts the two visible columns. Rounding T1 and T2
+    // first, then differencing, is what makes the row's own arithmetic true on
+    // the sheet — the same fix (and the same helper) as the treatment
+    // simulation and trend chart use for the identical problem. The bar and
+    // the hand-plotting-error dimming above are read straight off the raw
+    // `row.change`; they are reading aids and a clinical threshold, not
+    // numbers a reader checks by hand, so they are left at full precision.
+    const shownChange = roundToDisplay(
+      roundToDisplay(row.t2) - roundToDisplay(row.t1),
+    );
     const errorNote = row.kind === 'angular'
       ? `Within hand-plotting error (±${PLOTTING_ERROR.angular}°)`
       : `Within hand-plotting error (±${PLOTTING_ERROR.linear} mm)`;
@@ -1293,7 +1497,7 @@ export default class Superimposition extends React.PureComponent<Props, State> {
         <td className={classes.cell_num}>{printNumber(row.t1)}{unit}</td>
         <td className={classes.cell_num}>{printNumber(row.t2)}{unit}</td>
         <td className={cx(classes.cell_num, classes.cell_change)}>
-          {printSigned(row.change)}{unit}
+          {printSigned(shownChange)}{unit}
         </td>
         <td className={classes.cell_bar}>
           {fraction > 0 ? (
@@ -1339,6 +1543,7 @@ export default class Superimposition extends React.PureComponent<Props, State> {
     const shared = sharedBasisIds(t1.availableBasisIds, t2.availableBasisIds);
     const basisId = this.resolveBasisId(shared);
     if (basisId === undefined) {
+      this.setState({ exportError: 'These two tracings share no registration.' });
       return;
     }
     const basis = getBasis(basisId);
@@ -1356,13 +1561,16 @@ export default class Superimposition extends React.PureComponent<Props, State> {
     const identity = patient !== null
       ? [patient.chartId, patient.name].filter((p) => !!p).join(' · ')
       : '';
+    const t1Points = transformLandmarks(t1.landmarks, IDENTITY);
+    const t2Points = transformLandmarks(t2.landmarks, registration.transform);
     const annotations = buildAnnotations(
-      basis,
-      transformLandmarks(t1.landmarks, { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 }),
-      transformLandmarks(t2.landmarks, registration.transform),
-      frame,
-      t1.scaleFactor,
+      basis, t1Points, t2Points, frame, t1.scaleFactor,
     );
+    // The exported PNG dims the same orphan geometry the screen does (see
+    // `renderSvg`), from the same pure helpers — an export must read the same
+    // comparison the screen shows, not a second, undimmed one.
+    const t1Outlines = buildOutlines(t1Points);
+    const t2Outlines = buildOutlines(t2Points);
     this.setState({ isExporting: true, exportError: null });
     renderSuperimpositionSnapshot({
       filmSrc: t1.src,
@@ -1373,6 +1581,10 @@ export default class Superimposition extends React.PureComponent<Props, State> {
       transform: registration.transform,
       frame,
       annotations,
+      t1OrphanDotSymbols: orphanSymbols(t1Points, t2Points),
+      t2OrphanDotSymbols: orphanSymbols(t2Points, t1Points),
+      t1OrphanOutlineIds: orphanOutlineIds(t1Outlines, t2Outlines),
+      t2OrphanOutlineIds: orphanOutlineIds(t2Outlines, t1Outlines),
       t1Label: shortLabel(t1, 'T1'),
       t2Label: shortLabel(t2, 'T2'),
       registrationLabel: `Registered on ${basis.name}`,
@@ -1398,25 +1610,31 @@ export default class Superimposition extends React.PureComponent<Props, State> {
         });
         return;
       }
-      saveAs(blob, `${this.exportStem()}-superimposition.png`);
+      saveBlobAs(blob, `${this.exportStem(t1, t2)}-superimposition.png`);
       this.setState({ isExporting: false });
     });
   };
 
   /**
-   * File-name stem for the export. Characters a file system cannot carry —
-   * every CJK name among them — collapse to a single separator and are then
-   * trimmed away, so a Japanese name yields `C-0001-superimposition.png` rather
-   * than the malformed `C-0001__-superimposition.png`.
+   * File-name stem for the export. Only characters an actual filesystem path
+   * cannot carry are sanitised away — same rule as the `.wceph` case file
+   * export, via the shared `sanitizeFilenameStem` — so a Japanese name yields
+   * `C-0001 山田 太郎-superimposition.png` rather than losing the name entirely.
+   *
+   * Carries both films' own series tokens (`slotToken` — the same vocabulary
+   * the on-screen legend and column heads use), not just the patient: without
+   * them, exporting more than one comparison for the same patient in a
+   * session (T1→T2, then T1→T3, both legitimate registration pairs on a
+   * multi-visit case) wrote every pair to the identical filename.
    */
-  private exportStem(): string {
+  private exportStem(t1: TimepointRecord, t2: TimepointRecord): string {
     const { patient } = this.props;
-    const stem = (patient !== null
-      ? [patient.chartId, patient.name].filter((p) => !!p).join('_')
-      : '')
-      .replace(/[^\w.\-]+/g, '_')
-      .replace(/_{2,}/g, '_')
-      .replace(/^[_.\-]+|[_.\-]+$/g, '');
+    const visitLabel = sanitizeFilenameStem([
+      slotToken(t1, 'T1'), slotToken(t2, 'T2'),
+    ]);
+    const stem = patient !== null
+      ? sanitizeFilenameStem([patient.chartId, patient.name, visitLabel])
+      : visitLabel;
     return stem !== '' ? stem : 'superimposition';
   }
 }

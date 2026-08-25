@@ -1,10 +1,112 @@
 @import 'src/_variables.scss';
 
 .main {
+  position: relative;
   flex-grow: 1;
   min-width: 0;
   overflow: auto;
   order: 1;
+}
+
+// The dropzone fills the same box `.main` used to give it directly; moved onto
+// its own class once a loading overlay needed a sibling to sit over it.
+.dropzone_fill {
+  position: absolute;
+  inset: 0;
+}
+
+// Shown over the dropzone while a just-dropped/chosen file is still being read
+// and decoded — there is no traced image yet to switch the editor onto, and
+// without this a large scan's decode reads as nothing happening rather than
+// as work in progress.
+.import_overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(244, 246, 249, 0.82);
+}
+
+.import_overlay_card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 28px 36px;
+  border-radius: 12px;
+  background: $bg-surface;
+  box-shadow: $shadow-2;
+}
+
+.import_overlay_text {
+  font-size: 13.5px;
+  color: $text-secondary;
+}
+
+// Pinned to the dropzone's top edge, not `.import_overlay`'s full inset:0
+// scrim: the loading state's own scrim blocks interaction on purpose (there
+// is nothing to click while a file decodes), but a failed import's very next
+// step is picking a different file, and a scrim over "Choose image…" blocked
+// the retry it was reporting the need for. The dropzone stays fully live
+// beneath this banner.
+.import_error_banner {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  right: 16px;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border-radius: 8px;
+  background: $error-bg;
+  box-shadow: $shadow-2;
+}
+
+.import_error_icon {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+}
+
+.import_error_text {
+  font-size: 13.5px;
+  color: $error;
+}
+
+// The demo predictor's placeholder warning (see index.tsx) — a full-width
+// strip above the toolbar and the tracing area, not an absolutely-positioned
+// overlay: it must never sit on top of and hide the landmarks it is warning
+// about, and unlike the dropzone's import-error banner it has an entire
+// tracing session to stay visible for, not one retry.
+.placeholder_banner {
+  flex: 0 0 auto;
+  order: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 16px;
+  background: $warn-bg;
+  border-bottom: 1px solid $warn;
+}
+
+.placeholder_banner_icon {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  margin-top: 1px;
+}
+
+.placeholder_banner_text {
+  font-size: 13px;
+  line-height: 1.5;
+  color: $text-primary;
+
+  strong {
+    color: $warn;
+  }
 }
 
 // DOM-first (primary controls) but visually docked at the bottom.

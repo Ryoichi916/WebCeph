@@ -57,7 +57,9 @@ import { printDocumentTitle } from 'utils/printTitle';
 // this foot and the records sheet's own key read the same string.
 import { deviationStarKey } from './copy';
 
-import Wigglegram, { WigglegramKey } from './Wigglegram';
+import { WigglegramKey } from './Wigglegram';
+import { TargetBandKey } from './TargetBand';
+import NormsCharts from './NormsCharts';
 import ResultsTable, { DeviationKey } from './ResultsTable';
 import FindingsOverview from './FindingsOverview';
 import { AnalysisSections, PendingNote } from './AnalysisSection';
@@ -295,9 +297,19 @@ export class StoredEditable extends React.PureComponent<StoredEditableProps> {
   };
 
   // Paste as plain text so pasted rich content cannot break the letterhead.
+  //
+  // `\s` matches U+3000 (ideographic space) along with ordinary whitespace,
+  // so collapsing every run of `\s` flattened "高橋　三郎　医師" — pasted
+  // from a business card or a signature block, where the family and given
+  // name are conventionally separated by a full-width space, not a regular
+  // one — to "高橋 三郎 医師", corrupting the one field that prints on
+  // every signed document this app produces. `[^\S　]` is `\s` with
+  // U+3000 carved out (the complement of "\S or U+3000" is "whitespace that
+  // is not U+3000"), so a multi-line paste's real line breaks and tabs still
+  // collapse to one line, and an intentional ideographic space survives.
   private handlePaste = (e: React.ClipboardEvent<HTMLSpanElement>) => {
     e.preventDefault();
-    const text = e.clipboardData.getData('text/plain').replace(/\s+/g, ' ');
+    const text = e.clipboardData.getData('text/plain').replace(/[^\S　]+/g, ' ');
     document.execCommand('insertText', false, text);
   };
 }
@@ -310,21 +322,24 @@ export const PRINT_FONT =
 /**
  * The key to every convention that recurs on the printed pages: the severity
  * stars in the DEVIATION column, the wigglegram's shaded bands, **the colour
- * of its dots and the off-chart marker**. Set in the running foot so it is on
- * the page the marks are on, whichever page that is — which matters here,
- * because the combined printout's front-matter key is print-hidden (the
- * running foot is its replacement) and red ◂ ▸ markers appear as early as the
- * Downs section.
+ * of its dots and the off-chart marker**, and the target-range band's pill,
+ * tick and dot. Set in the running foot so it is on the page the marks are
+ * on, whichever page that is — which matters here, because the combined
+ * printout's front-matter key is print-hidden (the running foot is its
+ * replacement) and red ◂ ▸ markers appear as early as the Downs section.
  *
- * The marker is keyed as the glyph *pair*: the chart draws it outward-pointing,
- * so a value below −3 SD is marked ◂ and one above +3 SD is marked ▸, and the
- * two real occurrences on the sample report (OP(Downs)-FH at −3.4 SD, L1-OP at
- * +4.5 SD) are one of each. A key that named only ▸ left the commoner of the
- * two unexplained.
+ * The wigglegram marker is keyed as the glyph *pair*: the chart draws it
+ * outward-pointing, so a value below −3 SD is marked ◂ and one above +3 SD is
+ * marked ▸, and the two real occurrences on the sample report (OP(Downs)-FH
+ * at −3.4 SD, L1-OP at +4.5 SD) are one of each. A key that named only ▸ left
+ * the commoner of the two unexplained. The target-range band reuses the same
+ * pair for the same reason, on the one section that carries it (Tweed).
  */
 const RUNNING_KEY =
   `Deviation: ${deviationStarKey}  |  Wigglegram: band ±1 SD, ` +
-  'lighter ±2 SD; dot amber over 1 SD, red over 2 SD; ◂ ▸ beyond ±3 SD';
+  'lighter ±2 SD; dot amber over 1 SD, red over 2 SD; ◂ ▸ beyond ±3 SD  |  ' +
+  'Target band: pill = published target range, tick = target, dot amber ' +
+  'outside range, ◂ ▸ well beyond it';
 
 /** A CSS string literal, safe to interpolate into a generated stylesheet. */
 export const cssString = (text: string): string => (
@@ -462,7 +477,7 @@ export default class ClinicalReport extends React.PureComponent<Props, State> {
   private renderReport() {
     const {
       patient, results, analysisId, imageType, timepoint, captureDate,
-      scaleFactor, imageSrc, landmarksBySymbol,
+      scaleFactor, scaleCopiedFrom, imageSrc, landmarksBySymbol,
     } = this.props;
     const { snapshotUrl, scope, clinic, clinician, license } = this.state;
     const isCombined = scope === 'all';
@@ -793,6 +808,29 @@ export default class ClinicalReport extends React.PureComponent<Props, State> {
                       {isScaleSuspect ? ' · check scale' : ''}
                     </span>
                   ) : null}
+                  {/* Not a measurement taken on this film: the number was
+                      carried over from another film of the record (same image
+                      type, same pixel size). A signed report may not let the
+                      reader assume every mm claim here was measured on the
+                      radiograph it appears under — see `scaleCopiedFrom`. */}
+                  {scaleCopiedFrom !== null ? (
+                    <span
+                      className={classes.patient_note}
+                      title={
+                        `This film was not calibrated against a distance ` +
+                        `measured on it: the scale was copied from ` +
+                        `${scaleCopiedFrom.label}` +
+                        `${formatCaptureDate(scaleCopiedFrom.captureDate) !== null
+                          ? ` (${formatCaptureDate(scaleCopiedFrom.captureDate)})`
+                          : ''}.`
+                      }
+                    >
+                      copied from {scaleCopiedFrom.label}
+                      {formatCaptureDate(scaleCopiedFrom.captureDate) !== null
+                        ? ` · ${formatCaptureDate(scaleCopiedFrom.captureDate)}`
+                        : ''}
+                    </span>
+                  ) : null}
                 </div>
               </div>
             </div>
@@ -897,7 +935,7 @@ export default class ClinicalReport extends React.PureComponent<Props, State> {
             {isCombined ? this.renderCombinedBody() : (
               <div>
                 {hasResults ? (
-                  <Wigglegram
+                  <NormsCharts
                     results={results}
                     landmarksBySymbol={landmarksBySymbol}
                   />
@@ -1206,11 +1244,16 @@ export default class ClinicalReport extends React.PureComponent<Props, State> {
           </div>
         ) : null}
 
-        {/* Both keys, once for the document (they used to repeat under all
-            fourteen charts and tables). */}
+        {/* All three keys, once for the document (they used to repeat under
+            every chart and table). The target-range key sits beside the
+            wigglegram's own even though only Tweed's section uses it: a key
+            for a mark that appears on just one of nine sections still has to
+            be findable from the front matter a reader turns to first, not
+            buried under whichever page that section happens to land on. */}
         <div className={classes.keys}>
           <span className={classes.keys_line}><DeviationKey /></span>
           <span className={classes.keys_line}><WigglegramKey /></span>
+          <span className={classes.keys_line}><TargetBandKey /></span>
         </div>
 
         <AnalysisSections

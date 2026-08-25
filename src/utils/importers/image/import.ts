@@ -27,9 +27,21 @@ const importFile: Importer = async (fileToImport, options) => {
   img.src = dataURL;
   const { height, width } = await bluebird.fromCallback<HTMLImageElement>(cb => {
     img.onload = () => cb(null, img);
-    img.onerror = (event) => {
-      const error = typeof event === 'string' ? event : (event as ErrorEvent).error;
-      cb(error);
+    // An `<img>`'s error event is a plain `Event`, never the `ErrorEvent`
+    // window.onerror/WebSocket/Worker failures carry — it has no `.error`
+    // property, so reading one off it here always produced `undefined`. A
+    // node-style callback treats a falsy first argument as *success*, so
+    // `cb(undefined)` resolved this promise instead of rejecting it: the
+    // destructure below then threw on the resolved `undefined` value, which
+    // did reach the middleware's catch block, but as a generic "cannot
+    // destructure property 'height' of undefined" instead of a message a
+    // clinician who picked a corrupt or unsupported file could read. A
+    // constructed `Error` here rejects properly and says what happened.
+    img.onerror = () => {
+      cb(new Error(
+        `"${fileToImport.name}" could not be read as an image — the file ` +
+        'may be corrupt, or not an image format this browser can decode.',
+      ));
     };
   });
   // Only spread record metadata the caller actually supplied: an explicit

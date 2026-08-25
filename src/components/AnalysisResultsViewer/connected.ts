@@ -26,6 +26,8 @@ import {
   getImageProps,
 } from 'store/reducers/workspace/image';
 
+import { isPlaceholderAutoPlotWarned } from 'store/reducers/workspace/predictorWarnings';
+
 import {
   toggleAnalysisResults,
 } from 'actions/workspace';
@@ -53,6 +55,7 @@ const mapStateToProps: MapStateToProps<StateProps, OwnProps, StoreState> = (stat
       imageHeight: null,
       caveats: EMPTY_CAVEATS,
       analysisContext: EMPTY_CONTEXT,
+      isPlaceholderAutoPlot: false,
     };
   }
   const analysis = getActiveAnalysis(state)(activeImageId);
@@ -74,6 +77,7 @@ const mapStateToProps: MapStateToProps<StateProps, OwnProps, StoreState> = (stat
     needsScaleForLinear: hasUnreportableLinearMeasurements(state)(activeImageId),
     caveats: getAnalysisCaveats(state)(activeImageId),
     analysisContext: getPatientAnalysisContext(state)(activeImageId),
+    isPlaceholderAutoPlot: isPlaceholderAutoPlotWarned(state)(activeImageId),
   };
 };
 

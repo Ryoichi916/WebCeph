@@ -676,7 +676,7 @@ const SecondaryColumn = (
       <ul className={classes.oa_rows}>
         {shown.map((row) => {
           const { component, unit, stars, outOfRange } = row;
-          const { value, mean, min, max, band } = component;
+          const { value, mean, min, max, band, isTarget } = component;
           return (
             <li key={row.symbol} className={classes.oa_row}>
               <span className={classes.oa_row_name}>
@@ -694,7 +694,7 @@ const SecondaryColumn = (
                 ) : null}
               </span>
               <span className={classes.oa_row_norm}>
-                {displayNorm(mean, min, max, band)}
+                {displayNorm(mean, min, max, band, isTarget)}
               </span>
               {/* …and, where the column has the well to itself, the two tracks the
                   grid above reserves after NORM: how far this figure is from its
@@ -712,7 +712,7 @@ const SecondaryColumn = (
                     [classes.fv_dev__error]: stars >= 2,
                   })}
                 >
-                  {displayDeviation(value, mean, min, max, unit, band)}
+                  {displayDeviation(value, mean, min, max, unit, band, isTarget)}
                   <span className={classes.fv_stars}>
                     {stars > 0 ? STARS[stars] : ''}
                   </span>
@@ -1029,7 +1029,7 @@ const ValueLine = (
   },
 ) => {
   const { symbol, name, unit, stars, outOfRange, marker } = row;
-  const { value, mean, min, max, band } = row.component;
+  const { value, mean, min, max, band, isTarget } = row.component;
   const graded = hasNorm(mean, min, max);
   const floor = row.kind === 'angular'
     ? `±${PLOTTING_ERROR.angular}°`
@@ -1088,11 +1088,14 @@ const ValueLine = (
           ? 'Measured value — this app states no published norm for it'
           : isSdBand(band)
             ? `Mean ± 1 SD (${displayNumber(min)} to ${displayNumber(max)}${unit})`
-            : 'Published normal range, no standard deviation stated'}
+            : isTarget
+              ? 'Published target, with the conventional clinical latitude range ' +
+                'around it — no standard deviation stated'
+              : 'Published normal range, no standard deviation stated'}
       >
-        {displayNorm(mean, min, max, band)}
+        {displayNorm(mean, min, max, band, isTarget)}
         {graded && !isSdBand(band) ? (
-          <span className={classes.fv_norm_kind}>range</span>
+          <span className={classes.fv_norm_kind}>{isTarget ? 'target' : 'range'}</span>
         ) : null}
       </span>
       <span
@@ -1102,7 +1105,7 @@ const ValueLine = (
           [classes.fv_dev__error]: stars >= 2,
         })}
       >
-        {displayDeviation(value, mean, min, max, unit, band)}
+        {displayDeviation(value, mean, min, max, unit, band, isTarget)}
         <span className={classes.fv_stars}>{stars > 0 ? STARS[stars] : ''}</span>
       </span>
       {showStrip ? <DeviationStrip row={row} /> : null}

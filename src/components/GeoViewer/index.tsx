@@ -14,19 +14,26 @@ import map from 'lodash/map';
 
 import Props from './props';
 
-export { AngleProps };
+export type { AngleProps };
 export type PointProps = React.SVGAttributes<SVGCircleElement>;
 export type VectorProps = React.SVGAttributes<SVGLineElement>;
 
-import memoize from 'lodash/memoize';
-
 import { Rect } from 'utils/math';
 
-const createBoundingRect = memoize((top: number, left: number, width: number, height: number): Rect => ({
+// Not memoized: both real call sites (TracingViewer and the SVG exporter)
+// always pass top=0, so lodash's default memoize resolver — which keys the
+// cache on the first argument only — would permanently cache the *first*
+// image's dimensions and silently reuse them for every image loaded
+// afterward in the same session. That corrupted Angle's extend-vs-parallel
+// geometry (isPointWithinRect against boundingRect) for any patient with
+// multiple images of different resolution, a default first-class workflow
+// (T1/T2/T3 follow-up visits). The computation itself is a trivial object
+// literal, not worth caching.
+const createBoundingRect = (top: number, left: number, width: number, height: number): Rect => ({
   top, left,
   right: width,
   bottom: height,
-}));
+});
 
 const GeoViewer = pure((props: Props) => {
   const {

@@ -25,7 +25,16 @@ export interface RemoveRecordDialogProps {
    * row carries its image.
    */
   thumbnail?: string | null;
-  /** Whether anything has been traced on this image (said out loud if so). */
+  /**
+   * Whether anything has been traced on this image (said out loud if so).
+   * This must be the true total stored for the film — `record.landmarkPoints.length`,
+   * the same figure the dashboard's own StatusChip discloses via its
+   * "· N plotted in all" badge — and never just the active analysis's manual
+   * step count. A film can carry landmarks from more than one analysis (e.g.
+   * auto-plotted for a Clinical Report covering all nine), and this is the one
+   * dialog whose explicit job is to state exactly what an irreversible removal
+   * destroys; understating that count here would misstate the loss.
+   */
   landmarksPlaced: number;
   /**
    * How many other images the patient has on file. Removing an image clears the
@@ -74,7 +83,7 @@ export default class RemoveRecordDialog
         overlayClassName={classes.no_print}
         title={
           <div className={classes.title}>
-            <h3 className={classes.title_heading}>Remove this image from the record?</h3>
+            <h3 id="remove-record-dialog-title" className={classes.title_heading}>Remove this image from the record?</h3>
             <span className={classes.title_caption}>
               {fileName !== null ? fileName : 'Image on file'}
             </span>
@@ -101,6 +110,11 @@ export default class RemoveRecordDialog
         bodyStyle={{ padding: '4px 24px 8px', borderTop: '1px solid #DDE3EA' }}
         actionsContainerStyle={{ padding: '12px 24px', borderTop: '1px solid #DDE3EA' }}
         titleStyle={{ padding: '20px 24px 12px' }}
+        paperProps={{
+          role: 'dialog',
+          'aria-modal': 'true',
+          'aria-labelledby': 'remove-record-dialog-title',
+        }}
       >
         <div className={classes.remove_body}>
           {/* Which film. At the record card's own 68 × 85 film ratio, on the

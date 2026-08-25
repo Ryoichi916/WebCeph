@@ -19,6 +19,14 @@ import { isGeoPoint } from 'utils/math';
  * in a facial coordinate frame (anterior / longitudinal axes derived from the
  * N–Me line) and scaled to facial height, so they track the face's size and
  * orientation instead of assuming a fixed pixel scale.
+ *
+ * That facial frame falls back to the S–Gn axis when N or Me is not on the
+ * tracing (see `facialFrame` in `buildOutlines`) — Tweed's own 17-step point
+ * set never places N, so without the fallback none of the frame-scaled
+ * branches (sella, orbit, porion, the mandible's border sag) could draw for a
+ * Tweed-only tracing, even though the points they anchor to (S, Or, Po, Go,
+ * Me, Gn) were all placed. The mandible branch also accepts Gn as the chin
+ * anchor when Pog is not placed, for the same reason.
  */
 
 /** Shared visual identity — imported by both the SVG overlay and the canvas. */
@@ -58,6 +66,68 @@ export interface BezierPath {
 const point = (map: LandmarkMap, symbol: string): Pt | null => {
   const l = map[symbol];
   return isGeoPoint(l) ? { x: l.x, y: l.y } : null;
+};
+
+/**
+ * A turn between consecutive segments of an ordered curve sharper than this
+ * reads as the curve doubling back on itself rather than as an anatomical
+ * bend. Calibrated against the bundled sample's own mandible chain (Go,
+ * Me, Gn, Pog, B): every turn along it, plotted normally, stays under 40°,
+ * and moving the *whole* chin as a group — the shape a real growth spurt or
+ * a surgical advancement actually takes, however large — translates those
+ * points together and barely moves the angle either, because the segments
+ * between them keep the same relative geometry. What does cross this
+ * threshold is one point of the chain drifting out of line while its
+ * neighbours hold still — from an isolated 20 mm displacement (the shape a
+ * single mis-plotted or stale landmark takes, never a clinical change) the
+ * joint reaches ~139°, comfortably clear of both the normal baseline and a
+ * coherent anatomical movement. 110° leaves a wide margin on the honest side
+ * (ordinary tracing variation, real correlated change) while still catching
+ * the isolated-point case this guards against.
+ */
+const SPIKE_TURN_DEG = 110;
+
+/**
+ * Drops an interior point from an ordered, open curve when it reverses the
+ * curve's own direction sharply enough to draw a spike or a self-crossing
+ * loop instead of a bend a face could have. Guards a specific failure mode:
+ * one landmark of an otherwise well-behaved chain (e.g. the mandible's
+ * Me -> Gn -> Pog -> B) has drifted far from where its neighbours place it —
+ * a genuinely mis-plotted point, or an edit so large it no longer reads as
+ * the same anatomy — and the straight-line segments in and out of it fold
+ * the polyline back over itself. The landmark itself is never touched or
+ * hidden — every plotted point still gets its own dot on the tracing — this
+ * only keeps the *decorative* connecting curve from looping through it. A
+ * normal tracing never trips `SPIKE_TURN_DEG`, so this is a no-op on every
+ * anatomy the module is tuned against; only a single backward pass is taken,
+ * which is enough for the one-point drift this guards against.
+ */
+const dropSpikePoints = (pts: Point2[]): Point2[] => {
+  if (pts.length < 3) {
+    return pts;
+  }
+  const out = pts.slice();
+  for (let i = 1; i < out.length - 1; i += 1) {
+    const [ax, ay] = out[i - 1];
+    const [bx, by] = out[i];
+    const [cx, cy] = out[i + 1];
+    const v1x = bx - ax;
+    const v1y = by - ay;
+    const v2x = cx - bx;
+    const v2y = cy - by;
+    const len1 = Math.hypot(v1x, v1y);
+    const len2 = Math.hypot(v2x, v2y);
+    if (len1 < 1e-6 || len2 < 1e-6) {
+      continue;
+    }
+    const cos = (v1x * v2x + v1y * v2y) / (len1 * len2);
+    const turnDeg = Math.acos(Math.max(-1, Math.min(1, cos))) * (180 / Math.PI);
+    if (turnDeg > SPIKE_TURN_DEG) {
+      out.splice(i, 1);
+      i -= 1; // re-examine the joint the removal just closed up
+    }
+  }
+  return out;
 };
 
 /**
@@ -174,12 +244,41 @@ export const buildOutlines = (
     : map;
   const frameN = point(frameSource, 'N');
   const frameMe = point(frameSource, 'Me');
-  const facialFrame = (n: Pt, me: Pt): Frame =>
-    makeFrame(frameN !== null ? frameN : n, frameMe !== null ? frameMe : me);
+  const frameS = point(frameSource, 'S');
+  const frameGn = point(frameSource, 'Gn');
+  /**
+   * The facial axis every synthesised offset in this module is scaled and
+   * oriented against. Prefers N-Me (nasion to menton, the classic facial-
+   * height axis a full tracing carries); when a tracing has neither — Tweed's
+   * own 17-step point set never places N, only S, Gn, Go, Me, Po, Or and the
+   * lower incisor axis — falls back to S-Gn, the same posterior-superior-to-
+   * anterior-inferior axis Tweed's own Y-axis measurement is already built
+   * from. Without this fallback every branch below that needs a frame (sella,
+   * orbit, porion, the mandible's border sag) went blank for a Tweed-only
+   * tracing even though S, Or, Po and Go/Me/Gn — everything those branches
+   * actually anchor to — were all on the film. Returns null only when neither
+   * pair is placed, in which case the caller has no anatomy left to scale
+   * against.
+   */
+  const facialFrame = (n: Pt | null, me: Pt | null): Frame | null => {
+    const useN = frameN !== null ? frameN : n;
+    const useMe = frameMe !== null ? frameMe : me;
+    if (useN !== null && useMe !== null) {
+      return makeFrame(useN, useMe);
+    }
+    const useS = frameS !== null ? frameS : S;
+    const useGn = frameGn !== null ? frameGn : Gn;
+    if (useS !== null && useGn !== null) {
+      return makeFrame(useS, useGn);
+    }
+    return null;
+  };
 
   const hasSoftTissue = hasSoftTissueProfile(map);
   if (hasSoftTissue && N && Me) {
-    const f = facialFrame(N, Me);
+    // N and Me are both placed here (the `if` above requires them), so the
+    // N-Me branch of `facialFrame` always resolves — never the S-Gn fallback.
+    const f = facialFrame(N, Me) as Frame;
     const pts: Point2[] = [];
     // Forehead/glabella above soft nasion, derived from the skeletal frame so
     // the curve starts above the brow even when G is not a placed landmark.
@@ -207,7 +306,7 @@ export const buildOutlines = (
     // Offsets calibrated against the demo film's soft-tissue silhouette,
     // expressed in the facial frame. ANS anchors the subnasale when present;
     // otherwise it is derived from A (subnasale sits above and anterior to A).
-    const f = facialFrame(N, Me);
+    const f = facialFrame(N, Me) as Frame; // N, Me, A, B, Pog all placed (see `if`)
     const subnasale: Point2 = ANS
       ? place(f, ANS, 0.088, 0.055)
       : place(f, A, 0.110, -0.030);
@@ -224,41 +323,62 @@ export const buildOutlines = (
       place(f, Me, 0.112, -0.004), // soft menton
       place(f, Me, -0.050, 0.110), // throat / submental
     ];
-    outlines.push({ id: 'soft-tissue', points: pts, closed: false });
+    // See `dropSpikePoints`: Pog is an interior control point of this chain
+    // (forehead -> ... -> Pog -> Me -> throat) exactly as it is in the
+    // `mandible` outline below, so a mis-plotted Pog can fold this curve
+    // back over itself the same way. Guard it identically.
+    outlines.push({ id: 'soft-tissue', points: dropSpikePoints(pts), closed: false });
   }
 
   // ---- 2. Mandibular border ---------------------------------------------
   // Condyle/articulare -> gonial angle -> inferior border (bulged down) -> Me
-  // -> chin -> up the anterior symphysis to B.
-  if (Go && Me && Pog && B && N) {
-    const f = facialFrame(N, Me);
-    const pts: Point2[] = [];
-    if (Ar) {
-      pts.push([Ar.x, Ar.y]); // condyle / articulare (top of ramus)
+  // -> chin -> up the anterior symphysis to B, wherever those points exist.
+  // Anchors the chin on Pog when it is placed, on Gn otherwise — Tweed's own
+  // copy describes Gn as the "midpoint between pogonion and menton", and
+  // Tweed's 17-step point set places Gn and Me but never Pog, B or N. Without
+  // this fallback the whole curve — the app's most polished decorative layer
+  // — was invisible for a Tweed-only tracing even though Go, Me and Gn, the
+  // three points it actually needs, were all on the film.
+  const chinAnchor = Pog !== null ? Pog : Gn;
+  if (Go && Me && chinAnchor) {
+    const f = facialFrame(N, Me); // falls back to the S-Gn axis when N is absent
+    if (f) {
+      const pts: Point2[] = [];
+      if (Ar) {
+        pts.push([Ar.x, Ar.y]); // condyle / articulare (top of ramus)
+      }
+      pts.push([Go.x, Go.y]);
+      // Inferior border: on a real film the border runs close to the straight
+      // Go–Me chord — checked against the bundled sample, where the bone edge
+      // stays within ~2% of facial height of the chord (slightly above it near
+      // the antegonial region). The old 9% sag drew a bulge no mandible has.
+      const t = 0.6; // control point biased toward Me, where the border dips most
+      const cx = Go.x + (Me.x - Go.x) * t;
+      const cy = Go.y + (Me.y - Go.y) * t;
+      pts.push([cx + f.h * 0.02 * f.down.x, cy + f.h * 0.02 * f.down.y]);
+      pts.push([Me.x, Me.y]);
+      if (Gn) {
+        pts.push([Gn.x, Gn.y]);
+      }
+      if (Pog) {
+        pts.push([Pog.x, Pog.y]);
+      }
+      if (B) {
+        pts.push([B.x, B.y]);
+      }
+      // See `dropSpikePoints`: guards against one point of the chin chain
+      // (Me, Gn, Pog, B) having drifted far enough from its neighbours —
+      // a mis-plotted landmark between visits, most visibly — to fold the
+      // curve back over itself into a loop or a spike.
+      outlines.push({ id: 'mandible', points: dropSpikePoints(pts), closed: false });
     }
-    pts.push([Go.x, Go.y]);
-    // Inferior border: on a real film the border runs close to the straight
-    // Go–Me chord — checked against the bundled sample, where the bone edge
-    // stays within ~2% of facial height of the chord (slightly above it near
-    // the antegonial region). The old 9% sag drew a bulge no mandible has.
-    const t = 0.6; // control point biased toward Me, where the border dips most
-    const cx = Go.x + (Me.x - Go.x) * t;
-    const cy = Go.y + (Me.y - Go.y) * t;
-    pts.push([cx + f.h * 0.02 * f.down.x, cy + f.h * 0.02 * f.down.y]);
-    pts.push([Me.x, Me.y]);
-    if (Gn) {
-      pts.push([Gn.x, Gn.y]);
-    }
-    pts.push([Pog.x, Pog.y]);
-    pts.push([B.x, B.y]);
-    outlines.push({ id: 'mandible', points: pts, closed: false });
   }
 
   // ---- 3. Maxilla outline -----------------------------------------------
   // Palatal plane (PNS -> ANS) into the anterior maxilla (ANS -> A) and down to
   // the alveolar crest.
   if (ANS && A && N && Me) {
-    const f = facialFrame(N, Me);
+    const f = facialFrame(N, Me) as Frame; // N, Me, ANS, A all placed (see `if`)
     const pts: Point2[] = [];
     if (PNS) {
       pts.push([PNS.x, PNS.y]);
@@ -270,43 +390,55 @@ export const buildOutlines = (
   }
 
   // ---- 4. Sella turcica --------------------------------------------------
-  // Small U-shaped fossa opening upward around S.
-  if (S && N && Me) {
+  // Small U-shaped fossa opening upward around S. S is one of Tweed's own
+  // points (his Y-axis runs S->Gn), so this now draws for a Tweed-only
+  // tracing too, scaled off the S-Gn axis in place of N-Me.
+  if (S) {
     const f = facialFrame(N, Me);
-    const k = f.h / 388; // demo-calibrated pixel offsets, scaled to face size
-    const off = (dx: number, dy: number): Point2 => [S.x + dx * k, S.y + dy * k];
-    // Sized against the bundled sample's own fossa (~10 mm wide, ~6 mm deep at
-    // that film's scale): the previous offsets drew a U half again larger than
-    // the anatomy it was supposed to trace.
-    outlines.push({
-      id: 'sella',
-      points: [off(-17, -13), off(-15, 8), off(-1, 17), off(14, 9), off(18, -15)],
-      closed: false,
-    });
+    if (f) {
+      const k = f.h / 388; // demo-calibrated pixel offsets, scaled to face size
+      const off = (dx: number, dy: number): Point2 => [S.x + dx * k, S.y + dy * k];
+      // Sized against the bundled sample's own fossa (~10 mm wide, ~6 mm deep at
+      // that film's scale): the previous offsets drew a U half again larger than
+      // the anatomy it was supposed to trace.
+      outlines.push({
+        id: 'sella',
+        points: [off(-17, -13), off(-15, 8), off(-1, 17), off(14, 9), off(18, -15)],
+        closed: false,
+      });
+    }
   }
 
   // ---- 5. Infraorbital rim arc ------------------------------------------
-  if (Or && N && Me) {
+  // Or is one of Tweed's own points (his FMPA/FMIA run off Po-Or), so this
+  // now draws for a Tweed-only tracing too.
+  if (Or) {
     const f = facialFrame(N, Me);
-    const k = f.h / 388;
-    const off = (dx: number, dy: number): Point2 => [Or.x + dx * k, Or.y + dy * k];
-    outlines.push({
-      id: 'orbit',
-      points: [off(-48, -6), off(0, 6), off(46, -8)],
-      closed: false,
-    });
+    if (f) {
+      const k = f.h / 388;
+      const off = (dx: number, dy: number): Point2 => [Or.x + dx * k, Or.y + dy * k];
+      outlines.push({
+        id: 'orbit',
+        points: [off(-48, -6), off(0, 6), off(46, -8)],
+        closed: false,
+      });
+    }
   }
 
   // ---- 6. Porion / ear-rod marker ---------------------------------------
-  if (Po && N && Me) {
+  // Po is one of Tweed's own points, so this now draws for a Tweed-only
+  // tracing too.
+  if (Po) {
     const f = facialFrame(N, Me);
-    const r = Math.max(4, (f.h / 388) * 8);
-    const ring: Point2[] = [];
-    for (let i = 0; i < 10; i += 1) {
-      const a = (i / 10) * Math.PI * 2;
-      ring.push([Po.x + r * Math.cos(a), Po.y + r * Math.sin(a)]);
+    if (f) {
+      const r = Math.max(4, (f.h / 388) * 8);
+      const ring: Point2[] = [];
+      for (let i = 0; i < 10; i += 1) {
+        const a = (i / 10) * Math.PI * 2;
+        ring.push([Po.x + r * Math.cos(a), Po.y + r * Math.sin(a)]);
+      }
+      outlines.push({ id: 'porion', points: ring, closed: true });
     }
-    outlines.push({ id: 'porion', points: ring, closed: true });
   }
 
   // ---- 7. Central incisor lozenges --------------------------------------

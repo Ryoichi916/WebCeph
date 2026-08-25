@@ -48,6 +48,15 @@ export interface StateProps {
   /** mm-per-pixel calibration, or null when the image is not calibrated. */
   scaleFactor: number | null;
   /**
+   * Where the scale came from, when it was copied from another film of this
+   * record rather than measured on this one — null when it was measured here,
+   * when the film has no scale, or when the source has since been
+   * recalibrated to a different factor (see `connected.ts#getScaleCopiedFrom`).
+   * A signed report may not state a distance as measured on this radiograph
+   * when it was never measured on it at all.
+   */
+  scaleCopiedFrom: { label: string; captureDate: string | null } | null;
+  /**
    * True when the analysis interprets linear (mm) measurements that were
    * suppressed for want of an image scale. Their rows are absent from the
    * printed table, so a footnote accounts for them on the record.

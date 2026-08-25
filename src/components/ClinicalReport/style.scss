@@ -960,8 +960,14 @@
   border-top: 3px solid #FFFFFF;
 }
 
+// The swatch states what the film now actually carries: a ~1pt fully opaque
+// desaturated-blue rule (utils/tracingSnapshot `PLANE_COLOR` at
+// `planeStrokeWidth`), distinctly lighter and thinner than the anatomical
+// tracing's 3px white. Keep the two in agreement — a key whose swatch is
+// bolder or fainter than the rendering it explains is a small lie on a
+// signed sheet.
 .figkey_plane::after {
-  border-top: 1px solid #7E97AE;
+  border-top: 2px solid #93AEC6;
 }
 
 .figkey_point {
@@ -1066,6 +1072,44 @@
   margin-top: 7px;
   font-size: 10.5px;
   color: $text-tertiary;
+}
+
+// ---- Target range profile (TargetBand) --------------------------------------
+
+// Same treatment as `.wiggle_section` for the same reason (see the comment
+// there): the SVG is rescaled by a fraction of a percent to the print
+// column, so its own frame is inset and drawn `crispEdges` rather than relied
+// on to land exactly at the container edge.
+.tband_section {
+  page-break-inside: avoid;
+  overflow: hidden;
+}
+
+.sec_keep .tband_section {
+  margin-top: 12px;
+}
+
+// A wigglegram immediately followed by a target-range chart in the same
+// section (a future analysis with both kinds of norm) needs the same gap
+// between them that separates any two stacked blocks on this sheet.
+.wiggle_section + .tband_section {
+  margin-top: 12px;
+}
+
+// A section whose computed measurements plot on neither chart — see
+// `NormsCharts`'s doc comment for the one real cause (a partial Tweed
+// tracing). Worded plainly rather than boxed like `.sec_pending`: nothing is
+// wrong with the tracing, there is simply nothing to draw a chart from yet.
+.norms_chart_note {
+  margin: 10px 0 0;
+  font-size: 10.5px;
+  line-height: 1.5;
+  font-style: italic;
+  color: $text-tertiary;
+}
+
+.sec_keep .norms_chart_note {
+  margin-top: 12px;
 }
 
 // ---- Results table (print variant of the Summary table) --------------------
@@ -1275,8 +1319,29 @@ $cont-line-height: 13px;
   color: $text-tertiary;
 }
 
+// The clinical-latitude range under a *target* norm (see `isTarget`) — e.g.
+// "20.0–30.0" under Tweed's "25.0". `.cell_numeric` sets `white-space: nowrap`
+// on the whole column so a plain number never wraps, but this line is prose
+// wide enough to overflow that at that setting. Allowed to wrap here instead,
+// onto a second line inside its own cell — matches
+// AnalysisResultsViewer/style.scss's `.norm_target_bounds` so the printed
+// sheet and the Summary dialog agree.
+.norm_target_bounds {
+  display: block;
+  margin-top: 1px;
+  font-size: 9.5px;
+  white-space: normal;
+  color: $text-disabled;
+}
+
 .cell_deviation {
   color: $text-tertiary;
+}
+
+// "in range": a statement, not a measurement — set quieter than the numbers.
+.cell_deviation__muted {
+  color: $text-disabled;
+  font-style: italic;
 }
 
 .cell_deviation__warn {
@@ -1911,6 +1976,32 @@ $cont-line-height: 13px;
   .table tbody {
     page-break-inside: avoid;
     break-inside: avoid;
+  }
+
+  // The neutral bucket ("Measured values") is not one finding: it is a flat
+  // run of otherwise-unrelated measurements, routinely fourteen rows deep on
+  // an analysis with few interpreted findings (Jarabak's polygon, Wits &
+  // vertical's facial heights). Kept as one `<tbody>` with `page-break-inside:
+  // avoid` like every other group, a bucket that did not fit the space left
+  // under the findings above it moved *in full* to the next page — the sample
+  // film's Jarabak section left page 8 65 % white with fourteen rows sitting on
+  // page 9 that had room to start eight rows earlier. `page-break-inside: auto`
+  // does not fix this: Chromium's table fragmenter refuses to split a `<tbody>`
+  // that carries a `rowSpan` cell reaching every row in it (confirmed directly
+  // against this build's own print pipeline), which is exactly what the
+  // "Measured values" finding cell is. The real fix is in ResultsTable.tsx —
+  // one `<tbody>` per graded *run* (each already headed by its own subheading,
+  // "Outside the norm", "Reported without a published norm"), so a run that
+  // does not fit moves on its own rather than dragging every other run in the
+  // bucket with it. `tr { page-break-inside: avoid }` above still holds — no
+  // row is ever split, whichever run it falls in.
+
+  // A subheading ("Outside the norm", …) may not print alone at the foot of a
+  // page with its own rows stranded on the next one — belt to the brace of
+  // each run already being its own unbreakable `<tbody>` (see above).
+  .subrule_row {
+    page-break-after: avoid;
+    break-after: avoid;
   }
 
   .sec {

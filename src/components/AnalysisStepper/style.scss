@@ -195,9 +195,36 @@
     background: $bg-sunken;
   }
 
+  // Keyboard path for the same affordance: done rows are focusable
+  // (tabindex=0 in index.tsx) and focus dispatches the same canvas highlight
+  // as hover. The ring is inset so it stays inside the row instead of
+  // bleeding over its neighbours in the flush-edge list; :focus-visible keeps
+  // it off mouse clicks. The hover background comes along so the lit row
+  // reads identically however it was reached.
+  &__done:focus-visible {
+    outline: none;
+    background: $bg-sunken;
+    box-shadow: inset $focus-ring;
+  }
+
+  // While the row (or its own remove button) holds keyboard focus, the
+  // remove affordance must be visible — hover is not the only way in.
+  &:focus-within .step_remove {
+    opacity: 1;
+  }
+
   &__current {
     background: $primary-050;
     box-shadow: inset 3px 0 0 $primary-600;
+  }
+
+  // The reverse of `&__done:hover` above: this row's own landmark is being
+  // hovered directly on the film (TracingViewer → highlightStep), rather than
+  // the row itself being hovered. Same background as a hovered done row —
+  // one "this is the thing on screen" treatment, reachable from either side —
+  // and it wins over `__current` on the rare row that is somehow both.
+  &__highlighted {
+    background: $bg-sunken;
   }
 }
 
@@ -264,18 +291,18 @@
   overflow: hidden;
 }
 
-// Clinical definitions ("Most anterior point of mandibular symphysis") must
-// read in full — allow the same two-line clamp as titles instead of cutting
-// mid-word with an ellipsis.
+// Clinical definitions must read in full — no line clamp. A two-line clamp
+// cut the longest ones mid-sentence ("…the posterior border of t…" for
+// Articulare) and, worse, swallowed the sign conventions of the Dental
+// analysis's molar-relationship and curve-of-Spee rows ("Positive = lower
+// molar mesial to the upper"), which is exactly the part a clinician needs.
+// Only a handful of definitions run past two lines, so the checklist rhythm
+// survives the occasional taller row.
 .step_description {
   font-size: 12px;
   line-height: 1.35;
   color: $text-tertiary;
   overflow-wrap: break-word;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  overflow: hidden;
 }
 
 // Right-aligned numeric column with tabular figures — values like "-38.4°"

@@ -1,0 +1,92 @@
+@import 'src/_variables.scss';
+
+// A Ctrl+K / Cmd+K overlay over whatever the clinician was on. It used to be
+// an empty <div> — no input, no list, no styling at all — so there was
+// nothing here to style against; this follows the same dialog dressing as
+// Settings and the records dashboard's own dialogs (bordered surface, 8px
+// corners, $shadow-3 for the topmost layer in the app).
+
+.overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1300;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding-top: 12vh;
+  background-color: rgba(20, 24, 29, .45);
+}
+
+.dialog {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 560px;
+  max-height: 60vh;
+  margin: 0 16px;
+  background-color: $bg-surface;
+  border: 1px solid $border;
+  border-radius: 8px;
+  box-shadow: $shadow-3;
+  overflow: hidden;
+  font-family: $font-stack;
+}
+
+.input {
+  flex: 0 0 auto;
+  border: none;
+  border-bottom: 1px solid $border;
+  padding: 14px 18px;
+  font-family: $font-stack;
+  font-size: 16px;
+  color: $text-primary;
+  background-color: transparent;
+  outline: none;
+
+  &:focus {
+    box-shadow: inset $focus-ring;
+  }
+
+  &::placeholder {
+    color: $text-tertiary;
+  }
+}
+
+.list {
+  flex: 1 1 auto;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  overflow-y: auto;
+}
+
+.option,
+.option_active {
+  padding: 9px 12px;
+  border-radius: 6px;
+  font-size: 14px;
+  color: $text-primary;
+  cursor: pointer;
+  // Long labels scroll the list, not the row, and never force it wider than
+  // the dialog.
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.option_active {
+  background-color: $primary-050;
+  color: $primary-900;
+}
+
+.empty {
+  flex: 1 1 auto;
+  margin: 0;
+  padding: 24px 18px;
+  text-align: center;
+  font-size: 13.5px;
+  color: $text-tertiary;
+}

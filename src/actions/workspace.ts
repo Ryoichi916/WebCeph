@@ -5,6 +5,10 @@ export const setActiveTool = createActionCreator('SET_ACTIVE_TOOL_REQUESTED');
 export const ignoreWorkspaceError = createActionCreator('IGNORE_WORKSPACE_ERROR_REQUESTED');
 
 export const addManualLandmark = createActionCreator('ADD_MANUAL_LANDMARK_REQUESTED');
+// Transient, non-undoable position update for a landmark still being dragged
+// (mouse still down) — @see MOVE_MANUAL_LANDMARK_LIVE in webceph.d.ts for why
+// this is a separate action type from addManualLandmark above.
+export const moveManualLandmarkLive = createActionCreator('MOVE_MANUAL_LANDMARK_LIVE');
 export const addUnnamedManualLandmark = createActionCreator('ADD_UNKOWN_MANUAL_LANDMARK_REQUESTED');
 export const removeManualLandmark = createActionCreator('REMOVE_MANUAL_LANDMARK_REQUESTED');
 export const addManualLandmarks = createActionCreator('ADD_MANUAL_LANDMARKS_BATCH_REQUESTED');
@@ -12,6 +16,9 @@ export const addManualLandmarks = createActionCreator('ADD_MANUAL_LANDMARKS_BATC
 export const autoPlotLandmarks = createActionCreator('AUTO_PLOT_LANDMARKS_REQUESTED');
 export const autoPlotSucceeded = createActionCreator('AUTO_PLOT_LANDMARKS_SUCCEEDED');
 export const autoPlotFailed = createActionCreator('AUTO_PLOT_LANDMARKS_FAILED');
+// The demo/placeholder predictor fabricated a landmark for an image it was
+// never calibrated against — @see store/reducers/workspace/predictorWarnings.
+export const placeholderLandmarksPlotted = createActionCreator('PLACEHOLDER_LANDMARKS_PLOTTED');
 
 // Scaffold the remaining landmarks from the placed Sella and Nasion at their
 // SN-relative population-mean positions (see analyses/referenceTemplate).
@@ -79,6 +86,10 @@ export const saveProject = createActionCreator('SAVE_PROJECT_REQUESTED');
 export const loadProjectSucceeded = createActionCreator('LOAD_PROJECT_SUCCEEDED');
 
 export const setScale = createActionCreator('SET_SCALE_REQUESTED');
+// The pan position paired with setScale — @see
+// store/reducers/workspace/canvas#computeAnchoredZoomOffset, which keeps the
+// image-space point under the cursor fixed on screen across a zoom step.
+export const setScaleOffset = createActionCreator('SET_SCALE_OFFSET_REQUESTED');
 
 export const importFileRequested = createActionCreator('IMPORT_FILE_REQUESTED');
 export const importFileSucceeded = createActionCreator('IMPORT_FILE_SUCCEEDED');
@@ -94,12 +105,6 @@ export const exportFile = createActionCreator('EXPORT_FILE_REQUESTED');
 export const exportFileSucceeded = createActionCreator('EXPORT_FILE_SUCCEEDED');
 export const exportFileFailed = createActionCreator('EXPORT_FILE_FAILED');
 export const setExportProgress = createActionCreator('EXPORT_PROGRESS_CHANGED');
-
-export const flipX = createActionCreator('FLIP_IMAGE_X_REQUESTED');
-export const flipY = createActionCreator('FLIP_IMAGE_Y_REQUESTED');
-export const setBrightness = createActionCreator('SET_IMAGE_BRIGHTNESS_REQUESTED');
-export const setContrast = createActionCreator('SET_IMAGE_CONTRAST_REQUESTED');
-export const invertColors = createActionCreator('INVERT_IMAGE_REQUESTED');
 
 export const resetWorkspace = createActionCreator('RESET_WORKSPACE_REQUESTED');
 export const canvasResized = createActionCreator('CANVAS_RESIZED');

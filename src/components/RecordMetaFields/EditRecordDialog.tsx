@@ -101,7 +101,7 @@ export default class EditRecordDialog
         overlayClassName={classes.no_print}
         title={
           <div className={classes.title}>
-            <h3 className={classes.title_heading}>Edit record details</h3>
+            <h3 id="edit-record-dialog-title" className={classes.title_heading}>Edit record details</h3>
             <span className={classes.title_caption}>
               {fileName !== null ? fileName : 'Image on file'}
             </span>
@@ -133,6 +133,11 @@ export default class EditRecordDialog
         bodyStyle={{ padding: '4px 24px 8px', borderTop: '1px solid #DDE3EA' }}
         actionsContainerStyle={{ padding: '12px 24px', borderTop: '1px solid #DDE3EA' }}
         titleStyle={{ padding: '20px 24px 12px' }}
+        paperProps={{
+          role: 'dialog',
+          'aria-modal': 'true',
+          'aria-labelledby': 'edit-record-dialog-title',
+        }}
       >
         <RecordMetaFields
           value={value}

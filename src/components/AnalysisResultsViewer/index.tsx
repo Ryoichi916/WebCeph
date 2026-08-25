@@ -6,8 +6,7 @@ import IconClose from 'material-ui/svg-icons/navigation/close';
 import IconCopy from 'material-ui/svg-icons/content/content-copy';
 import IconCheck from 'material-ui/svg-icons/navigation/check';
 import IconDownload from 'material-ui/svg-icons/file/file-download';
-
-import { saveAs } from 'file-saver';
+import IconWarning from 'material-ui/svg-icons/alert/warning';
 
 import * as cx from 'classnames';
 
@@ -24,6 +23,7 @@ import {
 // tracing is typeset the same way on screen and on paper.
 import {
   groupFindings, alsoFindingLabel, AlsoFinding, chipToneFor,
+  findGroupDivergence, GroupDivergence,
 } from './grouping';
 
 import {
@@ -39,6 +39,11 @@ import {
 } from 'analyses/helpers';
 
 import LATERAL_ANALYSES from 'analyses/lateral';
+
+// `saveBlobAs` replaces `file-saver`'s saveAs(): see its doc comment for why
+// (a webpack chunk boundary between file-saver and its caller silently
+// drops the filename).
+import { saveBlobAs } from 'utils/tracingSnapshot';
 
 const classes = require('./style.scss');
 
@@ -174,15 +179,26 @@ export const formatRange = (min: number, max: number): string => (
  * The norm cell's text for any component, in one place so the dialog, the
  * printed report and the clipboard/CSV export can never describe the same
  * norm three different ways.
+ *
+ * `isTarget` (see `AnalysisComponent.isTarget`) keeps a published *target*
+ * printed beside its range instead of hidden by it: Tweed's 25/90/65 are
+ * figures a clinician actually treats toward, and a norm cell that showed
+ * only "20.0–30.0" left the number that drives his own treatment plan
+ * recoverable only from the provenance prose underneath. A plain range with no
+ * stated target (Björk's gonial halves, Jarabak's ratio) still prints bounds
+ * alone — inventing a "target" for those would resurrect exactly the
+ * manufactured-figure problem `RANGE` exists to prevent.
  */
 export const formatNorm = (
-  mean: number, min: number, max: number, band?: NormBand,
+  mean: number, min: number, max: number, band?: NormBand, isTarget?: boolean,
 ): string => {
   if (!hasNorm(mean, min, max)) {
     return NO_NORM_TEXT;
   }
   if (!isSdBand(band)) {
-    return formatRange(min, max);
+    return isTarget
+      ? `${formatNumber(mean)} · range ${formatRange(min, max)}`
+      : formatRange(min, max);
   }
   return `${formatNumber(mean)} ± ${formatNumber((max - min) / 2)}`;
 };
@@ -192,18 +208,25 @@ export const IN_RANGE_TEXT = 'in range';
 
 /**
  * The deviation cell's text. An SD component reports its signed distance from
- * the mean; a range component reports how far it lies beyond the nearer bound
- * (and says "in range" while it lies between them), because a range has no
- * mean to subtract from.
+ * the mean; a plain-range component reports how far it lies beyond the
+ * nearer bound (and says "in range" while it lies between them), because a
+ * range with no stated target has no figure to subtract from. A **target**
+ * range (`isTarget`) does have one — Tweed plans treatment on how far FMIA
+ * sits from 65°, not on whether it has crossed 60° or 70° — so it reports the
+ * signed distance from that target the same way an SD component does, still
+ * carrying no stars (see `getSeverityStars`).
  */
 export const formatDeviation = (
   value: number, mean: number, min: number, max: number,
-  unit: string, band?: NormBand,
+  unit: string, band?: NormBand, isTarget?: boolean,
 ): string => {
   if (!hasNorm(mean, min, max)) {
     return NO_NORM_TEXT;
   }
   if (!isSdBand(band)) {
+    if (isTarget) {
+      return `${formatSigned(value - mean)}${unit}`;
+    }
     const excess = rangeExcess(value, min, max);
     return excess === 0 ? IN_RANGE_TEXT : `${formatSigned(excess)}${unit}`;
   }
@@ -236,14 +259,16 @@ export const displaySigned = (n: number): string => displayMinus(formatSigned(n)
 
 /** `formatNorm` with the display minus (see `displayMinus`). */
 export const displayNorm = (
-  mean: number, min: number, max: number, band?: NormBand,
-): string => displayMinus(formatNorm(mean, min, max, band));
+  mean: number, min: number, max: number, band?: NormBand, isTarget?: boolean,
+): string => displayMinus(formatNorm(mean, min, max, band, isTarget));
 
 /** `formatDeviation` with the display minus (see `displayMinus`). */
 export const displayDeviation = (
   value: number, mean: number, min: number, max: number,
-  unit: string, band?: NormBand,
-): string => displayMinus(formatDeviation(value, mean, min, max, unit, band));
+  unit: string, band?: NormBand, isTarget?: boolean,
+): string => displayMinus(
+  formatDeviation(value, mean, min, max, unit, band, isTarget),
+);
 
 // The chip tone of a finding, and the order a list of them is read in, now live
 // beside `groupFindings` (see `./grouping`) — a pure module the records
@@ -284,6 +309,62 @@ export const NORMS_NOT_MATCHED =
   'diagnosis.';
 
 /**
+ * The mm rows of this table are present but derived from a calibration that
+ * cannot be right (see `getImpliedFilmSize`). One sentence, so the dialog and
+ * the clipboard/CSV export — the surface most likely to carry a wrong number
+ * onward with nothing saying why — print it identically.
+ */
+export const formatScaleSuspectNote = (
+  filmSize: { label: string },
+): string => (
+  `The image scale makes this film ${filmSize.label} — outside the ` +
+  `${FILM_SIZE_BAND.minMm}–${FILM_SIZE_BAND.maxMm} mm a cephalogram ` +
+  `measures. Every millimetre value above is derived from that scale and is ` +
+  `wrong by the same factor if it is; angles and ratios are unaffected. ` +
+  `Re-calibrate from the ruler chip in the toolbar.`
+);
+
+/**
+ * This analysis interprets linear (mm) measurements that are missing from the
+ * table because the image carries no scale — accounted for here rather than
+ * left as a silent gap, on screen and in the export alike.
+ */
+export const LINEAR_NEEDS_SCALE_NOTE =
+  'Linear measurements need an image scale — set it from the calibration ' +
+  'chip in the toolbar. Angular values are unaffected.';
+
+/**
+ * The demo/placeholder predictor (see `predictors/demo.ts`) plotted one or
+ * more of the landmarks this reading is computed from, on an image other
+ * than the bundled sample film its template is calibrated against — the
+ * values below are not derived from this image's anatomy. Printed on screen
+ * and carried into the copy/CSV export alike, the same reasoning as every
+ * other note this dialog cannot let stop at its own edge (see
+ * `formatScaleSuspectNote`).
+ */
+export const PLACEHOLDER_AUTOPLOT_NOTE =
+  'One or more landmarks were placed by the demo auto-plot predictor, which ' +
+  'is a placeholder calibrated only to the bundled sample film — on this ' +
+  'image its positions are fabricated, not detected. Verify and correct ' +
+  'every point before treating any value below as a clinical reading.';
+
+/**
+ * A `sum`-type row (Björk's total, Tweed's triangle closure) prints its own
+ * full-precision total, not the sum of the *rounded* figures printed two rows
+ * up for its own parts — `roundToDisplay`'s docstring names exactly this as
+ * the arithmetic a reader must be able to check against the printed columns.
+ * Re-deriving the total from rounded parts would fix the printed checksum at
+ * the cost of moving a row's grading away from the value the analysis
+ * actually computed (a total that rounds to the grading boundary either way);
+ * this footnote instead says, once, why the two do not always match.
+ */
+export const SUM_ROUNDING_NOTE =
+  'A row that sums other angles in this table (Björk\'s total, Tweed\'s ' +
+  'triangle closure) totals the full-precision values, not the rounded ' +
+  'figures printed for its own parts above it — adding those exactly as ' +
+  'printed can read up to 0.1° off the total shown, which remains correct.';
+
+/**
  * The provenance block that opens the clipboard/CSV export.
  *
  * The exported table is the artifact most likely to end up pasted into a chart
@@ -295,14 +376,33 @@ export const NORMS_NOT_MATCHED =
  *
  * Written as leading `key<TAB>value` lines rather than as extra columns so the
  * numbers below stay a clean rectangle a spreadsheet can sort.
+ *
+ * `caveats`, `scaleSuspectNote` and `linearNeedsScaleNote` carry the same
+ * warnings the dialog prints under the table (see `render`) into the export.
+ * They used to stop at the dialog's edge: a pasted spreadsheet showed
+ * Björk's three articulare-flagged rows starred red with nothing saying they
+ * may be an artefact, and a mis-scaled film's millimetre values travelled
+ * with no note that the scale itself was suspect — exactly the silent
+ * handoff this block exists to prevent for the norms citation.
  */
 const buildProvenanceRows = (
   analysisId: string | null,
   provenance: NormsProvenance | null,
   captureDate: string | null,
   timepoint: string | null,
+  patientNote?: string,
+  caveats: AnalysisCaveat[] = [],
+  scaleSuspectNote: string | null = null,
+  linearNeedsScaleNote: string | null = null,
+  sumRoundingNote: string | null = null,
+  placeholderAutoPlotNote: string | null = null,
 ): string[][] => {
   const rows: string[][] = [];
+  // First and loudest: a fabricated point makes the whole table suspect, not
+  // one row of it, so this leads even the norms citation below.
+  if (placeholderAutoPlotNote !== null) {
+    rows.push(['Placeholder warning', placeholderAutoPlotNote]);
+  }
   const analysisName = analysisId !== null
     ? (ANALYSIS_NAMES[analysisId] || analysisId)
     : null;
@@ -326,8 +426,33 @@ const buildProvenanceRows = (
     if (provenance.note !== undefined) {
       rows.push(['Note', provenance.note]);
     }
+    // What this reading did with this patient's record — an author's age
+    // correction or sex split applied, or the reason it was not. The dialog
+    // states it under the norms block; an export that drops it hands the
+    // reader age-corrected norm columns with nothing saying they were
+    // corrected, which is exactly the kind of silent rewriting the norm
+    // columns exist to prevent.
+    if (patientNote !== undefined) {
+      rows.push(['Applied', patientNote]);
+    }
   }
   rows.push(['Caveat', NORMS_NOT_MATCHED]);
+  // A warning the analysis draws from its own numbers — a landmark they
+  // expose as misplaced (see `AnalysisCaveat`) — marked with the same †/‡ the
+  // table rows carry (see `caveatMarkers`), so a reader who has only the
+  // spreadsheet can still find which rows it is about.
+  caveats.forEach((caveat, i) => {
+    rows.push([`Tracing caveat (${i === 0 ? '†' : '‡'})`, caveat.text]);
+  });
+  if (scaleSuspectNote !== null) {
+    rows.push(['Scale warning', scaleSuspectNote]);
+  }
+  if (linearNeedsScaleNote !== null) {
+    rows.push(['Scale note', linearNeedsScaleNote]);
+  }
+  if (sumRoundingNote !== null) {
+    rows.push(['Rounding note', sumRoundingNote]);
+  }
   // A blank line so the table below starts on its own header row.
   rows.push([]);
   return rows;
@@ -348,6 +473,11 @@ const buildProvenanceRows = (
  *    and a spreadsheet that flattens all of them under one heading attributes
  *    every one of them to the wrong paper.
  *
+ * A third, **Caveat**, carries the same †/‡ mark the on-screen table prints
+ * next to a row's symbol (see `caveatMarkers`) — Björk's NSAr and SArGo used
+ * to leave the dialog starred red with no sign that either symbol was
+ * discussed under the table at all.
+ *
  * The neutral bucket's rows carry their **own** grading rather than the
  * group's: it is one group spanning outside-norm, within-norm and ungraded
  * rows (see `defaultInterpretAnalysis`), so the group's indication would be
@@ -357,36 +487,71 @@ const buildReportRows = (
   results: Props['results'],
   landmarksBySymbol: Props['landmarksBySymbol'],
   provenance: NormsProvenance | null,
+  markers: { [symbol: string]: string | undefined } = {},
 ): string[][] => {
   const primarySource = provenance !== null
     ? formatProvenanceSource(provenance)
     : '';
   const rows: string[][] = [[
-    'Finding', 'Interpretation', 'Measurement', 'Name',
+    'Finding', 'Interpretation', 'Measurement', 'Caveat', 'Name',
     'Value', 'Norm', 'Norm type', 'Deviation', 'Severity', 'Norms source',
   ]];
   results.forEach(({ category, indication, relevantComponents }) => {
     relevantComponents.forEach((
-      { symbol, value, mean, min, max, band, normSource },
+      { symbol, value, mean, min, max, band, normSource, isTarget },
     ) => {
       const landmark = landmarksBySymbol[symbol];
       const unit = getUnitSuffix(landmark);
       const stars = getSeverityStars(value, mean, min, max, band);
       const name = landmark !== undefined ? landmark.name : undefined;
       const graded = hasNorm(mean, min, max);
-      const rowIndication = category === NEUTRAL_CATEGORY
+      // An ungraded row must not export its group's verdict as its own:
+      // Tweed's triangle-closure row (always 180°, no norm — see `NO_NORM`)
+      // sits in a group whose chip may read "Outside norm", and a pasted
+      // spreadsheet row saying `FMPA+IMPA+FMIA · Outside norm · 180.0°`
+      // would attribute a deviation to the one row that cannot have one.
+      //
+      // And a graded row must not export a verdict its own value contradicts:
+      // a finding's chip is resolved across the whole group, so when the
+      // group's measurements split — Downs' L1-OP reads the lower incisor
+      // labial off a steeply canted occlusal plane while IMPA reads the same
+      // tooth lingual — the group verdict is true of at most one of them, and
+      // a pasted row saying `IMPA · Labial · −7.2°` attributes to a
+      // measurement the opposite of what it found. Each row therefore exports
+      // its **own** landmark's reading of the group's category (the same
+      // re-interpretation the report's divergence note runs), and only a row
+      // whose landmark states no reading of its own inherits the group's.
+      const interpretOwn = landmark !== undefined ? landmark.interpret : undefined;
+      const own = typeof interpretOwn === 'function'
+        ? interpretOwn(value, min, max, mean)
+          .filter((r) => r.category === category)
+        : [];
+      // The diagnostic-triangle group's verdict is *collective* by design —
+      // within Tweed's norms only when every graded angle of it is (see
+      // `analyses/tweed`) — and none of its rows' landmarks emit a reading of
+      // that category, so a row that inherited the group's verdict exported a
+      // claim its own value contradicts: FMPA at 21.0°, inside its 20–30
+      // band, exported `Outside norm` two lines above a `Mandibular rotation
+      // · Normal` row for the same angle in the same file. Rows of the
+      // collective group therefore export their **own** grading against their
+      // own norm, exactly as the neutral bucket's rows do.
+      const isCollectiveVerdict = category === 'tweedTriangle';
+      const rowIndication = category === NEUTRAL_CATEGORY || isCollectiveVerdict || !graded
         ? gradeAgainstNorm(value, min, max, mean)
-        : indication;
+        : (own.length > 0 ? own[0].indication : indication);
       const borrowed = normSource;
       rows.push([
         mapCategoryToString(category) || '',
         mapIndicationToString(rowIndication) || '',
         symbol,
+        markers[symbol] || '',
         name !== undefined && name !== symbol ? name : '',
         formatNumber(value) + unit,
-        formatNorm(mean, min, max, band),
-        graded ? (isSdBand(band) ? 'mean ± 1 SD' : 'published range') : '',
-        formatDeviation(value, mean, min, max, unit, band),
+        formatNorm(mean, min, max, band, isTarget),
+        graded
+          ? (isSdBand(band) ? 'mean ± 1 SD' : (isTarget ? 'published target range' : 'published range'))
+          : '',
+        formatDeviation(value, mean, min, max, unit, band, isTarget),
         stars > 0 ? STARS[stars] : '',
         graded ? (borrowed !== undefined ? borrowed : primarySource) : '',
       ]);
@@ -494,8 +659,65 @@ const AlsoFindings = ({ also }: { also: AlsoFinding[] }) => (
   </span>
 );
 
+/**
+ * A group whose own tabulated rows do not all back its resolved chip (see
+ * `findGroupDivergence`) — printed under that chip, in the same styled block
+ * `AlsoFindings` uses for a conclusion borrowed from elsewhere, but without
+ * repeating the category name: this dissent is read from the *same* category
+ * as the heading directly above it, on a film where two of the category's own
+ * measurements land on opposite sides of it. Downs' "Lower incisor
+ * inclination" chip used to read "Labial" off a 1.91-vs-1.89-SD hair between
+ * L1-OP and IMPA with nothing on screen saying the group's own rows had
+ * split — the printed report already re-interprets each row this way (see
+ * `buildReportRows`); this is the same fact, read for the dialog's chip.
+ */
+const SplitFindings = ({ divergence }: { divergence: GroupDivergence }) => (
+  <span>
+    {map(divergence.dissenting, (d, i) => (
+      <span key={i} className={classes.also_finding}>
+        <span className={classes.also_label}>
+          {/* Non-breaking after "Driven by": see `alsoFindingLabel` for why —
+              the same narrow column, the same reason a line must not break
+              right after the word that introduces the measurement list. */}
+          {`Driven by ${divergence.drivingSymbols.join(', ')} — ` +
+            `${d.symbols.join(', ')} reads`}
+        </span>
+        <span
+          className={cx(classes.chip, {
+            [classes.chip__success]: chipToneFor(d.indication) === 'success',
+            [classes.chip__neutral]: chipToneFor(d.indication) === 'neutral',
+            [classes.chip__warn]: chipToneFor(d.indication) === 'warn',
+          })}
+        >
+          {mapIndicationToString(d.indication) || '—'}
+        </span>
+      </span>
+    ))}
+  </span>
+);
+
 const csvEscape = (cell: string): string => (
   /[",\n]/.test(cell) ? `"${cell.replace(/"/g, '""')}"` : cell
+);
+
+/**
+ * `csvEscape`'s counterpart for the tab-delimited clipboard export ("Copy
+ * table"), which otherwise joins cells with plain `\t`/`\n` and no escaping
+ * at all. A cell holding a literal tab or newline — pasted into a Note field
+ * from another document, say — silently inserted an extra tab-delimited
+ * column or row on paste, misaligning the rest of that row with nothing on
+ * screen to say why.
+ *
+ * There is no single-character escape a plain-text TSV clipboard payload can
+ * carry (unlike CSV, TSV has no format-level quoting rule), so this borrows
+ * CSV's convention instead: wrap the cell in double quotes and double any
+ * quote already inside it. It is not a guarantee — a spreadsheet is free to
+ * treat pasted TSV as pre-split cells with no quoting at all — but it is what
+ * Excel and Google Sheets both actually honor on paste, and it is the closest
+ * a plain-text TSV can get to `csvEscape`'s guarantee.
+ */
+const tsvEscape = (cell: string): string => (
+  /[\t"\n]/.test(cell) ? `"${cell.replace(/"/g, '""')}"` : cell
 );
 
 /**
@@ -537,6 +759,12 @@ const dialogContentStyle: React.CSSProperties = {
 
 const dialogBodyStyle: React.CSSProperties = {
   padding: '0 24px 8px',
+  // The results table carries a min-width (see `.table`, style.scss) so its
+  // measurement-name column stays readable instead of wrapping one letter
+  // per line on a narrow window; on a window too narrow even for that
+  // minimum, this is what scrolls horizontally. Not `.table_wrap` itself —
+  // see its own comment for why that specific element must stay overflow-free.
+  overflowX: 'auto',
 };
 
 const dialogActionsStyle: React.CSSProperties = {
@@ -596,6 +824,38 @@ const renderTimepointBadge = (timepoint: string) => {
   );
 };
 
+/**
+ * The table's range rows split two ways (see `formatNorm`), and whether any
+ * row is a `sum`-type landmark (see `SUM_ROUNDING_NOTE`) — computed once so
+ * the dialog's legend and the clipboard/CSV export print the same footnotes
+ * for the same table instead of the export silently dropping the ones the
+ * dialog shows (see `buildProvenanceRows`).
+ */
+const computeTableFlags = (
+  results: Props['results'],
+  landmarksBySymbol: Props['landmarksBySymbol'],
+): { hasPlainRangeRow: boolean; hasTargetRow: boolean; hasSumRow: boolean } => {
+  let hasPlainRangeRow = false;
+  let hasTargetRow = false;
+  let hasSumRow = false;
+  results.forEach(({ relevantComponents }) => {
+    relevantComponents.forEach(({ symbol, mean, min, max, band, isTarget }) => {
+      if (hasNorm(mean, min, max) && !isSdBand(band)) {
+        if (isTarget) {
+          hasTargetRow = true;
+        } else {
+          hasPlainRangeRow = true;
+        }
+      }
+      const landmark = landmarksBySymbol[symbol];
+      if (landmark !== undefined && landmark.type === 'sum') {
+        hasSumRow = true;
+      }
+    });
+  });
+  return { hasPlainRangeRow, hasTargetRow, hasSumRow };
+};
+
 interface ViewerState {
   copied: boolean;
 }
@@ -622,7 +882,7 @@ export class AnalysisResultsViewer extends React.PureComponent<Props, ViewerStat
     const {
       open, onRequestClose, results, analysisId, landmarksBySymbol,
       needsScaleForLinear, timepoint, captureDate, provenance,
-      caveats, analysisContext, scaleFactor, imageWidth, imageHeight,
+      caveats, scaleFactor, imageWidth, imageHeight, isPlaceholderAutoPlot,
     } = this.props;
     // What this film's scale says it physically measures, and whether that is
     // possible: the millimetre rows of this table are all derived from that
@@ -630,10 +890,7 @@ export class AnalysisResultsViewer extends React.PureComponent<Props, ViewerStat
     const filmSize = getImpliedFilmSize(imageWidth, imageHeight, scaleFactor);
     const isScaleSuspect = filmSize !== null && !filmSize.isPlausible;
     const markers = caveatMarkers(caveats);
-    const patientNote =
-      provenance !== null && typeof provenance.patientNote === 'function'
-        ? provenance.patientNote(analysisContext)
-        : undefined;
+    const patientNote = this.getPatientNote();
     const { copied } = this.state;
     const analysisName = analysisId !== null
       ? (ANALYSIS_NAMES[analysisId] || analysisId)
@@ -646,24 +903,38 @@ export class AnalysisResultsViewer extends React.PureComponent<Props, ViewerStat
     // in that group's finding cell — the same layout the printed report uses
     // (see `grouping.ts`).
     const groups = groupFindings(results);
-    let hasRangeRow = false;
-    results.forEach(({ relevantComponents }) => {
-      relevantComponents.forEach(({ mean, min, max, band }) => {
-        if (hasNorm(mean, min, max) && !isSdBand(band)) {
-          hasRangeRow = true;
-        }
-      });
-    });
+    // Range rows split into two footnotes: a plain range (Björk's gonial
+    // halves, Jarabak's ratio — bounds only, no figure a clinician treats
+    // toward) reads differently from a target range (Tweed's FMA/IMPA/FMIA —
+    // see `AnalysisComponent.isTarget`), whose deviation column is a signed
+    // distance from that target rather than a distance beyond a bound. A
+    // `sum`-type row (Björk's total, Tweed's triangle closure) gets its own
+    // footnote: its printed figure is the full-precision total, not the sum
+    // of the *rounded* figures printed for its own parts two rows up, and the
+    // two can disagree by the last printed digit (see `SUM_ROUNDING_NOTE`).
+    const { hasPlainRangeRow, hasTargetRow, hasSumRow } =
+      computeTableFlags(results, landmarksBySymbol);
 
     return (
       <Dialog
         open={open}
         onRequestClose={onRequestClose}
+        // A keyboard user could Tab straight through this dialog and onto
+        // the toolbar buttons sitting behind it (mui 0.20's Dialog does not
+        // trap focus on its own) — role/aria-modal opt this dialog into the
+        // app-root focus trap (see components/DialogFocusGuard), and
+        // aria-labelledby is what lets a screen reader announce which
+        // dialog just opened at all, which mui's own markup never states.
+        paperProps={{
+          role: 'dialog',
+          'aria-modal': 'true',
+          'aria-labelledby': 'analysis-summary-title',
+        }}
         title={
           <div className={classes.title}>
             <div className={classes.title_text}>
               <div className={classes.title_row}>
-                <h3 className={classes.title_heading}>Analysis summary</h3>
+                <h3 id="analysis-summary-title" className={classes.title_heading}>Analysis summary</h3>
                 {analysisName !== null ? (
                   <span className={classes.title_badge}>{analysisName}</span>
                 ) : null}
@@ -735,6 +1006,23 @@ export class AnalysisResultsViewer extends React.PureComponent<Props, ViewerStat
         actionsContainerStyle={dialogActionsStyle}
         autoScrollBodyContent
       >
+        {isPlaceholderAutoPlot ? (
+          // Leads even the results table: a fabricated landmark makes every
+          // value below suspect, not just the row it drives directly (a
+          // computed angle chains through components that are not always the
+          // ones a caveat marker names). Not dismissible — nothing here
+          // tracks which points a clinician has actually re-checked by hand,
+          // so nothing can honestly say the warning no longer applies.
+          <div className={classes.placeholder_banner} role="alert">
+            <IconWarning
+              className={classes.placeholder_banner_icon}
+              color="#B26A00"
+            />
+            <span className={classes.placeholder_banner_text}>
+              {PLACEHOLDER_AUTOPLOT_NOTE}
+            </span>
+          </div>
+        ) : null}
         {hasResults ? (
           <div>
             <div className={classes.table_wrap}>
@@ -757,6 +1045,13 @@ export class AnalysisResultsViewer extends React.PureComponent<Props, ViewerStat
                     [classes.chip__warn]: chipToneFor(indication) === 'warn',
                   });
                   const isNeutral = category === NEUTRAL_CATEGORY;
+                  // The neutral bucket is not a finding (see `NEUTRAL_CATEGORY`)
+                  // and has no chip to contradict, so it is never checked for a
+                  // split — only a category whose own rows can disagree with the
+                  // resolved conclusion printed for them.
+                  const divergence = isNeutral
+                    ? null
+                    : findGroupDivergence(category, indication, components, landmarksBySymbol);
                   const entries = neutralEntries(category, components);
                   return (
                     <tbody key={`${category}/${indication}`} className={classes.group}>
@@ -781,6 +1076,9 @@ export class AnalysisResultsViewer extends React.PureComponent<Props, ViewerStat
                             {also.length > 0 ? (
                               <AlsoFindings also={also} />
                             ) : null}
+                            {divergence !== null ? (
+                              <SplitFindings divergence={divergence} />
+                            ) : null}
                           </td>
                         ) : null;
                         if (entry.kind === 'rule') {
@@ -794,7 +1092,9 @@ export class AnalysisResultsViewer extends React.PureComponent<Props, ViewerStat
                           );
                         }
                         const component = entry.component;
-                        const { symbol, value, mean, min, max, band } = component;
+                        const {
+                          symbol, value, mean, min, max, band, isTarget,
+                        } = component;
                         const landmark = landmarksBySymbol[symbol];
                         const unit = getUnitSuffix(landmark);
                         const stars = getSeverityStars(value, mean, min, max, band);
@@ -841,11 +1141,28 @@ export class AnalysisResultsViewer extends React.PureComponent<Props, ViewerStat
                                 ? 'Measured value — this app states no published norm for it'
                                 : isSdBand(band)
                                   ? `Mean ± 1 SD (${displayNumber(min)} to ${displayNumber(max)}${unit})`
-                                  : `Published normal range, no standard deviation stated`}
+                                  : isTarget
+                                    ? 'Published target, with the conventional clinical ' +
+                                      'latitude range around it — no standard deviation stated'
+                                    : `Published normal range, no standard deviation stated`}
                             >
-                              {displayNorm(mean, min, max, band)}
+                              {/* A target's main line is the target alone (its
+                                  range travels on its own line below, see
+                                  `.norm_target_bounds`) — `displayNorm` still
+                                  carries the combined "25.0 · range 20–30"
+                                  text for the flat-text CSV/copy export (see
+                                  `buildReportRows`), where there is no second
+                                  line to put it on. */}
+                              {isTarget ? displayNumber(mean) : displayNorm(mean, min, max, band)}
                               {graded && !isSdBand(band) ? (
-                                <span className={classes.norm_kind}>range</span>
+                                <span className={classes.norm_kind}>
+                                  {isTarget ? 'target' : 'range'}
+                                </span>
+                              ) : null}
+                              {isTarget ? (
+                                <span className={classes.norm_target_bounds}>
+                                  {displayMinus(formatRange(min, max))}
+                                </span>
                               ) : null}
                             </td>
                             <td
@@ -853,10 +1170,10 @@ export class AnalysisResultsViewer extends React.PureComponent<Props, ViewerStat
                                 [classes.cell_deviation__warn]: stars === 1 || outOfRange,
                                 [classes.cell_deviation__error]: stars >= 2,
                                 [classes.cell_deviation__muted]:
-                                  graded && !isSdBand(band) && !outOfRange,
+                                  graded && !isSdBand(band) && !outOfRange && !isTarget,
                               })}
                             >
-                              {displayDeviation(value, mean, min, max, unit, band)}
+                              {displayDeviation(value, mean, min, max, unit, band, isTarget)}
                               {/* The slot is always rendered so the numbers stay
                                   aligned whether or not a row carries markers. */}
                               <span className={classes.deviation_stars}>
@@ -878,7 +1195,7 @@ export class AnalysisResultsViewer extends React.PureComponent<Props, ViewerStat
               <span className={classes.legend_stars}>**</span> over 2 SD
               <span className={classes.legend_dot}>·</span>
               <span className={classes.legend_stars}>***</span> over 3 SD
-              {hasRangeRow ? (
+              {hasPlainRangeRow ? (
                 // Says out loud which rows the star scale does *not* apply to,
                 // so "62.0–65.0 · +0.5 %" is never read as half an SD.
                 <span className={classes.legend_note_quiet}>
@@ -886,6 +1203,24 @@ export class AnalysisResultsViewer extends React.PureComponent<Props, ViewerStat
                   mean ± SD: their author stated no standard deviation, so they
                   are graded in or out of range and carry no stars. Their
                   deviation is the distance beyond the nearer bound.
+                </span>
+              ) : null}
+              {hasTargetRow ? (
+                // The target-range sibling of the note above: these rows *do*
+                // have a figure to read a distance from — the author's stated
+                // target, not either bound — so the wording must not tell the
+                // reader the opposite of what the deviation column shows them.
+                <span className={classes.legend_note_quiet}>
+                  Rows marked <em>target</em> carry a published target with a
+                  conventional clinical latitude range around it, not a mean ±
+                  SD, and carry no stars. Their norm cell shows the target beside
+                  the range, and their deviation is the signed distance from
+                  that target, not from the nearer bound.
+                </span>
+              ) : null}
+              {hasSumRow ? (
+                <span className={classes.legend_note_quiet}>
+                  {SUM_ROUNDING_NOTE}
                 </span>
               ) : null}
               {/* What the analysis' own numbers say about the *tracing* — a
@@ -904,20 +1239,14 @@ export class AnalysisResultsViewer extends React.PureComponent<Props, ViewerStat
                 // cannot be right — stated here rather than left for the reader
                 // to discover on the records dashboard.
                 <span className={classes.legend_note}>
-                  The image scale makes this film {filmSize.label} — outside the
-                  {' '}{FILM_SIZE_BAND.minMm}–{FILM_SIZE_BAND.maxMm} mm a
-                  cephalogram measures. Every millimetre value above is derived
-                  from that scale and is wrong by the same factor if it is; angles
-                  and ratios are unaffected. Re-calibrate from the ruler chip in
-                  the toolbar.
+                  {formatScaleSuspectNote(filmSize)}
                 </span>
               ) : null}
               {needsScaleForLinear ? (
                 // The mm measurements of this analysis are missing above, not
                 // normal — account for them instead of leaving a silent gap.
                 <span className={classes.legend_note}>
-                  Linear measurements need an image scale — set it from the
-                  calibration chip in the toolbar. Angular values are unaffected.
+                  {LINEAR_NEEDS_SCALE_NOTE}
                 </span>
               ) : null}
             </div>
@@ -968,14 +1297,69 @@ export class AnalysisResultsViewer extends React.PureComponent<Props, ViewerStat
     );
   }
 
+  /**
+   * Every symbol this reading actually tabulated — across every group, not
+   * just the one a caller happens to be looking at — so a `patientNote` that
+   * describes a specific row (Jacobson's Wits appraisal, absent from the
+   * table on an uncalibrated film) can tell whether that row is above it
+   * before it says so. See `NormsProvenance.patientNote`.
+   */
+  private getComputedSymbols = (): Set<string> => {
+    const { results } = this.props;
+    const symbols = new Set<string>();
+    results.forEach(({ relevantComponents }) => {
+      relevantComponents.forEach(({ symbol }) => symbols.add(symbol));
+    });
+    return symbols;
+  };
+
+  /** The patient-applied norms note, as shown in the provenance block. */
+  private getPatientNote = (): string | undefined => {
+    const { provenance, analysisContext } = this.props;
+    return provenance !== null && typeof provenance.patientNote === 'function'
+      ? provenance.patientNote(analysisContext, this.getComputedSymbols())
+      : undefined;
+  };
+
+  /**
+   * The scale-derived warnings printed under the table (see `render`), as
+   * plain strings for the clipboard/CSV export — `null` when the film's
+   * calibration gives no reason to print either.
+   */
+  private getScaleNotes = (): {
+    scaleSuspectNote: string | null;
+    linearNeedsScaleNote: string | null;
+  } => {
+    const {
+      needsScaleForLinear, scaleFactor, imageWidth, imageHeight,
+    } = this.props;
+    const filmSize = getImpliedFilmSize(imageWidth, imageHeight, scaleFactor);
+    const isScaleSuspect = filmSize !== null && !filmSize.isPlausible;
+    return {
+      scaleSuspectNote: isScaleSuspect && filmSize !== null
+        ? formatScaleSuspectNote(filmSize)
+        : null,
+      linearNeedsScaleNote: needsScaleForLinear ? LINEAR_NEEDS_SCALE_NOTE : null,
+    };
+  };
+
   private handleCopyTable = () => {
-    const { results, landmarksBySymbol } = this.props;
+    const { results, landmarksBySymbol, caveats, isPlaceholderAutoPlot } = this.props;
     const { provenance, captureDate, timepoint, analysisId } = this.props;
+    const { scaleSuspectNote, linearNeedsScaleNote } = this.getScaleNotes();
+    const { hasSumRow } = computeTableFlags(results, landmarksBySymbol);
     const text = [
-      ...buildProvenanceRows(analysisId, provenance, captureDate, timepoint),
-      ...buildReportRows(results, landmarksBySymbol, provenance),
+      ...buildProvenanceRows(
+        analysisId, provenance, captureDate, timepoint, this.getPatientNote(),
+        caveats, scaleSuspectNote, linearNeedsScaleNote,
+        hasSumRow ? SUM_ROUNDING_NOTE : null,
+        isPlaceholderAutoPlot ? PLACEHOLDER_AUTOPLOT_NOTE : null,
+      ),
+      ...buildReportRows(
+        results, landmarksBySymbol, provenance, caveatMarkers(caveats),
+      ),
     ]
-      .map((cells) => cells.join('\t'))
+      .map((cells) => cells.map(tsvEscape).join('\t'))
       .join('\n');
     copyTextToClipboard(text).then((ok) => {
       if (ok) {
@@ -994,19 +1378,36 @@ export class AnalysisResultsViewer extends React.PureComponent<Props, ViewerStat
   private handleExportCsv = () => {
     const {
       results, landmarksBySymbol, analysisId, provenance, captureDate,
-      timepoint,
+      timepoint, caveats, isPlaceholderAutoPlot,
     } = this.props;
+    const { scaleSuspectNote, linearNeedsScaleNote } = this.getScaleNotes();
+    const { hasSumRow } = computeTableFlags(results, landmarksBySymbol);
     const rows = [
-      ...buildProvenanceRows(analysisId, provenance, captureDate, timepoint),
-      ...buildReportRows(results, landmarksBySymbol, provenance),
+      ...buildProvenanceRows(
+        analysisId, provenance, captureDate, timepoint, this.getPatientNote(),
+        caveats, scaleSuspectNote, linearNeedsScaleNote,
+        hasSumRow ? SUM_ROUNDING_NOTE : null,
+        isPlaceholderAutoPlot ? PLACEHOLDER_AUTOPLOT_NOTE : null,
+      ),
+      ...buildReportRows(
+        results, landmarksBySymbol, provenance, caveatMarkers(caveats),
+      ),
     ];
-    // BOM so Excel opens the °/± characters as UTF-8.
-    const csv = '\uFEFF' + rows.map(
+    // Exactly one BOM: this download no longer goes through file-saver's
+    // saveAs() (see saveBlobAs's doc comment in tracingSnapshot.ts \u2014 a
+    // webpack chunk boundary between file-saver and its caller silently
+    // drops the filename), and a plain anchor download adds no BOM of its
+    // own, so it must be prepended here now that nothing else will. Exactly
+    // one: a second U+FEFF welded on top of this one would survive as an
+    // invisible character inside cell A1 ("\uFEFFAnalysis") \u2014 Excel's
+    // BOM-stripping only ever eats the outer one \u2014 which silently fails an
+    // exact-match or VLOOKUP on the header row.
+    const csv = rows.map(
       (cells) => cells.map(csvEscape).join(','),
     ).join('\r\n');
     const stem = analysisId !== null ? `${analysisId}-analysis` : 'analysis';
-    saveAs(
-      new Blob([csv], { type: 'text/csv;charset=utf-8' }),
+    saveBlobAs(
+      new Blob(['\uFEFF', csv], { type: 'text/csv;charset=utf-8' }),
       `${stem}-summary.csv`,
     );
   };

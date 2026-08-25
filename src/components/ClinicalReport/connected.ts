@@ -15,6 +15,7 @@ import {
   getImageProps,
   getManualLandmarks,
   getScaleFactor,
+  getScaleSourceId,
   getImageTimepoint,
   getImageCaptureDate,
 } from 'store/reducers/workspace/image';
@@ -23,12 +24,44 @@ import { getActivePatient } from 'store/reducers/patients';
 // of the sheet rather than left as blank rules (see `props#visitNote`).
 import { getVisitNotes } from 'store/reducers/workspace/records';
 import { getCurrentVisitNote } from 'utils/visitNotes';
+// Same identity the records dashboard's own card states when a film's scale was
+// copied rather than measured (see `props#scaleCopiedFrom`).
+import { getImageTypeShortLabel, getTimepointToken } from 'utils/records';
 
 import map from 'lodash/map';
 import keyBy from 'lodash/keyBy';
 
 const EMPTY_LANDMARKS: StateProps['landmarksBySymbol'] = { };
 const EMPTY_MANUAL: StateProps['manualLandmarks'] = { };
+
+/**
+ * Where this film's scale came from, when it was copied from another film of
+ * the record rather than measured on this one — the same fact and the same
+ * identity the records dashboard's own card states (see
+ * `RecordsDashboard#scaleCopiedFrom`), read fresh from the store rather than
+ * carried in this component's own state so a report opened long after the copy
+ * still states it correctly.
+ *
+ * Null once the source has since been recalibrated to a different factor: the
+ * two numbers are no longer one claim, and naming a source beside a figure it no
+ * longer matches would invite the reading that they agree.
+ */
+const getScaleCopiedFrom = (
+  state: StoreState, imageId: string,
+): StateProps['scaleCopiedFrom'] => {
+  const scaleFactor = getScaleFactor(state)(imageId);
+  const sourceId = getScaleSourceId(state)(imageId);
+  if (scaleFactor === null || sourceId === null) {
+    return null;
+  }
+  const source = getImageProps(state)(sourceId);
+  if (source === undefined || getScaleFactor(state)(sourceId) !== scaleFactor) {
+    return null;
+  }
+  const label = getTimepointToken(getImageTimepoint(state)(sourceId)) ||
+    getImageTypeShortLabel(source.type || null);
+  return { label, captureDate: getImageCaptureDate(state)(sourceId) };
+};
 
 const mapStateToProps =
   (state: StoreState, { imageId }: OwnProps): StateProps => {
@@ -47,6 +80,7 @@ const mapStateToProps =
         visitNote: null,
         manualLandmarks: EMPTY_MANUAL,
         scaleFactor: null,
+        scaleCopiedFrom: null,
         needsScaleForLinear: false,
       };
     }
@@ -72,6 +106,7 @@ const mapStateToProps =
       ),
       manualLandmarks: getManualLandmarks(state)(imageId),
       scaleFactor: getScaleFactor(state)(imageId),
+      scaleCopiedFrom: getScaleCopiedFrom(state, imageId),
       needsScaleForLinear: hasUnreportableLinearMeasurements(state)(imageId),
     };
   };

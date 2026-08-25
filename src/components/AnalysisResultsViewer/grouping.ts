@@ -237,6 +237,88 @@ export const orderFindings = (
     .map(({ f }) => f);
 };
 
+// --------------------------------------------------------------- divergence
+//
+// A group's chip is one indication resolved (see `resolveIndication`) across
+// every component that reports the category — but "resolved" is not
+// "unanimous". Downs' "Lower incisor inclination" is graded from L1-OP
+// (labial off a canted occlusal plane) and IMPA (lingual): on a film where
+// the two disagree by a hair of standard deviation, the chip reads "Labial"
+// while IMPA — tabulated two rows below it — reads the opposite, and nothing
+// on screen said the group's own rows had split. The printed report
+// re-interprets each row against its own landmark for exactly this reason
+// (see `AnalysisResultsViewer/index#buildReportRows`); this finds the same
+// split for the dialog's finding cell, so the chip a clinician reads first is
+// never silently contradicted by the numbers under it.
+
+/** One dissenting reading inside a group whose own rows do not agree. */
+export interface GroupDissent {
+  indication: Indication<Category>;
+  /** The measurements that read this way, not the group's resolved one. */
+  symbols: string[];
+}
+
+/** What a group's own components say about it, when they do not all agree. */
+export interface GroupDivergence {
+  /** The measurements whose own reading matches the group's resolved chip. */
+  drivingSymbols: string[];
+  /** Every other reading the group's own rows support, and who supports it. */
+  dissenting: GroupDissent[];
+}
+
+/**
+ * Finds a split inside one group: components whose own landmark states a
+ * reading of this category, grouped by what they actually read, compared
+ * against the group's resolved indication. Returns `null` when every
+ * component that states an opinion agrees with it (the common case), or when
+ * fewer than two components state one at all — nothing to split.
+ *
+ * Deliberately narrower than `resolveIndication`: a component with no
+ * `interpret` of its own, or one that does not cover this category, casts no
+ * vote here either, exactly as it casts none in the resolution itself.
+ */
+export const findGroupDivergence = (
+  category: Category,
+  indication: Indication<Category>,
+  components: ResultComponent[],
+  landmarksBySymbol: { [symbol: string]: CephLandmark | undefined },
+): GroupDivergence | null => {
+  const ownIndicationOf: { [symbol: string]: Indication<Category> } = {};
+  components.forEach(({ symbol, value, mean, min, max }) => {
+    const landmark = landmarksBySymbol[symbol];
+    if (landmark === undefined || typeof landmark.interpret !== 'function') {
+      return;
+    }
+    const own = landmark.interpret(value, min, max, mean)
+      .filter((r) => r.category === category);
+    if (own.length > 0) {
+      ownIndicationOf[symbol] = own[0].indication;
+    }
+  });
+  const symbols = Object.keys(ownIndicationOf);
+  if (symbols.length < 2) {
+    return null;
+  }
+  if (symbols.every((s) => ownIndicationOf[s] === indication)) {
+    return null;
+  }
+  const drivingSymbols = symbols.filter((s) => ownIndicationOf[s] === indication);
+  const dissentBy: { [ind: string]: string[] } = {};
+  symbols.forEach((s) => {
+    const ind = ownIndicationOf[s];
+    if (ind === indication) {
+      return;
+    }
+    const key = ind as string;
+    (dissentBy[key] = dissentBy[key] || []).push(s);
+  });
+  const dissenting = Object.keys(dissentBy).map((ind) => ({
+    indication: ind as Indication<Category>,
+    symbols: dissentBy[ind],
+  }));
+  return { drivingSymbols, dissenting };
+};
+
 /** The canonical slots a list of findings defines, for `orderFindings#pinned`. */
 export const findingOrderOf = (findings: HeadlineFinding[]): FindingOrder => {
   const order: FindingOrder = {};

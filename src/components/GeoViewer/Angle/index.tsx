@@ -103,7 +103,6 @@ const Angle = pure((props: AngleProps): JSX.Element => {
   const inSegment2 = isPointInSegment(intersection, vector2);
   const [head1, tail1] = getVectorPoints(vector1);
   const [head2, tail2] = getVectorPoints(vector2);
-  console.log('Drawing angle %s...', symbol);
   let additionalElements: any[] = [];
   let finalVectors: [GeoVector, GeoVector];
   if (inSegment1 && inSegment2) { 

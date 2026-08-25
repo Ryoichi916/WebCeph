@@ -1,5 +1,4 @@
 import { Store, Dispatch, Middleware } from 'redux';
-import { saveAs } from 'file-saver';
 
 import {
   exportFileSucceeded, exportFileFailed, setExportProgress,
@@ -8,6 +7,11 @@ import {
 import createExport from 'utils/importers/wceph/v1/export';
 
 import { isActionOfType } from 'utils/store';
+// Replaces `file-saver`'s saveAs(): see its doc comment in tracingSnapshot.ts
+// for why (a webpack chunk boundary between file-saver and its caller
+// silently drops the filename, saving this chart's only copy as an unnamed
+// 'download').
+import { saveBlobAs } from 'utils/tracingSnapshot';
 
 /**
  * Writing the case out as one `.wceph`.
@@ -41,13 +45,33 @@ const middleware = ({ getState }: Store<StoreState>) =>
         const file = await createExport(state, options, (value: number) => {
           next(setExportProgress({ value }));
         });
-        saveAs(file, file.name);
-        return next(exportFileSucceeded({ fileName: file.name }));
+        // Awaited, not fired-and-forgotten: `saveBlobAs` resolves with the
+        // name it actually wrote the file under, which is not always
+        // `file.name` verbatim (see its own doc comment) — and this dialog's
+        // "Written as X" must say what was written, not what was asked for.
+        const savedAs = await saveBlobAs(file, file.name);
+        if (savedAs === null) {
+          // The clinician cancelled the browser's own "Save As" dialog: no
+          // file exists, so this is not a success, but it is also not the
+          // writer failing — the wording says so rather than reusing a
+          // scarier "could not be written" sentence for a deliberate cancel.
+          return next(exportFileFailed({
+            message: 'Export cancelled — nothing was written. ' +
+              'Nothing on this chart has changed.',
+          }));
+        }
+        return next(exportFileSucceeded({ fileName: savedAs }));
       } catch (e) {
-        console.error(
-          `Failed to export file.`,
-          e,
-        );
+        // Diagnostic only, and only in development: the clinician's answer is
+        // the dispatched `exportFileFailed` above, which the dialog already
+        // renders as its own sentence (see `utils/importers/wceph/v1/export`'s
+        // own message). An unconditional `console.error` here duplicated that
+        // as a browser-console error on every refused export — including the
+        // ordinary, handled case of a chart the writer declines to write — the
+        // opposite of "zero console errors" for a *handled* failure.
+        if (__DEBUG__) {
+          console.warn('Failed to export file.', e);
+        }
         return next(exportFileFailed(e));
       }
     }

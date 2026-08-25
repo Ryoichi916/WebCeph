@@ -151,7 +151,7 @@ export default class RestoreFromCaseFile
         onRequestClose={isRestoring ? undefined : onCancel}
         title={
           <div className={classes.title}>
-            <h3 className={classes.title_heading}>Open a case file</h3>
+            <h3 id="restore-case-file-title" className={classes.title_heading}>Open a case file</h3>
             <span className={classes.title_caption}>
               Register the chart the file names, and read the case into it
             </span>
@@ -191,6 +191,9 @@ export default class RestoreFromCaseFile
         actionsContainerStyle={{ padding: '12px 24px', borderTop: '1px solid #DDE3EA' }}
         titleStyle={{ padding: '20px 24px 12px' }}
         paperProps={{
+          role: 'dialog',
+          'aria-modal': 'true',
+          'aria-labelledby': 'restore-case-file-title',
           style: {
             borderRadius: 8,
             boxShadow: '0 12px 32px rgba(16, 30, 50, .22)',

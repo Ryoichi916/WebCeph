@@ -219,14 +219,30 @@ const analysis: Analysis<'ceph_lateral'> = {
       const shown = years >= 10 ? years.toFixed(0) : years.toFixed(1);
       const applied = Math.min(Math.max(years, 9), 18);
       const grown = applied - 9;
+      const figures =
+        `facial depth ${(87 + 0.33 * grown).toFixed(1)}°, mandibular plane ` +
+        `${(26 - 0.3 * grown).toFixed(1)}°, convexity ` +
+        `${(2 - 0.2 * grown).toFixed(1)} mm, mandibular arc ` +
+        `${(26 + 0.5 * grown).toFixed(1)}°`;
+      // Below Ricketts' anchor age nothing is corrected — `grown` clamps to
+      // 0 and the four figures are his published age-9 means, unchanged. The
+      // sentence used to say "corrected for this patient's age (8.7 y)"
+      // over exactly those uncorrected numbers: true of the figures and
+      // false of the claim, since Ricketts published nothing younger to
+      // correct toward.
+      if (years < 9) {
+        return (
+          `This patient is younger than the age (9 y) Ricketts anchors ` +
+          `these norms to (${shown} y at the radiograph), and he published ` +
+          `no younger norms to correct toward — so his age-9 figures stand ` +
+          `uncorrected above: ${figures}. The standard deviations are the ` +
+          `sample's, unchanged.`
+        );
+      }
       const mature = years > 18;
       return (
         `The four age-indexed norms above are corrected for this patient's ` +
-        `age at the radiograph (${shown} y): facial depth ` +
-        `${(87 + 0.33 * grown).toFixed(1)}°, mandibular plane ` +
-        `${(26 - 0.3 * grown).toFixed(1)}°, convexity ` +
-        `${(2 - 0.2 * grown).toFixed(1)} mm, mandibular arc ` +
-        `${(26 + 0.5 * grown).toFixed(1)}°. ` +
+        `age at the radiograph (${shown} y): ${figures}. ` +
         (mature
           ? 'The correction runs from age 9 to the end of growth at 18 and ' +
             'stops there — these are Ricketts\' adult figures. Extending a ' +
