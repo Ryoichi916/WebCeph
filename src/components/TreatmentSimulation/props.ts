@@ -17,6 +17,20 @@ export interface StateProps {
   /** Free-text timepoint label of the film, when one was recorded. */
   timepoint: string | null;
   captureDate: string | null;
+  /**
+   * The registered profile photograph whose Photo Overlay registration
+   * points at this film, when one exists with both registration points
+   * placed. Read-only like everything else here: the registration was
+   * written by the Photo Overlay view, and this view only reads it — the
+   * simulation's no-dispatch invariant is untouched.
+   */
+  photo: {
+    imageId: string;
+    src: string;
+    width: number;
+    height: number;
+    registration: PhotoRegistration;
+  } | null;
 }
 
 /** The view dispatches nothing at all — that is the point of it. */

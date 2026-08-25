@@ -57,6 +57,7 @@ import {
 // Honest caveats, condensed on screen and printed in full — the same affordance
 // the superimposition legend uses.
 import AboutDisclosure from 'components/AboutDisclosure';
+import PhotoMorph from './PhotoMorph';
 
 // Number formatting and unit suffixes are the app's, not this view's.
 import { getUnitSuffix, roundToDisplay } from 'components/AnalysisResultsViewer';
@@ -112,6 +113,13 @@ interface State {
    * that shrinks with the crop.
    */
   figurePx: { width: number; height: number } | null;
+  /**
+   * Which figure is showing: the tracing (always available) or the plan
+   * illustrated on the registered profile photograph (only offered when a
+   * Photo Overlay registration points at this film). A display preference,
+   * so it lives here, not in the store.
+   */
+  figureTab: 'tracing' | 'photo';
 }
 
 /**
@@ -145,6 +153,7 @@ export default class TreatmentSimulation extends React.PureComponent<Props, Stat
     isExporting: false,
     exportError: null,
     figurePx: null,
+    figureTab: 'tracing',
   };
 
   /**
@@ -346,20 +355,33 @@ export default class TreatmentSimulation extends React.PureComponent<Props, Stat
 
         <div className={classes.body}>
           <div className={classes.figure_column}>
+            {this.renderFigureTabs()}
             <div className={classes.figure} ref={this.setFigureEl}>
-              {frame !== null
-                ? this.renderSvg(simulation, frame)
-                : (
-                  <div className={classes.empty}>
-                    <span className={classes.empty_title}>
-                      Not enough plotted geometry to draw
-                    </span>
-                    <span className={classes.empty_hint}>
-                      A simulation is drawn from the tracing. Plot the landmarks
-                      of an analysis and this view will move them.
-                    </span>
-                  </div>
-                )}
+              {this.state.figureTab === 'photo' && this.props.photo !== null
+                ? (
+                  <PhotoMorph
+                    src={this.props.photo.src}
+                    width={this.props.photo.width}
+                    height={this.props.photo.height}
+                    registration={this.props.photo.registration}
+                    cephMap={this.props.landmarks}
+                    cephWidth={this.props.width !== null ? this.props.width : 0}
+                    simulation={simulation}
+                  />
+                )
+                : frame !== null
+                  ? this.renderSvg(simulation, frame)
+                  : (
+                    <div className={classes.empty}>
+                      <span className={classes.empty_title}>
+                        Not enough plotted geometry to draw
+                      </span>
+                      <span className={classes.empty_hint}>
+                        A simulation is drawn from the tracing. Plot the landmarks
+                        of an analysis and this view will move them.
+                      </span>
+                    </div>
+                  )}
             </div>
             {this.renderLegend(controls)}
           </div>
@@ -1064,6 +1086,54 @@ export default class TreatmentSimulation extends React.PureComponent<Props, Stat
    * the most persuasive thing in this view and the least certain, so the numbers
    * behind it are published rather than buried.
    */
+  /**
+   * The Tracing / Photo preview switch, offered only when a Photo Overlay
+   * registration points at this film. The same `seg` idiom as the
+   * soft-tissue Follows/Held control, so the figure header reads like the
+   * rest of the panel.
+   */
+  private renderFigureTabs() {
+    if (this.props.photo === null) {
+      return null;
+    }
+    const { figureTab } = this.state;
+    return (
+      <div className={classes.figure_tabs}>
+        <div className={classes.seg} role="group" aria-label="Figure">
+          <button
+            type="button"
+            className={cx(classes.seg_button, {
+              [classes.seg_button__on]: figureTab === 'tracing',
+            })}
+            aria-pressed={figureTab === 'tracing'}
+            title="The tracing figure: current in cyan, simulated in violet"
+            onClick={this.showTracingTab}
+          >
+            Tracing
+          </button>
+          <button
+            type="button"
+            className={cx(classes.seg_button, {
+              [classes.seg_button__on]: figureTab === 'photo',
+            })}
+            aria-pressed={figureTab === 'photo'}
+            title={
+              'Illustrate the plan on the registered profile photograph — ' +
+              'an illustration of the published ratios, not a prediction of ' +
+              'appearance'
+            }
+            onClick={this.showPhotoTab}
+          >
+            Photo preview
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  private showTracingTab = () => this.setState({ figureTab: 'tracing' });
+  private showPhotoTab = () => this.setState({ figureTab: 'photo' });
+
   private renderSoftTissue() {
     const { plan } = this.state;
     const rows = activeSoftTissueRatios(plan);

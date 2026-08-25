@@ -216,6 +216,76 @@ $current-hue: #40C4FF;
   padding: 16px 16px 0;
 }
 
+// The Tracing / Photo-preview switch above the figure, present only when a
+// Photo Overlay registration points at this film. Reuses `.seg` (below).
+.figure_tabs {
+  flex: 0 0 auto;
+  display: flex;
+  justify-content: flex-start;
+  margin: 0 0 8px;
+}
+
+// ---- Photo-morph preview ----------------------------------------------------
+// The plan illustrated on the registered profile photograph. The canvas keeps
+// the photo's own aspect; the permanent caption carries the illustration
+// disclaimer — this figure must never render without it.
+.morph {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 12px;
+}
+
+.morph_canvas {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-width: 100%;
+  max-height: calc(100% - 64px);
+  object-fit: contain;
+  border-radius: 4px;
+}
+
+.morph_footer {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 720px;
+}
+
+.morph_note {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: #9DB1C0;
+}
+
+.morph_compare {
+  flex: 0 0 auto;
+  padding: 6px 12px;
+  border: 1px solid #3B4A56;
+  border-radius: 6px;
+  background: transparent;
+  color: #C7D5E0;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  user-select: none;
+
+  &:hover {
+    border-color: #5A6C7A;
+  }
+
+  &:active {
+    background: rgba(255, 255, 255, .06);
+  }
+}
+
 .figure {
   flex: 1 1 auto;
   // A floor, not just a shrink target: at a realistic viewport height with
