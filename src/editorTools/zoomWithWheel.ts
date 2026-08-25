@@ -1,7 +1,7 @@
 import createTrackCursor from './trackCursor';
 
-import { setScale } from 'actions/workspace';
-import { getScale } from 'store/reducers/workspace/canvas';
+import { setScale, setScaleOffset } from 'actions/workspace';
+import { getScale, computeAnchoredZoomOffset } from 'store/reducers/workspace/canvas';
 import { getActiveImageId } from 'store/reducers/workspace/image';
 
 import clamp from 'lodash/clamp';
@@ -32,14 +32,24 @@ const createZoomWithWheel: EditorToolCreator = (
     onCanvasMouseLeave() {
       // @TODO
     },
-    onCanvasMouseWheel: (dispatch, _x, _y, delta) => {
+    onCanvasMouseWheel: (dispatch, x, y, delta) => {
       const wheel = delta / 120;
       const zoom = Math.exp(-wheel * zoomIntensity);
       const scale = getScale(state);
       const newScale = clamp(scale * zoom, ZOOM_MIN, ZOOM_MAX);
+      const imageId = getActiveImageId(state)!;
+      // Keep the image-space point under the cursor (x, y, in original-image
+      // coordinates — @see TracingViewer#handleNativeWheel) fixed on screen
+      // across the scale change, instead of always re-centering the image.
+      const offset = computeAnchoredZoomOffset(state, imageId, x, y, newScale);
       dispatch(setScale({
-      imageId: getActiveImageId(state)!,
+        imageId,
         scale: newScale,
+      }));
+      dispatch(setScaleOffset({
+        imageId,
+        left: offset.left,
+        top: offset.top,
       }));
     },
     shouldShowLens: false,

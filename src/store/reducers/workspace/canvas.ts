@@ -4,6 +4,7 @@ import Tools from 'editorTools';
 
 import { getActiveWorkspaceId } from './activeId';
 import { getWorkspaceSettingsById, getAllWorkspacesSettings } from './settings';
+import { getImageWidth, getImageHeight } from './image';
 
 const KEY_CANVAS_MOUSE_POSITION: StoreKey = 'workspace.canvas.mouse.position';
 const KEY_CANVAS_TOOL_ID: StoreKey = 'workspace.canvas.tools.activeToolId';
@@ -50,6 +51,11 @@ const reducers: Partial<ReducerMap> = {
         };
       },
       RESET_WORKSPACE_REQUESTED: () => null,
+      // A freshly loaded image starts centered, same as its scale resets to
+      // 1 = exactly fitted (@see middleware/autoScale) — otherwise a pan left
+      // over from whatever was previously on screen would carry over onto an
+      // image of a different size, where it has no reason to still apply.
+      LOAD_IMAGE_SUCCEEDED: () => null,
     },
     null,
   ),
@@ -151,4 +157,126 @@ export const getCanvasDimensions = (state: StoreState): { width: number; height:
     width: typeof window !== 'undefined' ? window.innerWidth : 0,
     height: typeof window !== 'undefined' ? window.innerHeight : 0,
   };
+};
+
+// ---- Pan/zoom geometry --------------------------------------------------
+// The tracing canvas is a fixed-size viewport (getCanvasDimensions) holding
+// an image drawn at `fitScale * the user's zoom factor`, positioned by an
+// (left, top) translate — @see TracingViewer#getTransformAttribute, which is
+// the only consumer of getEffectiveOffset. Kept here, alongside getScale and
+// getCanvasDimensions, so the wheel/click zoom tools (editorTools/zoomWith*)
+// and the viewer compute the exact same numbers instead of two independent
+// formulas drifting apart.
+
+/**
+ * The scale that letterboxes the image into the canvas — `min(w/iw, h/ih)`,
+ * or `1` when either the canvas or the image has no measured size yet (first
+ * render, or an image still loading). The user's own zoom (getScale) is a
+ * multiplier on top of this.
+ */
+export const getFitScale = (
+  canvas: { width: number; height: number },
+  imageWidth: number,
+  imageHeight: number,
+): number => {
+  if (canvas.width > 0 && canvas.height > 0 && imageWidth > 0 && imageHeight > 0) {
+    return Math.min(canvas.width / imageWidth, canvas.height / imageHeight);
+  }
+  return 1;
+};
+
+/** The on-screen scale actually applied to the image: fit × the user's zoom. */
+export const getEffectiveScale = (state: StoreState) => (imageId: string): number => {
+  const canvas = getCanvasDimensions(state);
+  const imageWidth = getImageWidth(state)(imageId);
+  const imageHeight = getImageHeight(state)(imageId);
+  return getFitScale(canvas, imageWidth, imageHeight) * getScale(state);
+};
+
+/** The translate that simply centers the (scaled) image inside the canvas. */
+const getDefaultOffset = (
+  canvas: { width: number; height: number },
+  imageWidth: number,
+  imageHeight: number,
+  scale: number,
+): { left: number; top: number } => ({
+  left: Math.max(0, (canvas.width - imageWidth * scale) / 2),
+  top: Math.max(0, (canvas.height - imageHeight * scale) / 2),
+});
+
+/**
+ * Keeps a translate within the range that still shows the image filling (or
+ * centered within) the canvas on each axis — from flush against one edge to
+ * flush against the other — so a pan/zoom gesture can never park the image
+ * off in empty space with nothing on screen, and never show a gap on one
+ * side while the image overflows the other.
+ */
+const clampOffset = (
+  offset: { left: number; top: number },
+  canvas: { width: number; height: number },
+  imageWidth: number,
+  imageHeight: number,
+  scale: number,
+): { left: number; top: number } => {
+  const clampAxis = (value: number, canvasSize: number, imageSize: number) => {
+    const slack = canvasSize - imageSize * scale;
+    const min = Math.min(0, slack);
+    const max = Math.max(0, slack);
+    return Math.min(max, Math.max(min, value));
+  };
+  return {
+    left: clampAxis(offset.left, canvas.width, imageWidth),
+    top: clampAxis(offset.top, canvas.height, imageHeight),
+  };
+};
+
+/**
+ * The translate actually used to draw the image (@see
+ * TracingViewer#getTransformAttribute): the stored pan/zoom offset if one has
+ * been set (@see SET_SCALE_OFFSET_REQUESTED), else the centered default —
+ * always clamped against the *current* canvas/image/scale, so a stored offset
+ * left over from a differently-sized image or canvas self-corrects instead of
+ * parking the image off-screen.
+ */
+export const getEffectiveOffset = (state: StoreState) => (imageId: string): { left: number; top: number } => {
+  const canvas = getCanvasDimensions(state);
+  const imageWidth = getImageWidth(state)(imageId);
+  const imageHeight = getImageHeight(state)(imageId);
+  const scale = getEffectiveScale(state)(imageId);
+  const stored = getScaleOrigin(state);
+  const base = stored !== null
+    ? stored
+    : getDefaultOffset(canvas, imageWidth, imageHeight, scale);
+  return clampOffset(base, canvas, imageWidth, imageHeight, scale);
+};
+
+/**
+ * The offset that keeps a given image-space point fixed under the cursor
+ * across a scale change from the current user zoom to `newUserScale` — the
+ * standard "zoom to point" construction: shift the translate by exactly the
+ * distance that point would otherwise move due to the scale delta alone.
+ * Used by both wheel-zoom and click-zoom (@see editorTools/zoomWithWheel,
+ * editorTools/zoomWithClick) so the image content under the pointer stays
+ * put instead of sliding out from under it as the zoom level changes.
+ */
+export const computeAnchoredZoomOffset = (
+  state: StoreState,
+  imageId: string,
+  cursorImageX: number,
+  cursorImageY: number,
+  newUserScale: number,
+): { left: number; top: number } => {
+  const canvas = getCanvasDimensions(state);
+  const imageWidth = getImageWidth(state)(imageId);
+  const imageHeight = getImageHeight(state)(imageId);
+  const fitScale = getFitScale(canvas, imageWidth, imageHeight);
+  const oldEffectiveScale = getEffectiveScale(state)(imageId);
+  const newEffectiveScale = fitScale * newUserScale;
+  const oldOffset = getEffectiveOffset(state)(imageId);
+  const delta = newEffectiveScale - oldEffectiveScale;
+  const raw = {
+    left: oldOffset.left - cursorImageX * delta,
+    top: oldOffset.top - cursorImageY * delta,
+  };
+  return clampOffset(raw, canvas, imageWidth, imageHeight, newEffectiveScale);
 };

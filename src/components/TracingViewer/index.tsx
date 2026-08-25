@@ -195,20 +195,18 @@ export class TracingViewer extends React.PureComponent<Props, State> {
   }
 
   /**
-   * Surface = max(canvas, rendered film) — see the comment at its call site
-   * in render(). Shared with renderLens, which positions the magnifier by
-   * the same box.
+   * The drawing surface is always exactly the canvas — the viewport, not the
+   * (possibly larger, zoomed-in) rendered film. The image is positioned
+   * within it by `getTransformAttribute`'s translate and, once it overflows,
+   * clipped by the svg's own viewBox — the same as any pannable zoomed
+   * canvas — rather than growing the surface itself and relying on the
+   * ancestor's scroll to reveal the rest (nothing ever scrolled it: wheel
+   * zoom preventDefaults the native wheel-scroll it would otherwise ride on
+   * — @see setImageRef). Shared with renderLens, which positions the
+   * magnifier relative to this same box (the visible viewport's corner, not
+   * a partly off-screen enlarged one).
    */
-  private getSurfaceSize = (): { width: number; height: number } => {
-    const {
-      canvasSize: { width: canvasWidth, height: canvasHeight },
-      imageWidth, imageHeight, scale,
-    } = this.props;
-    return {
-      width: Math.max(canvasWidth, imageWidth * scale),
-      height: Math.max(canvasHeight, imageHeight * scale),
-    };
-  };
+  private getSurfaceSize = (): { width: number; height: number } => this.props.canvasSize;
 
   private convertMousePositionRelativeToOriginalImage = (
     e: React.MouseEvent<SVGElement> | React.TouchEvent<SVGElement>,
@@ -229,26 +227,15 @@ export class TracingViewer extends React.PureComponent<Props, State> {
   }
 
   private getTransformAttribute = () => {
-    const {
-      scale,
-      canvasSize: { width: canvasWidth, height: canvasHeight },
-      imageWidth, imageHeight,
-    } = this.props;
-    let transform = '';
-    // Center the (scaled) image inside the drawing surface so the radiograph
-    // is the visual hero instead of hugging the top-left corner. Mouse math is
-    // unaffected: all conversions use the image element's bounding rect.
-    // The surface is the larger of the canvas and the *rendered* film
-    // (image × scale) — sizing it by the raw image put a fitted high-resolution
-    // film (e.g. the 1578×2089 bundled sample) inside a surface bigger than the
-    // viewport, and the viewport then showed one corner of mostly-empty canvas.
-    const surfaceWidth = Math.max(canvasWidth, imageWidth * scale);
-    const surfaceHeight = Math.max(canvasHeight, imageHeight * scale);
-    const translateX = Math.max(0, (surfaceWidth - imageWidth * scale) / 2);
-    const translateY = Math.max(0, (surfaceHeight - imageHeight * scale) / 2);
-    transform += ` translate(${translateX}, ${translateY}) `;
-    transform += ` scale(${scale}, ${scale})`;
-    return transform;
+    const { scale, offset } = this.props;
+    // Position is the pan/zoom offset computed in the store (centered by
+    // default, cursor-anchored once the user has wheel- or click-zoomed —
+    // @see store/reducers/workspace/canvas#getEffectiveOffset), not
+    // recomputed here: this component only ever draws where it's told, so
+    // there is exactly one place (the selector) that decides where the image
+    // sits. Mouse math is unaffected either way: all conversions use the
+    // image element's own rendered bounding rect, not this formula.
+    return ` translate(${offset.left}, ${offset.top})  scale(${scale}, ${scale})`;
   }
 
   private handleCanvasMouseEnter = (e: React.MouseEvent<SVGElement>) => {

@@ -86,6 +86,10 @@ export const saveProject = createActionCreator('SAVE_PROJECT_REQUESTED');
 export const loadProjectSucceeded = createActionCreator('LOAD_PROJECT_SUCCEEDED');
 
 export const setScale = createActionCreator('SET_SCALE_REQUESTED');
+// The pan position paired with setScale — @see
+// store/reducers/workspace/canvas#computeAnchoredZoomOffset, which keeps the
+// image-space point under the cursor fixed on screen across a zoom step.
+export const setScaleOffset = createActionCreator('SET_SCALE_OFFSET_REQUESTED');
 
 export const importFileRequested = createActionCreator('IMPORT_FILE_REQUESTED');
 export const importFileSucceeded = createActionCreator('IMPORT_FILE_SUCCEEDED');

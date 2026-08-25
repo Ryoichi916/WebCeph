@@ -7,6 +7,11 @@ export interface StateProps {
   imageHeight: number;
   imageWidth: number;
   scale: number;
+  /**
+   * The translate paired with `scale` — where the (scaled) image is drawn
+   * within the canvas. @see store/reducers/workspace/canvas#getEffectiveOffset
+   */
+  offset: { left: number; top: number };
   landmarks: ReadonlyArray<{
     label: string;
     symbol: string;
