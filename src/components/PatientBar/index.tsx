@@ -26,13 +26,14 @@ const actionButtonStyle: React.CSSProperties = {
   color: '#FFFFFF',
 };
 
+// Unpadded: the padding that used to live here now lives on `.action_label`
+// itself (see style.scss) so that hiding that class at a narrow bar collapses
+// its padding along with its text, instead of leaving an empty gap behind.
 const actionLabelStyle: React.CSSProperties = {
   color: 'rgba(255, 255, 255, 0.95)',
   fontSize: 13,
   fontWeight: 500,
   textTransform: 'none',
-  paddingLeft: 8,
-  paddingRight: 12,
   verticalAlign: 'middle',
 };
 
@@ -92,12 +93,25 @@ export default class PatientBar extends React.PureComponent<Props, { }> {
           formatSexShort(activePatient.sex),
         ].filter((p) => p !== null).join(' · ')
       : '';
+    // The かな reading a name was registered with, beside it — same convention
+    // as the records dashboard's identity band and the printed chart (@see
+    // RecordsDashboard `reading`). Suppressed while that band is itself on
+    // screen for the same reason the chart ID and demographics are: the band
+    // 40px below this bar already carries it, and a reading stated twice 40px
+    // apart is one fact stated as if it were two.
+    const reading = activePatient !== null && activePatient.reading
+      ? activePatient.reading : null;
+    const recordsLabel = recordCount > 0 ? `Records (${recordCount})` : 'Records';
     return (
       <div className={cx(classes.root, className)}>
         <span className={classes.wordmark}>WebCeph</span>
         <span className={classes.divider} />
         {/* The patient identity is the entry point to their records: clicking
-            it opens the dashboard listing every image on file. */}
+            it opens the dashboard listing every image on file. It carries a
+            floor of its own (`.patient` min-width) so a narrowing window
+            empties the action labels beside it before it ever gives up the
+            avatar and name — this is the one indicator on screen of whose
+            chart is open, and it cannot be the first thing to disappear. */}
         <button
           type="button"
           className={cx(classes.patient, {
@@ -122,6 +136,9 @@ export default class PatientBar extends React.PureComponent<Props, { }> {
             </span>
           )}
           <span className={classes.patient_name} title={name}>{name}</span>
+          {reading !== null && !isRecordsShown ? (
+            <span className={classes.patient_reading}>{reading}</span>
+          ) : null}
           {/* While the records dashboard is the surface on screen, the identity
               band 40px below this bar owns the identity: it carries the chart ID
               as a pill and the demographics as labelled cells, in larger type.
@@ -140,8 +157,15 @@ export default class PatientBar extends React.PureComponent<Props, { }> {
         </button>
         <span className={classes.spacer} />
         <div className={classes.actions}>
+          {/* Labels are wrapped in their own element (rather than passed as a
+              bare string) purely so `.action_label` exists to hide at a narrow
+              bar — see the responsive block in style.scss. The full text stays
+              the button's accessible name via `aria-label` even once its
+              visible label is gone: a button that reads only an icon to a
+              sighted clinician must not go silent for a screen reader. */}
           <FlatButton
-            label={recordCount > 0 ? `Records (${recordCount})` : 'Records'}
+            label={<span className={classes.action_label}>{recordsLabel}</span>}
+            aria-label={recordsLabel}
             style={isRecordsShown ? activeActionStyle : actionButtonStyle}
             labelStyle={actionLabelStyle}
             hoverColor="rgba(255, 255, 255, 0.12)"
@@ -150,7 +174,8 @@ export default class PatientBar extends React.PureComponent<Props, { }> {
             onClick={onToggleRecords}
           />
           <FlatButton
-            label="Save project"
+            label={<span className={classes.action_label}>Save project</span>}
+            aria-label="Save project"
             style={actionButtonStyle}
             labelStyle={actionLabelStyle}
             hoverColor="rgba(255, 255, 255, 0.12)"
@@ -159,7 +184,8 @@ export default class PatientBar extends React.PureComponent<Props, { }> {
             onClick={onSave}
           />
           <FlatButton
-            label="Change patient"
+            label={<span className={classes.action_label}>Change patient</span>}
+            aria-label="Change patient"
             style={actionButtonStyle}
             labelStyle={actionLabelStyle}
             hoverColor="rgba(255, 255, 255, 0.12)"

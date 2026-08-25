@@ -39,8 +39,15 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  flex: 0 1 auto;
-  min-width: 0;
+  flex: 1 1 auto;
+  // The floor below which this button will not shrink: this is the bar's one
+  // persistent indicator of whose chart is open, so it is protected space, not
+  // scratch space. 110px is the avatar (26px) plus its gap plus room for a few
+  // characters of a truncated name — enough that the identity pill is always
+  // legible, never a bare, empty pill. `.action_label` (below) is what gives
+  // this room up: the action buttons' text is what a narrow bar sacrifices
+  // first, not the identity that names whose records are open.
+  min-width: 110px;
   // The chart-ID and demographics chips do not shrink, so on a narrow bar the
   // identity block used to paint over the action labels beside it. It clips
   // instead — and the two chips step aside entirely below (see the queries at
@@ -113,6 +120,19 @@
   max-width: 320px;
 }
 
+// The かな reading a name was registered with, next to it — the same
+// convention the records dashboard's identity band and the printed chart
+// follow (@see RecordsDashboard `.identity_reading`), because a Japanese
+// practice reads the name by this, not by its kanji.
+.patient_reading {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.68);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 140px;
+}
+
 .chart_id {
   display: inline-flex;
   align-items: center;
@@ -152,6 +172,20 @@
   flex-shrink: 0;
 }
 
+// The visible text of a named action (Records / Save project / Change
+// patient). It carries its own padding — rather than the button's outer label
+// wrapper carrying it — so that hiding this class at a narrow bar (see the
+// responsive block below) collapses that padding along with the text: the
+// three buttons fall back to icon-only rather than icon-plus-empty-gap. The
+// button's accessible name stays the full text throughout (`aria-label`,
+// set alongside this in index.tsx), so going icon-only never goes silent for
+// a screen reader.
+.action_label {
+  display: inline-block;
+  padding-left: 8px;
+  padding-right: 12px;
+}
+
 // Shared by the Command Palette and Settings entry points: both are bare
 // icon-only affordances, secondary to the labelled actions beside them.
 .icon_button {
@@ -179,8 +213,12 @@
 
 // ----------------------------------------------------------------- responsive
 // The bar gives up its quiet metadata before it gives up a named action: age ·
-// sex first, then the chart-ID chip, then the name's width. The record count and
-// the three actions are what the bar is for and are the last to go.
+// sex first, then the chart-ID chip and the かな reading, then the name's
+// width. The record count and the three actions are what the bar is for and
+// are the last to go — but "last to go" means their *labels* collapse first
+// (see `.action_label` below): the identity pill itself is never allowed to
+// shrink past `.patient`'s own floor, so it cannot vanish out from under a
+// clinician who is looking at this bar precisely to see whose chart is open.
 
 @media (max-width: 900px) {
   .divider {
@@ -193,12 +231,21 @@
 }
 
 @media (max-width: 760px) {
-  .chart_id {
+  .chart_id,
+  .patient_reading {
     display: none;
   }
 
   .patient_name {
     max-width: 180px;
+  }
+
+  // The three named actions go icon-only here, well before the identity pill
+  // is ever asked to give up its own floor (`.patient` min-width) — this is
+  // the inversion of the bar's old, backwards priority: the actions' text is
+  // what a narrow bar sacrifices, not the indicator of whose chart is open.
+  .action_label {
+    display: none;
   }
 }
 
@@ -275,6 +322,12 @@
     overflow: visible;
     white-space: normal;
     color: $text-primary;
+  }
+
+  .patient_reading {
+    max-width: none;
+    overflow: visible;
+    color: $text-secondary;
   }
 
   .chart_id {

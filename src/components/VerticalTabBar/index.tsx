@@ -142,16 +142,26 @@ class VerticalTabBar extends React.PureComponent<Props, { }> {
     const isNamedByHead = group.timepoint !== null &&
       caption !== undefined &&
       getTimepointToken(caption.timepoint) === group.timepoint;
+    // An empty tile's accessible name matches what it visually says — "+ Add
+    // image" on its face, "No. N" under it — the same "Add" verb the rail's
+    // own placeholder tile at the foot of the list already uses ("Add another
+    // image"). It used to read "Image N", which named a film that was not
+    // there rather than the upload slot the tile actually is.
     const label = caption !== undefined
       ? caption.fullLabel
-      : `Image ${i + 1}`;
+      : `Add image ${i + 1}`;
     return (
       <button
         tabIndex={0}
         key={id}
         className={cx(classes.tab_item, {
           [classes.tab_item__active]: isActiveTab,
-          [classes.tab_item__thumbnail]: hasImage,
+          // Whether the tile carries an image is already fully expressed by
+          // its `.tab_preview`/`.tab_preview__empty` markup below — no
+          // `.tab_item` modifier rule for it has ever existed in style.scss,
+          // so a `classes.tab_item__thumbnail` key here resolved to
+          // `undefined` and appended the literal string "undefined" to every
+          // image-bearing tile's className on every render.
           [classes.tab_item__pending]: pending !== null,
         })}
         onClick={!isActiveTab ? this.handleTabClick(id) : undefined}
