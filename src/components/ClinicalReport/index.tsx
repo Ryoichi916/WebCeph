@@ -297,9 +297,19 @@ export class StoredEditable extends React.PureComponent<StoredEditableProps> {
   };
 
   // Paste as plain text so pasted rich content cannot break the letterhead.
+  //
+  // `\s` matches U+3000 (ideographic space) along with ordinary whitespace,
+  // so collapsing every run of `\s` flattened "高橋　三郎　医師" — pasted
+  // from a business card or a signature block, where the family and given
+  // name are conventionally separated by a full-width space, not a regular
+  // one — to "高橋 三郎 医師", corrupting the one field that prints on
+  // every signed document this app produces. `[^\S　]` is `\s` with
+  // U+3000 carved out (the complement of "\S or U+3000" is "whitespace that
+  // is not U+3000"), so a multi-line paste's real line breaks and tabs still
+  // collapse to one line, and an intentional ideographic space survives.
   private handlePaste = (e: React.ClipboardEvent<HTMLSpanElement>) => {
     e.preventDefault();
-    const text = e.clipboardData.getData('text/plain').replace(/\s+/g, ' ');
+    const text = e.clipboardData.getData('text/plain').replace(/[^\S　]+/g, ' ');
     document.execCommand('insertText', false, text);
   };
 }
