@@ -10,14 +10,17 @@ import RecordViewer from 'components/RecordViewer/connected';
 
 import CircularProgress from 'material-ui/CircularProgress';
 import IconError from 'material-ui/svg-icons/alert/error-outline';
+import IconWarning from 'material-ui/svg-icons/alert/warning';
 
 const classes = require('./style.scss');
 
-// Matches `$error` in src/_variables.scss — a Sass variable is not reachable
-// from here, and the icon (an SVG whose own fill an ordinary CSS class does
-// not reliably override, unlike the surrounding markup) needs its color as a
-// prop, not a class, the same way the toolbar's own status icons take theirs.
+// Matches `$error` / `$warn` in src/_variables.scss — a Sass variable is not
+// reachable from here, and the icon (an SVG whose own fill an ordinary CSS
+// class does not reliably override, unlike the surrounding markup) needs its
+// color as a prop, not a class, the same way the toolbar's own status icons
+// take theirs.
 const ERROR_COLOR = '#C62828';
+const WARN_COLOR = '#B26A00';
 
 export default class TracingEditor extends React.PureComponent<Props, { }> {
   render() {
@@ -29,6 +32,7 @@ export default class TracingEditor extends React.PureComponent<Props, { }> {
       isSummaryShown,
       isImageTraceable,
       defaultTimepoint,
+      isPlaceholderAutoPlot,
       onFilesDrop,
       onDemoButtonClick,
     } = this.props;
@@ -44,6 +48,31 @@ export default class TracingEditor extends React.PureComponent<Props, { }> {
     }
     return (
       <div className={className} style={{ display: 'flex', flexDirection: 'column' }}>
+        {/* Auto-plot's positions on this image are the demo predictor's
+            fabricated placeholder (see predictors/demo.ts), not a real
+            detection — real-looking angle values with no anatomy behind
+            them. Kept up for the rest of the session rather than dismissible:
+            nothing here tracks which points a clinician has actually checked,
+            so nothing can honestly say the warning no longer applies. Placed
+            first in the DOM (and default flex `order`, ahead of the toolbar's
+            order:2 and the tracing area's order:1 — see style.scss) so it is
+            the first thing announced and the first thing seen. */}
+        {imageId !== null && isPlaceholderAutoPlot ? (
+          <div className={classes.placeholder_banner} role="alert">
+            <IconWarning
+              className={classes.placeholder_banner_icon}
+              color={WARN_COLOR}
+            />
+            <span className={classes.placeholder_banner_text}>
+              <strong>Demo auto-plot — not a real detection.</strong>{' '}
+              These landmark positions come from the placeholder predictor,
+              calibrated only to the bundled sample film; on this image they
+              are fabricated, not read off its anatomy. Verify and correct
+              every point by hand before treating this tracing as a clinical
+              reading.
+            </span>
+          </div>
+        ) : null}
         {/* The toolbar comes first in the DOM (its "Analysis: …" control is the
             primary analysis switcher) but is laid out at the bottom via flex
             order — see style.scss. */}

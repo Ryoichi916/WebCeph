@@ -49,6 +49,33 @@
   white-space: nowrap;
 }
 
+// The demo predictor's placeholder warning (see index.tsx) — leads the dialog
+// body, ahead of the table and every other note: a fabricated landmark makes
+// the whole reading suspect, not one footnote's worth of it.
+.placeholder_banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0 0 12px;
+  padding: 10px 14px;
+  border-radius: 6px;
+  background: $warn-bg;
+  border: 1px solid $warn;
+}
+
+.placeholder_banner_icon {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  margin-top: 1px;
+}
+
+.placeholder_banner_text {
+  font-size: 13px;
+  line-height: 1.5;
+  color: $text-primary;
+}
+
 // Which film the results came from: the record's timepoint, then its date.
 // The timepoint badge: the token pill and, beside it, the rest of a free-text
 // label. One construction, shared with the records dashboard's timeline stamp

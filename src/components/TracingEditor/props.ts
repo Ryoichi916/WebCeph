@@ -32,6 +32,14 @@ export interface StateProps {
    * count (see utils/records#getNextTimepointLabel).
    */
   defaultTimepoint: string;
+  /**
+   * True once the demo/placeholder predictor (see `predictors/demo.ts`) has
+   * plotted a landmark on this image and it is not the bundled sample
+   * cephalogram that predictor's template is calibrated against — i.e. some
+   * of what is on screen is a fabricated position, not a real detection.
+   * @see store/reducers/workspace/predictorWarnings
+   */
+  isPlaceholderAutoPlot: boolean;
 };
 
 export interface DispatchProps {

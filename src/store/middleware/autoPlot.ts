@@ -9,15 +9,18 @@ import {
   addManualLandmarks,
   autoPlotSucceeded,
   autoPlotFailed,
+  placeholderLandmarksPlotted,
 } from 'actions/workspace';
 import {
   getImageProps,
   getManualLandmarks,
 } from 'store/reducers/workspace/image';
 import { getManualSteps } from 'store/reducers/workspace/analyses';
-import { runPrediction, predictionsToLandmarks } from 'predictors';
+import { getActivePredictor, runPrediction, predictionsToLandmarks } from 'predictors';
 import { runPredictionInWorker } from 'predictors/workerClient';
 import { dataUrlToImageData } from 'utils/imageData';
+import { isSampleCephImage } from 'utils/sampleCeph';
+import { PLACEHOLDER_PREDICTOR_ID } from 'predictors/demo';
 
 /**
  * Orchestrates automatic landmark plotting: gathers the image and the analysis'
@@ -95,6 +98,19 @@ const middleware = ({ getState, dispatch }: Store<StoreState>) =>
         predictions, props.width, props.height, placed, overwrite,
       );
       dispatch(addManualLandmarks({ imageId, landmarks }));
+      // The demo predictor's positions (see `predictors/demo.ts`) are honest
+      // only for the exact bundled sample film they were read off — plotted
+      // on any other image they are fabricated, not detected, however
+      // real-looking the resulting angles are. Surface that once per image so
+      // TracingEditor/AnalysisResultsViewer can warn the clinician, rather
+      // than letting a fully "complete" tracing pass as a real reading.
+      if (
+        getActivePredictor().id === PLACEHOLDER_PREDICTOR_ID &&
+        !isSampleCephImage(props.data) &&
+        Object.keys(landmarks).length > 0
+      ) {
+        dispatch(placeholderLandmarksPlotted({ imageId }));
+      }
       dispatch(removeWorker(workerId));
       dispatch(autoPlotSucceeded({ imageId }));
     } catch (e) {

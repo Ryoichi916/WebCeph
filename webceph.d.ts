@@ -936,6 +936,18 @@ interface StoreState {
    */
   'workspace.analysis.lastActiveId': AnalysisId<ImageType> | null;
   /**
+   * Per-image: true once the demo/placeholder predictor (see
+   * `predictors/demo.ts`) has plotted a landmark on this image and it is not
+   * the bundled sample cephalogram that predictor's template is calibrated
+   * against. UI-only — never exported with the case file and never part of
+   * the undo history, because it records a fact about *this session*
+   * ("some of what's on screen was fabricated, not detected"), not a fact
+   * about the tracing. @see store/reducers/workspace/predictorWarnings
+   */
+  'workspace.autoPlot.placeholderWarning': {
+    [imageId: string]: boolean;
+  };
+  /**
    * Undo/redo history of the tracing slice. Managed by the enableUndoRedo
    * reducer enhancer (see store/index.ts); the registered reducers for these
    * keys are passthroughs so combineReducers leaves them intact.
@@ -1360,6 +1372,17 @@ interface Events {
     symbols?: string[];
   };
   AUTO_PLOT_LANDMARKS_SUCCEEDED: {
+    imageId: string;
+  };
+  /**
+   * The demo/placeholder predictor (see `predictors/demo.ts`) plotted at
+   * least one landmark on an image other than the bundled sample
+   * cephalogram it is calibrated against — those positions are fabricated
+   * for this image's anatomy, not detected on it. Drives the "verify before
+   * clinical use" warning in TracingEditor and AnalysisResultsViewer.
+   * @see store/reducers/workspace/predictorWarnings
+   */
+  PLACEHOLDER_LANDMARKS_PLOTTED: {
     imageId: string;
   };
   AUTO_PLOT_LANDMARKS_FAILED: {

@@ -42,6 +42,12 @@ const icons: { [id: string]: JSX.Element } = {
   done: ICON_DONE,
   evaluating: ICON_EVALUATING,
   pending: ICON_PENDING,
+  // A landmark the clinician removed on purpose (see
+  // REMOVE_MANUAL_LANDMARK_REQUESTED) reads no differently from an
+  // untouched one until it is the next step in line — same hollow circle,
+  // no separate iconography to learn for what is, to the person tracing,
+  // still just "not placed yet".
+  skipped: ICON_PENDING,
 };
 
 /**

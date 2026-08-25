@@ -7,6 +7,7 @@ import {
 import { getTracingImageId, getImportError } from 'store/reducers/workspace/settings';
 import { isSummaryShown } from 'store/reducers/workspace/analyses';
 import { isImageTraceable } from 'store/reducers/workspace/image';
+import { isPlaceholderAutoPlotWarned } from 'store/reducers/workspace/predictorWarnings';
 
 import {
   getPatientRecords,
@@ -34,6 +35,8 @@ const mapStateToProps: MapStateToProps<StateProps, OwnProps, StoreState> =
       importError: getImportError(state)(workspaceId),
       isSummaryShown: isSummaryShown(state),
       isImageTraceable: imageId !== null ? isImageTraceable(state)(imageId) : true,
+      isPlaceholderAutoPlot: imageId !== null
+        ? isPlaceholderAutoPlotWarned(state)(imageId) : false,
       // The next *visit* in the series, read off the timepoint labels the
       // record already carries: T1 on a case with nothing on file, T2 once T1
       // exists — however many images T1 holds. Counted off the images instead

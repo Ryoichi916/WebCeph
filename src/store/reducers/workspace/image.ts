@@ -333,6 +333,21 @@ const tracingReducer = handleActions<typeof KEY_TRACING>({
         manualLandmarks: {
           ...omit(entry && entry.manualLandmarks, symbol),
         },
+        // The clinician removed this landmark on purpose — most often to redo
+        // it by hand. Mark it pending (the same flag SKIP_MANUAL_STEP_REQUESTED
+        // sets) rather than merely absent, so it reads apart from a landmark
+        // that was simply never plotted yet: `store/middleware/analysisSwitch`
+        // reads this to know a re-plot must leave the symbol alone instead of
+        // silently refilling it with the auto-plot placeholder position the
+        // next time the active analysis changes. Placing the landmark again
+        // (by hand or via an explicit Auto-plot) does not need to clear this —
+        // `isStepComplete` already outranks `isStepSkipped` once a value
+        // exists (see `getStepStates`), so a re-placed symbol reads as done
+        // regardless of this flag's stale `true`.
+        skippedSteps: {
+          ...(entry && entry.skippedSteps),
+          [symbol]: true,
+        },
       },
     };
   },

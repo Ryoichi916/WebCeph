@@ -32,6 +32,7 @@ import fileExport, {
   getFileExportError,
 } from './fileExport';
 import workers from './workers';
+import predictorWarnings from './predictorWarnings';
 import order from './order';
 import activeId, { getActiveWorkspaceId } from './activeId';
 import { getWorkspacesIdsInOrder } from './order';
@@ -51,6 +52,7 @@ export default {
   ...image,
   ...canvas,
   ...workers,
+  ...predictorWarnings,
   ...treatment,
   ...records,
   ...settings,

@@ -16,6 +16,9 @@ export const addManualLandmarks = createActionCreator('ADD_MANUAL_LANDMARKS_BATC
 export const autoPlotLandmarks = createActionCreator('AUTO_PLOT_LANDMARKS_REQUESTED');
 export const autoPlotSucceeded = createActionCreator('AUTO_PLOT_LANDMARKS_SUCCEEDED');
 export const autoPlotFailed = createActionCreator('AUTO_PLOT_LANDMARKS_FAILED');
+// The demo/placeholder predictor fabricated a landmark for an image it was
+// never calibrated against — @see store/reducers/workspace/predictorWarnings.
+export const placeholderLandmarksPlotted = createActionCreator('PLACEHOLDER_LANDMARKS_PLOTTED');
 
 // Scaffold the remaining landmarks from the placed Sella and Nasion at their
 // SN-relative population-mean positions (see analyses/referenceTemplate).

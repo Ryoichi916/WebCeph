@@ -6,6 +6,7 @@ import IconClose from 'material-ui/svg-icons/navigation/close';
 import IconCopy from 'material-ui/svg-icons/content/content-copy';
 import IconCheck from 'material-ui/svg-icons/navigation/check';
 import IconDownload from 'material-ui/svg-icons/file/file-download';
+import IconWarning from 'material-ui/svg-icons/alert/warning';
 
 import * as cx from 'classnames';
 
@@ -333,6 +334,21 @@ export const LINEAR_NEEDS_SCALE_NOTE =
   'chip in the toolbar. Angular values are unaffected.';
 
 /**
+ * The demo/placeholder predictor (see `predictors/demo.ts`) plotted one or
+ * more of the landmarks this reading is computed from, on an image other
+ * than the bundled sample film its template is calibrated against — the
+ * values below are not derived from this image's anatomy. Printed on screen
+ * and carried into the copy/CSV export alike, the same reasoning as every
+ * other note this dialog cannot let stop at its own edge (see
+ * `formatScaleSuspectNote`).
+ */
+export const PLACEHOLDER_AUTOPLOT_NOTE =
+  'One or more landmarks were placed by the demo auto-plot predictor, which ' +
+  'is a placeholder calibrated only to the bundled sample film — on this ' +
+  'image its positions are fabricated, not detected. Verify and correct ' +
+  'every point before treating any value below as a clinical reading.';
+
+/**
  * A `sum`-type row (Björk's total, Tweed's triangle closure) prints its own
  * full-precision total, not the sum of the *rounded* figures printed two rows
  * up for its own parts — `roundToDisplay`'s docstring names exactly this as
@@ -379,8 +395,14 @@ const buildProvenanceRows = (
   scaleSuspectNote: string | null = null,
   linearNeedsScaleNote: string | null = null,
   sumRoundingNote: string | null = null,
+  placeholderAutoPlotNote: string | null = null,
 ): string[][] => {
   const rows: string[][] = [];
+  // First and loudest: a fabricated point makes the whole table suspect, not
+  // one row of it, so this leads even the norms citation below.
+  if (placeholderAutoPlotNote !== null) {
+    rows.push(['Placeholder warning', placeholderAutoPlotNote]);
+  }
   const analysisName = analysisId !== null
     ? (ANALYSIS_NAMES[analysisId] || analysisId)
     : null;
@@ -679,6 +701,26 @@ const csvEscape = (cell: string): string => (
 );
 
 /**
+ * `csvEscape`'s counterpart for the tab-delimited clipboard export ("Copy
+ * table"), which otherwise joins cells with plain `\t`/`\n` and no escaping
+ * at all. A cell holding a literal tab or newline — pasted into a Note field
+ * from another document, say — silently inserted an extra tab-delimited
+ * column or row on paste, misaligning the rest of that row with nothing on
+ * screen to say why.
+ *
+ * There is no single-character escape a plain-text TSV clipboard payload can
+ * carry (unlike CSV, TSV has no format-level quoting rule), so this borrows
+ * CSV's convention instead: wrap the cell in double quotes and double any
+ * quote already inside it. It is not a guarantee — a spreadsheet is free to
+ * treat pasted TSV as pre-split cells with no quoting at all — but it is what
+ * Excel and Google Sheets both actually honor on paste, and it is the closest
+ * a plain-text TSV can get to `csvEscape`'s guarantee.
+ */
+const tsvEscape = (cell: string): string => (
+  /[\t"\n]/.test(cell) ? `"${cell.replace(/"/g, '""')}"` : cell
+);
+
+/**
  * Copies plain text to the clipboard; async Clipboard API first, hidden
  * textarea + execCommand as the fallback for older engines.
  */
@@ -840,7 +882,7 @@ export class AnalysisResultsViewer extends React.PureComponent<Props, ViewerStat
     const {
       open, onRequestClose, results, analysisId, landmarksBySymbol,
       needsScaleForLinear, timepoint, captureDate, provenance,
-      caveats, scaleFactor, imageWidth, imageHeight,
+      caveats, scaleFactor, imageWidth, imageHeight, isPlaceholderAutoPlot,
     } = this.props;
     // What this film's scale says it physically measures, and whether that is
     // possible: the millimetre rows of this table are all derived from that
@@ -964,6 +1006,23 @@ export class AnalysisResultsViewer extends React.PureComponent<Props, ViewerStat
         actionsContainerStyle={dialogActionsStyle}
         autoScrollBodyContent
       >
+        {isPlaceholderAutoPlot ? (
+          // Leads even the results table: a fabricated landmark makes every
+          // value below suspect, not just the row it drives directly (a
+          // computed angle chains through components that are not always the
+          // ones a caveat marker names). Not dismissible — nothing here
+          // tracks which points a clinician has actually re-checked by hand,
+          // so nothing can honestly say the warning no longer applies.
+          <div className={classes.placeholder_banner} role="alert">
+            <IconWarning
+              className={classes.placeholder_banner_icon}
+              color="#B26A00"
+            />
+            <span className={classes.placeholder_banner_text}>
+              {PLACEHOLDER_AUTOPLOT_NOTE}
+            </span>
+          </div>
+        ) : null}
         {hasResults ? (
           <div>
             <div className={classes.table_wrap}>
@@ -1285,7 +1344,7 @@ export class AnalysisResultsViewer extends React.PureComponent<Props, ViewerStat
   };
 
   private handleCopyTable = () => {
-    const { results, landmarksBySymbol, caveats } = this.props;
+    const { results, landmarksBySymbol, caveats, isPlaceholderAutoPlot } = this.props;
     const { provenance, captureDate, timepoint, analysisId } = this.props;
     const { scaleSuspectNote, linearNeedsScaleNote } = this.getScaleNotes();
     const { hasSumRow } = computeTableFlags(results, landmarksBySymbol);
@@ -1294,12 +1353,13 @@ export class AnalysisResultsViewer extends React.PureComponent<Props, ViewerStat
         analysisId, provenance, captureDate, timepoint, this.getPatientNote(),
         caveats, scaleSuspectNote, linearNeedsScaleNote,
         hasSumRow ? SUM_ROUNDING_NOTE : null,
+        isPlaceholderAutoPlot ? PLACEHOLDER_AUTOPLOT_NOTE : null,
       ),
       ...buildReportRows(
         results, landmarksBySymbol, provenance, caveatMarkers(caveats),
       ),
     ]
-      .map((cells) => cells.join('\t'))
+      .map((cells) => cells.map(tsvEscape).join('\t'))
       .join('\n');
     copyTextToClipboard(text).then((ok) => {
       if (ok) {
@@ -1318,7 +1378,7 @@ export class AnalysisResultsViewer extends React.PureComponent<Props, ViewerStat
   private handleExportCsv = () => {
     const {
       results, landmarksBySymbol, analysisId, provenance, captureDate,
-      timepoint, caveats,
+      timepoint, caveats, isPlaceholderAutoPlot,
     } = this.props;
     const { scaleSuspectNote, linearNeedsScaleNote } = this.getScaleNotes();
     const { hasSumRow } = computeTableFlags(results, landmarksBySymbol);
@@ -1327,6 +1387,7 @@ export class AnalysisResultsViewer extends React.PureComponent<Props, ViewerStat
         analysisId, provenance, captureDate, timepoint, this.getPatientNote(),
         caveats, scaleSuspectNote, linearNeedsScaleNote,
         hasSumRow ? SUM_ROUNDING_NOTE : null,
+        isPlaceholderAutoPlot ? PLACEHOLDER_AUTOPLOT_NOTE : null,
       ),
       ...buildReportRows(
         results, landmarksBySymbol, provenance, caveatMarkers(caveats),

@@ -51,6 +51,14 @@ export interface StateProps {
    * or the reason none was). See `NormsProvenance.patientNote`.
    */
   analysisContext: AnalysisContext;
+  /**
+   * True when the demo/placeholder predictor (see `predictors/demo.ts`) has
+   * plotted a landmark this reading depends on, on an image other than the
+   * bundled sample cephalogram that predictor's template is calibrated
+   * against — i.e. some of the values below are computed from a fabricated
+   * position, not a real detection. @see store/reducers/workspace/predictorWarnings
+   */
+  isPlaceholderAutoPlot: boolean;
 };
 
 export interface DispatchProps {
