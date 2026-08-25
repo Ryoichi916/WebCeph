@@ -1,14 +1,17 @@
 import { addNewWorkspace } from 'actions/workspace';
+import { setCommandPaletteShown } from 'actions/commandPalette';
 
 import mapValues from 'lodash/mapValues';
 import { mintWorkspaceId } from 'utils/ids';
 
 export const keyboardActions: KeyboardActionCreators = {
   ADD_NEW_WORKSPACE: () => addNewWorkspace({ id: mintWorkspaceId() }),
+  OPEN_COMMAND_PALETTE: () => setCommandPaletteShown({ isShown: true }),
 };
 
 export const keyMap: KeyboardMap = {
   ADD_NEW_WORKSPACE: 'n',
+  OPEN_COMMAND_PALETTE: ['ctrl+k', 'command+k'],
 };
 
 /**

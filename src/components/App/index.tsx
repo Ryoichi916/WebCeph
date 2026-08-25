@@ -12,6 +12,7 @@ import { Route } from 'react-router-dom';
 
 import Progress from './Progress';
 import DialogFocusGuard from 'components/DialogFocusGuard';
+import CommandPalette from 'components/CommandPalette/connected';
 
 import getMuiTheme from 'material-ui/styles/getMuiTheme';
 import MuiThemeProvider from 'material-ui/styles/MuiThemeProvider';
@@ -102,6 +103,7 @@ const App = enhance(({
     <MuiThemeProvider muiTheme={muiTheme}>
       <React.Fragment>
       <DialogFocusGuard />
+      <CommandPalette />
       { isReady ? (
           <IntlProvider
             key={locale}

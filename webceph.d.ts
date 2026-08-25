@@ -870,6 +870,8 @@ interface StoreState {
   'app.status.isInstalling': boolean;
   'app.status.isInstalled': boolean;
   'app.status.isUpdated': boolean;
+  /** Whether the command palette overlay is open. @see components/CommandPalette */
+  'commandPalette.isOpen': boolean;
   'app.persistence.isSupported': boolean;
   'app.persistence.isSaving': boolean;
   'app.persistence.isLoading': boolean;
@@ -1170,6 +1172,10 @@ interface Events {
   }>;
   APP_INSTALL_STATUS_CHANGED: ProgressStatus;
   APP_UPDATE_STATUS_CHANGED: ProgressStatus;
+  /** Open or close the command palette overlay. @see components/CommandPalette */
+  SET_COMMAND_PALETTE_SHOWN: {
+    isShown: boolean;
+  };
   WORKER_CREATED: WorkerDetails;
   WORKER_TERMINATED: string;
   WORKER_STATUS_CHANGED: Pick<WorkerDetails, 'id'> & Pick<WorkerDetails, 'isBusy' | 'error'>;
@@ -1850,12 +1856,15 @@ type Validator = (
 type Saver = (state: StoreState) => IterableIterator<GenericAction>;
 
 type KeyboardCommand = (
-  'ADD_NEW_WORKSPACE'
+  'ADD_NEW_WORKSPACE' |
+  'OPEN_COMMAND_PALETTE'
 );
 
 type KeyboardActionCreators = Record<KeyboardCommand, () => GenericAction>;
 type KeyboardHandlers = Record<KeyboardCommand, (event: KeyboardEvent) => any>;
-type KeyboardMap = Record<KeyboardCommand, string>;
+// A binding may be a single combo ('n') or several alternates that all fire the
+// same command (['ctrl+k', 'command+k']) — react-hotkeys accepts either.
+type KeyboardMap = Record<KeyboardCommand, string | string[]>;
 
 /* Browser compatiblity checking */
 type BrowserId = 'Chrome' | 'Firefox' | 'Opera' | 'Microsoft Edge' | 'Safari';
