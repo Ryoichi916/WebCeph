@@ -2,6 +2,7 @@ import * as React from 'react';
 import Props from './props';
 import { PaletteCommand } from './commands';
 import { filterCommands } from './search';
+import { isFromEditable } from 'components/App/shortcuts';
 
 const classes = require('./style.scss');
 
@@ -14,8 +15,7 @@ const LISTBOX_ID = 'command-palette-listbox';
 const getOptionId = (index: number) => `command-palette-option-${index}`;
 
 /**
- * A Ctrl+K / Cmd+K overlay (bound in `App/shortcuts.ts`) that finds and runs
- * an app command by name.
+ * A Ctrl+K / Cmd+K overlay that finds and runs an app command by name.
  *
  * It renders nothing at all while closed — `isOpen` comes from
  * `commandPalette.isOpen` in the store, flipped by the shortcut and by
@@ -28,6 +28,15 @@ const getOptionId = (index: number) => `command-palette-option-${index}`;
  * reimplemented here — mounting with `role="dialog" aria-modal="true"` is all
  * any dialog in this app needs to opt into `DialogFocusGuard`, which already
  * does both for whichever dialog is currently in the DOM.
+ *
+ * The Ctrl+K/Cmd+K binding itself lives on `document`, in this component
+ * (@see `componentDidMount`), *not* in `App/shortcuts.ts`'s react-hotkeys
+ * map like the rest of the app's shortcuts — see the comment above `keyMap`
+ * there for why that map cannot reach this key reliably, and this component
+ * can: `<CommandPalette>` is mounted once, unconditionally, at the app root
+ * (`App/index.tsx`), regardless of whether a patient is active, so the
+ * listener attaches on first paint and never depends on where focus happens
+ * to be.
  */
 class CommandPalette extends React.PureComponent<Props, State> {
   state: State = {
@@ -35,11 +44,49 @@ class CommandPalette extends React.PureComponent<Props, State> {
     selectedIndex: 0,
   };
 
+  /**
+   * Guards `onMouseEnter` against a hover the clinician never intended.
+   *
+   * The dialog renders at a fixed screen position, so if the cursor is
+   * already resting over one of the option rows *before* the dialog opens
+   * (e.g. clicking into the canvas near where the palette will render, then
+   * pressing Ctrl+K without touching the mouse again), the browser fires a
+   * real `mouseenter` on that row the instant it mounts under the stationary
+   * cursor — with no mouse motion involved at all. Left unguarded, that
+   * silently overrode the correct default (index 0) before any keyboard
+   * input, so Enter executed whatever command happened to be under the
+   * pointer rather than the top match.
+   *
+   * The standard fix (VS Code / Sublime-style palettes): hover-driven
+   * selection is ignored until a genuine `mousemove` has been observed
+   * *after* this opening. Reset on every open, flipped by a document-level
+   * `mousemove` listener that only runs while open, so the very first hover
+   * that follows real cursor motion re-enables the usual point-to-select
+   * behaviour.
+   */
+  private hasMouseMoved = false;
+
+  componentDidMount() {
+    // Capture phase, same as `utils/focusTrap.ts`'s own document-level Tab
+    // handling: this must see the keystroke regardless of which element (or
+    // lack of one — `document.body` included) currently holds focus.
+    document.addEventListener('keydown', this.handleGlobalKeyDown, true);
+  }
+
   componentDidUpdate(prevProps: Props) {
     if (!prevProps.isOpen && this.props.isOpen) {
       // Every opening starts a fresh search, not wherever the last one left off.
       this.setState({ query: '', selectedIndex: 0 });
+      this.hasMouseMoved = false;
+      document.addEventListener('mousemove', this.handleDocumentMouseMove);
+    } else if (prevProps.isOpen && !this.props.isOpen) {
+      document.removeEventListener('mousemove', this.handleDocumentMouseMove);
     }
+  }
+
+  componentWillUnmount() {
+    document.removeEventListener('keydown', this.handleGlobalKeyDown, true);
+    document.removeEventListener('mousemove', this.handleDocumentMouseMove);
   }
 
   render() {
@@ -103,6 +150,34 @@ class CommandPalette extends React.PureComponent<Props, State> {
     return filterCommands(this.props.commands, this.state.query);
   }
 
+  /**
+   * The Ctrl+K/Cmd+K toggle itself — @see the class doc comment for why this
+   * is a `document` listener rather than a react-hotkeys binding.
+   *
+   * Gated on `hasActivePatient` the same way the palette's own command list
+   * is scoped (@see `commands.ts`): every command here acts on the active
+   * workspace, so there is nothing useful to open without one, and opening
+   * anyway would be a dialog full of commands that do nothing yet.
+   */
+  private handleGlobalKeyDown = (e: KeyboardEvent) => {
+    if (e.key !== 'k' && e.key !== 'K') {
+      return;
+    }
+    if (!e.ctrlKey && !e.metaKey) {
+      return;
+    }
+    if (this.props.isOpen || !this.props.hasActivePatient) {
+      return;
+    }
+    if (isFromEditable(e)) {
+      // Not a shortcut — a letter of what is being typed, same guard
+      // `App/shortcuts.ts` applies to its own bindings.
+      return;
+    }
+    e.preventDefault();
+    this.props.onOpen();
+  }
+
   private handleQueryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     this.setState({ query: e.target.value, selectedIndex: 0 });
   }
@@ -142,7 +217,17 @@ class CommandPalette extends React.PureComponent<Props, State> {
     }
   }
 
+  private handleDocumentMouseMove = () => {
+    this.hasMouseMoved = true;
+  }
+
   private handleOptionHover = (index: number) => () => {
+    if (!this.hasMouseMoved) {
+      // A `mouseenter` that fired before any real cursor motion was observed
+      // since the dialog opened — the cursor was already resting on this row
+      // when it mounted, not moved onto it. Not a hover the clinician made.
+      return;
+    }
     this.setState({ selectedIndex: index });
   }
 

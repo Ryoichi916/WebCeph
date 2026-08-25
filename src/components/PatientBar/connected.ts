@@ -8,6 +8,7 @@ import {
   setActivePatient,
   setRecordsDashboardShown,
 } from 'actions/workspace';
+import { setCommandPaletteShown } from 'actions/commandPalette';
 import {
   getActivePatient,
   getActivePatientId,
@@ -56,6 +57,7 @@ const mergeProps = (
     onToggleRecords: () => dispatch(setRecordsDashboardShown({
       isShown: !stateProps.isRecordsShown,
     })),
+    onOpenCommandPalette: () => dispatch(setCommandPaletteShown({ isShown: true })),
   };
 };
 

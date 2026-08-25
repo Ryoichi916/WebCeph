@@ -1855,15 +1855,17 @@ type Validator = (
  */
 type Saver = (state: StoreState) => IterableIterator<GenericAction>;
 
+// Command Palette's Ctrl+K/Cmd+K is *not* one of these: it is bound with its
+// own document-level listener in `components/CommandPalette/index.tsx`, not
+// through this react-hotkeys map — @see `components/App/shortcuts.ts` for why.
 type KeyboardCommand = (
-  'ADD_NEW_WORKSPACE' |
-  'OPEN_COMMAND_PALETTE'
+  'ADD_NEW_WORKSPACE'
 );
 
 type KeyboardActionCreators = Record<KeyboardCommand, () => GenericAction>;
 type KeyboardHandlers = Record<KeyboardCommand, (event: KeyboardEvent) => any>;
 // A binding may be a single combo ('n') or several alternates that all fire the
-// same command (['ctrl+k', 'command+k']) — react-hotkeys accepts either.
+// same command — react-hotkeys accepts either.
 type KeyboardMap = Record<KeyboardCommand, string | string[]>;
 
 /* Browser compatiblity checking */

@@ -152,15 +152,21 @@
   flex-shrink: 0;
 }
 
-.settings_link {
+// Shared by the Command Palette and Settings entry points: both are bare
+// icon-only affordances, secondary to the labelled actions beside them.
+.icon_button {
   display: flex;
   align-items: center;
   justify-content: center;
   width: 32px;
   height: 32px;
   margin-left: 4px;
+  padding: 0;
+  border: none;
   border-radius: 6px;
+  background: transparent;
   color: rgba(255, 255, 255, 0.85);
+  cursor: pointer;
   transition: background-color 120ms ease;
 
   &:hover,

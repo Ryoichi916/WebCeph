@@ -6,6 +6,7 @@ import IconSave from 'material-ui/svg-icons/content/save';
 import IconSwap from 'material-ui/svg-icons/action/swap-horiz';
 import IconSettings from 'material-ui/svg-icons/action/settings';
 import IconRecords from 'material-ui/svg-icons/action/view-list';
+import IconCommandPalette from 'material-ui/svg-icons/action/search';
 
 import { Link } from 'react-router-dom';
 
@@ -70,7 +71,7 @@ export default class PatientBar extends React.PureComponent<Props, { }> {
   render() {
     const {
       className, activePatient, recordCount, isRecordsShown,
-      onSave, onChangePatient, onToggleRecords,
+      onSave, onChangePatient, onToggleRecords, onOpenCommandPalette,
     } = this.props;
     const name = activePatient !== null ?
       (activePatient.name || activePatient.chartId || '(unnamed)') : '—';
@@ -166,9 +167,26 @@ export default class PatientBar extends React.PureComponent<Props, { }> {
             icon={<IconSwap color={iconWhite} style={actionIconStyle} />}
             onClick={onChangePatient}
           />
+          {/* The only mention anywhere in the app of Ctrl+K/Cmd+K — a clinician
+              had no way to discover the Command Palette otherwise. Placed here,
+              not in a menu: this bar is the one strip of chrome present on
+              every workspace screen, the way the tracing toolbar's own icon
+              buttons name their shortcut in `title` (@see "Undo (Ctrl+Z)").
+              It only renders once a patient is active, which is also exactly
+              the state the shortcut itself requires — so its mere presence
+              never promises a shortcut that would not fire. */}
+          <button
+            type="button"
+            className={classes.icon_button}
+            title="Command Palette (Ctrl+K / Cmd+K)"
+            aria-label="Open command palette"
+            onClick={onOpenCommandPalette}
+          >
+            <IconCommandPalette color="#F2F5F8" style={{ width: 20, height: 20 }} />
+          </button>
           <Link
             to="/settings"
-            className={classes.settings_link}
+            className={classes.icon_button}
             aria-label="Settings"
           >
             {/* mui SvgIcon resolves `currentColor` against its own inline

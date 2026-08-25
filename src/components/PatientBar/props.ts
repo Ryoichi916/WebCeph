@@ -14,6 +14,8 @@ export interface DispatchProps {
    * is already the surface on screen — go back to the editor.
    */
   onToggleRecords(): any;
+  /** Opens the Command Palette — the same action Ctrl+K/Cmd+K dispatches. */
+  onOpenCommandPalette(): any;
 }
 
 export interface OwnProps {
