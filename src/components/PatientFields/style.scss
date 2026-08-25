@@ -26,7 +26,10 @@ $field-label-line: 15px;
   font-weight: 600;
   letter-spacing: .06em;
   text-transform: uppercase;
-  color: $text-tertiary;
+  // $text-tertiary measured 3.2:1 here — a live field's own name, not
+  // decorative text, so WCAG AA's 4.5:1 applies. See $text-quiet's own
+  // comment (_variables.scss).
+  color: $text-quiet;
 }
 
 // Quiet "optional" tag inside a field label; lowercase against the
@@ -37,7 +40,9 @@ $field-label-line: 15px;
   font-weight: 500;
   letter-spacing: .03em;
   text-transform: lowercase;
-  color: $text-disabled;
+  // $text-disabled measured 1.84:1 here — this field is enabled and the tag
+  // is live, informative text, not the inert content that token is for.
+  color: $text-quiet;
 }
 
 // Locale-independent echo of a date input's value, so 08/06/2026 can't be
@@ -46,7 +51,8 @@ $field-label-line: 15px;
   font-size: 11.5px;
   line-height: 1.2;
   font-variant-numeric: tabular-nums;
-  color: $text-disabled;
+  // $text-disabled measured 1.84:1 here — same misuse as .field_optional.
+  color: $text-quiet;
 }
 
 // The date itself carries the weight; the "Stored as" label stays quiet.

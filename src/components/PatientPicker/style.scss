@@ -1161,7 +1161,10 @@ $row-inset: 4px;
   max-width: 420px;
   font-size: 12.5px;
   line-height: 1.6;
-  color: $text-tertiary;
+  // $text-tertiary measured 3.66:1 here — real onboarding instruction, not
+  // decorative text, so WCAG AA's 4.5:1 applies. See $text-quiet's own
+  // comment (_variables.scss).
+  color: $text-quiet;
 }
 
 // What happens after registration — three steps, so a first-run screen says what
