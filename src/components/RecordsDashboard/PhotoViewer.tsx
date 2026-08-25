@@ -247,7 +247,7 @@ export default class PhotoViewer extends React.PureComponent<PhotoViewerProps, S
         title={
           <div className={classes.title}>
             <div className={classes.title_main}>
-              <h3 className={classes.title_heading}>{title}</h3>
+              <h3 id="photo-viewer-title" className={classes.title_heading}>{title}</h3>
               <span className={classes.title_caption}>
                 {mode === 'single' && record !== undefined
                   ? this.recordCaption(record)
@@ -272,6 +272,9 @@ export default class PhotoViewer extends React.PureComponent<PhotoViewerProps, S
         actionsContainerStyle={{ padding: '8px 24px', borderTop: '1px solid #DDE3EA' }}
         titleStyle={{ padding: '18px 24px 12px' }}
         paperProps={{
+          role: 'dialog',
+          'aria-modal': 'true',
+          'aria-labelledby': 'photo-viewer-title',
           style: {
             borderRadius: 8,
             boxShadow: '0 12px 32px rgba(16, 30, 50, .22)',

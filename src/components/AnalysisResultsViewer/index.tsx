@@ -877,11 +877,22 @@ export class AnalysisResultsViewer extends React.PureComponent<Props, ViewerStat
       <Dialog
         open={open}
         onRequestClose={onRequestClose}
+        // A keyboard user could Tab straight through this dialog and onto
+        // the toolbar buttons sitting behind it (mui 0.20's Dialog does not
+        // trap focus on its own) — role/aria-modal opt this dialog into the
+        // app-root focus trap (see components/DialogFocusGuard), and
+        // aria-labelledby is what lets a screen reader announce which
+        // dialog just opened at all, which mui's own markup never states.
+        paperProps={{
+          role: 'dialog',
+          'aria-modal': 'true',
+          'aria-labelledby': 'analysis-summary-title',
+        }}
         title={
           <div className={classes.title}>
             <div className={classes.title_text}>
               <div className={classes.title_row}>
-                <h3 className={classes.title_heading}>Analysis summary</h3>
+                <h3 id="analysis-summary-title" className={classes.title_heading}>Analysis summary</h3>
                 {analysisName !== null ? (
                   <span className={classes.title_badge}>{analysisName}</span>
                 ) : null}

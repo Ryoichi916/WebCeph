@@ -219,7 +219,7 @@ export default class AddPhotoSeries extends React.PureComponent<AddPhotoSeriesPr
         overlayClassName={classes.no_print}
         title={
           <div className={classes.title}>
-            <h3 className={classes.title_heading}>
+            <h3 id="add-photo-series-title" className={classes.title_heading}>
               {`Add photographs to ${visit}`}
             </h3>
             <span className={classes.title_caption}>
@@ -253,6 +253,9 @@ export default class AddPhotoSeries extends React.PureComponent<AddPhotoSeriesPr
         actionsContainerStyle={{ padding: '8px 24px', borderTop: '1px solid #DDE3EA' }}
         titleStyle={{ padding: '18px 24px 12px' }}
         paperProps={{
+          role: 'dialog',
+          'aria-modal': 'true',
+          'aria-labelledby': 'add-photo-series-title',
           style: {
             borderRadius: 8,
             boxShadow: '0 12px 32px rgba(16, 30, 50, .22)',

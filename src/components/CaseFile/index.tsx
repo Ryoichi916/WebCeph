@@ -317,7 +317,7 @@ export default class CaseFile extends React.PureComponent<Props, State> {
         overlayClassName={classes.no_print}
         title={
           <div className={classes.title}>
-            <h3 className={classes.title_heading}>
+            <h3 id="case-file-dialog-title" className={classes.title_heading}>
               {isExport
                 ? 'Export this case as a file'
                 : 'Open a case file into this chart'}
@@ -334,6 +334,9 @@ export default class CaseFile extends React.PureComponent<Props, State> {
         actionsContainerStyle={{ padding: '12px 24px', borderTop: '1px solid #DDE3EA' }}
         titleStyle={{ padding: '20px 24px 12px' }}
         paperProps={{
+          role: 'dialog',
+          'aria-modal': 'true',
+          'aria-labelledby': 'case-file-dialog-title',
           style: {
             borderRadius: 8,
             boxShadow: '0 12px 32px rgba(16, 30, 50, .22)',

@@ -91,7 +91,7 @@ class Settings extends React.PureComponent<Props & InjectedIntlProps, { }> {
         onRequestClose={this.handleClose}
         title={
           <div className={classes.title}>
-            <h3 className={classes.title_heading}>Settings</h3>
+            <h3 id="settings-dialog-title" className={classes.title_heading}>Settings</h3>
             <span className={classes.title_caption}>
               Preferences for this browser — no part of a patient's record
             </span>
@@ -113,6 +113,9 @@ class Settings extends React.PureComponent<Props & InjectedIntlProps, { }> {
         }}
         titleStyle={{ padding: '20px 24px 12px' }}
         paperProps={{
+          role: 'dialog',
+          'aria-modal': 'true',
+          'aria-labelledby': 'settings-dialog-title',
           style: {
             borderRadius: 8,
             boxShadow: '0 12px 32px rgba(16, 30, 50, .22)',

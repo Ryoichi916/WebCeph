@@ -83,7 +83,7 @@ export default class RemoveRecordDialog
         overlayClassName={classes.no_print}
         title={
           <div className={classes.title}>
-            <h3 className={classes.title_heading}>Remove this image from the record?</h3>
+            <h3 id="remove-record-dialog-title" className={classes.title_heading}>Remove this image from the record?</h3>
             <span className={classes.title_caption}>
               {fileName !== null ? fileName : 'Image on file'}
             </span>
@@ -110,6 +110,11 @@ export default class RemoveRecordDialog
         bodyStyle={{ padding: '4px 24px 8px', borderTop: '1px solid #DDE3EA' }}
         actionsContainerStyle={{ padding: '12px 24px', borderTop: '1px solid #DDE3EA' }}
         titleStyle={{ padding: '20px 24px 12px' }}
+        paperProps={{
+          role: 'dialog',
+          'aria-modal': 'true',
+          'aria-labelledby': 'remove-record-dialog-title',
+        }}
       >
         <div className={classes.remove_body}>
           {/* Which film. At the record card's own 68 × 85 film ratio, on the

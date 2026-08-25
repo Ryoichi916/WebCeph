@@ -2397,7 +2397,15 @@ export default class PatientPicker extends React.PureComponent<Props, State> {
           bodyStyle={dialogBodyStyle}
           contentStyle={{ width: 440, maxWidth: '90vw' }}
           actionsContainerStyle={dialogActionsStyle}
-          paperProps={{ style: dialogPaperStyle }}
+          paperProps={{
+            role: 'dialog',
+            'aria-modal': 'true',
+            // A plain string `title` is rendered by Dialog's own internal
+            // markup, so there is no heading element here to point
+            // aria-labelledby at — aria-label says the same thing directly.
+            'aria-label': 'Remove patient?',
+            style: dialogPaperStyle,
+          }}
           actions={dialogActions}
           onRequestClose={this.cancelRemoval}
         >

@@ -201,7 +201,7 @@ export default class VisitNoteDialog
         overlayClassName={classes.no_print}
         title={
           <div className={classes.dlg_title}>
-            <h3 className={classes.dlg_heading}>
+            <h3 id="visit-note-dialog-title" className={classes.dlg_heading}>
               {isAmendment ? 'Amend clinical note' : 'Write clinical note'}
             </h3>
             {/* Which visit is being written about — the record's own label, its
@@ -279,6 +279,9 @@ export default class VisitNoteDialog
         titleStyle={{ padding: '20px 24px 12px' }}
         autoScrollBodyContent
         paperProps={{
+          role: 'dialog',
+          'aria-modal': 'true',
+          'aria-labelledby': 'visit-note-dialog-title',
           style: {
             borderRadius: 8,
             boxShadow: '0 12px 32px rgba(16, 30, 50, .22)',
