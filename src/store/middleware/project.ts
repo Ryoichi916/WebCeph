@@ -21,6 +21,11 @@ const PROJECT_KEYS: StoreKey[] = [
   'images.props',
   'images.status',
   'images.tracing',
+  // Where each profile photograph's ceph-overlay registration lives — the
+  // clicked Pn/Pog' positions, the ceph it reads from and the facing. Part of
+  // the record for the same reason the tracing is: it is clinical work done
+  // once. @see StoreEntries['images.photoRegistration']
+  'images.photoRegistration',
   // The written half of the record — one note per visit, with its amendment
   // trail. It is part of the project and not of the patient's own row because it
   // belongs to the visits the project holds. @see StoreEntries['records.notes']
@@ -35,6 +40,7 @@ const emptyProject = (): Partial<StoreState> => ({
   'images.props': {},
   'images.status': {},
   'images.tracing': {},
+  'images.photoRegistration': {},
   'records.notes': {},
   'workspaces.settings': { [defaultWorkspaceId]: defaultWorkspaceSettings },
   'workspaces.order': [defaultWorkspaceId],
@@ -105,6 +111,9 @@ const AUTOSAVE_ACTION_TYPES: { [type: string]: true } = {
   REDO_REQUESTED: true,
   // Which analysis the film is read under.
   SET_ACTIVE_ANALYSIS_REQUESTED: true,
+  // A photograph's ceph-overlay registration (clicked points, ceph, facing).
+  SET_PHOTO_REGISTRATION_REQUESTED: true,
+  REMOVE_PHOTO_REGISTRATION_REQUESTED: true,
   // Removing a film from the chart is as much an edit as filing one.
   CLOSE_IMAGE_REQUESTED: true,
 };

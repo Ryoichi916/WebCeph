@@ -21,6 +21,9 @@ import IconTrace from 'material-ui/svg-icons/image/crop-original';
 import IconReport from 'material-ui/svg-icons/action/description';
 import IconSuperimpose from 'material-ui/svg-icons/maps/layers';
 import IconSimulate from 'material-ui/svg-icons/image/tune';
+// The photo overlay's mark: the before/after comparison glyph — the closest
+// material icon to "one image read against another".
+import IconOverlay from 'material-ui/svg-icons/image/compare';
 // The ruler: the mark the app already associates with a mm/px scale.
 import IconScale from 'material-ui/svg-icons/image/straighten';
 
@@ -57,6 +60,9 @@ import { CaseFileMode } from 'components/CaseFile/props';
 import ClinicalReport from 'components/ClinicalReport/connected';
 import Superimposition from 'components/Superimposition/connected';
 import TreatmentSimulation from 'components/TreatmentSimulation/connected';
+// …and the fourth: the ceph tracing's profile lines laid over a profile
+// photograph, launched from the photograph's card or from the photo viewer.
+import PhotoOverlay from 'components/PhotoOverlay/connected';
 
 // What a tracing must carry before it can be registered — the superimposition's
 // own sentence, so the timeline's tooltip cannot drift from the view's.
@@ -624,6 +630,12 @@ interface State {
   /** The film whose treatment simulation is open, or null. Same reasoning. */
   simulationImageId: string | null;
   /**
+   * The profile photograph whose ceph overlay is open, or null. Same
+   * reasoning again: the overlay is *of a photograph*, opened from its card
+   * or from the photo viewer's enlargement.
+   */
+  overlayImageId: string | null;
+  /**
    * The two films a superimposition was started on, or null. These seed the
    * superimposition view's own T1/T2 selection (`Superimposition#initialT1Id`);
    * the pickers in its chrome own the choice from there, so the dashboard adds a
@@ -741,6 +753,7 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
     removeScaleImageId: null,
     reportImageId: null,
     simulationImageId: null,
+    overlayImageId: null,
     superimposePair: null,
     photoViewer: null,
     photoBatch: null,
@@ -3786,6 +3799,33 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
    * module that owns the rule (see `selectors#getRecordLaunch`).
    */
   private renderCardLaunch = (record: PatientRecord, identity: string) => {
+    // The one launch a *photograph* carries: a profile photograph can take the
+    // ceph tracing's analysis lines as an overlay. Enabled only when some
+    // traced ceph of the record carries the two registration landmarks, with
+    // the requirement stated where it is not (see
+    // `PhotoOverlay/selectors#getPhotoOverlayAvailability`).
+    if (record.type === 'photo_lateral') {
+      const { overlay } = this.props;
+      return (
+        <div className={classes.launch}>
+          <span className={classes.slots_label}>Open</span>
+          <span className={classes.launch_list}>
+            <LaunchAction
+              label="Ceph overlay"
+              icon={(
+                <IconOverlay
+                  color={overlay.canOverlay ? LAUNCH_ICON : LAUNCH_ICON_OFF}
+                  style={launchIconStyle}
+                />
+              )}
+              title={overlay.reason}
+              isEnabled={overlay.canOverlay}
+              onClick={this.handleOpenOverlay(record)}
+            />
+          </span>
+        </div>
+      );
+    }
     const entry = this.props.launch[record.imageId];
     if (!record.isTraceable || entry === undefined) {
       return null;
@@ -4012,7 +4052,9 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
    * so closing one lands back on the chart at the same scroll position.
    */
   private renderLaunchedViews = () => {
-    const { reportImageId, simulationImageId, superimposePair } = this.state;
+    const {
+      reportImageId, simulationImageId, overlayImageId, superimposePair,
+    } = this.state;
     return (
       <div>
         {reportImageId !== null ? (
@@ -4025,6 +4067,12 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
           <TreatmentSimulation
             imageId={simulationImageId}
             onRequestClose={this.closeSimulation}
+          />
+        ) : null}
+        {overlayImageId !== null ? (
+          <PhotoOverlay
+            imageId={overlayImageId}
+            onRequestClose={this.closeOverlay}
           />
         ) : null}
         {superimposePair !== null ? (
@@ -4061,6 +4109,16 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
     this.setState({ simulationImageId: record.imageId });
 
   private closeSimulation = () => this.setState({ simulationImageId: null });
+
+  /**
+   * Open the ceph overlay on a profile photograph — from its card, or from
+   * inside the photo viewer's enlargement (which closes so one full-screen
+   * surface holds the photograph at a time).
+   */
+  private handleOpenOverlay = (record: PatientRecord) => () =>
+    this.setState({ overlayImageId: record.imageId, photoViewer: null });
+
+  private closeOverlay = () => this.setState({ overlayImageId: null });
 
   /**
    * Start a superimposition on a named pair. The two ids seed the view's own
@@ -4718,6 +4776,8 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
           onOpenRecord={this.handleOpenPhotoRecord}
           onEdit={this.handleEditPhoto}
           onRemove={this.handleRemovePhoto}
+          overlay={this.props.overlay}
+          onCephOverlay={this.handleCephOverlayFromViewer}
         />
         {/* Filing a visit's photographic series — one act for the whole sitting,
             with every frame proposed in series order and editable first. It is
@@ -5245,6 +5305,10 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
 
   private handleRemovePhoto = (record: PatientRecord) =>
     this.setState({ photoViewer: null, removingImageId: record.imageId });
+
+  /** The viewer's own way into the ceph overlay — uncurried, like its peers. */
+  private handleCephOverlayFromViewer = (record: PatientRecord) =>
+    this.setState({ overlayImageId: record.imageId, photoViewer: null });
 
   /** The same dialog a card's pencil opens, taken by record rather than curried. */
   private handleEditRecord = (record: PatientRecord) =>

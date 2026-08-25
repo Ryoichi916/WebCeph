@@ -930,6 +930,19 @@ interface StoreState {
     [imageId: string]: CephImageTracingData;
   };
   /**
+   * The photo-overlay registrations of this patient's profile photographs,
+   * keyed by the photograph's image id: which traced ceph the overlay reads
+   * from, where on the *photograph* the clinician clicked each registration
+   * landmark (photo pixel coordinates, keyed by the ceph landmark's symbol —
+   * see `analyses/photoOverlay#REGISTRATION_SYMBOLS`), and which way the
+   * photograph faces. Part of the patient's **project** (see
+   * store/middleware/project), so a registration made once survives a reload;
+   * projects saved before this key existed simply carry none.
+   */
+  'images.photoRegistration': {
+    [photoImageId: string]: PhotoRegistration;
+  };
+  /**
    * The clinician's most recently explicitly-chosen analysis (via the
    * switcher), independent of any one image. @see
    * `store/reducers/workspace/image#getLastActiveAnalysisId`
@@ -1165,6 +1178,30 @@ type CephImageTracingData = {
     [symbol: string]: true;
   };
 };
+
+/**
+ * One profile photograph's ceph-overlay registration — the record of how the
+ * tracing's analysis lines are laid over the photograph.
+ * @see StoreEntries['images.photoRegistration'], analyses/photoOverlay
+ */
+interface PhotoRegistration {
+  /** The traced lateral ceph the overlay reads from; '' until one is chosen. */
+  cephImageId: string;
+  /**
+   * Where the clinician clicked each registration landmark **on the
+   * photograph** (photo pixel coordinates), keyed by the ceph landmark's
+   * symbol ('Pn', "Pog'"). Filled one click at a time.
+   */
+  points: {
+    [cephSymbol: string]: { x: number; y: number };
+  };
+  /**
+   * Whether the photograph faces left (mirrored relative to a right-facing
+   * ceph). A 2-point similarity cannot produce a reflection, so the facing is
+   * a stated fact, never inferred. @see analyses/photoOverlay#solvePhotoRegistration
+   */
+  isFlipped: boolean;
+}
 
 type ProgressStatus = Partial<{
   /**
@@ -1482,6 +1519,31 @@ interface Events {
     sourceImageId?: string | null;
   };
   UNSET_SCALE_FACTOR_REQUESTED: {
+    imageId: string;
+  };
+  /**
+   * Write (part of) a profile photograph's ceph-overlay registration — a
+   * **partial merge** onto whatever the photograph already has, creating the
+   * entry when it is absent. Each optional field that is present is written;
+   * a `point` payload sets `points[symbol]` to the clicked photo-pixel
+   * position. @see StoreEntries['images.photoRegistration']
+   */
+  SET_PHOTO_REGISTRATION_REQUESTED: {
+    /** The *photograph* being registered. */
+    imageId: string;
+    /** The traced ceph the overlay reads from. */
+    cephImageId?: string;
+    /** One registration landmark's clicked position on the photograph. */
+    point?: {
+      symbol: string;
+      x: number;
+      y: number;
+    };
+    /** Which way the photograph faces. @see PhotoRegistration#isFlipped */
+    isFlipped?: boolean;
+  };
+  /** Drop a photograph's ceph-overlay registration entirely. */
+  REMOVE_PHOTO_REGISTRATION_REQUESTED: {
     imageId: string;
   };
   SUPERIMPOSE_IMAGES_REQUESTED: {

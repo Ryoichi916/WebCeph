@@ -8,6 +8,7 @@ import analyses, {
 } from './analyses';
 import treatment from './treatment';
 import records from './records';
+import photoRegistration from './photoRegistration';
 import image, {
   hasImage, getManualLandmarks,
   isAnyImageLoading,
@@ -55,6 +56,7 @@ export default {
   ...predictorWarnings,
   ...treatment,
   ...records,
+  ...photoRegistration,
   ...settings,
   ...fileExport,
   ...order,

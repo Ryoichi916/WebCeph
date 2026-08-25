@@ -38,6 +38,13 @@ export const unsetScaleFactor = createActionCreator('UNSET_SCALE_FACTOR_REQUESTE
 // Export the current tracing (image + profilogram + points) as a raster image.
 export const exportImage = createActionCreator('EXPORT_IMAGE_REQUESTED');
 
+// A profile photograph's ceph-overlay registration: which traced ceph the
+// overlay reads from, where the clinician clicked Pn / Pog' on the photograph,
+// and which way the photograph faces. A partial merge per dispatch.
+// @see StoreEntries['images.photoRegistration'], analyses/photoOverlay
+export const setPhotoRegistration = createActionCreator('SET_PHOTO_REGISTRATION_REQUESTED');
+export const removePhotoRegistration = createActionCreator('REMOVE_PHOTO_REGISTRATION_REQUESTED');
+
 // Patient records dashboard (the timeline of every image on file).
 export const setRecordsDashboardShown = createActionCreator('SET_RECORDS_DASHBOARD_SHOWN');
 

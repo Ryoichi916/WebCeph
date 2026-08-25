@@ -3,6 +3,7 @@ import { PatientRecord } from 'store/reducers/workspace';
 import { PatientDetails } from 'components/PatientFields';
 
 import { RecordAnalysis, RecordLaunch } from './selectors';
+import { PhotoOverlayAvailability } from 'components/PhotoOverlay/selectors';
 
 export interface StateProps {
   /** The patient whose record is on screen. */
@@ -23,6 +24,14 @@ export interface StateProps {
    * absent. See `./selectors#getRecordLaunch`.
    */
   launch: { [imageId: string]: RecordLaunch | undefined };
+  /**
+   * Whether the patient's profile photographs can launch the ceph overlay —
+   * one answer for the whole record (the overlay needs *a* traced ceph
+   * carrying Pn and Pog′, whichever photograph it is opened on), with the
+   * sentence that explains it when they cannot.
+   * @see components/PhotoOverlay/selectors#getPhotoOverlayAvailability
+   */
+  overlay: PhotoOverlayAvailability;
   /**
    * Chart IDs of every *other* patient, so correcting this patient's chart ID
    * cannot silently collide with another record.

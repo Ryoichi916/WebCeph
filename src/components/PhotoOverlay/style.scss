@@ -1,0 +1,593 @@
+@import 'src/_variables.scss';
+
+// The overlay's hue over a *photograph*: the tracing's own cyan, with a dark
+// casing under every stroke so the lines stay legible over skin tones and
+// bright backgrounds alike. The markers the clinician clicks are amber — the
+// editor's own landmark colour — so "what you placed" and "what the tracing
+// says" read apart at a glance.
+$overlay-hue: #40C4FF;
+$overlay-skeletal: #9FB6C6;
+$sline-hue: #7EE0C0;
+$marker-hue: #FFC400;
+
+// ---- Full-screen shell ------------------------------------------------------
+
+.root {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 2200; // above the records dashboard and the toolbar's popovers
+  display: flex;
+  flex-direction: column;
+  background: $canvas-bg;
+  font-family: $font-stack;
+}
+
+:global(body.photo-overlay-open) {
+  overflow: hidden;
+}
+
+// ---- Top chrome -------------------------------------------------------------
+
+.chrome {
+  flex: 0 0 auto;
+  min-height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 0 20px;
+  background: rgba(0, 0, 0, .35);
+  border-bottom: 1px solid rgba(255, 255, 255, .08);
+}
+
+.chrome_title {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-shrink: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: $text-on-dark;
+}
+
+.chrome_title_text {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.chrome_hint {
+  font-size: 12px;
+  font-weight: 400;
+  color: rgba(242, 245, 248, .55);
+
+  @media (max-width: 1200px) {
+    display: none;
+  }
+}
+
+.chrome_actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.chrome_identity {
+  flex: 1 1 auto;
+  min-width: 64px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 12.5px;
+  color: rgba(199, 208, 217, .78);
+  white-space: nowrap;
+}
+
+.chrome_button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border: 1px solid rgba(255, 255, 255, .22);
+  border-radius: 6px;
+  background: transparent;
+  color: $text-on-dark;
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 120ms ease, border-color 120ms ease;
+
+  svg {
+    flex-shrink: 0;
+    // mui SvgIcon writes an inline theme `color` onto the <svg>; force the
+    // glyph to follow the button's own text colour (same fix as the
+    // simulation's chrome buttons).
+    color: inherit !important;
+    fill: currentColor !important;
+  }
+
+  &:hover {
+    background: rgba(255, 255, 255, .10);
+  }
+
+  &:focus {
+    outline: none;
+  }
+
+  &:focus-visible {
+    box-shadow: $focus-ring;
+  }
+}
+
+.chrome_button__primary {
+  background: $primary-600;
+  border-color: $primary-600;
+  font-weight: 600;
+
+  &:hover {
+    background: $primary-500;
+    border-color: $primary-500;
+  }
+}
+
+// ---- Body -------------------------------------------------------------------
+
+.body {
+  flex: 1 1 auto;
+  display: flex;
+  min-height: 0;
+}
+
+.figure_column {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  padding: 16px;
+}
+
+.figure {
+  flex: 1 1 auto;
+  min-height: 220px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid $canvas-border;
+  border-radius: 8px;
+  background: #0E1216;
+  overflow: hidden;
+}
+
+.svg {
+  display: block;
+}
+
+.svg__placing {
+  cursor: crosshair;
+}
+
+.svg__dragging {
+  cursor: grabbing;
+}
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 24px;
+  text-align: center;
+}
+
+.empty_title {
+  font-size: 14px;
+  font-weight: 600;
+  color: $canvas-text;
+}
+
+.empty_hint {
+  font-size: 12.5px;
+  color: rgba(199, 208, 217, .7);
+  max-width: 360px;
+}
+
+// ---- The overlay geometry ---------------------------------------------------
+
+// The whole transformed group is click-transparent: the photograph owns every
+// click (placement) and the markers own their drags — a tracing line crossing
+// a marker must never swallow either.
+.overlay {
+  pointer-events: none;
+}
+
+.overlay_casing {
+  fill: none;
+  stroke: rgba(10, 14, 18, .55);
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.overlay_outline {
+  fill: none;
+  stroke: $overlay-hue;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.overlay_outline__skeletal {
+  stroke: $overlay-skeletal;
+  stroke-width: 1.4;
+  stroke-dasharray: 6 4;
+}
+
+.refline {
+  pointer-events: none;
+}
+
+.refline_casing {
+  stroke: rgba(10, 14, 18, .55);
+  stroke-width: 4;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.refline_stroke {
+  stroke: $overlay-hue;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.refline_stroke__sline {
+  stroke: $sline-hue;
+  stroke-dasharray: 8 5;
+}
+
+.refline_label {
+  fill: $overlay-hue;
+  font-family: $font-stack;
+  // In viewBox units the photograph is its natural pixel size; the label is
+  // scaled relative to it rather than to the screen, which keeps it beside
+  // its line at every window size. (The group transform also scales it, which
+  // is correct: it labels ceph-frame geometry.)
+  font-size: 28px;
+  paint-order: stroke fill;
+  stroke: rgba(10, 14, 18, .8);
+  stroke-width: 5px;
+}
+
+// The transformed ceph copies of Pn / Pog′ — coincidence with the clicked
+// markers is the visible proof of the fit.
+.overlay_dot {
+  fill: $overlay-hue;
+  stroke: rgba(10, 14, 18, .8);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+// ---- The clicked markers ----------------------------------------------------
+
+.markers {
+  user-select: none;
+}
+
+.marker {
+  cursor: grab;
+
+  line {
+    stroke: $marker-hue;
+    stroke-width: 2;
+    stroke-linecap: round;
+    vector-effect: non-scaling-stroke;
+    // The dark halo the editor gives its landmarks, so the crosshair reads on
+    // a bright photograph.
+    filter: drop-shadow(0 0 1px rgba(10, 14, 18, .9));
+  }
+}
+
+.marker__dragging {
+  cursor: grabbing;
+}
+
+.marker_grab {
+  fill: transparent;
+  stroke: none;
+}
+
+.marker_ring {
+  fill: none;
+  stroke: $marker-hue;
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+  filter: drop-shadow(0 0 1px rgba(10, 14, 18, .9));
+}
+
+.marker_label {
+  fill: $marker-hue;
+  font-family: $font-stack;
+  font-size: 30px;
+  font-weight: 600;
+  paint-order: stroke fill;
+  stroke: rgba(10, 14, 18, .85);
+  stroke-width: 6px;
+  user-select: none;
+  pointer-events: none;
+}
+
+// ---- Side panel -------------------------------------------------------------
+
+.panel {
+  flex: 0 0 320px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-left: 1px solid $canvas-border;
+  background: $canvas-panel;
+  color: $canvas-text;
+
+  @media (max-width: 1000px) {
+    flex-basis: 280px;
+  }
+}
+
+.panel_scroll {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 14px 16px 24px;
+}
+
+.section {
+  margin: 0 0 18px;
+  padding: 0 0 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, .07);
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.section_title {
+  margin: 0 0 8px;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: rgba(199, 208, 217, .75);
+}
+
+.section_note {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: rgba(199, 208, 217, .65);
+}
+
+// The ceph picker: one row per eligible film.
+.ceph_list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ceph_option {
+  display: block;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 255, 255, .16);
+  border-radius: 6px;
+  background: transparent;
+  color: $canvas-text;
+  font-family: inherit;
+  font-size: 12.5px;
+  text-align: left;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease;
+
+  &:hover {
+    background: rgba(255, 255, 255, .07);
+  }
+
+  &:focus {
+    outline: none;
+  }
+
+  &:focus-visible {
+    box-shadow: $focus-ring;
+  }
+}
+
+.ceph_option__selected {
+  border-color: $overlay-hue;
+  background: rgba(64, 196, 255, .12);
+  color: $text-on-dark;
+}
+
+// The facing segmented toggle.
+.facing {
+  display: flex;
+  border: 1px solid rgba(255, 255, 255, .18);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.facing_option {
+  flex: 1 1 50%;
+  padding: 8px 0;
+  border: none;
+  background: transparent;
+  color: $canvas-text;
+  font-family: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: background-color 120ms ease;
+
+  & + & {
+    border-left: 1px solid rgba(255, 255, 255, .18);
+  }
+
+  &:hover {
+    background: rgba(255, 255, 255, .07);
+  }
+
+  &:focus {
+    outline: none;
+  }
+
+  &:focus-visible {
+    box-shadow: inset $focus-ring;
+  }
+}
+
+.facing_option__selected {
+  background: $primary-600;
+  color: #FFFFFF;
+  font-weight: 600;
+
+  &:hover {
+    background: $primary-600;
+  }
+}
+
+// The placement flow.
+.prompt {
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 196, 0, .5);
+  background: rgba(255, 196, 0, .1);
+  color: #FFD54F;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.prompt__done {
+  border-color: rgba(102, 187, 106, .5);
+  background: rgba(102, 187, 106, .1);
+  color: #A5D6A7;
+}
+
+.point_list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.point_row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+}
+
+.point_state {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 1px solid rgba(199, 208, 217, .6);
+  background: transparent;
+}
+
+.point_state__placed {
+  border-color: $marker-hue;
+  background: $marker-hue;
+}
+
+.point_name {
+  flex: 1 1 auto;
+}
+
+.point_value {
+  color: rgba(199, 208, 217, .6);
+  font-variant-numeric: tabular-nums;
+}
+
+.reset {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  padding: 6px 10px;
+  border: 1px solid rgba(255, 255, 255, .2);
+  border-radius: 6px;
+  background: transparent;
+  color: $canvas-text;
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+
+  svg {
+    color: inherit !important;
+    fill: currentColor !important;
+  }
+
+  &:hover {
+    background: rgba(255, 255, 255, .07);
+  }
+
+  &:focus {
+    outline: none;
+  }
+
+  &:focus-visible {
+    box-shadow: $focus-ring;
+  }
+}
+
+// The layer toggles.
+.layer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 0;
+  font-size: 12.5px;
+  cursor: pointer;
+
+  input {
+    margin: 0;
+    accent-color: $primary-500;
+  }
+}
+
+// Honest copy.
+.about {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.55;
+  color: rgba(199, 208, 217, .8);
+
+  strong {
+    color: $text-on-dark;
+  }
+}
+
+.caution {
+  margin: 10px 0 0;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 171, 64, .45);
+  background: rgba(255, 171, 64, .1);
+  color: #FFCC80;
+  font-size: 12px;
+  line-height: 1.5;
+
+  strong {
+    color: #FFE0B2;
+  }
+}

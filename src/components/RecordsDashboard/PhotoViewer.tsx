@@ -7,6 +7,9 @@ import FlatButton from 'material-ui/FlatButton';
 import IconOpen from 'material-ui/svg-icons/action/visibility';
 import IconEdit from 'material-ui/svg-icons/image/edit';
 import IconDelete from 'material-ui/svg-icons/action/delete';
+// The ceph overlay's mark — the same glyph its launch action wears on the
+// records dashboard's card.
+import IconOverlay from 'material-ui/svg-icons/image/compare';
 
 import { PatientRecord } from 'store/reducers/workspace';
 
@@ -95,6 +98,16 @@ export interface PhotoViewerProps {
   onEdit(record: PatientRecord): any;
   /** Drop this photograph from the record. */
   onRemove(record: PatientRecord): any;
+  /**
+   * Whether a *profile* photograph can launch the ceph overlay (a traced ceph
+   * carrying Pn and Pog′ exists), with the sentence that explains a refusal —
+   * the records dashboard's own availability, handed over so the viewer's
+   * control and the card's cannot disagree. Optional: a host that does not
+   * offer the overlay simply omits both props and no control is drawn.
+   */
+  overlay?: { canOverlay: boolean; reason: string };
+  /** Open the ceph overlay on this photograph. */
+  onCephOverlay?(record: PatientRecord): any;
 }
 
 interface State {
@@ -383,6 +396,35 @@ export default class PhotoViewer extends React.PureComponent<PhotoViewerProps, S
             analysed here.
           </p>
           <div className={classes.facts_actions}>
+            {/* The one analytical act a photograph supports: a *profile*
+                photograph can take the ceph tracing's analysis lines as an
+                overlay (lines only — nothing is measured on it). The tooltip
+                sits on an enabled wrapper so a disabled control still explains
+                itself, the same construction as the dashboard's launch pills. */}
+            {record.type === 'photo_lateral' &&
+              this.props.overlay !== undefined &&
+              this.props.onCephOverlay !== undefined ? (
+              <span title={this.props.overlay.reason}>
+                <button
+                  type="button"
+                  className={cx(classes.action, {
+                    [classes.action__off]: !this.props.overlay.canOverlay,
+                  })}
+                  aria-disabled={!this.props.overlay.canOverlay}
+                  aria-label={this.props.overlay.canOverlay
+                    ? 'Ceph overlay'
+                    : 'Ceph overlay — unavailable'}
+                  onClick={this.props.overlay.canOverlay
+                    ? this.handleCephOverlay(record) : undefined}
+                >
+                  <IconOverlay
+                    color={this.props.overlay.canOverlay ? '#1565C0' : '#A9B4BE'}
+                    style={actionIconStyle}
+                  />
+                  Ceph overlay
+                </button>
+              </span>
+            ) : null}
             <button
               type="button"
               className={classes.action}
@@ -1110,6 +1152,12 @@ export default class PhotoViewer extends React.PureComponent<PhotoViewerProps, S
 
   private handleRemove = (record: PatientRecord) => () =>
     this.props.onRemove(record);
+
+  private handleCephOverlay = (record: PatientRecord) => () => {
+    if (this.props.onCephOverlay !== undefined) {
+      this.props.onCephOverlay(record);
+    }
+  };
 }
 
 /**

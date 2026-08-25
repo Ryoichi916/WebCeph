@@ -16,6 +16,11 @@ import {
 
 import { getRecordAnalyses, getRecordLaunch } from './selectors';
 
+// Whether a profile photograph can launch the ceph overlay — owned by the
+// overlay's own module, so its control here and the view's own empty state
+// cannot disagree about the requirement.
+import { getPhotoOverlayAvailability } from 'components/PhotoOverlay/selectors';
+
 // The written half of the record: one clinical note per visit.
 import { getVisitNotes } from 'store/reducers/workspace/records';
 
@@ -81,6 +86,7 @@ const mapStateToProps = (state: StoreState): StateProps => {
     // strip does not re-derive nine simulation readiness checks on every mouse
     // move over the canvas behind this surface.
     launch: getRecordLaunch(state),
+    overlay: getPhotoOverlayAvailability(state),
     otherChartIds: getPatientsList(state)
       .filter((p) => patient === null || p.id !== patient.id)
       .map((p) => p.chartId || ''),
