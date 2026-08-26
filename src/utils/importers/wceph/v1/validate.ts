@@ -76,6 +76,7 @@ export enum ValidationErrorType {
   INVALID_RECORD_METADATA,
   INVALID_VISIT_NOTES,
   INVALID_PATIENT_DETAILS,
+  INVALID_PHOTO_REGISTRATIONS,
   /**
    * The file states a format version and it is not the one this app reads.
    *
@@ -162,6 +163,10 @@ const getMessageForError = (type: ValidationErrorType, data?: any): string => {
     case ValidationErrorType.INVALID_VISIT_NOTES:
       return 'a clinical entry is not in the form this app stores — its ' +
         'versions, their timestamps or their text';
+    case ValidationErrorType.INVALID_PHOTO_REGISTRATIONS:
+      return 'a photograph\'s ceph-overlay registration is not in the form ' +
+        'this app stores — which ceph it reads from, its clicked points\' ' +
+        'coordinates, or which way the photograph faces';
     case ValidationErrorType.INVALID_PATIENT_DETAILS:
       return 'the patient details are not in the form this app records — a ' +
         'date of birth must be a YYYY-MM-DD day and a sex must be male or female';
@@ -399,6 +404,36 @@ const rules: Array<[
       );
     },
     createErrorMaker(ValidationErrorType.INVALID_PATIENT_DETAILS),
+    undefined,
+  ],
+  [
+    // The photo-overlay registrations (@see WCephJSON#photoRegistrations).
+    // Optional, so every file written before the overlay existed keeps
+    // importing; when present, each entry must name its ceph as text, place
+    // each clicked point at finite numeric coordinates, and state which way
+    // the photograph faces as a boolean. Which images the ids resolve to is
+    // import's business, not this validator's — an unresolvable id is dropped
+    // there, not rejected here.
+    ({ photoRegistrations }) => {
+      if (isUndefined(photoRegistrations)) {
+        return true;
+      }
+      if (!isPlainObject(photoRegistrations)) {
+        return false;
+      }
+      return every(values(photoRegistrations), (entry: any) => (
+        isPlainObject(entry) &&
+        isString(entry.cephImageId) &&
+        isBoolean(entry.isFlipped) &&
+        isPlainObject(entry.points) &&
+        every(values(entry.points), (point: any) => (
+          isPlainObject(point) &&
+          isNumber(point.x) && isFinite(point.x) &&
+          isNumber(point.y) && isFinite(point.y)
+        ))
+      ));
+    },
+    createErrorMaker(ValidationErrorType.INVALID_PHOTO_REGISTRATIONS),
     undefined,
   ],
   [

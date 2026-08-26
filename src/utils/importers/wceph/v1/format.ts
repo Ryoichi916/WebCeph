@@ -245,6 +245,50 @@ export type WCephJSON = {
     imageIds: string[];
   };
 
+  /**
+   * The photo-overlay registrations the case carries: for each profile
+   * photograph, which traced ceph its overlay reads from, where on the
+   * *photograph* the clinician clicked each registration landmark (photo pixel
+   * coordinates, keyed by the ceph landmark's symbol — see
+   * `analyses/photoOverlay#REGISTRATION_SYMBOLS`), and which way the
+   * photograph faces. Optional: every file written before the overlay existed
+   * carries none, and they must keep importing — a photograph with no
+   * registration simply opens its overlay unregistered, which is exactly what
+   * the record then states.
+   *
+   * Only **complete** registrations are written — both registration landmarks
+   * clicked and a ceph chosen. A half-finished registration is workflow state
+   * (a dialog somebody left mid-click), not record data, and exporting it
+   * would put an unfinished gesture into the one artefact that leaves the
+   * device. @see utils/importers/wceph/v1/photoRegistrations
+   *
+   * Both the key and `cephImageId` are ids of *this file's* images, and import
+   * re-mints those ids, so an entry either side of which cannot be resolved
+   * after import is dropped whole: a registration that points at a film the
+   * chart does not hold is a dangling reference, and the overlay it would
+   * claim cannot be drawn (the same rule `CLOSE_IMAGE_REQUESTED` applies in
+   * the store — see store/reducers/workspace/photoRegistration).
+   */
+  photoRegistrations?: {
+    [photoImageId: string]: {
+      /** The traced lateral ceph the overlay reads from. */
+      cephImageId: string;
+      /**
+       * The clicked position of each registration landmark on the photograph,
+       * in photo pixel coordinates.
+       */
+      points: {
+        [cephSymbol: string]: { x: number; y: number };
+      };
+      /**
+       * Whether the photograph faces left (mirrored relative to a
+       * right-facing ceph). Stated, never inferred — a 2-point similarity
+       * cannot produce a reflection. @see PhotoRegistration#isFlipped
+       */
+      isFlipped: boolean;
+    };
+  };
+
   treatmentStages: {
     /** User-specified order of treatment stages */
     order: string[];

@@ -48,6 +48,12 @@ import { readVisitNote } from 'utils/visitNotes';
 
 import { getCaptureDateSortKey } from 'utils/records';
 
+// The photo-overlay registrations: which ceph each profile photograph's
+// overlay reads from, and where its landmarks were clicked (see
+// `photoRegistrations` in ./format).
+import { getPhotoRegistrations } from 'store/reducers/workspace/photoRegistration';
+import { selectExportablePhotoRegistrations } from './photoRegistrations';
+
 import { validateIndexJSON } from './validate';
 
 /**
@@ -169,6 +175,18 @@ const createExport: Exporter = async (state, options, onUpdate) => {
       };
     });
 
+  /**
+   * The photo-overlay registrations this file carries: only the **complete**
+   * ones, and only where both the photograph and the ceph are being written.
+   * A half-finished registration — a ceph chosen but a landmark not yet
+   * clicked — is workflow state, not record data, and is omitted rather than
+   * exported as a registration no overlay can draw.
+   * @see selectExportablePhotoRegistrations, WCephJSON#photoRegistrations
+   */
+  const photoRegistrations = selectExportablePhotoRegistrations(
+    getPhotoRegistrations(state), imagesToSave,
+  );
+
   const hasActiveImage = activeImageId !== null && findIndex(
     imagesToSave, id => id === activeImageId) !== -1;
 
@@ -248,6 +266,9 @@ const createExport: Exporter = async (state, options, onUpdate) => {
     // Omitted entirely when the record holds none, so a file from a chart with no
     // notes is byte-for-byte the file this app has always written.
     visitNotes: Object.keys(visitNotes).length > 0 ? visitNotes : undefined,
+    // Same rule: written only when at least one complete registration exists.
+    photoRegistrations: Object.keys(photoRegistrations).length > 0
+      ? photoRegistrations : undefined,
     patient: patient !== null ? {
       name: patient.name,
       chartId: patient.chartId,

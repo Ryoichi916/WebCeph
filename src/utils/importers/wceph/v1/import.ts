@@ -15,7 +15,10 @@ import {
   superimposeImages,
   loadVisitNotes,
   addNewWorkspace,
+  setPhotoRegistration,
 } from 'actions/workspace';
+
+import { translatePhotoRegistrations } from './photoRegistrations';
 
 import importImage from 'utils/importers/image/import';
 
@@ -227,6 +230,39 @@ const importFile: Importer = async (fileToImport, options) => {
    */
   if (json.visitNotes !== undefined) {
     actions.push(loadVisitNotes({ notes: json.visitNotes }));
+  }
+
+  /**
+   * The file's photo-overlay registrations, translated into this import's ids
+   * on **both** sides — the photograph (the entry's key) and the ceph the
+   * overlay reads from. An entry either side of which the map cannot resolve
+   * is dropped whole, so a dangling reference never enters the store (@see
+   * translatePhotoRegistrations). Files written before the overlay existed
+   * carry no `photoRegistrations` at all, and nothing is dispatched for them.
+   *
+   * Dispatched through the overlay's own action, which the reducer merges one
+   * field at a time — the ceph choice and facing first, then each clicked
+   * point, exactly the writes the overlay view itself makes.
+   */
+  if (json.photoRegistrations !== undefined) {
+    const registrations = translatePhotoRegistrations(
+      json.photoRegistrations, idMap,
+    );
+    Object.keys(registrations).forEach((photoImageId) => {
+      const entry = registrations[photoImageId];
+      actions.push(setPhotoRegistration({
+        imageId: photoImageId,
+        cephImageId: entry.cephImageId,
+        isFlipped: entry.isFlipped,
+      }));
+      Object.keys(entry.points).forEach((symbol) => {
+        const point = entry.points[symbol];
+        actions.push(setPhotoRegistration({
+          imageId: photoImageId,
+          point: { symbol, x: point.x, y: point.y },
+        }));
+      });
+    });
   }
 
   // Only where the file states one: this app no longer writes a superimposition
