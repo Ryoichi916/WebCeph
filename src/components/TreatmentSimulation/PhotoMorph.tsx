@@ -69,6 +69,12 @@ export default class PhotoMorph extends React.PureComponent<PhotoMorphProps, Sta
   }
 
   render() {
+    // The caption must state what the figure is actually doing: with the
+    // registration's ceph landmarks (Pn/Pog′) unplotted since the overlay was
+    // registered, no transform exists, the warp cannot run, and claiming the
+    // lips "move by the published ratios" over a photograph that cannot move
+    // would be false. Say so instead — and offer nothing to "compare".
+    const canIllustrate = this.transform() !== null;
     return (
       <div className={classes.morph}>
         <canvas
@@ -78,25 +84,36 @@ export default class PhotoMorph extends React.PureComponent<PhotoMorphProps, Sta
           height={this.props.height}
         />
         <div className={classes.morph_footer}>
-          <p className={classes.morph_note}>
-            Geometric illustration of the plan on the photograph — not a
-            prediction of appearance. The lips move by the same published mean
-            ratios as the tracing (individual response varies by roughly
-            ±0.3), through the Photo Overlay’s approximate two-point
-            alignment. Nothing is measured on the photograph.
-          </p>
-          <button
-            type="button"
-            className={classes.morph_compare}
-            title="Hold to see the photograph as taken"
-            onMouseDown={this.startCompare}
-            onMouseUp={this.stopCompare}
-            onMouseLeave={this.stopCompare}
-            onTouchStart={this.startCompare}
-            onTouchEnd={this.stopCompare}
-          >
-            Hold to compare
-          </button>
+          {canIllustrate ? (
+            <React.Fragment>
+              <p className={classes.morph_note}>
+                Geometric illustration of the plan on the photograph — not a
+                prediction of appearance. The lips move by the same published
+                mean ratios as the tracing (individual response varies by
+                roughly ±0.3), through the Photo Overlay’s approximate
+                two-point alignment. Nothing is measured on the photograph.
+              </p>
+              <button
+                type="button"
+                className={classes.morph_compare}
+                title="Hold to see the photograph as taken"
+                onMouseDown={this.startCompare}
+                onMouseUp={this.stopCompare}
+                onMouseLeave={this.stopCompare}
+                onTouchStart={this.startCompare}
+                onTouchEnd={this.stopCompare}
+              >
+                Hold to compare
+              </button>
+            </React.Fragment>
+          ) : (
+            <p className={classes.morph_note__warn} role="status">
+              The registration landmarks (Pn, Pog′) are no longer plotted on
+              this tracing, so the plan cannot be illustrated here — the
+              photograph is shown as taken. Re-plot them from the Soft Tissue
+              analysis, or register the photograph again in the Photo Overlay.
+            </p>
+          )}
         </div>
       </div>
     );
