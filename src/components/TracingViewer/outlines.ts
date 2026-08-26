@@ -186,6 +186,98 @@ const place = (f: Frame, anchor: Pt, ant: number, lon: number): Point2 => [
   anchor.y + f.h * (ant * f.ant.y + lon * f.down.y),
 ];
 
+// ---- Lip concavities ---------------------------------------------------
+// The labial sulci and the lip embrasure — the three concavities that make a
+// profile read as two lips instead of one smooth bulge: the superior labial
+// sulcus (Sls) between subnasale and the upper lip, the stomion notch
+// (Sts/Sti) where the lips meet, and the mentolabial sulcus (Ils) between the
+// lower lip and the soft chin. When the tracing carries the real landmark it
+// is always used; otherwise the dip is *synthesised* between its neighbours —
+// an invention, like every other synthesised offset in this module, published
+// here as explicit numbers rather than hidden in drawing code.
+
+/**
+ * A synthesised concavity: the point `t` of the way from `a` to `b`, pulled
+ * posteriorly (against the facial frame's anterior axis) by `depth` × facial
+ * height.
+ */
+const lipDip = (
+  a: Point2, b: Point2, f: Frame, depth: number, t: number,
+): Point2 => [
+  a[0] + (b[0] - a[0]) * t - f.ant.x * f.h * depth,
+  a[1] + (b[1] - a[1]) * t - f.ant.y * f.h * depth,
+];
+
+/**
+ * Depth (fraction of facial height, posterior of the chord) and position
+ * (fraction along the chord) of each synthesised dip. Derived from the
+ * bundled demo tracing's own Sls/Sts/Sti/Ils template positions relative to
+ * their neighbours, then calibrated against the rendered sample film — the
+ * same provenance as every `place()` offset above. The mentolabial fold is
+ * the deepest of the three on a normal profile.
+ */
+const LIP_DIPS = {
+  /** Sn → Ls: superior labial sulcus. */
+  sls: { depth: 0.016, t: 0.45 },
+  /** Ls → Li: the lip embrasure (stomion). */
+  stomion: { depth: 0.018, t: 0.5 },
+  /** Li → Pog': mentolabial sulcus. */
+  ils: { depth: 0.030, t: 0.45 },
+};
+
+/**
+ * Splices the three lip concavities into an assembled profile chain, between
+ * the boundary points given **by reference**. Each dip prefers the real
+ * plotted landmark (Sls / Sts+Sti / Ils) and synthesises otherwise. A dip is
+ * inserted only when its two boundary points are still *adjacent* in `pts` —
+ * if the spike guard removed either boundary, the anatomy there was already
+ * suspect and an interpolated dip would hang off a mis-plot.
+ */
+const insertLipConcavities = (
+  pts: Point2[],
+  map: LandmarkMap,
+  f: Frame,
+  snPt: Point2,
+  lsPt: Point2,
+  liPt: Point2,
+  pogPt: Point2,
+): Point2[] => {
+  const Sls = point(map, 'Sls');
+  const Sts = point(map, 'Sts');
+  const Sti = point(map, 'Sti');
+  const Ils = point(map, 'Ils');
+
+  const upper: Point2[] = Sls
+    ? [[Sls.x, Sls.y]]
+    : [lipDip(snPt, lsPt, f, LIP_DIPS.sls.depth, LIP_DIPS.sls.t)];
+  // Superior → inferior, matching the chain's own order: Sts (lowest point of
+  // the upper vermilion) before Sti (highest point of the lower vermilion).
+  const stomion: Point2[] = (Sts || Sti)
+    ? [
+      ...(Sts ? [[Sts.x, Sts.y] as Point2] : []),
+      ...(Sti ? [[Sti.x, Sti.y] as Point2] : []),
+    ]
+    : [lipDip(lsPt, liPt, f, LIP_DIPS.stomion.depth, LIP_DIPS.stomion.t)];
+  const lower: Point2[] = Ils
+    ? [[Ils.x, Ils.y]]
+    : [lipDip(liPt, pogPt, f, LIP_DIPS.ils.depth, LIP_DIPS.ils.t)];
+
+  const spliceBetween = (
+    arr: Point2[], a: Point2, b: Point2, inserts: Point2[],
+  ): Point2[] => {
+    const i = arr.indexOf(a);
+    if (i === -1 || arr[i + 1] !== b) {
+      return arr;
+    }
+    return [...arr.slice(0, i + 1), ...inserts, ...arr.slice(i + 1)];
+  };
+
+  let out = spliceBetween(pts, snPt, lsPt, upper);
+  out = spliceBetween(out, lsPt, liPt, stomion);
+  out = spliceBetween(out, liPt, pogPt, lower);
+  return out;
+};
+
 export interface OutlineOptions {
   /**
    * Take the N–Me facial frame — the unit system the synthesised soft-tissue
@@ -288,46 +380,83 @@ export const buildOutlines = (
       pts.push(place(f, N, -0.036, -0.264));
       pts.push(place(f, N, 0.027, -0.130));
     }
+    const snPt: Point2 = [Sn!.x, Sn!.y];
+    const lsPt: Point2 = [Ls!.x, Ls!.y];
+    const liPt: Point2 = [Li!.x, Li!.y];
+    const pogPt: Point2 = [Pogsoft!.x, Pogsoft!.y];
     pts.push([Nsoft!.x, Nsoft!.y]);
     pts.push([Pn!.x, Pn!.y]);
-    pts.push([Sn!.x, Sn!.y]);
-    pts.push([Ls!.x, Ls!.y]);
-    pts.push([Li!.x, Li!.y]);
-    pts.push([Pogsoft!.x, Pogsoft!.y]);
+    pts.push(snPt);
+    pts.push(lsPt);
+    pts.push(liPt);
+    pts.push(pogPt);
     if (Mesoft) {
       pts.push([Mesoft.x, Mesoft.y]);
       pts.push(place(f, Mesoft, -0.05, 0.10)); // throat / submental
     } else {
       pts.push(place(f, Pogsoft!, -0.04, 0.09));
     }
-    outlines.push({ id: 'soft-tissue', points: pts, closed: false });
+    // The lip concavities — real Sls/Sts/Sti/Ils where plotted, synthesised
+    // otherwise. No dropSpikePoints on this branch (unchanged): these sharp
+    // reversals are anatomy, and the guard would eat them.
+    outlines.push({
+      id: 'soft-tissue',
+      points: insertLipConcavities(pts, map, f, snPt, lsPt, liPt, pogPt),
+      closed: false,
+    });
   } else if (N && Me && A && B && Pog) {
-    // Skeletal-only synthesis (e.g. Downs, which has no soft-tissue landmarks).
-    // Offsets calibrated against the demo film's soft-tissue silhouette,
-    // expressed in the facial frame. ANS anchors the subnasale when present;
-    // otherwise it is derived from A (subnasale sits above and anterior to A).
+    // Skeletal-anchored synthesis (e.g. Downs, which has no soft-tissue
+    // landmarks) — but each slot prefers the *real* soft-tissue landmark when
+    // it happens to be plotted: a 9-of-9 Soft Tissue tracing carries
+    // G/Pn/Sn/Ls/Li/Ils/Pog' yet lands in this branch because N' (this gate's
+    // sixth landmark) is not a plottable step of any analysis, and drawing
+    // bone-derived guesses over real measurements would ignore the
+    // clinician's own tracing. Offsets calibrated against the demo film's
+    // soft-tissue silhouette, expressed in the facial frame. ANS anchors the
+    // subnasale when present; otherwise it is derived from A.
     const f = facialFrame(N, Me) as Frame; // N, Me, A, B, Pog all placed (see `if`)
-    const subnasale: Point2 = ANS
-      ? place(f, ANS, 0.088, 0.055)
-      : place(f, A, 0.110, -0.030);
+    const glabella: Point2 = G ? [G.x, G.y] : place(f, N, 0.027, -0.130);
+    const softNasion: Point2 = Nsoft
+      ? [Nsoft.x, Nsoft.y] : place(f, N, 0.057, -0.002);
+    const noseTip: Point2 = Pn ? [Pn.x, Pn.y] : place(f, N, 0.230, 0.264);
+    const subnasale: Point2 = Sn
+      ? [Sn.x, Sn.y]
+      : (ANS ? place(f, ANS, 0.088, 0.055) : place(f, A, 0.110, -0.030));
+    const upperLip: Point2 = Ls ? [Ls.x, Ls.y] : place(f, A, 0.173, 0.059);
+    const lowerLip: Point2 = Li ? [Li.x, Li.y] : place(f, B, 0.200, -0.129);
+    const softPog: Point2 = Pogsoft
+      ? [Pogsoft.x, Pogsoft.y] : place(f, Pog, 0.107, -0.061);
+    const softMenton: Point2 = Mesoft
+      ? [Mesoft.x, Mesoft.y] : place(f, Me, 0.112, -0.004);
     const pts: Point2[] = [
       place(f, N, -0.036, -0.264), // forehead
-      place(f, N, 0.027, -0.130),  // glabella
-      place(f, N, 0.057, -0.002),  // soft nasion
+      glabella,
+      softNasion,
       place(f, N, 0.136, 0.115),   // nasal bridge
-      place(f, N, 0.230, 0.264),   // nose tip (pronasale)
+      noseTip,
       subnasale,
-      place(f, A, 0.173, 0.059),   // upper lip
-      place(f, B, 0.200, -0.129),  // lower lip
-      place(f, Pog, 0.107, -0.061),// soft pogonion
-      place(f, Me, 0.112, -0.004), // soft menton
+      upperLip,
+      lowerLip,
+      softPog,
+      softMenton,
       place(f, Me, -0.050, 0.110), // throat / submental
     ];
     // See `dropSpikePoints`: Pog is an interior control point of this chain
     // (forehead -> ... -> Pog -> Me -> throat) exactly as it is in the
     // `mandible` outline below, so a mis-plotted Pog can fold this curve
-    // back over itself the same way. Guard it identically.
-    outlines.push({ id: 'soft-tissue', points: dropSpikePoints(pts), closed: false });
+    // back over itself the same way. Guard it identically — but BEFORE the
+    // lip concavities go in: their sharp reversals are deliberate anatomy the
+    // guard must never eat, so the guard sees only the base silhouette, and
+    // each dip is spliced in afterwards only where its boundary points
+    // survived.
+    const guarded = dropSpikePoints(pts);
+    outlines.push({
+      id: 'soft-tissue',
+      points: insertLipConcavities(
+        guarded, map, f, subnasale, upperLip, lowerLip, softPog,
+      ),
+      closed: false,
+    });
   }
 
   // ---- 2. Mandibular border ---------------------------------------------
@@ -486,8 +615,22 @@ export const buildOutlines = (
 };
 
 /**
+ * Uniform Catmull-Rom overshoots when consecutive control points are very
+ * unevenly spaced: a tangent derived from a long neighbouring chord swings a
+ * bezier control point far past a short segment, and the curve loops or cusps
+ * through it. The lip region is exactly that case — Ls → Sts → Sti → Li sit a
+ * few percent of facial height apart beside the much longer Pn → Sn chord —
+ * so each control offset is clamped to this fraction of its own segment's
+ * length. Evenly spaced points are untouched: their offset is |p2−p0|/6 ≈
+ * (2·segment)/6 = a third of the segment, comfortably under the cap, so every
+ * previously well-behaved outline renders byte-identically.
+ */
+const MAX_TANGENT_FRACTION = 0.45;
+
+/**
  * Catmull-Rom interpolation through the control points, converted to cubic
- * bezier segments (tension 1/6). Shared so the SVG path string and the canvas
+ * bezier segments (tension 1/6, per-segment tangent clamp — see
+ * `MAX_TANGENT_FRACTION`). Shared so the SVG path string and the canvas
  * stroke render identical curves.
  */
 export const toBezierPath = (points: Point2[], closed: boolean): BezierPath | null => {
@@ -510,16 +653,26 @@ export const toBezierPath = (points: Point2[], closed: boolean): BezierPath | nu
     p.unshift(points[0]);
     p.push(points[points.length - 1]);
   }
+  const clamp = (
+    baseX: number, baseY: number, offX: number, offY: number, segLen: number,
+  ): [number, number] => {
+    const len = Math.hypot(offX, offY);
+    const max = segLen * MAX_TANGENT_FRACTION;
+    if (len <= max || len < 1e-9) {
+      return [baseX + offX, baseY + offY];
+    }
+    const k = max / len;
+    return [baseX + offX * k, baseY + offY * k];
+  };
   const curves: BezierPath['curves'] = [];
   for (let i = 1; i < p.length - 2; i += 1) {
     const [x0, y0] = p[i - 1];
     const [x1, y1] = p[i];
     const [x2, y2] = p[i + 1];
     const [x3, y3] = p[i + 2];
-    const c1x = x1 + (x2 - x0) / 6;
-    const c1y = y1 + (y2 - y0) / 6;
-    const c2x = x2 - (x3 - x1) / 6;
-    const c2y = y2 - (y3 - y1) / 6;
+    const segLen = Math.hypot(x2 - x1, y2 - y1);
+    const [c1x, c1y] = clamp(x1, y1, (x2 - x0) / 6, (y2 - y0) / 6, segLen);
+    const [c2x, c2y] = clamp(x2, y2, -(x3 - x1) / 6, -(y3 - y1) / 6, segLen);
     curves.push([c1x, c1y, c2x, c2y, x2, y2]);
   }
   return { start: [p[1][0], p[1][1]], curves, closed };

@@ -69,7 +69,10 @@ export const Ils = point('Ils', 'Inferior labial sulcus');
 export const Sti = point('Sti', 'Stomion inferius');
 
 /**
- * The uppermost point on the vermilion of the upper lip.
+ * The lowermost point on the vermilion of the upper lip — where the upper lip
+ * meets the lip embrasure, always *above* Sti in the profile chain. (This
+ * JSDoc used to say "uppermost", contradicting the stepper's own definition
+ * and the superior→inferior ordering the profile curve depends on.)
  */
 export const Sts = point('Sts', 'Stomion superius');
 

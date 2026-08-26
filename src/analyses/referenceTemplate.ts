@@ -51,8 +51,13 @@ export const SN_RELATIVE_TEMPLATE: { [symbol: string]: [number, number] } = {
   'N\'': [1.10, 0.05],  // Soft-tissue nasion
   Pn: [1.34, 0.32],     // Pronasale (nose tip)
   Sn: [1.16, 0.60],     // Subnasale
+  Sls: [1.13, 0.68],    // Superior labial sulcus (dip between Sn and Ls)
   Ls: [1.20, 0.77],     // Labrale superius (upper lip)
+  Sts: [1.15, 0.84],    // Stomion superius (lowest point of the upper vermilion)
+  Sti: [1.14, 0.89],    // Stomion inferius (highest point of the lower vermilion)
   Li: [1.17, 0.95],     // Labrale inferius (lower lip)
+  Ils: [1.06, 1.06],    // Inferior (mentolabial) labial sulcus — a Soft Tissue
+                        // analysis step that this template used to omit
   'Pog\'': [1.08, 1.22], // Soft-tissue pogonion
   'Me\'': [0.88, 1.42],  // Soft-tissue menton
 };
