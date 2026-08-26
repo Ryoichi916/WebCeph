@@ -592,17 +592,17 @@ export const maxSimulatedTravelPx = (
 ): number => {
   const points = placedPoints(map);
   const hasScale = scaleFactor !== null && scaleFactor > 0;
-  let travel = 0;
-  if (hasScale) {
-    const mm = (id: ControlId): number => {
-      const spec = SIMULATION_CONTROLS.filter((s) => s.id === id)[0];
-      return spec !== undefined ? Math.max(Math.abs(spec.min), spec.max) : 0;
-    };
-    // The maxilla can take an advancement and an impaction at once, and they
-    // are perpendicular, so its worst case is the hypotenuse.
-    const maxillaMm = Math.hypot(mm('maxilla'), mm('impaction'));
-    travel = Math.max(mm('mandible'), maxillaMm) / scaleFactor!;
-  }
+  const mm = (id: ControlId): number => {
+    const spec = SIMULATION_CONTROLS.filter((s) => s.id === id)[0];
+    return spec !== undefined ? Math.max(Math.abs(spec.min), spec.max) : 0;
+  };
+  // The maxilla can take an advancement and an impaction at once, and they
+  // are perpendicular, so its worst case is the hypotenuse.
+  const maxillaPx = hasScale
+    ? Math.hypot(mm('maxilla'), mm('impaction')) / scaleFactor!
+    : 0;
+  const mandiblePx = hasScale ? mm('mandible') / scaleFactor! : 0;
+  let travel = Math.max(maxillaPx, mandiblePx);
   [
     ['U1 Apex', 'U1 Incisal Edge', 'u1', 'u1Mm'],
     ['L1 Apex', 'L1 Incisal Edge', 'l1', 'l1Mm'],
@@ -616,15 +616,19 @@ export const maxSimulatedTravelPx = (
       }
       const axis = Math.hypot(edge.x - apex.x, edge.y - apex.y);
       const deg = Math.max(Math.abs(spec.min), spec.max);
-      // Tipping and bodily movement apply at once, so the worst case is the
-      // swept chord plus the full bodily translation (zero when uncalibrated —
-      // the bodily control is withheld without a scale).
+      // The incisal edge's movements are ADDITIVE, not alternatives: the
+      // incisor rides its jaw, tips, and translates bodily all in one plan,
+      // so its worst case is the carrying jaw's travel plus the swept chord
+      // plus the full bodily translation (the mm terms are zero when
+      // uncalibrated — every linear control is withheld without a scale).
       const bodilySpec = SIMULATION_CONTROLS.filter((s) => s.id === bodilyId)[0];
       const bodilyPx = hasScale && bodilySpec !== undefined
         ? Math.max(Math.abs(bodilySpec.min), bodilySpec.max) / scaleFactor!
         : 0;
+      const jawPx = tipId === 'u1' ? maxillaPx : mandiblePx;
       travel = Math.max(
-        travel, 2 * axis * Math.sin((deg * Math.PI / 180) / 2) + bodilyPx,
+        travel,
+        jawPx + 2 * axis * Math.sin((deg * Math.PI / 180) / 2) + bodilyPx,
       );
     });
   return travel;
@@ -1160,10 +1164,12 @@ export interface SimulationRow {
   isCorrected: boolean;
   isWorsened: boolean;
   /**
-   * True when the simulated value falls outside the range a real human head
-   * can produce (see `PLAUSIBILITY`). On a synthetic fixture that is merely
-   * arithmetic; on a real film it means the plan or the tracing is wrong, and
-   * it must not be styled like an ordinary out-of-norm value.
+   * True when the *plan changed this value* and left it outside the range a
+   * real human head can produce (see `PLAUSIBILITY`). On a synthetic fixture
+   * that is merely arithmetic; on a real film it means the plan (or the
+   * tracing it moved) is wrong, and it must not be styled like an ordinary
+   * out-of-norm value. A row the plan did not touch never carries it — a
+   * measured value already outside plausibility is the tracing's own story.
    */
   isSimulatedImplausible: boolean;
 }
@@ -1285,7 +1291,14 @@ export const buildSimulationTable = (
         hasChange && isCurrentInNorm === false && isSimulatedInNorm === true,
       isWorsened:
         hasChange && isCurrentInNorm === true && isSimulatedInNorm === false,
-      isSimulatedImplausible: isImplausible(row.t2, norm, row.kind),
+      isSimulatedImplausible:
+        // A warning about what the *plan* did to the value, so a row the plan
+        // did not touch never carries it: at rest the simulated column is the
+        // measured value, and a measured value far outside its norm is the
+        // tracing's own story (told by the norm colouring), not the
+        // simulation's. Without this gate the app's own auto-plotted sample
+        // film opened with a red implausibility mark on an untouched row.
+        hasChange && isImplausible(row.t2, norm, row.kind),
     });
   });
 

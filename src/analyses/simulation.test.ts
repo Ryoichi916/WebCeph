@@ -3,7 +3,7 @@ import expect from 'expect';
 import {
   getSimulationReadiness, describeControls, LOWER_INCISOR_REQUIRED,
   applySimulation, activeSoftTissueRatios, maxSimulatedTravelPx,
-  isPlanEmpty, planKey, EMPTY_PLAN,
+  isPlanEmpty, planKey, EMPTY_PLAN, buildSimulationTable,
 } from './simulation';
 import { LandmarkMap } from 'analyses/superimposition';
 
@@ -154,5 +154,57 @@ describe('Bodily incisor movement (u1Mm / l1Mm)', () => {
     const ls = rows.filter((r) => r.ratio.symbol === 'Ls')[0];
     expect(ls === undefined).toBe(false);
     expect(ls.drivers.some((d) => d.driver === 'upper incisor')).toBe(true);
+  });
+
+  it('pads the frame for jaw + tipping + bodily as ADDITIVE incisal-edge travel', () => {
+    // The upper incisor rides the maxilla, tips, and translates bodily in one
+    // plan, so the frame padding must cover their sum — not the max of the
+    // skeletal and the incisor-own parts. With this fixture's U1 axis
+    // (|edge − apex| ≈ 104.4 px), 15° chord ≈ 27.3 px, bodily 8 mm = 80 px
+    // and maxilla worst case hypot(8, 6) = 10 mm = 100 px: the sum is well
+    // above either part alone.
+    const travel = maxSimulatedTravelPx(bodilyFixture, SCALE);
+    const apex = bodilyFixture['U1 Apex'] as { x: number; y: number };
+    const edge = bodilyFixture['U1 Incisal Edge'] as { x: number; y: number };
+    const axis = Math.hypot(edge.x - apex.x, edge.y - apex.y);
+    const chord = 2 * axis * Math.sin((15 * Math.PI / 180) / 2);
+    const maxillaPx = Math.hypot(8, 6) / SCALE;
+    expect(travel >= maxillaPx + chord + 80 - 1e-6).toBe(true);
+  });
+});
+
+describe('Simulation value table implausibility gating', () => {
+  it('never flags an untouched row as implausible, even far outside its norm', () => {
+    // A tracing whose nasolabial angle is wildly outside plausibility as
+    // *measured* (the fixture is synthetic arithmetic): with an EMPTY plan the
+    // simulated column is the measured value, and the implausibility mark —
+    // a statement about what the plan did — must not appear. This is exactly
+    // how the app's own auto-plotted sample film used to open: a red mark on
+    // a row no slider had touched.
+    const map: LandmarkMap = {
+      ...bodilyFixture,
+      'Pn': { x: 700, y: 560 },
+      'Sn': { x: 640, y: 610 },
+    };
+    const sim = applySimulation(map, EMPTY_PLAN, SCALE);
+    const table = buildSimulationTable(map, sim.landmarks, SCALE);
+    const naso = table.rows.filter((r) => r.row.symbol === 'Nasolabial')[0];
+    expect(naso === undefined).toBe(false);
+    expect(naso.isSimulatedImplausible).toBe(false);
+    // And when a plan genuinely drives a value outside plausibility, the mark
+    // still fires: tip the incisor to the extreme and check the same row is
+    // free to flag once its value actually changed. (Whether it crosses the
+    // plausibility reach depends on geometry; assert only the gate — a
+    // changed row MAY flag, an unchanged one NEVER does.)
+    const wild = applySimulation(map, { ...EMPTY_PLAN, u1Deg: 15 }, SCALE);
+    const wildTable = buildSimulationTable(map, wild.landmarks, SCALE);
+    const wildNaso = wildTable.rows.filter((r) => r.row.symbol === 'Nasolabial')[0];
+    expect(wildNaso === undefined).toBe(false);
+    // The gate itself: an unchanged row's flag is always false regardless of
+    // where the measured value sits.
+    const untouched = wildTable.rows.filter((r) => Math.abs(r.row.change) < 0.05);
+    untouched.forEach((r) => {
+      expect(r.isSimulatedImplausible).toBe(false);
+    });
   });
 });
