@@ -56,6 +56,13 @@ export interface SuperimpositionSnapshotInput {
   filmSrc: string | null;
   filmWidth: number | null;
   filmHeight: number | null;
+  /**
+   * Opacity the film is drawn at. Defaults to `FILM_OPACITY` — the on-screen
+   * dimming every radiograph view applies. The photo overlay passes 1: its
+   * film is the patient's photograph, which that view never dims on screen,
+   * and an export that dimmed the patient's face would misrepresent them.
+   */
+  filmOpacity?: number;
   /** Landmarks of each timepoint, in their own image coordinates. */
   t1: LandmarkMap;
   t2: LandmarkMap;
@@ -99,6 +106,13 @@ export interface SuperimpositionSnapshotInput {
   t2Outlines?: Outline[];
   /** Symbols to dot on the overlaid layer. Defaults to every placed point. */
   t2DotSymbols?: string[];
+  /**
+   * Whether the overlaid layer (and its legend swatch) is dashed. Defaults to
+   * true — T2 is dashed so a coincident T1 stays visible under it. The photo
+   * overlay passes false: its screen draws the carried tracing solid, and
+   * there is no second tracing underneath to keep visible.
+   */
+  t2IsDashed?: boolean;
   /**
    * Landmark symbols and outline ids, per layer, with no counterpart on the
    * other layer — drawn at reduced opacity rather than full weight, matching
@@ -517,7 +531,8 @@ const drawLegend = (
   );
   swatch(
     input.t2Color !== undefined ? input.t2Color : T2_COLOR,
-    input.t2Label, true,
+    input.t2Label,
+    input.t2IsDashed !== undefined ? input.t2IsDashed : true,
   );
 
   y += m.noteLine / 2 - m.swatchLine / 2;
@@ -559,7 +574,9 @@ const compose = (
 
   if (film !== null && input.filmWidth !== null && input.filmHeight !== null) {
     ctx.save();
-    ctx.globalAlpha = FILM_OPACITY;
+    ctx.globalAlpha = input.filmOpacity !== undefined
+      ? input.filmOpacity
+      : FILM_OPACITY;
     ctx.drawImage(film, 0, 0, input.filmWidth, input.filmHeight);
     ctx.restore();
   }
@@ -573,7 +590,7 @@ const compose = (
   drawTracing(
     ctx, transformLandmarks(input.t2, input.transform),
     input.t2Color !== undefined ? input.t2Color : T2_COLOR,
-    scale, dotRadius, true,
+    scale, dotRadius, input.t2IsDashed !== undefined ? input.t2IsDashed : true,
     input.t2Outlines, input.t2DotSymbols,
     input.t2OrphanOutlineIds, input.t2OrphanDotSymbols,
   );

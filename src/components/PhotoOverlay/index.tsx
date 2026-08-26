@@ -3,8 +3,12 @@ import * as ReactDOM from 'react-dom';
 
 import * as cx from 'classnames';
 
+import { Helmet } from 'react-helmet';
+
 import IconClose from 'material-ui/svg-icons/navigation/close';
 import IconReset from 'material-ui/svg-icons/av/replay';
+import IconPrint from 'material-ui/svg-icons/action/print';
+import IconImage from 'material-ui/svg-icons/image/photo';
 
 import Props from './props';
 import { EligibleCeph } from './selectors';
@@ -16,8 +20,10 @@ import {
   OverlayLine,
 } from 'analyses/photoOverlay';
 import {
+  applyTransform,
   placedPoints,
   toSvgMatrix,
+  SuperimpositionAnnotations,
   Transform,
 } from 'analyses/superimposition';
 import {
@@ -25,9 +31,22 @@ import {
   outlineToSvgPath,
   hasSoftTissueProfile,
   missingSoftTissueProfileLandmarks,
+  Outline,
 } from 'components/TracingViewer/outlines';
+// The practice identity is the clinical report's, read back here so every
+// printed sheet this app produces is signed to the same standard.
+import { readLetterhead, formatClinicianLine } from 'components/ClinicalReport/letterhead';
 
 import { formatCaptureDate, parseCaptureDate } from 'utils/records';
+// A saved PDF is named after the document title, so this sheet titles itself
+// from the patient and the photograph rather than from the image's file name.
+import { printDocumentTitle } from 'utils/printTitle';
+import { formatAgeFull, formatSexFull } from 'utils/patient';
+import { renderSuperimpositionSnapshot } from 'utils/superimpositionSnapshot';
+// `saveBlobAs` replaces `file-saver`'s saveAs(): see its doc comment in
+// tracingSnapshot.ts for why (a webpack chunk boundary between file-saver
+// and its caller silently drops the filename).
+import { saveBlobAs } from 'utils/tracingSnapshot';
 
 const classes = require('./style.scss');
 
@@ -46,6 +65,11 @@ const MARKER_LABELS: { [symbol: string]: string } = {
   "Pog'": 'Pog′ — chin',
 };
 
+/** The overlay's hue, shared with the SCSS ($overlay-hue) and the PNG export. */
+const OVERLAY_HUE = '#40C4FF';
+/** Legend swatch for the photograph itself — a neutral, not a tracing hue. */
+const PHOTO_SWATCH = '#C7D0D9';
+
 interface LayerState {
   soft: boolean;
   eline: boolean;
@@ -59,6 +83,8 @@ interface State {
   figurePx: { width: number; height: number } | null;
   /** The marker being dragged, or null. */
   dragSymbol: string | null;
+  isExporting: boolean;
+  exportError: string | null;
 }
 
 /**
@@ -86,6 +112,8 @@ export default class PhotoOverlay extends React.PureComponent<Props, State> {
     layers: { soft: true, eline: true, sline: false, skeletal: false },
     figurePx: null,
     dragSymbol: null,
+    isExporting: false,
+    exportError: null,
   };
 
   private figureEl: HTMLDivElement | null = null;
@@ -364,6 +392,18 @@ export default class PhotoOverlay extends React.PureComponent<Props, State> {
         aria-modal="true"
         aria-label="Ceph overlay on the profile photograph"
       >
+        {/* A saved PDF is named after `document.title`, which the app sets from
+            the workspace — the image's file name. Held only while this view is
+            mounted; react-helmet restores the app's title on close. */}
+        <Helmet
+          title={printDocumentTitle(
+            this.props.patient,
+            'Ceph photo overlay',
+            [this.photoLabel()],
+          )}
+        />
+        {this.renderPrintHead(ceph)}
+
         <div className={classes.chrome}>
           <span className={classes.chrome_title}>
             <span className={classes.chrome_title_text}>Ceph overlay</span>
@@ -374,6 +414,35 @@ export default class PhotoOverlay extends React.PureComponent<Props, State> {
           </span>
           <div className={classes.chrome_actions}>
             <span className={classes.chrome_identity}>{this.identityLine()}</span>
+            {this.state.exportError !== null ? (
+              <span className={classes.chrome_error} role="alert">
+                {this.state.exportError}
+              </span>
+            ) : null}
+            <button
+              type="button"
+              className={classes.chrome_button}
+              disabled={transform === null || this.state.isExporting}
+              title={transform !== null
+                ? 'Save the overlay as a PNG, stamped with its caveats'
+                : 'Place both registration points first'}
+              onClick={this.handleExportPng}
+            >
+              <IconImage color="currentColor" style={{ width: 18, height: 18 }} />
+              {this.state.isExporting ? 'Exporting…' : 'Export PNG'}
+            </button>
+            <button
+              type="button"
+              className={classes.chrome_button}
+              disabled={transform === null}
+              title={transform !== null
+                ? 'Print the overlay, or save it as a PDF for the chart'
+                : 'Place both registration points first'}
+              onClick={this.handlePrint}
+            >
+              <IconPrint color="currentColor" style={{ width: 18, height: 18 }} />
+              Print / Save as PDF
+            </button>
             <button
               type="button"
               className={cx(classes.chrome_button, classes.chrome_button__primary)}
@@ -394,6 +463,9 @@ export default class PhotoOverlay extends React.PureComponent<Props, State> {
           </div>
           {this.renderPanel(ceph, transform)}
         </div>
+
+        {this.renderPrintCaveats(ceph)}
+        {this.renderPrintTail()}
       </div>
     );
   }
@@ -414,6 +486,267 @@ export default class PhotoOverlay extends React.PureComponent<Props, State> {
       parts.push(date);
     }
     return parts.join(' · ');
+  }
+
+  /** "T1 · 2026/01/12" for the photograph, when the record carries either. */
+  private photoLabel(): string | null {
+    const { timepoint, captureDate } = this.props;
+    const parts: string[] = [];
+    if (timepoint !== null && timepoint.trim() !== '') {
+      parts.push(timepoint.trim());
+    }
+    const date = formatCaptureDate(captureDate);
+    if (date !== null) {
+      parts.push(date);
+    }
+    return parts.length > 0 ? parts.join(' · ') : null;
+  }
+
+  /** The ceph named the way its picker row names it, for legend and band. */
+  private cephLabel(ceph: EligibleCeph): string {
+    const label = [
+      ceph.timepoint !== null && ceph.timepoint.trim() !== ''
+        ? ceph.timepoint.trim() : null,
+      formatCaptureDate(ceph.captureDate),
+      ceph.name,
+    ].filter((part) => part !== null).join(' · ');
+    return label !== '' ? label : 'Lateral cephalogram';
+  }
+
+  /** The stated facing, and what it did to the tracing. */
+  private facingLabel(): string {
+    return this.registrationFields().isFlipped
+      ? 'Photograph faces left — the tracing is mirrored to match'
+      : 'Photograph faces right, like the ceph tracing';
+  }
+
+  /** The enabled layers, named as their toggles name them. */
+  private enabledLayerNames(): string[] {
+    const { layers } = this.state;
+    const names: string[] = [];
+    if (layers.soft) {
+      names.push('soft-tissue profile');
+    }
+    if (layers.eline) {
+      names.push('E-line');
+    }
+    if (layers.sline) {
+      names.push('S-line');
+    }
+    if (layers.skeletal) {
+      names.push('skeletal outlines');
+    }
+    return names;
+  }
+
+  // ---- The honest caveats ---------------------------------------------------
+  //
+  // The same sentences the panel states, as plain strings — stamped verbatim
+  // onto the exported PNG's legend and printed in full on the sheet, because a
+  // detached image is read without the app (and its panel) around it.
+
+  /** The "About this overlay" statement, split into its two sentences. */
+  private aboutSentences(): string[] {
+    return [
+      'The fit is approximate: posture, perspective and magnification ' +
+      'differ between a projected radiograph and a photograph, and a ' +
+      'two-point registration cannot correct for any of them.',
+      'Nothing is measured on the photograph — the lines are a visual aid ' +
+      'for discussing the profile, not a measurement surface.',
+    ];
+  }
+
+  /** The cross-visit caution's text, or null when the visits match. */
+  private timepointCautionText(ceph: EligibleCeph | null): string | null {
+    const { timepoint } = this.props;
+    if (ceph === null) {
+      return null;
+    }
+    const photoT = timepoint !== null ? timepoint.trim() : '';
+    const cephT = ceph.timepoint !== null ? ceph.timepoint.trim() : '';
+    if (photoT === cephT) {
+      return null;
+    }
+    const name = (t: string) => t !== '' ? t : 'no timepoint';
+    return `Photograph ${name(photoT)} · ceph ${name(cephT)} — the overlay ` +
+      'compares different visits.';
+  }
+
+  /** The inferred-silhouette caution's text, or null when it does not apply. */
+  private silhouetteCautionText(ceph: EligibleCeph | null): string | null {
+    if (ceph === null || !this.state.layers.soft) {
+      return null;
+    }
+    if (hasSoftTissueProfile(ceph.landmarks)) {
+      return null;
+    }
+    const missing = missingSoftTissueProfileLandmarks(ceph.landmarks);
+    return 'The soft-tissue curve is an inferred silhouette: this tracing ' +
+      `is missing ${missing.join(', ')}, so the curve is synthesised from ` +
+      'the skeletal profile rather than drawn through plotted soft-tissue ' +
+      'points.';
+  }
+
+  /** Every caveat that applies right now, in the order the panel states them. */
+  private caveatSentences(ceph: EligibleCeph | null): string[] {
+    const sentences = this.aboutSentences();
+    const timepointCaution = this.timepointCautionText(ceph);
+    if (timepointCaution !== null) {
+      sentences.push(timepointCaution);
+    }
+    const silhouetteCaution = this.silhouetteCautionText(ceph);
+    if (silhouetteCaution !== null) {
+      sentences.push(silhouetteCaution);
+    }
+    return sentences;
+  }
+
+  // ---- Print-only letterhead, caveats and certification ---------------------
+
+  /**
+   * Print-only letterhead and patient band, to the same standard as the
+   * clinical report, the superimposition and the treatment simulation: a
+   * detached sheet must carry the practice it came from, the patient it is
+   * about, the day it was produced — and, here, exactly which photograph and
+   * which tracing were laid over each other, and how.
+   */
+  private renderPrintHead(ceph: EligibleCeph | null) {
+    const { patient, captureDate } = this.props;
+    const letterhead = readLetterhead();
+    const clinicianLine = formatClinicianLine(letterhead);
+    const printedOn = new Date().toLocaleDateString(undefined, {
+      year: 'numeric', month: 'long', day: 'numeric',
+    });
+    const dateOfBirth = patient !== null && patient.dateOfBirth !== undefined &&
+      patient.dateOfBirth !== ''
+      ? patient.dateOfBirth
+      : null;
+    // Age is stated at the photograph the overlay is drawn on, not at the
+    // print date.
+    const photoDate = parseCaptureDate(captureDate);
+    const ageAtPhoto = patient !== null && photoDate !== null
+      ? formatAgeFull(patient.dateOfBirth, photoDate)
+      : null;
+    const age = ageAtPhoto !== null
+      ? ageAtPhoto
+      : (patient !== null ? formatAgeFull(patient.dateOfBirth) : null);
+    const layerNames = this.enabledLayerNames();
+
+    const cell = (label: string, value: string | null) => (
+      <div className={classes.band_cell}>
+        <span className={classes.band_label}>{label}</span>
+        <span className={classes.band_value}>{value !== null ? value : '—'}</span>
+      </div>
+    );
+
+    return (
+      <div className={classes.print_head} aria-hidden="true">
+        <header className={classes.print_masthead}>
+          <div className={classes.print_masthead_left}>
+            <span className={classes.print_clinic}>
+              {letterhead.clinic !== ''
+                ? letterhead.clinic
+                : 'Cephalometric photo overlay'}
+            </span>
+            {clinicianLine !== '' ? (
+              <span className={classes.print_clinic_line}>{clinicianLine}</span>
+            ) : null}
+          </div>
+          <div className={classes.print_masthead_right}>
+            <span className={classes.print_kicker}>Photo overlay</span>
+            <span className={classes.print_date}>{printedOn}</span>
+          </div>
+        </header>
+        <h1 className={classes.print_title}>
+          Ceph Overlay on the Profile Photograph
+        </h1>
+        <div className={classes.print_band}>
+          <div className={classes.band_row}>
+            {cell('Patient', patient !== null && patient.name ? patient.name : null)}
+            {cell('Chart ID', patient !== null && patient.chartId ? patient.chartId : null)}
+            {cell('Sex', patient !== null ? formatSexFull(patient.sex) : null)}
+          </div>
+          <div className={classes.band_row}>
+            {cell('Date of birth', dateOfBirth)}
+            {cell(
+              ageAtPhoto !== null ? 'Age at photograph' : 'Age at printing', age,
+            )}
+            {cell('Photograph', this.photoLabel())}
+          </div>
+          <div className={classes.band_row}>
+            {cell('Ceph tracing', ceph !== null ? this.cephLabel(ceph) : null)}
+            {cell('Facing', this.facingLabel())}
+            {cell(
+              'Layers drawn',
+              layerNames.length > 0 ? layerNames.join(', ') : 'none',
+            )}
+          </div>
+        </div>
+        <p className={classes.print_banner}>
+          This sheet is an <strong>approximate visual overlay</strong>, not a
+          measurement. The tracing lines were carried onto the photograph by a
+          two-point fit on Pn (nose tip) and Pog′ (soft-tissue chin) clicked by
+          the clinician; nothing on this sheet was measured on the photograph.
+        </p>
+      </div>
+    );
+  }
+
+  /**
+   * Print-only caveats, in full — the on-screen panel (with the interactive
+   * pickers the caveats live between) is not printed, and a sheet without them
+   * would claim more than the view does.
+   */
+  private renderPrintCaveats(ceph: EligibleCeph | null) {
+    return (
+      <div className={classes.print_caveats} aria-hidden="true">
+        <h2 className={classes.caveats_title}>About this overlay</h2>
+        {this.caveatSentences(ceph).map((sentence, index) => (
+          <p key={index} className={classes.caveat_line}>{sentence}</p>
+        ))}
+        <p className={classes.caveat_line}>
+          The amber crosshairs are the clinician’s two clicked registration
+          points; the cyan dots are the tracing’s own Pn and Pog′ carried by
+          the fit — their coincidence is the visible check of the registration.
+          No scale bar is drawn: a photograph has no calibration.
+        </p>
+      </div>
+    );
+  }
+
+  /** Print-only certification block, matching the other printed sheets. */
+  private renderPrintTail() {
+    const letterhead = readLetterhead();
+    return (
+      <div className={classes.print_tail} aria-hidden="true">
+        <div className={classes.sig_label}>Certification</div>
+        <div className={classes.sig_row}>
+          <div className={cx(classes.sig_field, classes.sig_field__wide)}>
+            <div className={classes.sig_line}>{letterhead.clinician}</div>
+            <span className={classes.sig_caption}>
+              Reviewed by — name &amp; signature
+            </span>
+          </div>
+          <div className={classes.sig_field}>
+            <div className={classes.sig_line}>
+              {letterhead.license !== '' ? `License no. ${letterhead.license}` : ''}
+            </div>
+            <span className={classes.sig_caption}>License no.</span>
+          </div>
+          <div className={classes.sig_field}>
+            <div className={classes.sig_line} />
+            <span className={classes.sig_caption}>Date</span>
+          </div>
+        </div>
+        <p className={classes.print_colophon}>
+          Produced with WebCeph. The lines on this sheet come from the
+          patient’s own traced cephalogram, carried onto the photograph by a
+          two-point registration clicked by the clinician. Nothing was measured
+          on the photograph, and nothing here changed the tracing or the
+          photograph.
+        </p>
+      </div>
+    );
   }
 
   // ---- The figure -----------------------------------------------------------
@@ -784,30 +1117,16 @@ export default class PhotoOverlay extends React.PureComponent<Props, State> {
 
   /** "Photograph T2 · ceph T1 — the overlay compares different visits." */
   private renderTimepointCaution(ceph: EligibleCeph | null) {
-    const { timepoint } = this.props;
-    if (ceph === null) {
+    const text = this.timepointCautionText(ceph);
+    if (text === null) {
       return null;
     }
-    const photoT = timepoint !== null ? timepoint.trim() : '';
-    const cephT = ceph.timepoint !== null ? ceph.timepoint.trim() : '';
-    if (photoT === cephT) {
-      return null;
-    }
-    const name = (t: string) => t !== '' ? t : 'no timepoint';
-    return (
-      <p className={classes.caution}>
-        Photograph {name(photoT)} · ceph {name(cephT)} — the overlay compares
-        different visits.
-      </p>
-    );
+    return <p className={classes.caution}>{text}</p>;
   }
 
   /** The soft-tissue curve is inferred where the tracing lacks the full set. */
   private renderSilhouetteCaution(ceph: EligibleCeph | null) {
-    if (ceph === null || !this.state.layers.soft) {
-      return null;
-    }
-    if (hasSoftTissueProfile(ceph.landmarks)) {
+    if (ceph === null || this.silhouetteCautionText(ceph) === null) {
       return null;
     }
     const missing = missingSoftTissueProfileLandmarks(ceph.landmarks);
@@ -819,5 +1138,137 @@ export default class PhotoOverlay extends React.PureComponent<Props, State> {
         points.
       </p>
     );
+  }
+
+  // ---- Export & print -------------------------------------------------------
+
+  private handlePrint = () => {
+    window.print();
+  };
+
+  /**
+   * PNG of the overlay, rendered by the shared canvas back-end (the very one
+   * the superimposition and the treatment simulation export through) from the
+   * same geometry the screen draws: the enabled outline curves and reference
+   * lines, built in ceph coordinates by the same modules and carried by the
+   * same two-point transform, over the photograph at **full opacity** — the
+   * film here is the patient's face, and this view never dims it.
+   *
+   * A detached image is read without the panel around it, so every caveat the
+   * panel states is stamped verbatim onto the legend — and no scale bar is
+   * drawn: a photograph has no calibration.
+   */
+  private handleExportPng = () => {
+    const { src, width, height } = this.props;
+    const ceph = this.effectiveCeph();
+    const transform = this.solve(ceph);
+    if (ceph === null || transform === null ||
+        src === null || width === null || height === null) {
+      this.setState({ exportError: 'Place both registration points first.' });
+      return;
+    }
+    const { layers } = this.state;
+    const cephPoints = placedPoints(ceph.landmarks);
+    // Exactly the screen's filters (see `renderOverlay`): the enabled outline
+    // curves, and the enabled reference lines.
+    const outlines = buildOutlines(cephPoints).filter(({ id }) => (
+      id === 'soft-tissue' ? layers.soft : layers.skeletal
+    ));
+    const lines = buildOverlayLines(ceph.landmarks).filter(({ id }) => (
+      id === 'e-line' ? layers.eline : layers.sline
+    ));
+    const toPhoto = (x: number, y: number) => applyTransform(transform, { x, y });
+    // The curves are transformed point-by-point rather than rebuilt from the
+    // transformed landmarks, so the export cannot disagree with the screen —
+    // which draws these very curves under an SVG group transform.
+    const t2Outlines: Outline[] = outlines.map((outline) => ({
+      ...outline,
+      points: outline.points.map(([x, y]): [number, number] => {
+        const p = toPhoto(x, y);
+        return [p.x, p.y];
+      }),
+    }));
+    lines.forEach((line) => {
+      const p1 = toPhoto(line.x1, line.y1);
+      const p2 = toPhoto(line.x2, line.y2);
+      t2Outlines.push({
+        id: line.id,
+        points: [[p1.x, p1.y], [p2.x, p2.y]],
+        closed: false,
+      });
+    });
+    const annotations: SuperimpositionAnnotations = {
+      // No registration marker and — deliberately — no scale bar: a photograph
+      // carries no calibration, so a millimetre bar on it would be fabricated.
+      originSymbol: '',
+      origin: null,
+      t1Basis: null,
+      t2Basis: null,
+      labels: lines.map((line) => ({
+        symbol: line.label,
+        point: toPhoto(line.x2, line.y2),
+      })),
+      scaleBar: null,
+    };
+    const layerNames = this.enabledLayerNames();
+    this.setState({ isExporting: true, exportError: null });
+    renderSuperimpositionSnapshot({
+      filmSrc: src,
+      filmWidth: width,
+      filmHeight: height,
+      // The photograph is the patient's face: full opacity, never dimmed.
+      filmOpacity: 1,
+      t1: {},
+      t2: ceph.landmarks,
+      transform,
+      frame: { x: 0, y: 0, width, height },
+      annotations,
+      t1Color: PHOTO_SWATCH,
+      t2Color: OVERLAY_HUE,
+      t2Outlines,
+      // The tracing's own Pn and Pog′, carried by the fit — the screen's
+      // visible proof of the registration.
+      t2DotSymbols: REGISTRATION_SYMBOLS,
+      // The screen draws the carried tracing solid; so does the export.
+      t2IsDashed: false,
+      t1Label: 'Photograph — full opacity, never dimmed',
+      t2Label: `Ceph tracing — ${this.cephLabel(ceph)}`,
+      registrationLabel:
+        'Two-point registration: Pn (nose tip) and Pog′ (chin) clicked on ' +
+        'the photograph',
+      interval: null,
+      auditLabel: `${this.facingLabel()} · Drawn: ${
+        layerNames.length > 0 ? layerNames.join(', ') : 'no layers enabled'}`,
+      patientLabel: this.identityLine(),
+      caveat: null,
+      notes: this.caveatSentences(ceph),
+    }).then((blob) => {
+      if (blob === null) {
+        this.setState({
+          isExporting: false,
+          exportError: 'This browser could not render the image.',
+        });
+        return;
+      }
+      saveBlobAs(blob, `${this.exportStem()}-photo-overlay.png`);
+      this.setState({ isExporting: false });
+    });
+  };
+
+  /**
+   * File-name stem for the export. Characters a file system cannot carry —
+   * every CJK name among them — collapse to a single separator and are then
+   * trimmed away, so a Japanese name yields `C-0001-photo-overlay.png` rather
+   * than the malformed `C-0001__-photo-overlay.png`.
+   */
+  private exportStem(): string {
+    const { patient } = this.props;
+    const stem = (patient !== null
+      ? [patient.chartId, patient.name].filter((p) => !!p).join('_')
+      : '')
+      .replace(/[^\w.\-]+/g, '_')
+      .replace(/_{2,}/g, '_')
+      .replace(/^[_.\-]+|[_.\-]+$/g, '');
+    return stem !== '' ? stem : 'ceph-photo-overlay';
   }
 }

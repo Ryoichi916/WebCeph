@@ -87,6 +87,14 @@ $marker-hue: #FFC400;
   white-space: nowrap;
 }
 
+.chrome_error {
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(198, 40, 40, .22);
+  color: #FFD8D8;
+  font-size: 12.5px;
+}
+
 .chrome_button {
   display: inline-flex;
   align-items: center;
@@ -121,6 +129,15 @@ $marker-hue: #FFC400;
 
   &:focus-visible {
     box-shadow: $focus-ring;
+  }
+
+  &[disabled] {
+    opacity: .45;
+    cursor: default;
+
+    &:hover {
+      background: transparent;
+    }
   }
 }
 
@@ -589,5 +606,277 @@ $marker-hue: #FFC400;
 
   strong {
     color: #FFE0B2;
+  }
+}
+
+// ---- Print ------------------------------------------------------------------
+
+// Print-only letterhead, patient band, caveats and certification block. The
+// screen carries the identity in the chrome and the caveats in the panel;
+// paper has to carry all of it, to the same standard as the clinical report,
+// the superimposition and the treatment simulation.
+.print_head,
+.print_caveats,
+.print_tail {
+  display: none;
+}
+
+@page {
+  size: A4 portrait;
+  margin: 14mm;
+}
+
+@media print {
+  // Hide the app and every other portal; print the overlay alone.
+  :global(body.photo-overlay-open) > * {
+    display: none !important;
+  }
+
+  :global(body.photo-overlay-open) {
+    overflow: visible;
+    background: #FFFFFF !important;
+  }
+
+  :global(html) {
+    background: #FFFFFF !important;
+  }
+
+  :global(body.photo-overlay-open) > .root {
+    display: block !important;
+    position: static;
+    background: #FFFFFF;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .chrome {
+    display: none !important;
+  }
+
+  // The panel is interaction — pickers, toggles, the placement flow. What it
+  // states (the identity of both images, the facing, the layers, and every
+  // caveat) is restated by the print head and the print caveats below.
+  .panel {
+    display: none !important;
+  }
+
+  // ---- Letterhead -----------------------------------------------------------
+
+  .print_head {
+    display: block;
+  }
+
+  .print_masthead {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    padding-bottom: 6px;
+    border-bottom: 2px solid $primary-700;
+  }
+
+  .print_masthead_left {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .print_clinic {
+    font-size: 15px;
+    font-weight: 600;
+    color: $primary-900;
+  }
+
+  .print_clinic_line {
+    font-size: 11px;
+    color: $text-secondary;
+  }
+
+  .print_masthead_right {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
+    white-space: nowrap;
+  }
+
+  .print_kicker {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: $primary-700;
+  }
+
+  .print_date {
+    font-size: 11px;
+    color: $text-secondary;
+  }
+
+  .print_title {
+    margin: 8px 0 0;
+    font-size: 18px;
+    font-weight: 600;
+    color: $text-primary;
+  }
+
+  .print_band {
+    margin-top: 6px;
+    padding: 6px 0;
+    border-top: 1px solid $border;
+    border-bottom: 1px solid $border;
+  }
+
+  .band_row {
+    display: flex;
+    gap: 12px;
+
+    + .band_row {
+      margin-top: 4px;
+    }
+  }
+
+  .band_cell {
+    flex: 1 1 0;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  .band_label {
+    font-size: 8.5px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: $text-tertiary;
+  }
+
+  .band_value {
+    font-size: 11px;
+    color: $text-primary;
+  }
+
+  // The one sentence a detached sheet must not be read without.
+  .print_banner {
+    margin: 6px 0 0;
+    padding: 5px 8px;
+    border-left: 3px solid $warn;
+    background: $warn-bg;
+    font-size: 10px;
+    line-height: 1.45;
+    color: #6B4200;
+  }
+
+  // ---- Figure ---------------------------------------------------------------
+
+  .body {
+    display: block;
+  }
+
+  .figure_column {
+    display: block;
+    padding: 6mm 0 0;
+  }
+
+  .figure {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 0;
+    height: 128mm;
+    border: 1px solid $border;
+    border-radius: 0;
+    // The photograph is printed exactly as the screen shows it: full opacity,
+    // never dimmed — it is the patient's face.
+    background: #FFFFFF;
+    page-break-inside: avoid;
+  }
+
+  // The svg carries an inline pixel size measured on screen; on paper it must
+  // fill the figure box instead (the viewBox keeps the photograph's aspect).
+  .svg {
+    width: auto !important;
+    height: 100% !important;
+    max-width: 100%;
+  }
+
+  // ---- The caveats, in full -------------------------------------------------
+
+  .print_caveats {
+    display: block;
+    margin-top: 5mm;
+    page-break-inside: avoid;
+  }
+
+  .caveats_title {
+    margin: 0 0 4px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .07em;
+    color: $text-tertiary;
+  }
+
+  .caveat_line {
+    margin: 0 0 4px;
+    font-size: 10px;
+    line-height: 1.45;
+    color: $text-secondary;
+  }
+
+  // ---- Certification --------------------------------------------------------
+
+  .print_tail {
+    display: block;
+    margin-top: 5mm;
+    padding-top: 5px;
+    border-top: 1px solid $border;
+    page-break-inside: avoid;
+  }
+
+  .sig_label {
+    font-size: 9px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .07em;
+    color: $text-tertiary;
+  }
+
+  .sig_row {
+    display: flex;
+    gap: 10mm;
+    margin-top: 6px;
+  }
+
+  .sig_field {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  .sig_field__wide {
+    flex: 1.6 1 0;
+  }
+
+  .sig_line {
+    min-height: 16px;
+    padding-bottom: 2px;
+    border-bottom: 1px solid $border-strong;
+    font-size: 11px;
+    color: $text-primary;
+  }
+
+  .sig_caption {
+    display: block;
+    margin-top: 3px;
+    font-size: 9px;
+    color: $text-tertiary;
+  }
+
+  .print_colophon {
+    margin: 5px 0 0;
+    font-size: 9px;
+    line-height: 1.4;
+    color: $text-tertiary;
   }
 }
