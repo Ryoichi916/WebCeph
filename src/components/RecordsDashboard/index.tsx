@@ -1475,8 +1475,8 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
     }
     const {
       editingImageId, removingImageId, isEditingPatient, applyScaleImageId,
-      reportImageId, simulationImageId, superimposePair, photoViewer,
-      editingNoteFor,
+      reportImageId, simulationImageId, overlayImageId, superimposePair,
+      photoViewer, editingNoteFor,
     } = this.state;
     if (
       editingImageId !== null || removingImageId !== null || isEditingPatient ||
@@ -1499,13 +1499,15 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
     ) {
       return;
     }
-    // …nor while one of the views this surface launches is over it. Each of the
-    // three closes on Escape itself, and both handlers are on `document`: without
+    // …nor while one of the views this surface launches is over it. Each of
+    // them closes on Escape itself, and both handlers are on `document`: without
     // this guard, one Escape closed the report *and* left the dashboard, so the
-    // clinician landed in the tracing editor having asked for neither.
+    // clinician landed in the tracing editor having asked for neither. The ceph
+    // photo overlay is one of these views and had exactly that fault until it
+    // was added here.
     if (
       reportImageId !== null || simulationImageId !== null ||
-      superimposePair !== null
+      overlayImageId !== null || superimposePair !== null
     ) {
       return;
     }
@@ -1760,9 +1762,11 @@ export default class RecordsDashboard extends React.PureComponent<Props, State> 
    */
   /** Whether one of the launched views is open over this surface. */
   private isLaunchedViewOpen = () => {
-    const { reportImageId, simulationImageId, superimposePair } = this.state;
+    const {
+      reportImageId, simulationImageId, overlayImageId, superimposePair,
+    } = this.state;
     return reportImageId !== null || simulationImageId !== null ||
-      superimposePair !== null;
+      overlayImageId !== null || superimposePair !== null;
   };
 
   /**

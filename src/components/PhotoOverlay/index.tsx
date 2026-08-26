@@ -357,6 +357,18 @@ export default class PhotoOverlay extends React.PureComponent<Props, State> {
     }
   };
 
+  /**
+   * A fresh press inside the svg starts a fresh gesture, so no stale
+   * suppression may outlive it. `endDrag` also runs on mouseleave, and a drag
+   * released *outside* the svg produces no click to consume the flag — without
+   * this reset, the next legitimate placement click was silently swallowed.
+   * (A marker's own mousedown stops propagation, so a drag that ends inside
+   * the svg still gets its click suppressed as before.)
+   */
+  private handleSvgMouseDown = () => {
+    this.suppressClick = false;
+  };
+
   private handleChooseCeph = (cephImageId: string) => () => {
     this.props.onSetRegistration({ imageId: this.props.imageId, cephImageId });
   };
@@ -792,6 +804,7 @@ export default class PhotoOverlay extends React.PureComponent<Props, State> {
           ? 'The profile photograph with the ceph tracing lines overlaid'
           : 'The profile photograph, waiting for the registration clicks'}
         onClick={this.handleSvgClick}
+        onMouseDown={this.handleSvgMouseDown}
         onMouseMove={this.handleSvgMouseMove}
         onMouseUp={this.endDrag}
         onMouseLeave={this.endDrag}
