@@ -197,32 +197,48 @@ const place = (f: Frame, anchor: Pt, ant: number, lon: number): Point2 => [
 // here as explicit numbers rather than hidden in drawing code.
 
 /**
- * A synthesised concavity: the point `t` of the way from `a` to `b`, pulled
- * posteriorly (against the facial frame's anterior axis) by `depth` × facial
- * height.
+ * A synthesised concavity between neighbours `a` and `b`: its longitudinal
+ * position (along the frame's `down` axis) is `t` of the way from `a` to `b`,
+ * and its anterior coordinate is `depth` × facial height **behind the less
+ * anterior of the two neighbours** — not behind their chord. The distinction
+ * is what makes the dip a dip: when the two lips differ a lot in anterior
+ * projection (a Class III tracing puts the lower lip well in front of the
+ * upper), a point "behind the chord" can still sit in *front* of the nearer
+ * lip, and the concavity silently reads as part of one convex bulge. A local
+ * minimum against both neighbours is the property a sulcus is defined by, so
+ * it is what this constructs. `ant`/`down` are orthonormal, so the point is
+ * rebuilt exactly from its two projections.
  */
 const lipDip = (
   a: Point2, b: Point2, f: Frame, depth: number, t: number,
-): Point2 => [
-  a[0] + (b[0] - a[0]) * t - f.ant.x * f.h * depth,
-  a[1] + (b[1] - a[1]) * t - f.ant.y * f.h * depth,
-];
+): Point2 => {
+  const antOf = (p: Point2) => p[0] * f.ant.x + p[1] * f.ant.y;
+  const lonOf = (p: Point2) => p[0] * f.down.x + p[1] * f.down.y;
+  const lon = lonOf(a) + (lonOf(b) - lonOf(a)) * t;
+  const ant = Math.min(antOf(a), antOf(b)) - depth * f.h;
+  return [
+    ant * f.ant.x + lon * f.down.x,
+    ant * f.ant.y + lon * f.down.y,
+  ];
+};
 
 /**
- * Depth (fraction of facial height, posterior of the chord) and position
- * (fraction along the chord) of each synthesised dip. Derived from the
- * bundled demo tracing's own Sls/Sts/Sti/Ils template positions relative to
- * their neighbours, then calibrated against the rendered sample film — the
- * same provenance as every `place()` offset above. The mentolabial fold is
- * the deepest of the three on a normal profile.
+ * Depth (fraction of facial height, posterior of the **less anterior
+ * neighbour** — see `lipDip`) and position (fraction along the span) of each
+ * synthesised dip. Calibrated against the bundled demo tracing's own
+ * Sls/Sts/Sti/Ils template positions relative to their neighbours: on that
+ * film (facial height ≈ 974 px) the real sulcus sits ≈ 11 px behind
+ * min(Sn, Ls), the real stomion ≈ 13 px behind min(Ls, Li), and the real
+ * mentolabial fold ≈ 32 px behind min(Li, Pog′) — the deepest of the three
+ * on a normal profile.
  */
 const LIP_DIPS = {
   /** Sn → Ls: superior labial sulcus. */
-  sls: { depth: 0.016, t: 0.45 },
+  sls: { depth: 0.010, t: 0.45 },
   /** Ls → Li: the lip embrasure (stomion). */
-  stomion: { depth: 0.018, t: 0.5 },
+  stomion: { depth: 0.012, t: 0.5 },
   /** Li → Pog': mentolabial sulcus. */
-  ils: { depth: 0.030, t: 0.45 },
+  ils: { depth: 0.028, t: 0.45 },
 };
 
 /**

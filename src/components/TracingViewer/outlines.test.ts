@@ -61,13 +61,16 @@ describe('Soft-tissue profile: lip concavities', () => {
     expect(idx('Li') < idx('Ils') && idx('Ils') < idx('Pog\'')).toBe(true);
   });
 
-  it('synthesises each missing dip posterior of its chord', () => {
+  it('synthesises each missing dip posterior of BOTH its neighbours', () => {
     const outline = softTissueOutline(tracedMap);
     expect(outline === undefined).toBe(false);
     const pts = outline.points as Array<[number, number]>;
-    // Between each boundary pair there is now exactly one interposed point,
-    // and it sits at a smaller x (posterior, for this upright frame) than the
-    // chord's own interpolation at that height.
+    // Between each boundary pair there is now exactly one interposed point.
+    // For this upright frame the anterior axis is exactly +x, so the dip's x
+    // must be depth × facial height (700 px) behind the LESS anterior of its
+    // two neighbours — a guaranteed local minimum, not merely "behind the
+    // chord" (which fails to dip at all when the chord itself is steeply
+    // inclined; see the Class III regression test below).
     const find = (x: number, y: number) =>
       pts.findIndex(([px, py]) => near(px, x) && near(py, y));
     const iSn = find(620, 500);
@@ -77,16 +80,43 @@ describe('Soft-tissue profile: lip concavities', () => {
     expect(iLs - iSn).toBe(2);   // Sn, [sulcus], Ls
     expect(iLi - iLs).toBe(2);   // Ls, [stomion], Li
     expect(iPog - iLi).toBe(2);  // Li, [mentolabial], Pog'
-    const chordX = (a: [number, number], b: [number, number], t: number) =>
-      a[0] + (b[0] - a[0]) * t;
-    // depth × facial height (700 px) posterior of the chord point.
     const sulcus = pts[iSn + 1];
-    expect(sulcus[0] < chordX(pts[iSn], pts[iLs], 0.45)).toBe(true);
-    expect(near(sulcus[0], chordX(pts[iSn], pts[iLs], 0.45) - 0.016 * 700, 1e-6)).toBe(true);
+    expect(near(sulcus[0], Math.min(620, 645) - 0.010 * 700)).toBe(true);
+    expect(near(sulcus[1], 500 + (570 - 500) * 0.45)).toBe(true);
     const stomion = pts[iLs + 1];
-    expect(near(stomion[0], chordX(pts[iLs], pts[iLi], 0.5) - 0.018 * 700, 1e-6)).toBe(true);
+    expect(near(stomion[0], Math.min(645, 640) - 0.012 * 700)).toBe(true);
+    expect(near(stomion[1], 570 + (660 - 570) * 0.5)).toBe(true);
     const mentolabial = pts[iLi + 1];
-    expect(near(mentolabial[0], chordX(pts[iLi], pts[iPog], 0.45) - 0.030 * 700, 1e-6)).toBe(true);
+    expect(near(mentolabial[0], Math.min(640, 610) - 0.028 * 700)).toBe(true);
+    expect(near(mentolabial[1], 660 + (800 - 660) * 0.45)).toBe(true);
+  });
+
+  it('still dips on a Class III profile, where the lips differ a lot in anterior projection', () => {
+    // The regression the clinician caught live: on the bundled sample film
+    // (ANB −4.2°) the synthesised lower lip sits ~88 px more anterior than
+    // the upper, so a dip measured against the Ls–Li CHORD landed in front
+    // of Ls itself and the "stomion" rendered as part of one convex bulge.
+    // The dip must be a local minimum of the anterior projection against
+    // both neighbours, however inclined their chord.
+    const map: LandmarkMap = {
+      ...tracedMap,
+      'Ls': { x: 600, y: 570 },  // upper lip well behind...
+      'Li': { x: 700, y: 660 },  // ...a protrusive lower lip
+    };
+    const outline = softTissueOutline(map);
+    expect(outline === undefined).toBe(false);
+    const pts = outline.points as Array<[number, number]>;
+    const find = (x: number, y: number) =>
+      pts.findIndex(([px, py]) => near(px, x) && near(py, y));
+    const iLs = find(600, 570);
+    const iLi = find(700, 660);
+    expect(iLi - iLs).toBe(2);
+    const stomion = pts[iLs + 1];
+    // Posterior of BOTH lips — with the old chord-relative construction this
+    // point sat at x = 650 − 0.018·700 = 637.4, i.e. 37 px ANTERIOR of Ls.
+    expect(stomion[0] < 600).toBe(true);
+    expect(stomion[0] < 700).toBe(true);
+    expect(near(stomion[0], 600 - 0.012 * 700)).toBe(true);
   });
 
   it('prefers real soft-tissue landmarks in the synthesised-silhouette branch', () => {
