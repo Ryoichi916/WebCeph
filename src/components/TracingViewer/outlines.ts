@@ -394,7 +394,7 @@ export const buildOutlines = (
       pts.push([G.x, G.y]);
     } else {
       pts.push(place(f, N, -0.036, -0.264));
-      pts.push(place(f, N, 0.027, -0.130));
+      pts.push(place(f, N, 0.019, -0.082));
     }
     const snPt: Point2 = [Sn!.x, Sn!.y];
     const lsPt: Point2 = [Ls!.x, Ls!.y];
@@ -431,24 +431,24 @@ export const buildOutlines = (
     // soft-tissue silhouette, expressed in the facial frame. ANS anchors the
     // subnasale when present; otherwise it is derived from A.
     const f = facialFrame(N, Me) as Frame; // N, Me, A, B, Pog all placed (see `if`)
-    const glabella: Point2 = G ? [G.x, G.y] : place(f, N, 0.027, -0.130);
+    const glabella: Point2 = G ? [G.x, G.y] : place(f, N, 0.019, -0.082);
     const softNasion: Point2 = Nsoft
-      ? [Nsoft.x, Nsoft.y] : place(f, N, 0.057, -0.002);
-    const noseTip: Point2 = Pn ? [Pn.x, Pn.y] : place(f, N, 0.230, 0.264);
+      ? [Nsoft.x, Nsoft.y] : place(f, N, 0.037, 0.008);
+    const noseTip: Point2 = Pn ? [Pn.x, Pn.y] : place(f, N, 0.225, 0.277);
     const subnasale: Point2 = Sn
       ? [Sn.x, Sn.y]
-      : (ANS ? place(f, ANS, 0.088, 0.055) : place(f, A, 0.110, -0.030));
-    const upperLip: Point2 = Ls ? [Ls.x, Ls.y] : place(f, A, 0.173, 0.059);
-    const lowerLip: Point2 = Li ? [Li.x, Li.y] : place(f, B, 0.200, -0.129);
+      : (ANS ? place(f, ANS, 0.131, -0.023) : place(f, A, 0.144, -0.081));
+    const upperLip: Point2 = Ls ? [Ls.x, Ls.y] : place(f, A, 0.169, 0.008);
+    const lowerLip: Point2 = Li ? [Li.x, Li.y] : place(f, B, 0.110, -0.127);
     const softPog: Point2 = Pogsoft
-      ? [Pogsoft.x, Pogsoft.y] : place(f, Pog, 0.107, -0.061);
+      ? [Pogsoft.x, Pogsoft.y] : place(f, Pog, 0.076, -0.056);
     const softMenton: Point2 = Mesoft
-      ? [Mesoft.x, Mesoft.y] : place(f, Me, 0.112, -0.004);
+      ? [Mesoft.x, Mesoft.y] : place(f, Me, 0.077, 0.019);
     const pts: Point2[] = [
       place(f, N, -0.036, -0.264), // forehead
       glabella,
       softNasion,
-      place(f, N, 0.136, 0.115),   // nasal bridge
+      place(f, N, 0.131, 0.143),   // nasal bridge (midpoint of the N'-Pn dorsum)
       noseTip,
       subnasale,
       upperLip,

@@ -47,7 +47,7 @@ const frac = (n: number): number => n - Math.floor(n);
  * The film's own ruler reads 10 mm ≈ 114 px at full resolution (1578×2089):
  * the calibration a demo walkthrough should enter.
  */
-const TEMPLATE: { [symbol: string]: [number, number] } = {
+export const TEMPLATE: { [symbol: string]: [number, number] } = {
   // Cranial base
   'S': [0.190, 0.452],
   'N': [0.607, 0.390],

@@ -4,6 +4,7 @@ import {
   buildOutlines, toBezierPath, SOFT_TISSUE_PROFILE_LANDMARKS,
 } from './outlines';
 import { LandmarkMap } from 'analyses/superimposition';
+import { TEMPLATE } from 'predictors/demo';
 
 const near = (a: number, b: number, tol: number = 1e-6): boolean =>
   Math.abs(a - b) < tol;
@@ -164,6 +165,67 @@ describe('Soft-tissue profile: lip concavities', () => {
     expect(outline === undefined).toBe(false);
     // Base silhouette is 11 points; the three dips make 14.
     expect(outline.points.length).toBe(14);
+  });
+});
+
+describe('Synthesised silhouette calibration against the demo template', () => {
+  /**
+   * The offsets in outlines.ts claim to be "calibrated against the demo
+   * film's soft-tissue silhouette". This test makes that claim mechanical:
+   * a bone-only tracing at the demo template's own positions must synthesise
+   * each soft-tissue slot within a couple of pixels of where the template's
+   * REAL soft landmark sits — the position auto-plot itself would place.
+   * The clinician caught the lower lip drawn ~88 px too far anterior; these
+   * offsets had been eyeballed, and nothing pinned them. Now this does.
+   */
+  it('lands each synthetic slot on the template\'s real soft landmark', () => {
+    const W = 1578;
+    const H = 2089;
+    const at = (symbol: string) => ({
+      x: TEMPLATE[symbol][0] * W,
+      y: TEMPLATE[symbol][1] * H,
+    });
+    const boneOnly: LandmarkMap = {
+      'N': at('N'), 'Me': at('Me'), 'A': at('A'), 'B': at('B'),
+      'Pog': at('Pog'), 'ANS': at('ANS'),
+    };
+    const outline = softTissueOutline(boneOnly);
+    expect(outline === undefined).toBe(false);
+    const pts = outline.points as Array<[number, number]>;
+    // Offsets are stored rounded to 3 decimals of facial height (~974 px on
+    // this film), so each slot may sit up to ~0.7 px off its target.
+    const TOL = 1.5;
+    ['G', 'N\'', 'Pn', 'Sn', 'Ls', 'Li', 'Pog\'', 'Me\''].forEach((symbol) => {
+      const target = at(symbol);
+      const hit = pts.some(([x, y]) =>
+        Math.hypot(x - target.x, y - target.y) <= TOL);
+      if (!hit) {
+        // Name the offender in the failure output.
+        const closest = Math.min(
+          ...pts.map(([x, y]) => Math.hypot(x - target.x, y - target.y)));
+        expect(`${symbol} missed by ${closest.toFixed(1)}px`).toBe('on target');
+      }
+      expect(hit).toBe(true);
+    });
+  });
+
+  it('holds for the A-anchored subnasale fallback when ANS is unplotted', () => {
+    const W = 1578;
+    const H = 2089;
+    const at = (symbol: string) => ({
+      x: TEMPLATE[symbol][0] * W,
+      y: TEMPLATE[symbol][1] * H,
+    });
+    const noAns: LandmarkMap = {
+      'N': at('N'), 'Me': at('Me'), 'A': at('A'), 'B': at('B'),
+      'Pog': at('Pog'),
+    };
+    const outline = softTissueOutline(noAns);
+    expect(outline === undefined).toBe(false);
+    const target = at('Sn');
+    const hit = (outline.points as Array<[number, number]>).some(([x, y]) =>
+      Math.hypot(x - target.x, y - target.y) <= 1.5);
+    expect(hit).toBe(true);
   });
 });
 
